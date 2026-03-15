@@ -1,0 +1,434 @@
+[
+  {
+    "case_id": "prepared_001_sum_name",
+    "formula": "=SUM(InputValue,2)",
+    "defined_names": {
+      "InputValue": "Number(5)"
+    },
+    "host_query_profile": null,
+    "expected": {
+      "prepared_calls": [
+        {
+          "function_id": "FUNC.SUM",
+          "prepared_arguments": [
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "NameReference",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "Literal",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        }
+      ],
+      "result_class": "Scalar",
+      "result_structure_class": "DirectScalar",
+      "payload_summary": "Number(7)",
+      "blankness_class": "NonBlank",
+      "format_hint": null,
+      "publication_hint": null,
+      "capability_dependencies": []
+    }
+  },
+  {
+    "case_id": "prepared_002_text_locale",
+    "formula": "=TEXT(1234.567,\"0.00\")",
+    "defined_names": {},
+    "host_query_profile": null,
+    "expected": {
+      "prepared_calls": [
+        {
+          "function_id": "FUNC.TEXT",
+          "prepared_arguments": [
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "Literal",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "Literal",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        }
+      ],
+      "result_class": "Scalar",
+      "result_structure_class": "DirectScalar",
+      "payload_summary": "Text(1234.57)",
+      "blankness_class": "NonBlank",
+      "format_hint": "locale_format_semantics",
+      "publication_hint": null,
+      "capability_dependencies": [
+        "locale_format_context"
+      ]
+    }
+  },
+  {
+    "case_id": "prepared_003_info_host_query",
+    "formula": "=INFO(\"directory\")",
+    "defined_names": {},
+    "host_query_profile": "DirectoryOnly",
+    "expected": {
+      "prepared_calls": [
+        {
+          "function_id": "FUNC.INFO",
+          "prepared_arguments": [
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "Literal",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        }
+      ],
+      "result_class": "Scalar",
+      "result_structure_class": "DirectScalar",
+      "payload_summary": "Text(C:\\Work)",
+      "blankness_class": "NonBlank",
+      "format_hint": null,
+      "publication_hint": "host_query_surface",
+      "capability_dependencies": [
+        "host_query"
+      ]
+    }
+  },
+  {
+    "case_id": "prepared_004_cell_reference_visible",
+    "formula": "=CELL(\"filename\",A1)",
+    "defined_names": {},
+    "host_query_profile": "DirectoryOnly",
+    "expected": {
+      "prepared_calls": [
+        {
+          "function_id": "FUNC.CELL",
+          "prepared_arguments": [
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "Literal",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "ReferenceVisible",
+              "source_class": "CellReference",
+              "evaluation_mode": "ReferencePreserved",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        }
+      ],
+      "result_class": "Scalar",
+      "result_structure_class": "DirectScalar",
+      "payload_summary": "Text([Book1]Sheet1)",
+      "blankness_class": "NonBlank",
+      "format_hint": null,
+      "publication_hint": "host_query_surface",
+      "capability_dependencies": [
+        "caller_context",
+        "host_query"
+      ]
+    }
+  },
+  {
+    "case_id": "prepared_005_let_helper_trace",
+    "formula": "=LET(x,1,x+2)",
+    "defined_names": {},
+    "host_query_profile": null,
+    "expected": {
+      "prepared_calls": [
+        {
+          "function_id": "SPECIAL.LET",
+          "prepared_arguments": [
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "HelperParameter",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "Literal",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "BinaryExpression",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        }
+      ],
+      "result_class": "Scalar",
+      "result_structure_class": "DirectScalar",
+      "payload_summary": "Number(3)",
+      "blankness_class": "NonBlank",
+      "format_hint": null,
+      "publication_hint": null,
+      "capability_dependencies": [
+        "helper_environment"
+      ]
+    }
+  },
+  {
+    "case_id": "prepared_006_legacy_single_trace",
+    "formula": "=_xlfn.SINGLE(A1)",
+    "defined_names": {},
+    "host_query_profile": null,
+    "expected": {
+      "prepared_calls": [
+        {
+          "function_id": "SPECIAL.LEGACY_SINGLE",
+          "prepared_arguments": [
+            {
+              "structure_class": "ReferenceVisible",
+              "source_class": "CellReference",
+              "evaluation_mode": "ReferencePreserved",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        }
+      ],
+      "result_class": "Scalar",
+      "result_structure_class": "DirectScalar",
+      "payload_summary": "Number(7)",
+      "blankness_class": "NonBlank",
+      "format_hint": null,
+      "publication_hint": null,
+      "capability_dependencies": [
+        "caller_context",
+        "legacy_single_compat"
+      ]
+    }
+  },
+  {
+    "case_id": "prepared_007_lambda_trace",
+    "formula": "=LAMBDA(x,x+1)",
+    "defined_names": {},
+    "host_query_profile": null,
+    "expected": {
+      "prepared_calls": [
+        {
+          "function_id": "SPECIAL.LAMBDA",
+          "prepared_arguments": [
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "HelperParameter",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "BinaryExpression",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        }
+      ],
+      "result_class": "Scalar",
+      "result_structure_class": "DirectScalar",
+      "payload_summary": "Lambda(arity=1;params=x;captures=-;body=Binary)",
+      "blankness_class": "NonBlank",
+      "format_hint": null,
+      "publication_hint": null,
+      "capability_dependencies": [
+        "helper_environment"
+      ]
+    }
+  },
+  {
+    "case_id": "prepared_008_lambda_invoke_trace",
+    "formula": "=LAMBDA(x,x+1)(2)",
+    "defined_names": {},
+    "host_query_profile": null,
+    "expected": {
+      "prepared_calls": [
+        {
+          "function_id": "SPECIAL.LAMBDA_INVOKE",
+          "prepared_arguments": [
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "Literal",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        }
+      ],
+      "result_class": "Scalar",
+      "result_structure_class": "DirectScalar",
+      "payload_summary": "Number(3)",
+      "blankness_class": "NonBlank",
+      "format_hint": null,
+      "publication_hint": null,
+      "capability_dependencies": [
+        "helper_environment"
+      ]
+    }
+  },
+  {
+    "case_id": "prepared_009_let_lambda_invoke_trace",
+    "formula": "=LET(f,LAMBDA(x,x+1),f(2))",
+    "defined_names": {},
+    "host_query_profile": null,
+    "expected": {
+      "prepared_calls": [
+        {
+          "function_id": "SPECIAL.LAMBDA",
+          "prepared_arguments": [
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "HelperParameter",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "BinaryExpression",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        },
+        {
+          "function_id": "SPECIAL.LAMBDA_INVOKE",
+          "prepared_arguments": [
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "Literal",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        },
+        {
+          "function_id": "SPECIAL.LET",
+          "prepared_arguments": [
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "HelperParameter",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "FunctionCall",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "FunctionCall",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        }
+      ],
+      "result_class": "Scalar",
+      "result_structure_class": "DirectScalar",
+      "payload_summary": "Number(3)",
+      "blankness_class": "NonBlank",
+      "format_hint": null,
+      "publication_hint": null,
+      "capability_dependencies": [
+        "helper_environment"
+      ]
+    }
+  },
+  {
+    "case_id": "prepared_010_lambda_capture_trace",
+    "formula": "=LET(x,10,LAMBDA(y,x+y))",
+    "defined_names": {},
+    "host_query_profile": null,
+    "expected": {
+      "prepared_calls": [
+        {
+          "function_id": "SPECIAL.LAMBDA",
+          "prepared_arguments": [
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "HelperParameter",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "BinaryExpression",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        },
+        {
+          "function_id": "SPECIAL.LET",
+          "prepared_arguments": [
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "HelperParameter",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "Literal",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "FunctionCall",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        }
+      ],
+      "result_class": "Scalar",
+      "result_structure_class": "DirectScalar",
+      "payload_summary": "Lambda(arity=1;params=y;captures=x;body=Binary)",
+      "blankness_class": "NonBlank",
+      "format_hint": null,
+      "publication_hint": null,
+      "capability_dependencies": [
+        "helper_environment"
+      ]
+    }
+  }
+]

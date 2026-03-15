@@ -1,0 +1,26 @@
+[
+  {
+    "scenario_id": "oracle_001_text",
+    "formula": "=TEXT(InputValue,\"0.00\")",
+    "entered_formula_text": "=TEXT(InputValue,\"0.00\")",
+    "stored_formula_text": "=TEXT(InputValue,\"0.00\")",
+    "input_bindings": {
+      "InputValue": "Number(1234.567)"
+    },
+    "expected_result_summary": "Text(1234.57)",
+    "locale_profile": "EnUs",
+    "date_system": "System1900",
+    "host_query_profile": null
+  },
+  {
+    "scenario_id": "oracle_002_info",
+    "formula": "=INFO(\"directory\")",
+    "entered_formula_text": "=INFO(\"directory\")",
+    "stored_formula_text": "=INFO(\"directory\")",
+    "input_bindings": {},
+    "expected_result_summary": "Text(C:\\Work)",
+    "locale_profile": "EnUs",
+    "date_system": "System1900",
+    "host_query_profile": "DirectoryOnly"
+  }
+]

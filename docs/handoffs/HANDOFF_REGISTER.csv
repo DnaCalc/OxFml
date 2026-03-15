@@ -1,0 +1,4 @@
+handoff_id,direction,title,status,source_workset,target_workset,filed_date,acknowledged_date
+HANDOFF-CALC-001,inbound,Coordinator-Facing Seam Hardening for Accepted Results Reject Detail and Fence Consequences,acknowledged,OxCalc/W005,W001,2026-03-15,2026-03-15
+HO-FN-002,inbound,Host-Query Active Selection and CELL INFO Seam Pressure,acknowledged,OxFunc/W015,W003/W006,2026-03-15,2026-03-15
+HANDOFF-FML-001,outbound,Minimum Seam Schema Tightening for Candidate Commit Reject and Trace Payloads,filed,W001,OxCalc-TBD,2026-03-15,

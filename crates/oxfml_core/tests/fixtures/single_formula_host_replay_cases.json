@@ -1,0 +1,51 @@
+[
+  {
+    "case_id": "host_001_defined_name_recalc",
+    "formula": "=SUM(InputValue,2)",
+    "backend": "OxFuncBacked",
+    "defined_names": {
+      "InputValue": "Number(5)"
+    },
+    "host_query_profile": null,
+    "expected": {
+      "payload_summary": "Number(7)",
+      "commit_decision": "accepted",
+      "trace_event_kinds": [
+        "AcceptedCandidateResultBuilt",
+        "CommitAccepted"
+      ]
+    }
+  },
+  {
+    "case_id": "host_002_local_bootstrap",
+    "formula": "=InputValue+2",
+    "backend": "LocalBootstrap",
+    "defined_names": {
+      "InputValue": "Number(5)"
+    },
+    "host_query_profile": null,
+    "expected": {
+      "payload_summary": "Number(7)",
+      "commit_decision": "accepted",
+      "trace_event_kinds": [
+        "AcceptedCandidateResultBuilt",
+        "CommitAccepted"
+      ]
+    }
+  },
+  {
+    "case_id": "host_003_host_query",
+    "formula": "=INFO(\"directory\")",
+    "backend": "OxFuncBacked",
+    "defined_names": {},
+    "host_query_profile": "DirectoryOnly",
+    "expected": {
+      "payload_summary": "Text(C:\\Work)",
+      "commit_decision": "accepted",
+      "trace_event_kinds": [
+        "AcceptedCandidateResultBuilt",
+        "CommitAccepted"
+      ]
+    }
+  }
+]

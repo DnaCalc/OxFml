@@ -1,0 +1,74 @@
+[
+  {
+    "case_id": "pb_001",
+    "formula": "=1+2",
+    "expected_root_kind": "BinaryExpr",
+    "expected_parse_diagnostics": 0,
+    "expected_bound_root_kind": "Binary",
+    "expected_reference_count": 0,
+    "expected_bind_diagnostics": 0
+  },
+  {
+    "case_id": "pb_002",
+    "formula": "=A1",
+    "expected_root_kind": "IdentifierExpr",
+    "expected_parse_diagnostics": 0,
+    "expected_bound_root_kind": "Reference",
+    "expected_reference_count": 1,
+    "expected_bind_diagnostics": 0
+  },
+  {
+    "case_id": "pb_003",
+    "formula": "=A1:B2",
+    "expected_root_kind": "RangeExpr",
+    "expected_parse_diagnostics": 0,
+    "expected_bound_root_kind": "Reference",
+    "expected_reference_count": 1,
+    "expected_bind_diagnostics": 0
+  },
+  {
+    "case_id": "pb_004",
+    "formula": "=@A1#",
+    "expected_root_kind": "PrefixExpr",
+    "expected_parse_diagnostics": 0,
+    "expected_bound_root_kind": "ImplicitIntersection",
+    "expected_reference_count": 1,
+    "expected_bind_diagnostics": 0
+  },
+  {
+    "case_id": "pb_005",
+    "formula": "=SUM(A1,2)",
+    "expected_root_kind": "CallExpr",
+    "expected_parse_diagnostics": 0,
+    "expected_bound_root_kind": "FunctionCall",
+    "expected_reference_count": 1,
+    "expected_bind_diagnostics": 0
+  },
+  {
+    "case_id": "pb_006",
+    "formula": "=A1,B2",
+    "expected_root_kind": "UnionExpr",
+    "expected_parse_diagnostics": 0,
+    "expected_bound_root_kind": "Reference",
+    "expected_reference_count": 2,
+    "expected_bind_diagnostics": 0
+  },
+  {
+    "case_id": "pb_007",
+    "formula": "=A1 B2",
+    "expected_root_kind": "IntersectionExpr",
+    "expected_parse_diagnostics": 0,
+    "expected_bound_root_kind": "Reference",
+    "expected_reference_count": 2,
+    "expected_bind_diagnostics": 0
+  },
+  {
+    "case_id": "pb_008",
+    "formula": "=LAMBDA(x,x+1)(2)",
+    "expected_root_kind": "InvokeExpr",
+    "expected_parse_diagnostics": 0,
+    "expected_bound_root_kind": "Invocation",
+    "expected_reference_count": 1,
+    "expected_bind_diagnostics": 0
+  }
+]

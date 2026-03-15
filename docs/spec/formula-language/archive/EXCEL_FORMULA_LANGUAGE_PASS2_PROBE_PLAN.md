@@ -1,5 +1,9 @@
 # Excel Formula Language Pass-2 Probe Plan
 
+Archive status:
+1. This is retained as an empirical planning/evidence document.
+2. It is not part of the canonical OxFml bootstrap read set.
+
 ## 1. Purpose
 Define the deferred empirical pass-2 execution plan for formula-language unresolved lanes.
 

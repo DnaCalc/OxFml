@@ -1,0 +1,139 @@
+[
+  {
+    "case_id": "session_001_commit",
+    "formula": "=SUM(InputValue,2)",
+    "with_input_name": true,
+    "capability_spec": {
+      "host_query_enabled": false,
+      "locale_format_enabled": false,
+      "caller_context_enabled": true,
+      "external_provider_enabled": false
+    },
+    "action": "execute_commit",
+    "expected": {
+      "phase": "Committed",
+      "decision": "accepted",
+      "reject_code": null,
+      "published_payload": "Number(7)",
+      "trace_event_kinds": [
+        "SessionOpened",
+        "CapabilityViewEstablished",
+        "AcceptedCandidateResultBuilt",
+        "CommitAccepted"
+      ]
+    }
+  },
+  {
+    "case_id": "session_002_capability_denied",
+    "formula": "=INFO(\"directory\")",
+    "with_input_name": false,
+    "capability_spec": {
+      "host_query_enabled": false,
+      "locale_format_enabled": true,
+      "caller_context_enabled": true,
+      "external_provider_enabled": false
+    },
+    "action": "capability_only",
+    "expected": {
+      "phase": "Rejected",
+      "decision": "rejected",
+      "reject_code": "CapabilityDenied",
+      "published_payload": null,
+      "trace_event_kinds": [
+        "SessionOpened",
+        "RejectIssued"
+      ]
+    }
+  },
+  {
+    "case_id": "session_003_abort",
+    "formula": "=SUM(InputValue,2)",
+    "with_input_name": true,
+    "capability_spec": {
+      "host_query_enabled": false,
+      "locale_format_enabled": false,
+      "caller_context_enabled": true,
+      "external_provider_enabled": false
+    },
+    "action": "abort_before_execute",
+    "expected": {
+      "phase": "Aborted",
+      "decision": "rejected",
+      "reject_code": "SessionTerminated",
+      "published_payload": null,
+      "trace_event_kinds": [
+        "SessionOpened",
+        "SessionAborted"
+      ]
+    }
+  },
+  {
+    "case_id": "session_004_expire",
+    "formula": "=SUM(InputValue,2)",
+    "with_input_name": true,
+    "capability_spec": {
+      "host_query_enabled": false,
+      "locale_format_enabled": false,
+      "caller_context_enabled": true,
+      "external_provider_enabled": false
+    },
+    "action": "expire_before_execute",
+    "expected": {
+      "phase": "Expired",
+      "decision": "rejected",
+      "reject_code": "SessionTerminated",
+      "published_payload": null,
+      "trace_event_kinds": [
+        "SessionOpened",
+        "SessionExpired"
+      ]
+    }
+  },
+  {
+    "case_id": "session_005_execute_twice",
+    "formula": "=SUM(InputValue,2)",
+    "with_input_name": true,
+    "capability_spec": {
+      "host_query_enabled": false,
+      "locale_format_enabled": false,
+      "caller_context_enabled": true,
+      "external_provider_enabled": false
+    },
+    "action": "execute_twice",
+    "expected": {
+      "phase": "Rejected",
+      "decision": "rejected",
+      "reject_code": "StructuralConflict",
+      "published_payload": null,
+      "trace_event_kinds": [
+        "SessionOpened",
+        "CapabilityViewEstablished",
+        "AcceptedCandidateResultBuilt",
+        "RejectIssued"
+      ]
+    }
+  },
+  {
+    "case_id": "session_006_commit_without_execute",
+    "formula": "=SUM(InputValue,2)",
+    "with_input_name": true,
+    "capability_spec": {
+      "host_query_enabled": false,
+      "locale_format_enabled": false,
+      "caller_context_enabled": true,
+      "external_provider_enabled": false
+    },
+    "action": "commit_without_execute",
+    "expected": {
+      "phase": "Rejected",
+      "decision": "rejected",
+      "reject_code": "StructuralConflict",
+      "published_payload": null,
+      "trace_event_kinds": [
+        "SessionOpened",
+        "CapabilityViewEstablished",
+        "CommitRejected"
+      ]
+    }
+  }
+]

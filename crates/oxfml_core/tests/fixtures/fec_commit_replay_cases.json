@@ -1,0 +1,50 @@
+[
+  {
+    "case_id": "fec_001_accept",
+    "observed_fence": {
+      "formula_token": "token:v1",
+      "snapshot_epoch": "epoch:10",
+      "bind_hash": "bind:abc",
+      "profile_version": "profile:v1",
+      "capability_view_key": "cap:view:v1"
+    },
+    "expected": {
+      "decision": "accepted",
+      "published_payload": "Number(42)",
+      "shape_outcome_class": "Established",
+      "spill_event_kind": "SpillTakeover"
+    }
+  },
+  {
+    "case_id": "fec_002_formula_token_reject",
+    "observed_fence": {
+      "formula_token": "token:v2",
+      "snapshot_epoch": "epoch:10",
+      "bind_hash": "bind:abc",
+      "profile_version": "profile:v1",
+      "capability_view_key": "cap:view:v1"
+    },
+    "expected": {
+      "decision": "rejected",
+      "reject_code": "FenceMismatch",
+      "mismatch_member_kind": "formula_token",
+      "mismatch_class": "stale"
+    }
+  },
+  {
+    "case_id": "fec_003_capability_view_reject",
+    "observed_fence": {
+      "formula_token": "token:v1",
+      "snapshot_epoch": "epoch:10",
+      "bind_hash": "bind:abc",
+      "profile_version": "profile:v1",
+      "capability_view_key": "cap:view:v2"
+    },
+    "expected": {
+      "decision": "rejected",
+      "reject_code": "FenceMismatch",
+      "mismatch_member_kind": "capability_view_key",
+      "mismatch_class": "incompatible"
+    }
+  }
+]

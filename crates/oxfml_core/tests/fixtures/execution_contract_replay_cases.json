@@ -1,0 +1,48 @@
+[
+  {
+    "case_id": "contract_001_sum",
+    "formula": "=SUM(A1,2)",
+    "expected": {
+      "lane_class": "ConcurrentSafe",
+      "replay_sensitivity": "Stable",
+      "single_flight_advisable": false,
+      "restrictions": []
+    }
+  },
+  {
+    "case_id": "contract_002_cell",
+    "formula": "=CELL(\"filename\",A1)",
+    "expected": {
+      "lane_class": "Serialized",
+      "replay_sensitivity": "Stable",
+      "single_flight_advisable": true,
+      "restrictions": [
+        "ContextualVolatility",
+        "HostSerialized",
+        "ThreadAffine",
+        "SerialOnly",
+        "SingleFlightAdvisable",
+        "HostQuery",
+        "CallerContext",
+        "ReferencePreserved"
+      ]
+    }
+  },
+  {
+    "case_id": "contract_003_rand",
+    "formula": "=RAND()",
+    "expected": {
+      "lane_class": "Serialized",
+      "replay_sensitivity": "NonDeterministic",
+      "single_flight_advisable": true,
+      "restrictions": [
+        "HostSerialized",
+        "ThreadAffine",
+        "SerialOnly",
+        "SingleFlightAdvisable",
+        "Volatile",
+        "PseudoRandom"
+      ]
+    }
+  }
+]

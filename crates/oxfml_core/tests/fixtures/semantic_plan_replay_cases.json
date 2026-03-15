@@ -1,0 +1,300 @@
+[
+  {
+    "case_id": "sp_001_at_spill",
+    "formula": "=@A1#",
+    "expected": {
+      "function_ids": [],
+      "evaluation_requirements": [
+        "ImplicitIntersection",
+        "CallerContextSensitive",
+        "ReferenceExpression",
+        "SpillReference"
+      ],
+      "execution_profile": {
+        "thread_safety": "SafeConcurrent",
+        "volatility": "Stable",
+        "determinism": "Deterministic",
+        "requires_host_query": false,
+        "requires_caller_context": true,
+        "requires_reference_preservation": true,
+        "uses_implicit_intersection": true,
+        "uses_spill_reference": true,
+        "requires_branch_laziness": false,
+        "requires_fallback_laziness": false,
+        "requires_serial_scheduler_lane": false
+      },
+      "helper_profile": {
+        "contains_let": false,
+        "contains_lambda": false,
+        "contains_lambda_invocation": false,
+        "lambda_literal_count": 0,
+        "lambda_invocation_count": 0,
+        "max_lambda_arity": 0,
+        "lexical_capture_required": false
+      },
+      "capability_requirements": [
+        "caller_context",
+        "spill_reference"
+      ]
+    }
+  },
+  {
+    "case_id": "sp_002_cell_host_query",
+    "formula": "=CELL(\"filename\",A1)",
+    "expected": {
+      "function_ids": [
+        "FUNC.CELL"
+      ],
+      "evaluation_requirements": [
+        "ReferenceExpression",
+        "HostQueryCapability",
+        "ReferencePreservedCalls",
+        "CallerContextSensitive"
+      ],
+      "execution_profile": {
+        "thread_safety": "HostSerialized",
+        "volatility": "Contextual",
+        "determinism": "Deterministic",
+        "requires_host_query": true,
+        "requires_caller_context": true,
+        "requires_reference_preservation": true,
+        "uses_implicit_intersection": false,
+        "uses_spill_reference": false,
+        "requires_branch_laziness": false,
+        "requires_fallback_laziness": false,
+        "requires_serial_scheduler_lane": true
+      },
+      "helper_profile": {
+        "contains_let": false,
+        "contains_lambda": false,
+        "contains_lambda_invocation": false,
+        "lambda_literal_count": 0,
+        "lambda_invocation_count": 0,
+        "max_lambda_arity": 0,
+        "lexical_capture_required": false
+      },
+      "capability_requirements": [
+        "host_query",
+        "caller_context"
+      ]
+    }
+  },
+  {
+    "case_id": "sp_003_rand_profile",
+    "formula": "=RAND()",
+    "expected": {
+      "function_ids": [
+        "FUNC.RAND"
+      ],
+      "evaluation_requirements": [],
+      "execution_profile": {
+        "thread_safety": "HostSerialized",
+        "volatility": "Volatile",
+        "determinism": "NonDeterministic",
+        "requires_host_query": false,
+        "requires_caller_context": false,
+        "requires_reference_preservation": false,
+        "uses_implicit_intersection": false,
+        "uses_spill_reference": false,
+        "requires_branch_laziness": false,
+        "requires_fallback_laziness": false,
+        "requires_serial_scheduler_lane": true
+      },
+      "helper_profile": {
+        "contains_let": false,
+        "contains_lambda": false,
+        "contains_lambda_invocation": false,
+        "lambda_literal_count": 0,
+        "lambda_invocation_count": 0,
+        "max_lambda_arity": 0,
+        "lexical_capture_required": false
+      },
+      "capability_requirements": [
+        "random_provider"
+      ]
+    }
+  },
+  {
+    "case_id": "sp_004_legacy_single",
+    "formula": "=_xlfn.SINGLE(A1)",
+    "expected": {
+      "function_ids": [],
+      "evaluation_requirements": [
+        "ReferenceExpression",
+        "LegacySingleCompat",
+        "ImplicitIntersection",
+        "CallerContextSensitive"
+      ],
+      "execution_profile": {
+        "thread_safety": "SafeConcurrent",
+        "volatility": "Stable",
+        "determinism": "Deterministic",
+        "requires_host_query": false,
+        "requires_caller_context": true,
+        "requires_reference_preservation": true,
+        "uses_implicit_intersection": true,
+        "uses_spill_reference": false,
+        "requires_branch_laziness": false,
+        "requires_fallback_laziness": false,
+        "requires_serial_scheduler_lane": false
+      },
+      "helper_profile": {
+        "contains_let": false,
+        "contains_lambda": false,
+        "contains_lambda_invocation": false,
+        "lambda_literal_count": 0,
+        "lambda_invocation_count": 0,
+        "max_lambda_arity": 0,
+        "lexical_capture_required": false
+      },
+      "capability_requirements": [
+        "caller_context",
+        "legacy_single_compat"
+      ]
+    }
+  },
+  {
+    "case_id": "sp_005_let_helper",
+    "formula": "=LET(x,1,x+2)",
+    "expected": {
+      "function_ids": [],
+      "evaluation_requirements": [
+        "ReferenceExpression",
+        "HelperEnvironment"
+      ],
+      "execution_profile": {
+        "thread_safety": "SafeConcurrent",
+        "volatility": "Stable",
+        "determinism": "Deterministic",
+        "requires_host_query": false,
+        "requires_caller_context": false,
+        "requires_reference_preservation": true,
+        "uses_implicit_intersection": false,
+        "uses_spill_reference": false,
+        "requires_branch_laziness": false,
+        "requires_fallback_laziness": false,
+        "requires_serial_scheduler_lane": false
+      },
+      "helper_profile": {
+        "contains_let": true,
+        "contains_lambda": false,
+        "contains_lambda_invocation": false,
+        "lambda_literal_count": 0,
+        "lambda_invocation_count": 0,
+        "max_lambda_arity": 0,
+        "lexical_capture_required": false
+      },
+      "capability_requirements": [
+        "helper_environment"
+      ]
+    }
+  },
+  {
+    "case_id": "sp_006_lambda_helper",
+    "formula": "=LAMBDA(x,x+1)",
+    "expected": {
+      "function_ids": [],
+      "evaluation_requirements": [
+        "ReferenceExpression",
+        "HelperEnvironment"
+      ],
+      "execution_profile": {
+        "thread_safety": "SafeConcurrent",
+        "volatility": "Stable",
+        "determinism": "Deterministic",
+        "requires_host_query": false,
+        "requires_caller_context": false,
+        "requires_reference_preservation": true,
+        "uses_implicit_intersection": false,
+        "uses_spill_reference": false,
+        "requires_branch_laziness": false,
+        "requires_fallback_laziness": false,
+        "requires_serial_scheduler_lane": false
+      },
+      "helper_profile": {
+        "contains_let": false,
+        "contains_lambda": true,
+        "contains_lambda_invocation": false,
+        "lambda_literal_count": 1,
+        "lambda_invocation_count": 0,
+        "max_lambda_arity": 1,
+        "lexical_capture_required": false
+      },
+      "capability_requirements": [
+        "helper_environment"
+      ]
+    }
+  },
+  {
+    "case_id": "sp_007_lambda_invoke",
+    "formula": "=LAMBDA(x,x+1)(2)",
+    "expected": {
+      "function_ids": [],
+      "evaluation_requirements": [
+        "ReferenceExpression",
+        "HelperEnvironment"
+      ],
+      "execution_profile": {
+        "thread_safety": "SafeConcurrent",
+        "volatility": "Stable",
+        "determinism": "Deterministic",
+        "requires_host_query": false,
+        "requires_caller_context": false,
+        "requires_reference_preservation": true,
+        "uses_implicit_intersection": false,
+        "uses_spill_reference": false,
+        "requires_branch_laziness": false,
+        "requires_fallback_laziness": false,
+        "requires_serial_scheduler_lane": false
+      },
+      "helper_profile": {
+        "contains_let": false,
+        "contains_lambda": true,
+        "contains_lambda_invocation": true,
+        "lambda_literal_count": 1,
+        "lambda_invocation_count": 1,
+        "max_lambda_arity": 1,
+        "lexical_capture_required": false
+      },
+      "capability_requirements": [
+        "helper_environment"
+      ]
+    }
+  },
+  {
+    "case_id": "sp_008_lambda_capture_profile",
+    "formula": "=LET(x,10,LAMBDA(y,x+y))",
+    "expected": {
+      "function_ids": [],
+      "evaluation_requirements": [
+        "ReferenceExpression",
+        "HelperEnvironment"
+      ],
+      "execution_profile": {
+        "thread_safety": "SafeConcurrent",
+        "volatility": "Stable",
+        "determinism": "Deterministic",
+        "requires_host_query": false,
+        "requires_caller_context": false,
+        "requires_reference_preservation": true,
+        "uses_implicit_intersection": false,
+        "uses_spill_reference": false,
+        "requires_branch_laziness": false,
+        "requires_fallback_laziness": false,
+        "requires_serial_scheduler_lane": false
+      },
+      "helper_profile": {
+        "contains_let": true,
+        "contains_lambda": true,
+        "contains_lambda_invocation": false,
+        "lambda_literal_count": 1,
+        "lambda_invocation_count": 0,
+        "max_lambda_arity": 1,
+        "lexical_capture_required": true
+      },
+      "capability_requirements": [
+        "helper_environment"
+      ]
+    }
+  }
+]

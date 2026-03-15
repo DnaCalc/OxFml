@@ -1,0 +1,194 @@
+# OxFml Public API and Runtime Service Sketch
+
+## 1. Purpose
+This document defines the first code-facing OxFml public surface sketch.
+
+It is not a language-level signature freeze.
+It is the current API-shape baseline that implementation work should target unless a later workset narrows it further.
+
+Read together with:
+1. `OXFML_IMPLEMENTATION_SURFACES_AND_STATE_OPTIONS.md`
+2. `OXFML_IMPLEMENTATION_BASELINE.md`
+3. `OXFML_CANONICAL_ARTIFACT_SHAPES.md`
+4. `OXFML_TEST_LADDER_AND_PROVING_HOSTS.md`
+5. `formula-language/OXFML_PARSER_AND_BINDER_REALIZATION.md`
+6. `fec-f3e/FEC_F3E_DESIGN_SPEC.md`
+
+## 2. Surface Rule
+The public OxFml surface should separate:
+1. canonical artifact transforms,
+2. optional repositories and runtime services,
+3. evaluator-session and commit operations,
+4. proving-host helpers.
+
+The canonical artifact transforms are normative.
+Repositories and services are optional operational layers over the same semantics.
+
+## 3. Canonical Transform Surface
+The current canonical transform chain is:
+1. `parse`
+2. `project_red_view`
+3. `bind`
+4. `compile_semantic_plan`
+5. `evaluate`
+6. `commit`
+
+Each step must accept explicit inputs and return explicit typed outputs.
+
+## 4. Current Request and Result Shapes
+### 4.1 `ParseRequest` -> `ParseResult`
+Minimum request fields:
+1. `FormulaSourceRecord`
+2. parse profile or compatibility context
+
+Minimum result fields:
+1. `GreenTreeRoot`
+2. parse diagnostics
+3. optional token-stream or trivia projection
+
+### 4.2 `RedProjectionRequest` -> `RedProjection`
+Minimum request fields:
+1. `GreenTreeRoot`
+2. `formula_stable_id`
+3. source-span and caller/workbook context as needed
+
+Minimum result fields:
+1. red root view
+2. span/parent-position helpers
+3. contextual diagnostic helpers
+
+### 4.3 `BindRequest` -> `BindResult`
+Minimum request fields:
+1. `GreenTreeRoot` and/or red projection
+2. `formula_stable_id`
+3. `formula_token`
+4. `structure_context_version`
+5. scope and table metadata
+6. caller anchor and address-mode context
+7. profile and capability context
+
+Minimum result fields:
+1. `BoundFormula`
+2. bind diagnostics
+3. unresolved-reference records
+
+### 4.4 `CompileSemanticPlanRequest` -> `CompileSemanticPlanResult`
+Minimum request fields:
+1. `BoundFormula`
+2. OxFunc catalog or trait surface identity
+3. locale, date-system, and format-service context
+
+Minimum result fields:
+1. `SemanticPlan`
+2. semantic diagnostics and unsupported-lane markers
+3. execution-profile summary
+4. helper-environment profile summary
+
+### 4.5 `EvaluateRequest` -> `AcceptedCandidateResult | RejectRecord`
+Minimum request fields:
+1. `SemanticPlan`
+2. explicit evaluation context
+3. host-query capability view where required
+4. snapshot, token, and capability fence members
+5. replay-correlation ids
+
+Minimum result rule:
+1. evaluation returns an accepted candidate or a typed reject,
+2. evaluation does not publish.
+
+### 4.6 `CommitRequest` -> `CommitBundle | RejectRecord`
+Minimum request fields:
+1. `AcceptedCandidateResult`
+2. commit-attempt identity
+3. accept-or-reject fence basis
+
+Minimum result rule:
+1. commit returns a published bundle or a typed no-publish reject,
+2. commit consequences remain distinct from evaluator success.
+
+## 5. Optional Repository and Runtime Surfaces
+The first implementation may also expose optional services such as:
+1. `SyntaxRepository`
+2. `BindRepository`
+3. `SemanticPlanRepository`
+4. `EvaluationSessionService`
+5. `TraceCaptureService`
+
+Working rule:
+1. these services may own caches, indexes, or runtime handles,
+2. they must not be the only explanation of semantic truth,
+3. all service-backed results must remain reproducible through the canonical transform surface.
+
+## 6. Current Handle Vocabulary
+If handle-based services exist, the first handle families should remain narrow:
+1. syntax artifact handle
+2. bound-formula handle
+3. semantic-plan handle
+4. session handle
+5. trace or replay handle
+
+Working rule:
+1. handles are operational conveniences,
+2. canonical artifacts remain the semantic baseline,
+3. handles must be mappable back to artifact identities and version keys.
+
+## 7. Single-Formula Proving Host Surface
+OxFml should also expose a small proving-host helper surface for the ladder defined in `OXFML_TEST_LADDER_AND_PROVING_HOSTS.md`.
+
+The current intended operations are:
+1. create or refresh single-formula host state
+2. update defined-name inputs
+3. trigger full recalc
+4. retrieve candidate, commit, reject, and trace outputs
+5. run an empirical-oracle scenario through the same proving-host surface
+
+Working rule:
+1. this surface is a proving host, not a second scheduler,
+2. it should exercise the same canonical transform and seam outputs,
+3. it should not require OxCalc multi-node infrastructure.
+
+## 8. Execution-Profile and Concurrency Surface
+The public surface must leave room for scheduler-relevant execution metadata from the start.
+
+The first exposed shape should allow:
+1. formula-level execution profile summary from `SemanticPlan`
+2. helper-environment profile summary from `SemanticPlan`
+3. call-site or operator-level restrictions where needed
+4. explicit flags for host-query, thread-affine, async, single-flight, or serial-only lanes
+
+Working rule:
+1. OxFml surfaces execution restrictions,
+2. OxCalc or a host consumes them for scheduling,
+3. OxFml also surfaces helper-environment shape where downstream semantic coordination depends on it,
+4. OxFml does not become the scheduler-policy owner.
+
+## 9. Current Preferred Packaging Shape
+The current preferred packaging shape is:
+1. a stateless canonical-core module set,
+2. optional repository/service modules,
+3. an FEC/F3E session service layer,
+4. an optional proving-host helper layer.
+
+This is the API reflection of the hybrid implementation baseline.
+
+## 10. Deferred Decisions
+The following remain open:
+1. exact trait/interface/function names,
+2. whether the direct transform surface is free-function based or service-object based,
+3. whether red projection is publicly exposed or kept as an internal helper surface,
+4. whether proving-host helpers live in the main library or a sibling support package,
+5. exact error/result carrier style for language bindings.
+
+## 11. Workset Implications
+Current expected primary owners:
+1. `W002`: parser, red-projection, bind, and artifact-surface narrowing
+2. `W003`: semantic-plan, evaluation, and execution-profile surface narrowing
+3. `W004`: session and commit service surface narrowing
+4. `W008`: single-formula proving-host helper surface narrowing
+
+## 12. Working Rule
+Implementation should treat this document as the current public-surface baseline:
+1. direct transforms first,
+2. optional services second,
+3. publication and reject consequences typed,
+4. proving-host helpers narrow and explicit.

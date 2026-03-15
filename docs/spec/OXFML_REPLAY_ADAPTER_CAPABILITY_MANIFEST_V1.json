@@ -1,0 +1,80 @@
+{
+  "adapter_id": "oxfml.replay_adapter.v1",
+  "adapter_version": "v1-draft",
+  "lane_id": "oxfml",
+  "supported_source_schema_ids": [
+    "oxfml.local.source_schema.parse_bind_cases.v1",
+    "oxfml.local.source_schema.semantic_plan_replay_cases.v1",
+    "oxfml.local.source_schema.prepared_call_replay_cases.v1",
+    "oxfml.local.source_schema.fec_commit_replay_cases.v1",
+    "oxfml.local.source_schema.execution_contract_replay_cases.v1",
+    "oxfml.local.source_schema.session_lifecycle_replay_cases.v1",
+    "oxfml.local.source_schema.single_formula_host_replay_cases.v1",
+    "oxfml.local.source_schema.empirical_oracle_scenarios.v1"
+  ],
+  "supported_replay_bundle_schema_versions": [
+    "dna-replay-bundle/v1"
+  ],
+  "claimed_capability_levels": [
+    "cap.C0.ingest_valid",
+    "cap.C1.replay_valid",
+    "cap.C2.diff_valid",
+    "cap.C3.explain_valid"
+  ],
+  "scaffolded_capability_levels": [
+    "cap.C4.distill_valid"
+  ],
+  "known_limits": [
+    "No replay-safe formula-text rewrite family is declared in this pass.",
+    "No replay-safe bind rewrite family is declared in this pass.",
+    "No replay-safe fence rewrite family is declared in this pass.",
+    "No replay-safe capability-view rewrite family is declared in this pass.",
+    "The adapter does not claim cap.C5.pack_valid in this pass.",
+    "Current supported source schema ids are OxFml-local ids, not yet published machine-readable schema ids.",
+    "Unified trace-schema merge strategy versus subsystem-preserved schemas remains open."
+  ],
+  "conformance_artifact_refs": [
+    "docs/spec/OXFML_REPLAY_APPLIANCE_ADAPTER_V1.md",
+    "docs/spec/fec-f3e/FEC_F3E_TESTING_AND_REPLAY.md",
+    "docs/spec/fec-f3e/FEC_F3E_SCHEMA_REPLAY_FIXTURE_PLAN.md",
+    "docs/spec/fec-f3e/FEC_F3E_FORMAL_AND_ASSURANCE_MAP.md",
+    "crates/oxfml_core/tests/fixtures/fec_commit_replay_cases.json",
+    "crates/oxfml_core/tests/fixtures/session_lifecycle_replay_cases.json",
+    "crates/oxfml_core/tests/fixtures/prepared_call_replay_cases.json",
+    "crates/oxfml_core/tests/fixtures/execution_contract_replay_cases.json",
+    "crates/oxfml_core/tests/fixtures/single_formula_host_replay_cases.json",
+    "crates/oxfml_core/tests/fixtures/empirical_oracle_scenarios.json"
+  ],
+  "registry_version_refs": [
+    {
+      "registry_family": "predicate_kind",
+      "registry_version": "oxfml.local.registry_pin.foundation_handoff_20260315_pass01"
+    },
+    {
+      "registry_family": "mismatch_kind",
+      "registry_version": "oxfml.local.registry_pin.foundation_handoff_20260315_pass01"
+    },
+    {
+      "registry_family": "severity_class",
+      "registry_version": "oxfml.local.registry_pin.foundation_handoff_20260315_pass01"
+    },
+    {
+      "registry_family": "reduction_status",
+      "registry_version": "oxfml.local.registry_pin.foundation_handoff_20260315_pass01"
+    },
+    {
+      "registry_family": "witness_lifecycle_state",
+      "registry_version": "oxfml.local.registry_pin.foundation_handoff_20260315_pass01"
+    },
+    {
+      "registry_family": "capability_level",
+      "registry_version": "oxfml.local.registry_pin.foundation_handoff_20260315_pass01"
+    }
+  ],
+  "rollout_notes": [
+    "OxFml remains authoritative for artifact meaning, typed rejects, fence semantics, and trace taxonomy.",
+    "Normalized replay families are additive cross-lane transport and explanation aids only.",
+    "Current capability claims are local-witness-tier claims and do not imply pack-grade promotion.",
+    "Witness distillation is scaffolded in planning only and is not claimed as proven replay-valid in this manifest."
+  ]
+}
