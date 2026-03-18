@@ -4,21 +4,43 @@ use oxfunc_core::host_info::HostInfoProvider;
 use oxfunc_core::locale_format::LocaleFormatContext;
 use oxfunc_core::value::{EvalValue, ExcelText, ReferenceLike};
 
-use crate::binding::{BindContext, BindRequest, NameKind, bind_formula};
+use crate::binding::{BindContext, BindRequest, BoundFormula, NameKind, bind_formula_incremental};
 use crate::eval::{
     DefinedNameBinding, EvaluationBackend, EvaluationContext, EvaluationOutput, evaluate_formula,
 };
-use crate::red::project_red_view;
+use crate::red::{RedProjection, project_red_view_incremental};
 use crate::scheduler::{ExecutionContract, build_execution_contract};
 use crate::seam::{
-    AcceptDecision, AcceptedCandidateResult, CapabilityEffectFact, CommitRequest, Extent,
-    FenceSnapshot, FormatDependencyFact, Locus, ShapeDelta, ShapeOutcomeClass, SpillEvent,
-    SpillEventKind, TopologyDelta, TraceEvent, TraceEventKind, TracePayload, ValueDelta,
-    ValuePayload, WorksheetValueClass, commit_candidate,
+    AcceptDecision, AcceptedCandidateResult, CapabilityEffectFact, CommitRequest,
+    DependencyConsequenceFact, DisplayDelta, Extent, FenceSnapshot, FormatDelta,
+    FormatDependencyFact, Locus, ShapeDelta, ShapeOutcomeClass, SpillEvent, SpillEventKind,
+    TopologyDelta, TraceEvent, TraceEventKind, TracePayload, ValueDelta, ValuePayload,
+    WorksheetValueClass, commit_candidate,
 };
 use crate::semantics::{CompileSemanticPlanRequest, SemanticPlan, compile_semantic_plan};
 use crate::source::{FormulaSourceRecord, StructureContextVersion};
-use crate::syntax::parser::{ParseRequest, parse_formula};
+use crate::syntax::green::GreenTreeRoot;
+use crate::syntax::parser::{ParseRequest, parse_formula_incremental};
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ArtifactReuseReport {
+    pub green_tree_reused: bool,
+    pub red_projection_reused: bool,
+    pub bound_formula_reused: bool,
+    pub semantic_plan_reused: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct CachedHostArtifacts {
+    green_tree: GreenTreeRoot,
+    red_projection: RedProjection,
+    bound_formula: BoundFormula,
+    semantic_plan: SemanticPlan,
+    semantic_plan_catalog_identity: String,
+    locale_profile: Option<String>,
+    date_system: Option<String>,
+    format_profile: Option<String>,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SingleFormulaHost {
@@ -35,6 +57,7 @@ pub struct SingleFormulaHost {
     pub random_value: Option<f64>,
     next_session_id: u64,
     next_commit_attempt_id: u64,
+    cached_artifacts: Option<CachedHostArtifacts>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -46,6 +69,7 @@ pub struct HostRecalcOutput {
     pub candidate_result: AcceptedCandidateResult,
     pub commit_decision: AcceptDecision,
     pub trace_events: Vec<TraceEvent>,
+    pub artifact_reuse: ArtifactReuseReport,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -55,6 +79,7 @@ pub struct EmpiricalOracleScenario {
     pub entered_formula_text: String,
     pub stored_formula_text: Option<String>,
     pub input_bindings: BTreeMap<String, String>,
+    pub cell_bindings: BTreeMap<String, String>,
     pub expected_result_summary: String,
     pub locale_profile: Option<String>,
     pub date_system: Option<String>,
@@ -81,12 +106,14 @@ impl SingleFormulaHost {
             random_value: Some(0.25),
             next_session_id: 1,
             next_commit_attempt_id: 1,
+            cached_artifacts: None,
         }
     }
 
     pub fn set_formula_text(&mut self, formula_text: impl Into<String>) {
         self.formula_text = formula_text.into();
         self.formula_text_version += 1;
+        self.cached_artifacts = None;
     }
 
     pub fn set_defined_name_value(&mut self, name: impl Into<String>, value: EvalValue) {
@@ -126,46 +153,105 @@ impl SingleFormulaHost {
             self.formula_text_version,
             self.formula_text.clone(),
         );
-        let parse = parse_formula(ParseRequest {
-            source: source.clone(),
-        });
-        let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
-        let bind = bind_formula(BindRequest {
-            source: source.clone(),
-            green_tree: parse.green_tree,
-            red_projection: red,
-            context: BindContext {
-                structure_context_version: StructureContextVersion(
-                    self.structure_context_version.clone(),
-                ),
-                caller_row: self.caller_row,
-                caller_col: self.caller_col,
-                formula_token: source.formula_token(),
-                names: self
-                    .defined_names
-                    .iter()
-                    .map(|(name, binding)| {
-                        (
-                            name.clone(),
-                            match binding {
-                                DefinedNameBinding::Value(_) => NameKind::ValueLike,
-                                DefinedNameBinding::Reference(_) => NameKind::ReferenceLike,
-                            },
-                        )
-                    })
-                    .collect(),
-                ..BindContext::default()
+        let cached_artifacts = self.cached_artifacts.as_ref();
+        let parse = parse_formula_incremental(
+            ParseRequest {
+                source: source.clone(),
             },
-        });
+            cached_artifacts.map(|artifacts| &artifacts.green_tree),
+        );
+        let red = project_red_view_incremental(
+            source.formula_stable_id.clone(),
+            &parse.green_tree,
+            cached_artifacts.map(|artifacts| &artifacts.red_projection),
+        );
+        let bind = bind_formula_incremental(
+            BindRequest {
+                source: source.clone(),
+                green_tree: parse.green_tree.clone(),
+                red_projection: red.red_projection.clone(),
+                context: BindContext {
+                    structure_context_version: StructureContextVersion(
+                        self.structure_context_version.clone(),
+                    ),
+                    caller_row: self.caller_row,
+                    caller_col: self.caller_col,
+                    formula_token: source.formula_token(),
+                    names: self
+                        .defined_names
+                        .iter()
+                        .map(|(name, binding)| {
+                            (
+                                name.clone(),
+                                match binding {
+                                    DefinedNameBinding::Value(_) => NameKind::ValueLike,
+                                    DefinedNameBinding::Reference(_) => NameKind::ReferenceLike,
+                                },
+                            )
+                        })
+                        .collect(),
+                    ..BindContext::default()
+                },
+            },
+            cached_artifacts.map(|artifacts| &artifacts.bound_formula),
+        );
 
-        let semantic_plan = compile_semantic_plan(CompileSemanticPlanRequest {
+        let semantic_plan_catalog_identity = "oxfunc:host".to_string();
+        let locale_profile = locale_ctx.map(|ctx| format!("{:?}", ctx.profile.id));
+        let date_system = locale_ctx.map(|ctx| format!("{:?}", ctx.date_system));
+        let format_profile = locale_ctx.map(|_| "locale-format-context".to_string());
+        let (semantic_plan, semantic_plan_reused) = if let Some(previous) = cached_artifacts {
+            if previous.bound_formula.bind_hash == bind.bound_formula.bind_hash
+                && previous.semantic_plan_catalog_identity == semantic_plan_catalog_identity
+                && previous.locale_profile == locale_profile
+                && previous.date_system == date_system
+                && previous.format_profile == format_profile
+            {
+                (previous.semantic_plan.clone(), true)
+            } else {
+                (
+                    compile_semantic_plan(CompileSemanticPlanRequest {
+                        bound_formula: bind.bound_formula.clone(),
+                        oxfunc_catalog_identity: semantic_plan_catalog_identity.clone(),
+                        locale_profile: locale_profile.clone(),
+                        date_system: date_system.clone(),
+                        format_profile: format_profile.clone(),
+                        library_context_snapshot: None,
+                    })
+                    .semantic_plan,
+                    false,
+                )
+            }
+        } else {
+            (
+                compile_semantic_plan(CompileSemanticPlanRequest {
+                    bound_formula: bind.bound_formula.clone(),
+                    oxfunc_catalog_identity: semantic_plan_catalog_identity.clone(),
+                    locale_profile: locale_profile.clone(),
+                    date_system: date_system.clone(),
+                    format_profile: format_profile.clone(),
+                    library_context_snapshot: None,
+                })
+                .semantic_plan,
+                false,
+            )
+        };
+        let artifact_reuse = ArtifactReuseReport {
+            green_tree_reused: parse.reused_green_tree,
+            red_projection_reused: red.reused_red_projection,
+            bound_formula_reused: bind.reused_bound_formula,
+            semantic_plan_reused,
+        };
+        self.cached_artifacts = Some(CachedHostArtifacts {
+            green_tree: parse.green_tree,
+            red_projection: red.red_projection,
             bound_formula: bind.bound_formula.clone(),
-            oxfunc_catalog_identity: "oxfunc:host".to_string(),
-            locale_profile: locale_ctx.map(|ctx| format!("{:?}", ctx.profile.id)),
-            date_system: locale_ctx.map(|ctx| format!("{:?}", ctx.date_system)),
-            format_profile: locale_ctx.map(|_| "locale-format-context".to_string()),
-        })
-        .semantic_plan;
+            semantic_plan: semantic_plan.clone(),
+            semantic_plan_catalog_identity,
+            locale_profile,
+            date_system,
+            format_profile,
+        });
 
         let execution_contract = build_execution_contract(&semantic_plan);
 
@@ -210,6 +296,7 @@ impl SingleFormulaHost {
             candidate_result,
             commit_decision,
             trace_events,
+            artifact_reuse,
         })
     }
 
@@ -243,6 +330,9 @@ impl SingleFormulaHost {
         let mut host = SingleFormulaHost::new(&scenario.scenario_id, &scenario.formula);
         for (name, summary) in &scenario.input_bindings {
             apply_empirical_input_binding(&mut host, name, summary)?;
+        }
+        for (target, summary) in &scenario.cell_bindings {
+            apply_empirical_cell_binding(&mut host, target, summary)?;
         }
         host.recalc(host_info, locale_ctx)
     }
@@ -299,6 +389,8 @@ fn build_candidate_result(
     } else {
         Vec::new()
     };
+    let format_delta = format_delta_from_evaluation(source, evaluation, primary_locus);
+    let display_delta = display_delta_from_evaluation(source, evaluation, primary_locus);
 
     AcceptedCandidateResult {
         formula_stable_id: source.formula_stable_id.0.clone(),
@@ -348,18 +440,90 @@ fn build_candidate_result(
                 .collect(),
             dependency_removals: Vec::new(),
             dependency_reclassifications: Vec::new(),
+            dependency_consequence_facts: dependency_consequence_facts_for_plan(
+                source,
+                semantic_plan,
+            ),
             dynamic_reference_facts: Vec::new(),
             spill_facts: Vec::new(),
             format_dependency_facts,
             capability_effect_facts,
             candidate_result_id: Some(candidate_result_id.clone()),
         },
-        format_delta: None,
-        display_delta: None,
+        format_delta,
+        display_delta,
         spill_events,
         execution_profile: Some(semantic_plan.execution_profile.clone()),
         trace_correlation_id: format!("trace:{candidate_result_id}"),
     }
+}
+
+fn dependency_consequence_facts_for_plan(
+    source: &FormulaSourceRecord,
+    semantic_plan: &SemanticPlan,
+) -> Vec<DependencyConsequenceFact> {
+    let mut facts = semantic_plan
+        .diagnostics
+        .iter()
+        .enumerate()
+        .map(|(index, diagnostic)| DependencyConsequenceFact {
+            formula_stable_id: source.formula_stable_id.0.clone(),
+            dependency_identity: format!("diagnostic:{index}"),
+            consequence_kind: "addition".to_string(),
+            evidence_class: "semantic_diagnostic".to_string(),
+            projection_state: diagnostic.message.clone(),
+        })
+        .collect::<Vec<_>>();
+
+    if semantic_plan
+        .capability_requirements
+        .iter()
+        .any(|item| item == "external_reference")
+    {
+        facts.push(DependencyConsequenceFact {
+            formula_stable_id: source.formula_stable_id.0.clone(),
+            dependency_identity: "reference_lane:external_reference".to_string(),
+            consequence_kind: "reclassification".to_string(),
+            evidence_class: "dynamic_reference_deferred".to_string(),
+            projection_state: "retained_without_target_resolution".to_string(),
+        });
+    }
+
+    facts
+}
+
+fn format_delta_from_evaluation(
+    source: &FormulaSourceRecord,
+    evaluation: &EvaluationOutput,
+    primary_locus: &Locus,
+) -> Option<FormatDelta> {
+    evaluation
+        .result
+        .format_hint
+        .as_ref()
+        .map(|hint| FormatDelta {
+            formula_stable_id: source.formula_stable_id.0.clone(),
+            target_loci: vec![primary_locus.clone()],
+            format_effect_class: hint.clone(),
+            format_effect_payload: evaluation.result.payload_summary.clone(),
+        })
+}
+
+fn display_delta_from_evaluation(
+    source: &FormulaSourceRecord,
+    evaluation: &EvaluationOutput,
+    primary_locus: &Locus,
+) -> Option<DisplayDelta> {
+    evaluation
+        .result
+        .publication_hint
+        .as_ref()
+        .map(|hint| DisplayDelta {
+            formula_stable_id: source.formula_stable_id.0.clone(),
+            target_loci: vec![primary_locus.clone()],
+            display_effect_class: hint.clone(),
+            display_effect_payload: evaluation.result.payload_summary.clone(),
+        })
 }
 
 fn apply_empirical_input_binding(
@@ -367,6 +531,48 @@ fn apply_empirical_input_binding(
     name: &str,
     summary: &str,
 ) -> Result<(), String> {
+    match parse_empirical_defined_name_binding(summary)? {
+        DefinedNameBinding::Value(value) => host.set_defined_name_value(name, value),
+        DefinedNameBinding::Reference(reference) => {
+            host.set_defined_name_reference(name, reference)
+        }
+    }
+    Ok(())
+}
+
+fn apply_empirical_cell_binding(
+    host: &mut SingleFormulaHost,
+    target: &str,
+    summary: &str,
+) -> Result<(), String> {
+    match parse_empirical_defined_name_binding(summary)? {
+        DefinedNameBinding::Value(value) => {
+            host.set_cell_value(target, value);
+            Ok(())
+        }
+        DefinedNameBinding::Reference(_) => Err(format!(
+            "cell empirical binding cannot be a reference for {target}: {summary}"
+        )),
+    }
+}
+
+fn parse_empirical_defined_name_binding(summary: &str) -> Result<DefinedNameBinding, String> {
+    if let Some(target) = summary
+        .strip_prefix("Reference(")
+        .and_then(|rest| rest.strip_suffix(')'))
+    {
+        return Ok(DefinedNameBinding::Reference(ReferenceLike {
+            kind: oxfunc_core::value::ReferenceKind::A1,
+            target: target.to_string(),
+        }));
+    }
+
+    Ok(DefinedNameBinding::Value(parse_empirical_eval_value(
+        summary,
+    )?))
+}
+
+fn parse_empirical_eval_value(summary: &str) -> Result<EvalValue, String> {
     if let Some(number) = summary
         .strip_prefix("Number(")
         .and_then(|rest| rest.strip_suffix(')'))
@@ -374,54 +580,51 @@ fn apply_empirical_input_binding(
         let parsed = number
             .parse::<f64>()
             .map_err(|_| format!("invalid numeric empirical binding {summary}"))?;
-        host.set_defined_name_value(name, EvalValue::Number(parsed));
-        return Ok(());
+        return Ok(EvalValue::Number(parsed));
     }
 
     if let Some(text) = summary
         .strip_prefix("Text(")
         .and_then(|rest| rest.strip_suffix(')'))
     {
-        host.set_defined_name_value(
-            name,
-            EvalValue::Text(ExcelText::from_utf16_code_units(
-                text.encode_utf16().collect(),
-            )),
-        );
-        return Ok(());
+        return Ok(EvalValue::Text(ExcelText::from_utf16_code_units(
+            text.encode_utf16().collect(),
+        )));
     }
 
     if let Some(logical) = summary
         .strip_prefix("Logical(")
         .and_then(|rest| rest.strip_suffix(')'))
     {
-        match logical {
-            "true" | "True" | "TRUE" => host.set_defined_name_value(name, EvalValue::Logical(true)),
-            "false" | "False" | "FALSE" => {
-                host.set_defined_name_value(name, EvalValue::Logical(false))
-            }
-            _ => return Err(format!("invalid logical empirical binding {summary}")),
-        }
-        return Ok(());
+        return match logical {
+            "true" | "True" | "TRUE" => Ok(EvalValue::Logical(true)),
+            "false" | "False" | "FALSE" => Ok(EvalValue::Logical(false)),
+            _ => Err(format!("invalid logical empirical binding {summary}")),
+        };
     }
 
-    if let Some(target) = summary
-        .strip_prefix("Reference(")
+    if let Some(code) = summary
+        .strip_prefix("Error(")
         .and_then(|rest| rest.strip_suffix(')'))
     {
-        host.set_defined_name_reference(
-            name,
-            ReferenceLike {
-                kind: oxfunc_core::value::ReferenceKind::A1,
-                target: target.to_string(),
-            },
-        );
-        return Ok(());
+        let error = match code {
+            "#REF!" => oxfunc_core::value::WorksheetErrorCode::Ref,
+            "#VALUE!" => oxfunc_core::value::WorksheetErrorCode::Value,
+            "#NAME?" => oxfunc_core::value::WorksheetErrorCode::Name,
+            "#N/A" => oxfunc_core::value::WorksheetErrorCode::NA,
+            "#DIV/0!" => oxfunc_core::value::WorksheetErrorCode::Div0,
+            "#NUM!" => oxfunc_core::value::WorksheetErrorCode::Num,
+            "#NULL!" => oxfunc_core::value::WorksheetErrorCode::Null,
+            _ => {
+                return Err(format!(
+                    "unsupported error empirical binding summary {summary}"
+                ));
+            }
+        };
+        return Ok(EvalValue::Error(error));
     }
 
-    Err(format!(
-        "unsupported empirical binding summary for {name}: {summary}"
-    ))
+    Err(format!("unsupported empirical binding summary: {summary}"))
 }
 
 fn build_trace_events(

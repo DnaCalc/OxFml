@@ -9,6 +9,8 @@ pub enum SyntaxKind {
     NumberLiteralExpr,
     StringLiteralExpr,
     IdentifierExpr,
+    QuotedIdentifierExpr,
+    QualifiedReferenceExpr,
     CallExpr,
     InvokeExpr,
     ArgumentList,

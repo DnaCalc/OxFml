@@ -187,7 +187,8 @@ Known limits for this pass:
 4. no replay-safe capability-view rewrite family is declared,
 5. subsystem schema merge strategy versus one unified replay trace schema remains open,
 6. current source schema ids for adapter import are still OxFml-local identifiers rather than published machine-readable schema ids,
-7. witness distillation is planned and shaped, but not yet locally evidenced as replay-valid reduced-witness production.
+7. witness distillation is now locally evidenced for a narrow retained-local floor, but not yet at pack-grade breadth,
+8. normalized pack-candidate bundle evidence is local-only and non-pack-eligible in this pass.
 
 ## 9. Registry Version Pins
 Until Foundation publishes machine-readable registry snapshots, OxFml pins the replay governance families to the authoritative Foundation handoff package:
@@ -224,6 +225,11 @@ Current expected lifecycle use in OxFml:
 3. explanatory-only reductions should use `wit.explanatory_only`,
 4. quarantine reasons should use Foundation families such as `oracle_unstable`, `capture_insufficient`, `schema_incompatible`, or `replay_invalid`.
 
+Current local extension:
+1. reduced witnesses broadened after `W010` may move directly to `wit.retained_local` when replay-valid closure is exercised and no quarantine reason applies,
+2. normalized pack-candidate bundles remain local-only evidence and are not themselves witness lifecycle promotions,
+3. the current retained-local floor now spans FEC commit/reject, session rejection, execution contract, single-formula host, and empirical-oracle families.
+
 ## 11. Open Alignment Items
 The current OxFml replay rollout still carries these alignment items:
 1. `capability_view_key` is checked today but remains open as a first-class fence tuple member,
@@ -231,7 +237,10 @@ The current OxFml replay rollout still carries these alignment items:
 3. some code and minimum-schema surfaces still need closure around fields such as `reject_record_id` and `fence_snapshot_ref`,
 4. `BindMismatchContext` still needs tighter exercised closure between prose, code, and replay normalization,
 5. helper-form and scalarization provenance continue to narrow with the OxFunc boundary,
-6. witness distillation remains policy-shaped but not yet evidenced as replay-valid reduced-witness production.
+6. current reduced-witness breadth is still narrow and local,
+7. normalized pack-candidate bundle evidence exists only as local rehearsal and remains intentionally non-pack-eligible,
+8. current retained-witness set breadth is stronger than the first rehearsal floor but still not broad enough for a `cap.C4.distill_valid` claim,
+9. DNA OneCalc host-policy and empirical-pack planning are now explicit, but remain planning-only and non-pack-grade.
 
 ## 12. Working Rule
 Use this adapter document as the OxFml-local replay rollout authority for:

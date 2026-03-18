@@ -25,7 +25,8 @@ At minimum, the boundary must preserve:
 5. caller-context-sensitive scalarization and reference formation,
 6. locale and format-service dependencies,
 7. typed host-query capabilities for host-observing functions,
-8. post-evaluation format hints when the semantic lane requires them.
+8. post-evaluation format hints when the semantic lane requires them,
+9. catalog, feature/profile, and provider-availability distinctions where function admission or runtime behavior depends on them.
 
 ## 3. Design Tests That Drive The Boundary
 The current boundary is primarily shaped by these function families:
@@ -36,6 +37,53 @@ The current boundary is primarily shaped by these function families:
 5. host-query semantics such as `CELL` and `INFO`.
 
 These are not random examples. They are the current proof points for whether OxFml is preserving enough structure.
+
+## 3A. Library Context And Catalog Snapshot Boundary
+OxFunc should own the canonical function/operator catalog semantics.
+OxFml should consume that world through an externally supplied library-context snapshot rather than through hidden global registry state.
+
+The current intended split is:
+1. OxFunc owns canonical function and operator ids, aliases, localized names, semantic traits, function profiles, and capability declarations,
+2. OxFml owns parse, bind, semantic-plan, and evaluation behavior that consumes a versioned library-context snapshot,
+3. the library-context snapshot should remain externally allocated and versioned rather than globally owned by OxFunc.
+4. dynamic registrations from add-in, VBA, user-defined, or later provider-backed sources should be representable as snapshot truth without requiring OxFunc-owned hidden global state.
+
+Minimum library-context concerns that must remain representable are:
+1. canonical function/operator identity,
+2. alias and localized name tables,
+3. semantic trait/profile references,
+4. feature, compatibility, or host-profile gates,
+5. provider/add-in presence or absence where those states materially change formula admission or execution behavior,
+6. registration source kind where add-in, built-in, provider-backed, or other sources materially affect admission or diagnostics,
+7. snapshot identity/versioning strong enough for early rejection, bind, semantic planning, and replay correlation.
+
+Current local floor:
+1. OxFml now preserves `library_context_snapshot_ref` on the semantic plan when an external snapshot is supplied,
+2. availability summaries are stage-aware across parse/bind, semantic-plan, runtime-capability, and post-dispatch/provider lanes,
+3. transport remains intentionally open beyond those preserved semantic distinctions.
+
+Working rule:
+1. preserve the semantic distinction first,
+2. keep the exact transport or runtime ownership shape open until later narrowing,
+3. do not require OxFunc to own hidden mutable registry state just to express catalog truth.
+
+## 3B. Operator, Literal, And Value-Universe Boundary
+The OxFml/OxFunc seam should keep lexical/grammar ownership distinct from semantic value/operator ownership rather than smoothing the boundary into one generic language layer.
+
+Current intended split:
+1. OxFml owns lexical grammar, parse structure, localized separators, literal tokenization, and precedence/associativity handling,
+2. OxFunc owns semantic value-universe meaning, canonical operator identities, operator/function semantics, coercion policy, and result-class behavior,
+3. catalog/profile availability may influence which operators or functions are admitted semantically, but that does not move raw lexical parsing ownership out of OxFml.
+
+Current examples:
+1. decimal, group, currency, and localized literal spelling are lexical and locale-sensitive on the OxFml side,
+2. operator meaning and result-class behavior are semantic and catalog-owned on the OxFunc side,
+3. compatibility/profile gates may influence admission, but they should remain explicit rather than hidden inside parse normalization.
+
+Working rule:
+1. keep the tension explicit where needed,
+2. do not force OxFml to own semantic operator truth just because it owns grammar,
+3. do not force OxFunc to own localized literal parsing just because it owns semantic value meaning.
 
 ## 4. Prepared Argument Contract
 Prepared arguments must preserve more than payload alone.
@@ -73,6 +121,10 @@ The canonical prepared-result surface must carry at least:
    - when later seam or host layers need an explicit non-value publication decision.
 7. helper-result provenance when the result is a helper-produced callable value
    - at minimum a replayable summary of arity, helper-capture presence, and body-shape class in the current baseline.
+
+Current local floor:
+1. callable helper values additionally carry structured callable detail for arity, parameter names, capture names, and body kind,
+2. that detail is still a baseline carrier and not yet the final shared callable transport contract.
 
 ## 5A. Execution and Scheduling Profile Boundary
 Some function traits materially affect whether a formula or call path is safely schedulable under concurrent or async calculation.
@@ -122,6 +174,46 @@ Boundary rule:
 2. host-query answers must be replayable as typed facts or typed denials,
 3. omitted-reference `CELL(info_type)` forms must be able to observe active-selection context when the host/profile admits it,
 4. the query vocabulary may grow, but the transport must stay typed and capability-scoped.
+
+## 6A. Callable-Value Boundary
+Callable helper and lambda values should be treated as first-class semantic values even when publication or worksheet-surface display restrictions still apply.
+
+The current intended split is:
+1. OxFml owns helper syntax, sequential binding, shadowing, lambda formation, lexical capture, and invocation planning,
+2. OxFunc should not need raw helper AST ownership to apply callable semantics,
+3. OxFunc should be able to consume callable values through a typed carrier or typed invocation facility without losing lexical meaning.
+
+Current OxFml baseline:
+1. helper forms are exercised locally,
+2. lexical helper capture is preserved semantically,
+3. the current callable-value carrier remains provisional and replay-summary-oriented rather than finalized as a shared downstream transport.
+
+Working rule:
+1. publication restrictions on callable values remain separate from the question of whether callable values are semantically admissible,
+2. lexical capture must not be approximated away by dynamic helper-name lookup,
+3. transport details remain open, but callable-value meaning must stay recoverable.
+
+## 6B. Availability, Feature, And Provider Gating Boundary
+OxFml and OxFunc need a shared way to distinguish function availability states without collapsing them into one generic unknown-function bucket.
+
+The current minimum state families are:
+1. known in catalog,
+2. feature-gated,
+3. compatibility-gated,
+4. host-profile unavailable,
+5. add-in absent,
+6. provider unavailable.
+
+Working split:
+1. catalog- and profile-defined availability belongs primarily in library-context truth,
+2. runtime host or provider presence belongs primarily in capability view or runtime execution truth,
+3. early formula rejection, runtime `#NAME?`, typed capability denial, and provider-failure outcomes must remain distinguishable.
+
+Current stage-oriented reading:
+1. parse and bind should be able to observe catalog-known, alias/localization, feature-gated, and compatibility-gated states where early admission depends on them,
+2. semantic planning should preserve the relevant availability/gating summary rather than collapsing it into one generic unsupported marker,
+3. runtime capability view should carry genuinely host- or session-dependent unavailable states,
+4. post-dispatch or runtime execution may still surface provider-failure outcomes that are distinct from both early unknown-name classification and capability denial.
 
 ## 7. Source and Structure Classes
 The current minimum semantic vocabulary should distinguish at least:
@@ -222,4 +314,22 @@ The most important open questions at this boundary are:
 3. how to distinguish spill-derived values from generic array-like payloads at the minimum necessary level,
 4. which prepared-result publication hints belong in OxFml versus FEC/F3E,
 5. which host-query families belong in the minimum cross-profile baseline versus profile-gated extensions,
-6. which function-semantic traits must be mandatory in the first execution-profile surface exposed to the core engine.
+6. which function-semantic traits must be mandatory in the first execution-profile surface exposed to the core engine,
+7. what is the smallest honest shared library-context snapshot shape,
+8. which callable-value facts must cross the boundary beyond opaque identity plus typed invocation,
+9. which availability and provider states belong in library context versus runtime capability view.
+
+## 15. Current Round Stabilization Posture
+The current OxFml reading is that this seam round has reached the point of diminishing returns for note-only narrowing.
+
+Working rule:
+1. treat the current canonical OxFml seam docs as the active semantic baseline,
+2. keep preserving semantic distinctions even where the exact transport or carrier remains open,
+3. do not read provisional candidate type sketches from note exchange as locked API commitments,
+4. reopen this seam for narrower stabilization only when a concrete trigger appears.
+
+Current trigger examples are:
+1. a canonical minimum field set needs to be locked,
+2. a proving-host or replay artifact forces a narrower carrier,
+3. an implementation-facing handoff needs a more explicit transport decision,
+4. a coordinator-visible consequence emerges from availability, provider-failure, callable publication, or a related lane.

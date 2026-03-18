@@ -1,0 +1,40 @@
+{
+  "reduction_id": "oxfml.local.reduction.single_formula_host_scalarization.v1",
+  "source_bundle_ref": "crates/oxfml_core/tests/fixtures/single_formula_host_replay_cases.json",
+  "source_scope_ref": "fixture_family:single_formula_host_replay_cases",
+  "predicate_ref": {
+    "predicate_id": "oxfml.local.predicate.single_formula_host_scalarization.v1",
+    "predicate_kind": "pred.publication.accepted_payload_present",
+    "required_reject_code": null,
+    "required_mismatch_member_kind": null,
+    "required_publication_value_class": "Number",
+    "required_execution_restriction": null
+  },
+  "strategy_id": "hierarchy_first",
+  "unit_kinds": [
+    "oxfml.local.reduction_unit.fixture_case"
+  ],
+  "retained_units": [
+    "host_004_implicit_intersection"
+  ],
+  "removed_units": [
+    "host_001_defined_name_recalc",
+    "host_002_local_bootstrap",
+    "host_003_host_query",
+    "host_005_legacy_single",
+    "host_006_let_helper",
+    "host_007_lambda_invocation",
+    "host_008_spill_sequence",
+    "host_009_formatting",
+    "host_010_cell_filename"
+  ],
+  "rewritten_units": [],
+  "closure_rules_applied": [
+    "identity_closure",
+    "candidate_commit_lineage",
+    "host_cell_binding_closure"
+  ],
+  "iteration_count": 1,
+  "final_status": "red.preserved",
+  "witness_bundle_ref": "crates/oxfml_core/tests/fixtures/witness_distillation/single_formula_host_scalarization_witness_bundle.json"
+}

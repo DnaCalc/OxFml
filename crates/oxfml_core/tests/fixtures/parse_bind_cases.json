@@ -15,7 +15,10 @@
     "expected_parse_diagnostics": 0,
     "expected_bound_root_kind": "Reference",
     "expected_reference_count": 1,
-    "expected_bind_diagnostics": 0
+    "expected_bind_diagnostics": 0,
+    "expected_normalized_references": [
+      "sheet:default!R1C1"
+    ]
   },
   {
     "case_id": "pb_003",
@@ -70,5 +73,122 @@
     "expected_bound_root_kind": "Invocation",
     "expected_reference_count": 1,
     "expected_bind_diagnostics": 0
+  },
+  {
+    "case_id": "pb_009",
+    "formula": "=Sheet2!A1",
+    "expected_root_kind": "QualifiedReferenceExpr",
+    "expected_parse_diagnostics": 0,
+    "expected_bound_root_kind": "Reference",
+    "expected_reference_count": 1,
+    "expected_bind_diagnostics": 0,
+    "expected_normalized_references": [
+      "Sheet2!R1C1"
+    ]
+  },
+  {
+    "case_id": "pb_010",
+    "formula": "=Sheet2!A1:Sheet2!B2",
+    "expected_root_kind": "RangeExpr",
+    "expected_parse_diagnostics": 0,
+    "expected_bound_root_kind": "Reference",
+    "expected_reference_count": 1,
+    "expected_bind_diagnostics": 0,
+    "expected_normalized_references": [
+      "Sheet2!R1C1:2x2"
+    ]
+  },
+  {
+    "case_id": "pb_011",
+    "formula": "=Sheet2!InputValue",
+    "expected_root_kind": "QualifiedReferenceExpr",
+    "expected_parse_diagnostics": 0,
+    "expected_bound_root_kind": "Reference",
+    "expected_reference_count": 1,
+    "expected_bind_diagnostics": 0,
+    "expected_normalized_references": [
+      "name:Sheet2!InputValue"
+    ]
+  },
+  {
+    "case_id": "pb_012",
+    "formula": "=Sheet2!(A1)",
+    "expected_root_kind": "QualifiedReferenceExpr",
+    "expected_parse_diagnostics": 0,
+    "expected_bound_root_kind": "Reference",
+    "expected_reference_count": 0,
+    "expected_bind_diagnostics": 1
+  },
+  {
+    "case_id": "pb_013",
+    "formula": "=1:3",
+    "expected_root_kind": "RangeExpr",
+    "expected_parse_diagnostics": 0,
+    "expected_bound_root_kind": "Reference",
+    "expected_reference_count": 1,
+    "expected_bind_diagnostics": 0,
+    "expected_normalized_references": [
+      "sheet:default!R1:R3"
+    ]
+  },
+  {
+    "case_id": "pb_014",
+    "formula": "=A:C",
+    "expected_root_kind": "RangeExpr",
+    "expected_parse_diagnostics": 0,
+    "expected_bound_root_kind": "Reference",
+    "expected_reference_count": 1,
+    "expected_bind_diagnostics": 0,
+    "expected_normalized_references": [
+      "sheet:default!C1:C3"
+    ]
+  },
+  {
+    "case_id": "pb_015",
+    "formula": "='Annual Data'!A1",
+    "expected_root_kind": "QualifiedReferenceExpr",
+    "expected_parse_diagnostics": 0,
+    "expected_bound_root_kind": "Reference",
+    "expected_reference_count": 1,
+    "expected_bind_diagnostics": 0,
+    "expected_normalized_references": [
+      "Annual Data!R1C1"
+    ]
+  },
+  {
+    "case_id": "pb_016",
+    "formula": "='Annual Data'!1:'Annual Data'!3",
+    "expected_root_kind": "RangeExpr",
+    "expected_parse_diagnostics": 0,
+    "expected_bound_root_kind": "Reference",
+    "expected_reference_count": 1,
+    "expected_bind_diagnostics": 0,
+    "expected_normalized_references": [
+      "Annual Data!R1:R3"
+    ]
+  },
+  {
+    "case_id": "pb_017",
+    "formula": "='Annual Data'!A:'Annual Data'!C",
+    "expected_root_kind": "RangeExpr",
+    "expected_parse_diagnostics": 0,
+    "expected_bound_root_kind": "Reference",
+    "expected_reference_count": 1,
+    "expected_bind_diagnostics": 0,
+    "expected_normalized_references": [
+      "Annual Data!C1:C3"
+    ]
+  },
+  {
+    "case_id": "pb_018",
+    "formula": "=[Book.xlsx]Sheet2!A1",
+    "expected_root_kind": "QualifiedReferenceExpr",
+    "expected_parse_diagnostics": 0,
+    "expected_bound_root_kind": "Reference",
+    "expected_reference_count": 1,
+    "expected_bind_diagnostics": 0,
+    "expected_normalized_references": [
+      "external:[Book.xlsx]Sheet2!A1"
+    ]
   }
 ]

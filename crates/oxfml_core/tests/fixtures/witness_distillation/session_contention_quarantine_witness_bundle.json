@@ -1,0 +1,34 @@
+{
+  "witness_id": "oxfml.local.witness.session_contention_quarantine.v1",
+  "source_fixture_family": "session_lifecycle_replay_cases",
+  "reduced_role": "explanatory_only_witness",
+  "bundle_state": "quarantined_local",
+  "source_case_ids": [
+    "session_008_contention_execute_rejected"
+  ],
+  "scenario_cases": [
+    {
+      "case_id": "session_008_contention_execute_rejected",
+      "formula": "=INFO(\"directory\")",
+      "with_input_name": false,
+      "capability_spec": {
+        "host_query_enabled": true,
+        "locale_format_enabled": true,
+        "caller_context_enabled": true,
+        "external_provider_enabled": false
+      },
+      "action": "contention_execute_rejected",
+      "expected": {
+        "phase": "Rejected",
+        "decision": "rejected",
+        "reject_code": "StructuralConflict",
+        "published_payload": null,
+        "trace_event_kinds": [
+          "SessionOpened",
+          "CapabilityViewEstablished",
+          "RejectIssued"
+        ]
+      }
+    }
+  ]
+}

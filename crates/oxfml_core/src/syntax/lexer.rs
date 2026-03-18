@@ -20,6 +20,42 @@ pub fn lex(input: &str) -> Vec<Token> {
             '@' => simple(TokenKind::At, ch, start),
             '#' => simple(TokenKind::Hash, ch, start),
             '!' => simple(TokenKind::Bang, ch, start),
+            '\'' => {
+                index += 1;
+                while index < chars.len() {
+                    if chars[index] == '\'' {
+                        if index + 1 < chars.len() && chars[index + 1] == '\'' {
+                            index += 2;
+                            continue;
+                        }
+                        index += 1;
+                        break;
+                    }
+                    index += 1;
+                }
+                Token {
+                    kind: TokenKind::QuotedIdentifier,
+                    text: chars[start..index].iter().collect(),
+                    span: TextSpan::new(start, index - start),
+                }
+            }
+            '[' => {
+                index += 1;
+                while index < chars.len() && chars[index] != ']' {
+                    index += 1;
+                }
+                if index < chars.len() {
+                    index += 1;
+                }
+                while index < chars.len() && is_identifier_continue(chars[index]) {
+                    index += 1;
+                }
+                Token {
+                    kind: TokenKind::BracketedQualifier,
+                    text: chars[start..index].iter().collect(),
+                    span: TextSpan::new(start, index - start),
+                }
+            }
             '"' => {
                 index += 1;
                 while index < chars.len() && chars[index] != '"' {

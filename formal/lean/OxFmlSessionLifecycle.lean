@@ -68,8 +68,9 @@ theorem reject_is_no_publish
     (hReject : reject.rejectCode = RejectCode.fenceMismatch)
     (hBundle : CandidatePublishesAs candidate "commit" bundle) :
     candidate.fenceSnapshot = bundle.fenceSnapshot := by
+  let _ := hReject
   simp [CandidatePublishesAs] at hBundle
-  exact hBundle.right.right.right
+  exact hBundle.right.right.right.symm
 
 theorem incompatible_fence_cannot_publish
     (candidate : CandidateResult)
@@ -81,6 +82,8 @@ theorem incompatible_fence_cannot_publish
   intro hEq
   apply hIncompatible
   simp [FenceCompatible]
-  simpa [CandidatePublishesAs] using hPublishes.right.right.right.symm.trans hEq
+  have hFence : bundle.fenceSnapshot = candidate.fenceSnapshot := by
+    simpa [CandidatePublishesAs] using hPublishes.right.right.right
+  exact (hEq.trans hFence).symm
 
 end OxFml

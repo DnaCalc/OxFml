@@ -9,9 +9,14 @@ It is the planning register for:
 3. replay/schema witness families,
 4. conformance-pack alignment.
 
-It is primarily a planning register, but the first local formal skeletons now exist at:
+It is primarily a planning register, but the first checked local formal artifacts now exist at:
 1. `../../formal/lean/OxFmlSessionLifecycle.lean`
-2. `../../formal/tla/FecSessionLifecycle.tla`
+2. `../../formal/lean/OxFmlExternalReferenceDeferred.lean`
+3. `../../formal/tla/FecSessionLifecycle.tla`
+4. `../../formal/tla/FecSessionLifecycle.cfg`
+5. `../../formal/tla/FecExternalCapabilityGate.tla`
+6. `../../formal/tla/FecExternalCapabilityGate.cfg`
+7. `../../formal/run_formal.ps1`
 
 Read together with:
 1. `OXFML_FORMALIZATION_AND_VERIFICATION.md`
@@ -60,15 +65,26 @@ The first TLA+-owned models should be:
 The following planning gaps remain explicit:
 1. exact replay artifact promotion path from local crate fixtures to pack-grade corpus,
 2. whether some OxFml formal artifacts live locally versus in shared Green-owned repos,
-3. when the current local Lean/TLA+ skeletons should be promoted into Green-owned proof/model locations.
+3. when the current local checked Lean/TLA+ artifacts should be promoted into Green-owned proof/model locations.
+
+## 5C. Current Executed Ownership Floor
+The current executed ownership floor is:
+1. `W016` for the first checked local Lean/TLA+ execution path,
+2. `W022` for external-capability and broader clause-family checked artifacts,
+3. `W023` for replay-promotion evidence that the formal lane can point at honestly.
 
 ## 5B. Current Local Formal Artifact Paths
 The current local formal artifact floor is:
-1. Lean session lifecycle and no-publish skeleton: `formal/lean/OxFmlSessionLifecycle.lean`
-2. TLA+ session lifecycle and publish-safety skeleton: `formal/tla/FecSessionLifecycle.tla`
+1. Lean session lifecycle and no-publish artifact: `formal/lean/OxFmlSessionLifecycle.lean`
+2. Lean external-reference deferment artifact: `formal/lean/OxFmlExternalReferenceDeferred.lean`
+3. TLA+ session lifecycle and publish-safety model: `formal/tla/FecSessionLifecycle.tla`
+4. TLA+ model configuration: `formal/tla/FecSessionLifecycle.cfg`
+5. TLA+ external capability gate model: `formal/tla/FecExternalCapabilityGate.tla`
+6. TLA+ external capability gate configuration: `formal/tla/FecExternalCapabilityGate.cfg`
+7. Local formal runner: `formal/run_formal.ps1`
 
-These are authored local skeletons.
-They are not yet checked proof artifacts, not yet model-checked runs, and not yet Green-owned canonical formal artifacts.
+These are checked local artifacts.
+They are not yet Green-owned canonical formal artifacts, and broader clause families still remain open.
 
 ## 5A. Current Authored Local Witness Paths
 The current local witness floor is:
@@ -82,6 +98,12 @@ The current local witness floor is:
 8. empirical-oracle scenario path: `crates/oxfml_core/tests/fixtures/empirical_oracle_scenarios.json`
 
 These are implementation-local witnesses, not formal artifacts and not yet full pack-grade replay bundles.
+The current retained-local witness index is:
+1. `crates/oxfml_core/tests/fixtures/witness_distillation/retained_witness_set_index.json`
+
+The current planning-only host and empirical-pack artifacts are:
+1. `crates/oxfml_core/tests/fixtures/empirical_pack_planning/dna_onecalc_host_policy_profiles.json`
+2. `crates/oxfml_core/tests/fixtures/empirical_pack_planning/empirical_pack_candidate_groups.json`
 
 ## 6. Working Rule
 When a new important OxFml clause is promoted:

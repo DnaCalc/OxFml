@@ -1,0 +1,71 @@
+[
+  {
+    "family_id": "fec_commit",
+    "source_fixture_family": "fec_commit_replay_cases",
+    "current_evidence_tier": "retained_local",
+    "promotion_readiness": "candidate_for_pack_grade_baseline",
+    "required_capability_level": "cap.C3.explain_valid",
+    "required_predicates": [
+      "pred.publication.accepted_payload_present",
+      "pred.publication.not_published_reason"
+    ],
+    "promotion_blockers": [
+      "pack_grade_bundle_governance_not_satisfied"
+    ]
+  },
+  {
+    "family_id": "session_lifecycle",
+    "source_fixture_family": "session_lifecycle_replay_cases",
+    "current_evidence_tier": "retained_local",
+    "promotion_readiness": "candidate_for_pack_grade_baseline",
+    "required_capability_level": "cap.C3.explain_valid",
+    "required_predicates": [
+      "pred.reject.family_present"
+    ],
+    "promotion_blockers": [
+      "pack_grade_bundle_governance_not_satisfied"
+    ]
+  },
+  {
+    "family_id": "execution_contract",
+    "source_fixture_family": "execution_contract_replay_cases",
+    "current_evidence_tier": "retained_local",
+    "promotion_readiness": "blocked_local_only",
+    "required_capability_level": "cap.C3.explain_valid",
+    "required_predicates": [
+      "pred.execution.restriction_present"
+    ],
+    "promotion_blockers": [
+      "cap_c4_breadth_not_satisfied",
+      "pack_grade_bundle_governance_not_satisfied"
+    ]
+  },
+  {
+    "family_id": "single_formula_host",
+    "source_fixture_family": "single_formula_host_replay_cases",
+    "current_evidence_tier": "retained_local",
+    "promotion_readiness": "blocked_direct_binding_policy",
+    "required_capability_level": "cap.C3.explain_valid",
+    "required_predicates": [
+      "pred.execution.restriction_present"
+    ],
+    "promotion_blockers": [
+      "direct_binding_sensitive_pack_rules_not_frozen",
+      "pack_grade_bundle_governance_not_satisfied"
+    ]
+  },
+  {
+    "family_id": "empirical_oracle",
+    "source_fixture_family": "empirical_oracle_scenarios",
+    "current_evidence_tier": "retained_local",
+    "promotion_readiness": "blocked_empirical_pack_policy",
+    "required_capability_level": "cap.C3.explain_valid",
+    "required_predicates": [
+      "pred.diff.mismatch_present"
+    ],
+    "promotion_blockers": [
+      "empirical_pack_policy_not_promoted",
+      "pack_grade_bundle_governance_not_satisfied"
+    ]
+  }
+]

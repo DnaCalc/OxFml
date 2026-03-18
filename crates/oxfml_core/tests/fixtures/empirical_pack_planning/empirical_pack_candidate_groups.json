@@ -1,0 +1,135 @@
+[
+  {
+    "group_id": "emp_pack.scalarization_reference.v1",
+    "host_case_ids": [
+      "host_004_implicit_intersection",
+      "host_005_legacy_single"
+    ],
+    "empirical_oracle_scenario_ids": [
+      "oracle_003_implicit_intersection",
+      "oracle_004_legacy_single"
+    ],
+    "requires_direct_cell_bindings": true,
+    "primary_semantic_lanes": [
+      "scalarization",
+      "reference_resolution"
+    ],
+    "pack_state": "planning_only",
+    "promotion_blockers": [
+      "local_witness_tier_only",
+      "excel_oracle_pack_capture_not_authored"
+    ],
+    "notes": [
+      "Preserve direct cell bindings because semantic truth depends on concrete cell resolution."
+    ]
+  },
+  {
+    "group_id": "emp_pack.helper_invocation.v1",
+    "host_case_ids": [
+      "host_006_let_helper",
+      "host_007_lambda_invocation"
+    ],
+    "empirical_oracle_scenario_ids": [
+      "oracle_005_lambda_invocation"
+    ],
+    "requires_direct_cell_bindings": false,
+    "primary_semantic_lanes": [
+      "helper_environment",
+      "callable_value"
+    ],
+    "pack_state": "planning_only",
+    "promotion_blockers": [
+      "local_witness_tier_only",
+      "callable_value_pack_rules_not_final"
+    ],
+    "notes": [
+      "Callable helper lanes remain planning-only for empirical-pack promotion."
+    ]
+  },
+  {
+    "group_id": "emp_pack.spill_publication.v1",
+    "host_case_ids": [
+      "host_008_spill_sequence"
+    ],
+    "empirical_oracle_scenario_ids": [
+      "oracle_006_sequence_spill"
+    ],
+    "requires_direct_cell_bindings": false,
+    "primary_semantic_lanes": [
+      "spill_publication",
+      "shape_delta"
+    ],
+    "pack_state": "planning_only",
+    "promotion_blockers": [
+      "local_witness_tier_only",
+      "spill_pack_capture_not_authored"
+    ],
+    "notes": [
+      "Spill-shaped publication is grouped separately because pack promotion needs broader shape/effect evidence."
+    ]
+  },
+  {
+    "group_id": "emp_pack.formatting_semantics.v1",
+    "host_case_ids": [
+      "host_009_formatting"
+    ],
+    "empirical_oracle_scenario_ids": [
+      "oracle_001_text"
+    ],
+    "requires_direct_cell_bindings": false,
+    "primary_semantic_lanes": [
+      "semantic_formatting"
+    ],
+    "pack_state": "planning_only",
+    "promotion_blockers": [
+      "local_witness_tier_only",
+      "formatting_oracle_pack_capture_not_authored"
+    ],
+    "notes": [
+      "Formatting scenarios preserve locale/date-system context but remain planning-only."
+    ]
+  },
+  {
+    "group_id": "emp_pack.host_query_environment.v1",
+    "host_case_ids": [
+      "host_003_host_query"
+    ],
+    "empirical_oracle_scenario_ids": [
+      "oracle_002_info"
+    ],
+    "requires_direct_cell_bindings": false,
+    "primary_semantic_lanes": [
+      "host_query"
+    ],
+    "pack_state": "planning_only",
+    "promotion_blockers": [
+      "local_witness_tier_only",
+      "host_query_pack_capture_not_authored"
+    ],
+    "notes": [
+      "Environment-only host-query cases remain separate from reference-sensitive host-query cases."
+    ]
+  },
+  {
+    "group_id": "emp_pack.host_query_reference_sensitive.v1",
+    "host_case_ids": [
+      "host_010_cell_filename"
+    ],
+    "empirical_oracle_scenario_ids": [
+      "oracle_007_cell_filename"
+    ],
+    "requires_direct_cell_bindings": true,
+    "primary_semantic_lanes": [
+      "host_query",
+      "reference_resolution"
+    ],
+    "pack_state": "planning_only",
+    "promotion_blockers": [
+      "local_witness_tier_only",
+      "reference_sensitive_host_query_pack_capture_not_authored"
+    ],
+    "notes": [
+      "Reference-sensitive host-query scenarios must preserve direct cell bindings in any future pack."
+    ]
+  }
+]

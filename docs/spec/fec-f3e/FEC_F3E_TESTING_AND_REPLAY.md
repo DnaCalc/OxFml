@@ -13,6 +13,8 @@ This document should be read together with:
 5. `../OXFML_MINIMUM_SEAM_SCHEMAS.md`
 6. `../OXFML_DELTA_EFFECT_TRACE_AND_REJECT_TAXONOMIES.md`
 7. `../OXFML_TEST_LADDER_AND_PROVING_HOSTS.md`
+8. `../OXFML_DNA_ONECALC_HOST_POLICY_BASELINE.md`
+9. `../OXFML_EMPIRICAL_PACK_PLANNING.md`
 
 ## 1A. Test Ladder
 The canonical OxFml test ladder is defined in:
@@ -154,7 +156,9 @@ Current rules:
 3. reduced witnesses remain local evidence until they carry explicit lifecycle refs and satisfy replay-valid policy,
 4. pack eligibility additionally requires the adapter capability surface to meet the pack-required level,
 5. current OxFml rollout does not declare formula-text, bind, fence, or capability-view rewrites replay-safe,
-6. local replay bundles and normalized fixtures may remain useful for ingest, replay, diff, and explain even when not pack-eligible.
+6. local replay bundles and normalized fixtures may remain useful for ingest, replay, diff, and explain even when not pack-eligible,
+7. local normalized pack-candidate bundles are rehearsal artifacts only and must remain explicitly non-pack-eligible.
+8. retained-local witness sets may broaden across host and empirical-oracle families, but retained-local breadth alone does not imply `cap.C4.distill_valid`.
 
 ## 5. Local Bootstrap Evaluator Role
 OxFml should maintain a minimal local bootstrap evaluator surface for fast OxFml-owned testing.
@@ -179,9 +183,18 @@ That means:
 Before full DNA OneCalc host specification, OxFml should exercise a single-formula proving host with:
 1. one formula under test,
 2. mutable defined-name inputs,
-3. full update and full recalc semantics,
-4. no multi-formula dependency graph,
-5. candidate/commit/reject/trace output capture.
+3. mutable direct cell bindings where a reference-sensitive formula needs concrete resolution,
+4. full update and full recalc semantics,
+5. no multi-formula dependency graph,
+6. candidate/commit/reject/trace output capture.
+
+Current exercised local floor:
+1. reuse-sensitive recalc over changed host inputs,
+2. scalarization-sensitive host runs for `@` and `_xlfn.SINGLE`,
+3. helper-form host runs for `LET` and callable `LAMBDA`,
+4. spill-sensitive host runs for `SEQUENCE`,
+5. formatting-sensitive host runs for `TEXT`,
+6. host-query-sensitive host runs for `INFO` and `CELL("filename", ...)`.
 
 ## 8. Empirical Oracle Role
 OxFml should maintain formula-oriented empirical validation scaffolding that uses Excel behavior as oracle.
@@ -190,7 +203,14 @@ The scaffolding should make it easy to verify:
 1. stored-form vs entered-form behavior,
 2. single-formula evaluation behavior,
 3. defined-name input update behavior,
-4. high-risk lanes such as `@`, `#`, `SINGLE`, `LET`, `LAMBDA`, formatting-sensitive semantics, and host-query semantics.
+4. high-risk lanes such as `@`, `#`, `SINGLE`, `LET`, `LAMBDA`, spill publication, formatting-sensitive semantics, and host-query semantics.
+
+Current exercised local floor:
+1. formatting oracle scenarios via `TEXT`,
+2. host-query oracle scenarios via `INFO("directory")` and `CELL("filename", ref)`,
+3. scalarization oracle scenarios via `@` and `_xlfn.SINGLE`,
+4. helper-form oracle scenarios via `LET` and callable `LAMBDA`,
+5. spill-shaped oracle scenarios via `SEQUENCE(2)`.
 
 ## 9. Formal and Model-Checking Obligations
 OxFml testing is coupled to formal assurance from the start.
@@ -217,6 +237,10 @@ DNA OneCalc is the preferred early proving host for:
 
 DNA OneCalc is not allowed to redefine OxFml semantics.
 Its role is to exercise the OxFml/OxFunc contracts without OxCalc multi-node coordination.
+
+The current host-policy baseline and empirical-pack planning docs are:
+1. `../OXFML_DNA_ONECALC_HOST_POLICY_BASELINE.md`
+2. `../OXFML_EMPIRICAL_PACK_PLANNING.md`
 
 ## 11. OxCalc Integration Role
 OxCalc integration testing should validate:
@@ -246,7 +270,15 @@ The current local witness floor for the exercised implementation-start slice is:
 4. FEC commit/reject fixtures: `crates/oxfml_core/tests/fixtures/fec_commit_replay_cases.json`
 5. execution-contract fixtures: `crates/oxfml_core/tests/fixtures/execution_contract_replay_cases.json`
 6. session lifecycle fixtures: `crates/oxfml_core/tests/fixtures/session_lifecycle_replay_cases.json`
+   Current exercised lanes: fence rejection, contention, async-coupled external-provider execution, dependency consequence facts, and overlay-family expectations
 7. single-formula host fixtures: `crates/oxfml_core/tests/fixtures/single_formula_host_replay_cases.json`
+   Current exercised lanes: reuse-sensitive recalc, scalarization, helper forms, spill, formatting, host-query, and seam-significant publication-surface deltas
 8. empirical-oracle scenario fixtures: `crates/oxfml_core/tests/fixtures/empirical_oracle_scenarios.json`
+   Current exercised lanes: formatting, host-query, scalarization, helper-form invocation, spill publication, and seam-significant `format_delta` / `display_delta`
+9. replay-adapter manifest and conformance checks: `docs/spec/OXFML_REPLAY_APPLIANCE_ADAPTER_V1.md`, `docs/spec/OXFML_REPLAY_ADAPTER_CAPABILITY_MANIFEST_V1.json`, and `crates/oxfml_core/tests/replay_adapter_and_witness_tests.rs`
+10. first local reduced-witness artifacts: `crates/oxfml_core/tests/fixtures/witness_distillation/fec_reject_formula_token_reduction_manifest.json`, `crates/oxfml_core/tests/fixtures/witness_distillation/fec_reject_formula_token_witness_bundle.json`, and `crates/oxfml_core/tests/fixtures/witness_distillation/fec_reject_formula_token_lifecycle.json`
+11. broadened reduced-witness artifacts: `crates/oxfml_core/tests/fixtures/witness_distillation/fec_accept_publication_reduction_manifest.json`, `crates/oxfml_core/tests/fixtures/witness_distillation/session_capability_denied_reduction_manifest.json`, `crates/oxfml_core/tests/fixtures/witness_distillation/execution_contract_host_query_reduction_manifest.json`, and `crates/oxfml_core/tests/replay_adapter_and_witness_tests.rs`
+12. local normalized pack-candidate bundles: `crates/oxfml_core/tests/fixtures/replay_bundle_normalization/fec_commit_pack_candidate_bundle.json`, `crates/oxfml_core/tests/fixtures/replay_bundle_normalization/session_lifecycle_pack_candidate_bundle.json`, and `crates/oxfml_core/tests/fixtures/replay_bundle_normalization/pack_candidate_index.json`
+13. promotion-readiness planning artifacts: `crates/oxfml_core/tests/fixtures/replay_bundle_normalization/promotion_candidate_families.json` and `crates/oxfml_core/tests/fixtures/replay_bundle_normalization/promotion_readiness_index.json`
 
 These are local witness artifacts, not yet promoted pack-grade corpus.

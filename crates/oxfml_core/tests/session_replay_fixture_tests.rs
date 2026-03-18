@@ -2,8 +2,9 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
+use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
 use oxfunc_core::locale_format::en_us_context;
-use oxfunc_core::value::EvalValue;
+use oxfunc_core::value::{EvalValue, ExcelText, ReferenceLike};
 use serde::Deserialize;
 
 use oxfml_core::binding::{BindContext, BindRequest, NameKind, bind_formula};
@@ -43,6 +44,10 @@ struct SessionReplayExpected {
     reject_code: Option<String>,
     published_payload: Option<String>,
     trace_event_kinds: Vec<String>,
+    capability_effect_kinds: Option<Vec<String>>,
+    dynamic_reference_failure_classes: Option<Vec<String>>,
+    dependency_consequence_evidence_classes: Option<Vec<String>>,
+    overlay_families: Option<Vec<String>>,
 }
 
 #[test]
@@ -82,6 +87,73 @@ fn session_lifecycle_replay_fixtures_match_expected_snapshots() {
                     })
                     .expect("execute should succeed");
 
+                if let Some(expected_effects) = &fixture.expected.capability_effect_kinds {
+                    let mut actual_effects = candidate
+                        .topology_delta
+                        .capability_effect_facts
+                        .iter()
+                        .map(|fact| fact.capability_kind.clone())
+                        .collect::<Vec<_>>();
+                    actual_effects.sort();
+                    let mut expected_effects = expected_effects.clone();
+                    expected_effects.sort();
+                    assert_eq!(
+                        actual_effects, expected_effects,
+                        "capability effect mismatch for {}",
+                        fixture.case_id
+                    );
+                }
+                if let Some(expected_failures) = &fixture.expected.dynamic_reference_failure_classes
+                {
+                    let mut actual_failures = candidate
+                        .topology_delta
+                        .dynamic_reference_facts
+                        .iter()
+                        .filter_map(|fact| fact.resolution_failure_class.clone())
+                        .collect::<Vec<_>>();
+                    actual_failures.sort();
+                    let mut expected_failures = expected_failures.clone();
+                    expected_failures.sort();
+                    assert_eq!(
+                        actual_failures, expected_failures,
+                        "dynamic reference failure mismatch for {}",
+                        fixture.case_id
+                    );
+                }
+                if let Some(expected_evidence_classes) =
+                    &fixture.expected.dependency_consequence_evidence_classes
+                {
+                    let mut actual_evidence_classes = candidate
+                        .topology_delta
+                        .dependency_consequence_facts
+                        .iter()
+                        .map(|fact| fact.evidence_class.clone())
+                        .collect::<Vec<_>>();
+                    actual_evidence_classes.sort();
+                    let mut expected_evidence_classes = expected_evidence_classes.clone();
+                    expected_evidence_classes.sort();
+                    assert_eq!(
+                        actual_evidence_classes, expected_evidence_classes,
+                        "dependency consequence mismatch for {}",
+                        fixture.case_id
+                    );
+                }
+                if let Some(expected_overlay_families) = &fixture.expected.overlay_families {
+                    let mut actual_overlay_families = service
+                        .overlay_entries(&open.session_id)
+                        .iter()
+                        .map(|entry| entry.overlay_family.clone())
+                        .collect::<Vec<_>>();
+                    actual_overlay_families.sort();
+                    let mut expected_overlay_families = expected_overlay_families.clone();
+                    expected_overlay_families.sort();
+                    assert_eq!(
+                        actual_overlay_families, expected_overlay_families,
+                        "overlay family mismatch for {}",
+                        fixture.case_id
+                    );
+                }
+
                 let decision =
                     service.commit(&open.session_id, "commit:fixture", candidate.fence_snapshot);
                 assert_eq!(
@@ -103,6 +175,63 @@ fn session_lifecycle_replay_fixtures_match_expected_snapshots() {
                         fixture.case_id, reject.reject_code
                     ),
                 }
+            }
+            "execute_commit_rejected" => {
+                service
+                    .establish_capability_view(&open.session_id, into_capability_spec(&fixture))
+                    .expect("capability view should succeed");
+
+                let mut defined_names = BTreeMap::new();
+                if fixture.with_input_name {
+                    defined_names.insert(
+                        "InputValue".to_string(),
+                        DefinedNameBinding::Value(EvalValue::Number(5.0)),
+                    );
+                }
+
+                let candidate = service
+                    .execute(ExecuteRequest {
+                        session_id: open.session_id.clone(),
+                        backend: EvaluationBackend::OxFuncBacked,
+                        caller_row: 1,
+                        caller_col: 1,
+                        cell_values: BTreeMap::new(),
+                        defined_names,
+                        locale_ctx: Some(&en_us_context()),
+                        host_info: None,
+                        now_serial: Some(46000.0),
+                        random_value: Some(0.25),
+                    })
+                    .expect("execute should succeed");
+
+                let decision = service.commit(
+                    &open.session_id,
+                    "commit:fixture_rejected",
+                    oxfml_core::FenceSnapshot {
+                        formula_token: "token:stale".to_string(),
+                        snapshot_epoch: candidate.fence_snapshot.snapshot_epoch.clone(),
+                        bind_hash: candidate.fence_snapshot.bind_hash.clone(),
+                        profile_version: candidate.fence_snapshot.profile_version.clone(),
+                        capability_view_key: candidate.fence_snapshot.capability_view_key.clone(),
+                    },
+                );
+
+                assert_eq!(
+                    accept_decision_name(&decision),
+                    fixture.expected.decision,
+                    "decision mismatch for {}",
+                    fixture.case_id
+                );
+
+                let AcceptDecision::Rejected(reject) = decision else {
+                    panic!("expected rejected decision for {}", fixture.case_id);
+                };
+                assert_eq!(
+                    Some(reject_code_name(reject.reject_code)),
+                    fixture.expected.reject_code,
+                    "reject code mismatch for {}",
+                    fixture.case_id
+                );
             }
             "capability_only" => {
                 let reject = service
@@ -206,6 +335,78 @@ fn session_lifecycle_replay_fixtures_match_expected_snapshots() {
                     fixture.case_id
                 );
             }
+            "contention_execute_rejected" => {
+                service
+                    .establish_capability_view(&open.session_id, into_capability_spec(&fixture))
+                    .expect("capability view should succeed");
+                service
+                    .execute(ExecuteRequest {
+                        session_id: open.session_id.clone(),
+                        backend: EvaluationBackend::OxFuncBacked,
+                        caller_row: 1,
+                        caller_col: 1,
+                        cell_values: BTreeMap::new(),
+                        defined_names: BTreeMap::new(),
+                        locale_ctx: Some(&en_us_context()),
+                        host_info: Some(&ReplayHostInfoProvider),
+                        now_serial: Some(46000.0),
+                        random_value: Some(0.25),
+                    })
+                    .expect("primary execute should succeed");
+
+                let prepared_second = compile_prepared(&fixture.formula, fixture.with_input_name);
+                let prepared_second = service
+                    .prepare(prepared_second)
+                    .expect("second prepare should succeed");
+                let open_second = service.open_session(prepared_second);
+                service
+                    .establish_capability_view(
+                        &open_second.session_id,
+                        into_capability_spec(&fixture),
+                    )
+                    .expect("second capability view should succeed");
+                let reject = service
+                    .execute(ExecuteRequest {
+                        session_id: open_second.session_id.clone(),
+                        backend: EvaluationBackend::OxFuncBacked,
+                        caller_row: 1,
+                        caller_col: 1,
+                        cell_values: BTreeMap::new(),
+                        defined_names: BTreeMap::new(),
+                        locale_ctx: Some(&en_us_context()),
+                        host_info: Some(&ReplayHostInfoProvider),
+                        now_serial: Some(46000.0),
+                        random_value: Some(0.25),
+                    })
+                    .expect_err("second execute should reject");
+                assert_eq!(
+                    Some(reject_code_name(reject.reject_code)),
+                    fixture.expected.reject_code,
+                    "reject code mismatch for {}",
+                    fixture.case_id
+                );
+
+                let session = service
+                    .session(&open_second.session_id)
+                    .expect("second session should exist");
+                assert_eq!(
+                    session_phase_name(&session.phase),
+                    fixture.expected.phase,
+                    "phase mismatch for {}",
+                    fixture.case_id
+                );
+                let actual_trace = session
+                    .trace_events
+                    .iter()
+                    .map(|event| trace_event_name(event.event_kind))
+                    .collect::<Vec<_>>();
+                assert_eq!(
+                    actual_trace, fixture.expected.trace_event_kinds,
+                    "trace event mismatch for {}",
+                    fixture.case_id
+                );
+                continue;
+            }
             other => panic!("unsupported action {other} for {}", fixture.case_id),
         }
 
@@ -279,6 +480,7 @@ fn compile_prepared(formula: &str, with_input_name: bool) -> PrepareRequest {
         locale_profile: Some("en-US".to_string()),
         date_system: Some("1900".to_string()),
         format_profile: Some("excel-default".to_string()),
+        library_context_snapshot: None,
     })
     .semantic_plan;
 
@@ -350,4 +552,30 @@ fn trace_event_name(kind: TraceEventKind) -> String {
         TraceEventKind::SessionExpired => "SessionExpired",
     }
     .to_string()
+}
+
+struct ReplayHostInfoProvider;
+
+impl HostInfoProvider for ReplayHostInfoProvider {
+    fn query_cell_info(
+        &self,
+        query: CellInfoQuery,
+        _reference: Option<&ReferenceLike>,
+    ) -> Result<EvalValue, HostInfoError> {
+        match query {
+            CellInfoQuery::Filename => Ok(EvalValue::Text(ExcelText::from_utf16_code_units(
+                "[Book1]Sheet1".encode_utf16().collect(),
+            ))),
+            _ => Err(HostInfoError::UnsupportedCellInfoQuery(query)),
+        }
+    }
+
+    fn query_info(&self, query: InfoQuery) -> Result<EvalValue, HostInfoError> {
+        match query {
+            InfoQuery::Directory => Ok(EvalValue::Text(ExcelText::from_utf16_code_units(
+                "C:\\Work".encode_utf16().collect(),
+            ))),
+            _ => Err(HostInfoError::UnsupportedInfoQuery(query)),
+        }
+    }
 }

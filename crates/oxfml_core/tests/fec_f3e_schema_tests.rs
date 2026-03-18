@@ -124,6 +124,7 @@ fn sample_candidate() -> AcceptedCandidateResult {
             dependency_additions: vec!["name:InputA".to_string()],
             dependency_removals: Vec::new(),
             dependency_reclassifications: Vec::new(),
+            dependency_consequence_facts: Vec::new(),
             dynamic_reference_facts: vec![DynamicReferenceFact {
                 formula_stable_id: "formula:001".to_string(),
                 discovery_site: "OFFSET".to_string(),

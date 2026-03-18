@@ -18,6 +18,12 @@ pub struct RedProjection {
     pub nodes: Vec<RedNode>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IncrementalRedProjectionResult {
+    pub red_projection: RedProjection,
+    pub reused_red_projection: bool,
+}
+
 impl RedProjection {
     pub fn root(&self) -> &RedNode {
         &self.nodes[0]
@@ -34,6 +40,28 @@ pub fn project_red_view(
         formula_stable_id,
         green_tree_key: green_tree.green_tree_key.clone(),
         nodes,
+    }
+}
+
+pub fn project_red_view_incremental(
+    formula_stable_id: FormulaStableId,
+    green_tree: &GreenTreeRoot,
+    previous_red_projection: Option<&RedProjection>,
+) -> IncrementalRedProjectionResult {
+    if let Some(previous_red_projection) = previous_red_projection {
+        if previous_red_projection.formula_stable_id == formula_stable_id
+            && previous_red_projection.green_tree_key == green_tree.green_tree_key
+        {
+            return IncrementalRedProjectionResult {
+                red_projection: previous_red_projection.clone(),
+                reused_red_projection: true,
+            };
+        }
+    }
+
+    IncrementalRedProjectionResult {
+        red_projection: project_red_view(formula_stable_id, green_tree),
+        reused_red_projection: false,
     }
 }
 

@@ -1,13 +1,10 @@
+use oxfml_core::semantics::{
+    EvaluationRequirement, FormulaDeterminismClass, FormulaThreadSafetyClass,
+    FormulaVolatilityClass,
+};
 use oxfunc_core::function::FecDependencyProfile;
 
-use oxfml_core::binding::{BindContext, BindRequest, bind_formula};
-use oxfml_core::red::project_red_view;
-use oxfml_core::semantics::{
-    CompileSemanticPlanRequest, EvaluationRequirement, FormulaDeterminismClass,
-    FormulaThreadSafetyClass, FormulaVolatilityClass, compile_semantic_plan,
-};
-use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
-use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
+mod common;
 
 #[test]
 fn semantic_plan_for_sum_binds_known_oxfunc_metadata() {
@@ -97,6 +94,110 @@ fn semantic_plan_for_rand_marks_nondeterministic_volatile_profile() {
         plan.capability_requirements
             .iter()
             .any(|item| item == "random_provider")
+    );
+}
+
+#[test]
+fn semantic_plan_for_row_and_column_mark_caller_context_and_serial_lane() {
+    let row_plan = compile("=ROW()");
+    let column_plan = compile("=COLUMN(A1:B2)");
+
+    assert_eq!(row_plan.function_bindings[0].function_id, "FUNC.ROW");
+    assert_eq!(column_plan.function_bindings[0].function_id, "FUNC.COLUMN");
+    assert!(row_plan.execution_profile.requires_caller_context);
+    assert!(column_plan.execution_profile.requires_caller_context);
+    assert!(row_plan.execution_profile.requires_serial_scheduler_lane);
+    assert!(column_plan.execution_profile.requires_serial_scheduler_lane);
+    assert!(
+        row_plan
+            .evaluation_requirements
+            .contains(&EvaluationRequirement::CallerContextSensitive)
+    );
+    assert!(
+        column_plan
+            .evaluation_requirements
+            .contains(&EvaluationRequirement::ReferencePreservedCalls)
+    );
+}
+
+#[test]
+fn semantic_plan_for_indirect_offset_and_iferror_marks_runtime_requirements() {
+    let indirect_plan = compile("=INDIRECT(\"A1\")");
+    let offset_plan = compile("=OFFSET(A1,0,0)");
+    let iferror_plan = compile("=IFERROR(UnknownName,2)");
+
+    assert_eq!(
+        indirect_plan.function_bindings[0].function_id,
+        "FUNC.INDIRECT"
+    );
+    assert_eq!(offset_plan.function_bindings[0].function_id, "FUNC.OFFSET");
+    assert_eq!(
+        iferror_plan.function_bindings[0].function_id,
+        "FUNC.IFERROR"
+    );
+    assert!(indirect_plan.execution_profile.requires_caller_context);
+    assert!(
+        indirect_plan
+            .execution_profile
+            .requires_serial_scheduler_lane
+    );
+    assert!(
+        offset_plan
+            .execution_profile
+            .requires_reference_preservation
+    );
+    assert!(offset_plan.execution_profile.requires_caller_context);
+    assert!(iferror_plan.execution_profile.requires_fallback_laziness);
+    assert!(
+        iferror_plan
+            .evaluation_requirements
+            .contains(&EvaluationRequirement::FallbackLazy)
+    );
+}
+
+#[test]
+fn semantic_plan_for_external_reference_marks_deferred_capability_lane() {
+    let plan = compile("=[Book.xlsx]Sheet2!A1");
+
+    assert!(plan.function_bindings.is_empty());
+    assert!(
+        plan.evaluation_requirements
+            .contains(&EvaluationRequirement::ExternalReferenceDeferred)
+    );
+    assert!(plan.execution_profile.requires_host_interaction);
+    assert!(plan.execution_profile.requires_async_coupling);
+    assert!(plan.execution_profile.contains_external_event_dependence);
+    assert!(plan.execution_profile.requires_serial_scheduler_lane);
+    assert!(
+        plan.capability_requirements
+            .iter()
+            .any(|item| item == "external_reference")
+    );
+}
+
+#[test]
+fn semantic_plan_for_index_and_xmatch_binds_registered_catalog_entries() {
+    let index_plan = compile("=INDEX(SEQUENCE(3),2)");
+    let xmatch_plan = compile("=XMATCH(3,SEQUENCE(5))");
+
+    let index_function_ids = index_plan
+        .function_bindings
+        .iter()
+        .map(|binding| binding.function_id)
+        .collect::<Vec<_>>();
+    let xmatch_function_ids = xmatch_plan
+        .function_bindings
+        .iter()
+        .map(|binding| binding.function_id)
+        .collect::<Vec<_>>();
+
+    assert_eq!(index_function_ids, vec!["FUNC.SEQUENCE", "FUNC.INDEX"]);
+    assert_eq!(xmatch_function_ids, vec!["FUNC.SEQUENCE", "FUNC.XMATCH"]);
+    assert!(index_plan.execution_profile.requires_reference_preservation);
+    assert!(
+        !xmatch_plan
+            .execution_profile
+            .requires_reference_preservation
     );
 }
 
@@ -203,27 +304,12 @@ fn semantic_plan_preserves_helper_environment_for_let_and_lambda() {
 }
 
 fn compile(formula: &str) -> oxfml_core::SemanticPlan {
-    let source = FormulaSourceRecord::new("semantic-fixture", 1, formula.to_string());
-    let parse = parse_formula(ParseRequest {
-        source: source.clone(),
-    });
-    let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
-    let bind = bind_formula(BindRequest {
-        source,
-        green_tree: parse.green_tree,
-        red_projection: red,
-        context: BindContext {
-            structure_context_version: StructureContextVersion("semantic-struct-v1".to_string()),
-            ..BindContext::default()
-        },
-    });
-
-    compile_semantic_plan(CompileSemanticPlanRequest {
-        bound_formula: bind.bound_formula,
-        oxfunc_catalog_identity: "oxfunc:fixture".to_string(),
-        locale_profile: Some("en-US".to_string()),
-        date_system: Some("1900".to_string()),
-        format_profile: Some("excel-default".to_string()),
-    })
+    common::compile_formula(
+        "semantic-fixture",
+        formula,
+        std::collections::BTreeMap::new(),
+        "semantic-struct-v1",
+        "oxfunc:fixture",
+    )
     .semantic_plan
 }

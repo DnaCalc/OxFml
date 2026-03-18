@@ -8,9 +8,14 @@ OxFml is not just a parser and evaluator implementation target. It is part of th
 The current clause-to-artifact planning register is:
 1. `OXFML_FORMAL_ARTIFACT_REGISTER.md`
 
-The current local formal skeleton floor is:
+The current local checked-formal floor is:
 1. `../../formal/lean/OxFmlSessionLifecycle.lean`
-2. `../../formal/tla/FecSessionLifecycle.tla`
+2. `../../formal/lean/OxFmlExternalReferenceDeferred.lean`
+3. `../../formal/tla/FecSessionLifecycle.tla`
+4. `../../formal/tla/FecSessionLifecycle.cfg`
+5. `../../formal/tla/FecExternalCapabilityGate.tla`
+6. `../../formal/tla/FecExternalCapabilityGate.cfg`
+7. `../../formal/run_formal.ps1`
 
 This continues the broader DNA Calc verification posture already present across sibling lanes:
 1. Lean-oriented semantic and type formalization in Foundation and OxFunc,
@@ -27,6 +32,11 @@ OxFml uses a coupled assurance stack:
 6. conformance packs and scenario suites.
 
 No critical semantic clause should exist only as prose when a typed or model-checked form is practical.
+
+Runner rule:
+1. a local formal artifact is operationally stronger when the repo also contains the deterministic command surface that checks it,
+2. where practical, checked local formal artifacts should ship with a canonical runner or command path in the repo,
+3. docs should distinguish clearly between authored-only artifacts and checked artifacts with a known local execution path.
 
 ## 3. Lean-Oriented Surfaces
 The following OxFml surfaces should be designed for Lean-friendly formalization:
@@ -107,6 +117,14 @@ The first formal priorities for OxFml are:
 4. no-publish-on-reject and fence-soundness rules for FEC/F3E,
 5. session lifecycle and commit atomicity in sequential coordinator mode,
 6. TLA+ modeling of concurrent session conflicts before Stage 2 promotion.
+
+The current checked local floor now covers:
+1. a Lean-checked session lifecycle and no-publish artifact,
+2. a Lean-checked external-reference deferment and capability-admissibility artifact,
+3. a Lean-checked async-capability consequence artifact for the external-provider lane,
+4. a TLC-checked TLA+ session lifecycle and publish-safety model,
+5. a TLC-checked TLA+ external capability gate model including async-consequence invariants,
+6. a canonical local execution path through `formal/run_formal.ps1`.
 
 ## 8. Open Lanes
 The following formal lanes remain open and must be tracked as such:

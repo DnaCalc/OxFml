@@ -1,0 +1,24 @@
+{
+  "index_id": "oxfml.local.replay_promotion_readiness_index.v1",
+  "lane_id": "oxfml",
+  "adapter_id": "oxfml.replay_adapter.v1",
+  "index_state": "promotion_baseline_only",
+  "claimed_capability_ceiling": "cap.C3.explain_valid",
+  "family_refs": [
+    "crates/oxfml_core/tests/fixtures/replay_bundle_normalization/promotion_candidate_families.json"
+  ],
+  "nearest_promotion_families": [
+    "fec_commit",
+    "session_lifecycle"
+  ],
+  "promotion_blockers": [
+    "pack_grade_bundle_governance_not_satisfied",
+    "cap_c4_breadth_not_satisfied",
+    "retained_local_only"
+  ],
+  "notes": [
+    "This index records the OxFml promotion-readiness baseline only.",
+    "It does not claim cap.C4.distill_valid or cap.C5.pack_valid.",
+    "Nearest-promotion families are still local-only and remain non-pack-eligible."
+  ]
+}

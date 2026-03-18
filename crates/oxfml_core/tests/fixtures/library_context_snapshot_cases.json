@@ -1,0 +1,104 @@
+[
+  {
+    "case_id": "lc_001_catalog_known_and_feature_gate",
+    "formula": "=SUM(1)+FUTUREFUNC(2)",
+    "snapshot": {
+      "snapshot_id": "libctx.fixture.round1",
+      "snapshot_version": "v1",
+      "entries": [
+        {
+          "surface_name": "SUM",
+          "canonical_id": "FUNC.SUM",
+          "registration_source_kind": "BuiltIn",
+          "parse_bind_state": "CatalogKnown",
+          "semantic_plan_state": "CatalogKnown",
+          "runtime_capability_state": null,
+          "post_dispatch_state": null
+        },
+        {
+          "surface_name": "FUTUREFUNC",
+          "canonical_id": "FUNC.FUTUREFUNC",
+          "registration_source_kind": "BuiltIn",
+          "parse_bind_state": "FeatureGated",
+          "semantic_plan_state": "FeatureGated",
+          "runtime_capability_state": null,
+          "post_dispatch_state": null
+        }
+      ]
+    },
+    "expected": {
+      "snapshot_ref": "libctx.fixture.round1@v1",
+      "availability_summaries": [
+        {
+          "surface_name": "SUM",
+          "canonical_id": "FUNC.SUM",
+          "registration_source_kind": "BuiltIn",
+          "parse_bind_state": "CatalogKnown",
+          "semantic_plan_state": "CatalogKnown",
+          "runtime_capability_state": null,
+          "post_dispatch_state": null
+        },
+        {
+          "surface_name": "FUTUREFUNC",
+          "canonical_id": "FUNC.FUTUREFUNC",
+          "registration_source_kind": "BuiltIn",
+          "parse_bind_state": "FeatureGated",
+          "semantic_plan_state": "FeatureGated",
+          "runtime_capability_state": null,
+          "post_dispatch_state": null
+        }
+      ]
+    }
+  },
+  {
+    "case_id": "lc_002_provider_and_addin_staging",
+    "formula": "=TRANSLATE(1)+MYADDINFUNC(2)",
+    "snapshot": {
+      "snapshot_id": "libctx.fixture.round2",
+      "snapshot_version": "v1",
+      "entries": [
+        {
+          "surface_name": "TRANSLATE",
+          "canonical_id": "FUNC.TRANSLATE",
+          "registration_source_kind": "ProviderBacked",
+          "parse_bind_state": "CatalogKnown",
+          "semantic_plan_state": "CatalogKnown",
+          "runtime_capability_state": "ProviderUnavailable",
+          "post_dispatch_state": "ProviderUnavailable"
+        },
+        {
+          "surface_name": "MYADDINFUNC",
+          "canonical_id": "FUNC.MYADDINFUNC",
+          "registration_source_kind": "AddIn",
+          "parse_bind_state": "CatalogKnown",
+          "semantic_plan_state": "CatalogKnown",
+          "runtime_capability_state": "AddInAbsent",
+          "post_dispatch_state": null
+        }
+      ]
+    },
+    "expected": {
+      "snapshot_ref": "libctx.fixture.round2@v1",
+      "availability_summaries": [
+        {
+          "surface_name": "TRANSLATE",
+          "canonical_id": "FUNC.TRANSLATE",
+          "registration_source_kind": "ProviderBacked",
+          "parse_bind_state": "CatalogKnown",
+          "semantic_plan_state": "CatalogKnown",
+          "runtime_capability_state": "ProviderUnavailable",
+          "post_dispatch_state": "ProviderUnavailable"
+        },
+        {
+          "surface_name": "MYADDINFUNC",
+          "canonical_id": "FUNC.MYADDINFUNC",
+          "registration_source_kind": "AddIn",
+          "parse_bind_state": "CatalogKnown",
+          "semantic_plan_state": "CatalogKnown",
+          "runtime_capability_state": "AddInAbsent",
+          "post_dispatch_state": null
+        }
+      ]
+    }
+  }
+]

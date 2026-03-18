@@ -12,8 +12,10 @@ It exists to make explicit:
 Read together with:
 1. `OXFML_IMPLEMENTATION_BASELINE.md`
 2. `OXFML_HIGH_RISK_AND_EARLY_ATTENTION_AREAS.md`
-3. `fec-f3e/FEC_F3E_TESTING_AND_REPLAY.md`
-4. `fec-f3e/FEC_F3E_SCHEMA_REPLAY_FIXTURE_PLAN.md`
+3. `OXFML_DNA_ONECALC_HOST_POLICY_BASELINE.md`
+4. `OXFML_EMPIRICAL_PACK_PLANNING.md`
+5. `fec-f3e/FEC_F3E_TESTING_AND_REPLAY.md`
+6. `fec-f3e/FEC_F3E_SCHEMA_REPLAY_FIXTURE_PLAN.md`
 
 ## 2. Working Rule
 OxFml should not wait for a full downstream function universe before it can test its own parser, binder, evaluator, and seam surfaces.
@@ -75,13 +77,23 @@ Purpose:
 The current intended scope is:
 1. one formula under test,
 2. no upstream formula dependency graph,
-3. defined names or host-supplied bindings as mutable inputs,
+3. defined names, direct cell bindings, or host-supplied bindings as mutable inputs,
 4. full recompute or full update semantics,
 5. candidate/commit/reject/trace behavior,
-6. enough host structure to model caller context, profile, locale, date-system, and host-query capabilities where needed.
+6. enough host structure to model caller context, profile, locale, date-system, host-query capabilities, and artifact reuse where needed.
+
+Current exercised local floor:
+1. defined-name update and reuse-sensitive recalc,
+2. reference-sensitive scalarization through `@` and `_xlfn.SINGLE`,
+3. helper-form evaluation through `LET` and callable `LAMBDA`,
+4. spill-shaped publication through `SEQUENCE`,
+5. formatting-sensitive host runs through `TEXT`,
+6. host-query-sensitive host runs through `INFO` and `CELL("filename", ...)`.
 
 This is the direct precursor to the later DNA OneCalc host specification.
 It is an OxFml proving-host model first, not a full host/product definition.
+The current DNA OneCalc-facing host policy baseline is recorded in:
+1. `OXFML_DNA_ONECALC_HOST_POLICY_BASELINE.md`
 
 ### 3.5 Layer 5: Excel Empirical Oracle Runs
 Purpose:
@@ -90,12 +102,24 @@ Purpose:
 Current target use:
 1. parse/normalization behavior,
 2. formula evaluation behavior in the single-formula host model,
-3. `@`, `#`, `SINGLE`, `LET`, `LAMBDA`, host-query, and formatting-sensitive lanes,
+3. `@`, `#`, `SINGLE`, `LET`, `LAMBDA`, host-query, spill, and formatting-sensitive lanes,
 4. update/recalc behavior when defined-name inputs change.
+
+Current exercised local floor:
+1. `TEXT` locale-sensitive formatting,
+2. `INFO("directory")` host-query semantics,
+3. `CELL("filename", ref)` host-query semantics with typed reference input,
+4. `@` and `_xlfn.SINGLE` scalarization over reference-like inputs,
+5. helper-form invocation through `LET` and `LAMBDA`,
+6. spill-shaped array publication through `SEQUENCE(2)`.
 
 Rule:
 1. empirical Excel runs are not implementation substitutes,
 2. they are the behavior oracle for disputed or under-specified formula semantics.
+
+Current machine-readable empirical-pack planning artifacts are:
+1. `crates/oxfml_core/tests/fixtures/empirical_pack_planning/dna_onecalc_host_policy_profiles.json`
+2. `crates/oxfml_core/tests/fixtures/empirical_pack_planning/empirical_pack_candidate_groups.json`
 
 ### 3.6 Layer 6: Replay and Formal Witnesses
 Purpose:
@@ -127,8 +151,13 @@ The current proving-host model should support:
 1. one formula source record,
 2. one green/root and bind/semantic-plan path,
 3. mutable defined-name inputs supplied by the host,
-4. explicit recalc trigger and full recompute semantics,
-5. replay-stable candidate, commit, reject, and trace outputs.
+4. mutable direct cell bindings where a reference-sensitive formula needs concrete cell resolution,
+5. explicit recalc trigger and full recompute semantics,
+6. replay-stable candidate, commit, reject, and trace outputs.
+
+Working rule:
+1. direct cell bindings are not an optional convenience where reference-sensitive truth depends on concrete cell state,
+2. host models that omit them should not claim coverage of scalarization, spill-linked, or host-query lanes that require real cell resolution.
 
 It should not require:
 1. a workbook-wide formula graph,
@@ -142,10 +171,14 @@ The scaffolding should make it easy to capture:
 1. entered formula,
 2. stored formula if different,
 3. bound or normalized context summary,
-4. input binding set for defined names,
+4. input binding set for defined names and any required direct cell bindings,
 5. observed Excel result class and value,
 6. any relevant host/query/format context,
 7. reproducible scenario ids for replay comparison.
+
+Working rule:
+1. empirical-oracle scenarios should not hide direct cell state inside ad hoc prose when that state is semantically required,
+2. if a scenario depends on concrete cell resolution, the cell bindings belong in the scenario artifact.
 
 ## 7. Workset Implications
 Current expected primary owners:
@@ -168,5 +201,12 @@ The current local witness floor for the ladder is:
 1. Layer 1 parse/bind fixtures: `crates/oxfml_core/tests/fixtures/parse_bind_cases.json`
 2. Layer 3 OxFunc-backed prepared-call/result fixtures: `crates/oxfml_core/tests/fixtures/prepared_call_replay_cases.json`
 3. Layer 4 single-formula host fixtures: `crates/oxfml_core/tests/fixtures/single_formula_host_replay_cases.json`
+   Current exercised lanes: reuse-sensitive recalc, `@`, `_xlfn.SINGLE`, `LET`, `LAMBDA`, `SEQUENCE`, `TEXT`, `INFO`, and `CELL("filename", ...)`
 4. Layer 5 empirical-oracle scenario shapes: `crates/oxfml_core/tests/fixtures/empirical_oracle_scenarios.json`
+   Current exercised lanes: formatting, host-query, scalarization, helper forms, spill publication, and seam-significant `format_delta` / `display_delta`
 5. Layer 6 execution/replay fixtures: `crates/oxfml_core/tests/fixtures/semantic_plan_replay_cases.json`, `crates/oxfml_core/tests/fixtures/fec_commit_replay_cases.json`, and `crates/oxfml_core/tests/fixtures/execution_contract_replay_cases.json`
+
+Current proving-host discipline:
+1. direct cell bindings are preserved where scalarization, host-query, or reference-sensitive replay depends on them,
+2. host and empirical fixtures should expand in the same wave when new seam-significant format, display, or topology facts are added,
+3. promotion-readiness planning for host and empirical families remains local-only until broader replay promotion work authorizes more.

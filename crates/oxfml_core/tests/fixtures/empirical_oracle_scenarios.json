@@ -7,10 +7,24 @@
     "input_bindings": {
       "InputValue": "Number(1234.567)"
     },
+    "cell_bindings": {},
     "expected_result_summary": "Text(1234.57)",
     "locale_profile": "EnUs",
     "date_system": "System1900",
-    "host_query_profile": null
+    "host_query_profile": null,
+    "expected_trace_event_kinds": [
+      "AcceptedCandidateResultBuilt",
+      "CommitAccepted"
+    ],
+    "expected_capability_effect_kinds": [],
+    "expected_format_dependency_tokens": [
+      "locale_format_context"
+    ],
+    "expected_spill_event_kinds": [],
+    "expected_format_delta_classes": [
+      "locale_format_semantics"
+    ],
+    "expected_display_delta_classes": []
   },
   {
     "scenario_id": "oracle_002_info",
@@ -18,9 +32,148 @@
     "entered_formula_text": "=INFO(\"directory\")",
     "stored_formula_text": "=INFO(\"directory\")",
     "input_bindings": {},
+    "cell_bindings": {},
     "expected_result_summary": "Text(C:\\Work)",
     "locale_profile": "EnUs",
     "date_system": "System1900",
-    "host_query_profile": "DirectoryOnly"
+    "host_query_profile": "DirectoryOnly",
+    "expected_trace_event_kinds": [
+      "AcceptedCandidateResultBuilt",
+      "CommitAccepted"
+    ],
+    "expected_capability_effect_kinds": [
+      "host_query"
+    ],
+    "expected_format_dependency_tokens": [],
+    "expected_spill_event_kinds": [],
+    "expected_format_delta_classes": [],
+    "expected_display_delta_classes": [
+      "host_query_surface"
+    ]
+  },
+  {
+    "scenario_id": "oracle_003_implicit_intersection",
+    "formula": "=@InputRef",
+    "entered_formula_text": "=@InputRef",
+    "stored_formula_text": "=@InputRef",
+    "input_bindings": {
+      "InputRef": "Reference(A1)"
+    },
+    "cell_bindings": {
+      "A1": "Number(7)"
+    },
+    "expected_result_summary": "Number(7)",
+    "locale_profile": "EnUs",
+    "date_system": "System1900",
+    "host_query_profile": null,
+    "expected_trace_event_kinds": [
+      "AcceptedCandidateResultBuilt",
+      "CommitAccepted"
+    ],
+    "expected_capability_effect_kinds": [],
+    "expected_format_dependency_tokens": [],
+    "expected_spill_event_kinds": [],
+    "expected_format_delta_classes": [],
+    "expected_display_delta_classes": []
+  },
+  {
+    "scenario_id": "oracle_004_legacy_single",
+    "formula": "=_xlfn.SINGLE(InputRef)",
+    "entered_formula_text": "=_xlfn.SINGLE(InputRef)",
+    "stored_formula_text": "=_xlfn.SINGLE(InputRef)",
+    "input_bindings": {
+      "InputRef": "Reference(A1)"
+    },
+    "cell_bindings": {
+      "A1": "Number(7)"
+    },
+    "expected_result_summary": "Number(7)",
+    "locale_profile": "EnUs",
+    "date_system": "System1900",
+    "host_query_profile": null,
+    "expected_trace_event_kinds": [
+      "AcceptedCandidateResultBuilt",
+      "CommitAccepted"
+    ],
+    "expected_capability_effect_kinds": [],
+    "expected_format_dependency_tokens": [],
+    "expected_spill_event_kinds": [],
+    "expected_format_delta_classes": [],
+    "expected_display_delta_classes": []
+  },
+  {
+    "scenario_id": "oracle_005_lambda_invocation",
+    "formula": "=LET(f,LAMBDA(x,x+1),f(InputValue))",
+    "entered_formula_text": "=LET(f,LAMBDA(x,x+1),f(InputValue))",
+    "stored_formula_text": "=LET(f,LAMBDA(x,x+1),f(InputValue))",
+    "input_bindings": {
+      "InputValue": "Number(2)"
+    },
+    "cell_bindings": {},
+    "expected_result_summary": "Number(3)",
+    "locale_profile": "EnUs",
+    "date_system": "System1900",
+    "host_query_profile": null,
+    "expected_trace_event_kinds": [
+      "AcceptedCandidateResultBuilt",
+      "CommitAccepted"
+    ],
+    "expected_capability_effect_kinds": [],
+    "expected_format_dependency_tokens": [],
+    "expected_spill_event_kinds": [],
+    "expected_format_delta_classes": [],
+    "expected_display_delta_classes": []
+  },
+  {
+    "scenario_id": "oracle_006_sequence_spill",
+    "formula": "=SEQUENCE(2)",
+    "entered_formula_text": "=SEQUENCE(2)",
+    "stored_formula_text": "=SEQUENCE(2)",
+    "input_bindings": {},
+    "cell_bindings": {},
+    "expected_result_summary": "Array(2x1)",
+    "locale_profile": "EnUs",
+    "date_system": "System1900",
+    "host_query_profile": null,
+    "expected_trace_event_kinds": [
+      "AcceptedCandidateResultBuilt",
+      "CommitAccepted"
+    ],
+    "expected_capability_effect_kinds": [],
+    "expected_format_dependency_tokens": [],
+    "expected_spill_event_kinds": [
+      "SpillTakeover"
+    ],
+    "expected_format_delta_classes": [],
+    "expected_display_delta_classes": []
+  },
+  {
+    "scenario_id": "oracle_007_cell_filename",
+    "formula": "=CELL(\"filename\",InputRef)",
+    "entered_formula_text": "=CELL(\"filename\",InputRef)",
+    "stored_formula_text": "=CELL(\"filename\",InputRef)",
+    "input_bindings": {
+      "InputRef": "Reference(A1)"
+    },
+    "cell_bindings": {
+      "A1": "Number(7)"
+    },
+    "expected_result_summary": "Text([Book1]Sheet1)",
+    "locale_profile": "EnUs",
+    "date_system": "System1900",
+    "host_query_profile": "FilenameOnly",
+    "expected_trace_event_kinds": [
+      "AcceptedCandidateResultBuilt",
+      "CommitAccepted"
+    ],
+    "expected_capability_effect_kinds": [
+      "host_query"
+    ],
+    "expected_format_dependency_tokens": [],
+    "expected_spill_event_kinds": [],
+    "expected_format_delta_classes": [],
+    "expected_display_delta_classes": [
+      "host_query_surface"
+    ]
   }
 ]

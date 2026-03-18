@@ -16,7 +16,7 @@ use oxfunc_core::functions::{
     type_fn::TYPE_META, value_fn::VALUE_META, xlookup::XLOOKUP_META, xmatch::XMATCH_META,
 };
 
-use crate::binding::{BoundExpr, BoundFormula, ReferenceExpr};
+use crate::binding::{BoundExpr, BoundFormula, NormalizedReference, ReferenceExpr};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompileSemanticPlanRequest {
@@ -25,6 +25,7 @@ pub struct CompileSemanticPlanRequest {
     pub locale_profile: Option<String>,
     pub date_system: Option<String>,
     pub format_profile: Option<String>,
+    pub library_context_snapshot: Option<LibraryContextSnapshot>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,15 +39,67 @@ pub struct SemanticPlan {
     pub formula_stable_id: String,
     pub bind_hash: String,
     pub oxfunc_catalog_identity: String,
+    pub library_context_snapshot_ref: Option<String>,
     pub locale_profile: Option<String>,
     pub date_system: Option<String>,
     pub format_profile: Option<String>,
     pub function_bindings: Vec<FunctionPlanBinding>,
+    pub availability_summaries: Vec<FunctionAvailabilitySummary>,
     pub evaluation_requirements: Vec<EvaluationRequirement>,
     pub execution_profile: ExecutionProfileSummary,
     pub helper_profile: HelperEnvironmentProfile,
     pub capability_requirements: Vec<String>,
     pub diagnostics: Vec<SemanticDiagnostic>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegistrationSourceKind {
+    BuiltIn,
+    AddIn,
+    ProviderBacked,
+    UserDefined,
+    Vba,
+    CompatibilityAlias,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LibraryAvailabilityState {
+    CatalogKnown,
+    FeatureGated,
+    CompatibilityGated,
+    HostProfileUnavailable,
+    AddInAbsent,
+    ProviderUnavailable,
+    UnknownSurface,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LibraryContextSnapshotEntry {
+    pub surface_name: String,
+    pub canonical_id: Option<String>,
+    pub registration_source_kind: RegistrationSourceKind,
+    pub parse_bind_state: LibraryAvailabilityState,
+    pub semantic_plan_state: LibraryAvailabilityState,
+    pub runtime_capability_state: Option<LibraryAvailabilityState>,
+    pub post_dispatch_state: Option<LibraryAvailabilityState>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LibraryContextSnapshot {
+    pub snapshot_id: String,
+    pub snapshot_version: String,
+    pub entries: Vec<LibraryContextSnapshotEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionAvailabilitySummary {
+    pub surface_name: String,
+    pub canonical_id: Option<String>,
+    pub registration_source_kind: Option<RegistrationSourceKind>,
+    pub parse_bind_state: LibraryAvailabilityState,
+    pub semantic_plan_state: LibraryAvailabilityState,
+    pub runtime_capability_state: Option<LibraryAvailabilityState>,
+    pub post_dispatch_state: Option<LibraryAvailabilityState>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,6 +129,7 @@ pub enum EvaluationRequirement {
     ImplicitIntersection,
     SpillReference,
     ReferenceExpression,
+    ExternalReferenceDeferred,
     LegacySingleCompat,
     HelperEnvironment,
 }
@@ -176,33 +230,44 @@ pub fn compile_semantic_plan(request: CompileSemanticPlanRequest) -> CompileSema
         locale_profile,
         date_system,
         format_profile,
+        library_context_snapshot,
     } = request;
+
+    let library_context_snapshot_ref = library_context_snapshot
+        .as_ref()
+        .map(|snapshot| format!("{}@{}", snapshot.snapshot_id, snapshot.snapshot_version));
 
     let mut compiler = SemanticCompiler {
         function_bindings: Vec::new(),
+        availability_summaries: Vec::new(),
         evaluation_requirements: Vec::new(),
         execution_profile: ExecutionProfileSummary::default(),
         helper_profile: HelperEnvironmentProfile::default(),
         capability_requirements: bound_formula.capability_requirements.clone(),
         diagnostics: Vec::new(),
+        library_context_snapshot,
     };
 
     compiler.visit_expr(&bound_formula.root);
 
-    let semantic_plan_key = hash_debug(&(
+    let semantic_plan_key_input = format!(
+        "{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}",
         bound_formula.formula_stable_id.as_str(),
         bound_formula.bind_hash.as_str(),
         &compiler.function_bindings,
+        &compiler.availability_summaries,
         &compiler.evaluation_requirements,
         &compiler.execution_profile,
         &compiler.helper_profile,
         &compiler.capability_requirements,
         &compiler.diagnostics,
         oxfunc_catalog_identity.as_str(),
+        library_context_snapshot_ref.as_deref(),
         locale_profile.as_deref(),
         date_system.as_deref(),
         format_profile.as_deref(),
-    ));
+    );
+    let semantic_plan_key = hash_debug(&semantic_plan_key_input);
 
     CompileSemanticPlanResult {
         semantic_plan: SemanticPlan {
@@ -210,10 +275,12 @@ pub fn compile_semantic_plan(request: CompileSemanticPlanRequest) -> CompileSema
             formula_stable_id: bound_formula.formula_stable_id,
             bind_hash: bound_formula.bind_hash,
             oxfunc_catalog_identity,
+            library_context_snapshot_ref,
             locale_profile,
             date_system,
             format_profile,
             function_bindings: compiler.function_bindings,
+            availability_summaries: compiler.availability_summaries,
             evaluation_requirements: compiler.evaluation_requirements,
             execution_profile: compiler.execution_profile,
             helper_profile: compiler.helper_profile,
@@ -225,11 +292,13 @@ pub fn compile_semantic_plan(request: CompileSemanticPlanRequest) -> CompileSema
 
 struct SemanticCompiler {
     function_bindings: Vec<FunctionPlanBinding>,
+    availability_summaries: Vec<FunctionAvailabilitySummary>,
     evaluation_requirements: Vec<EvaluationRequirement>,
     execution_profile: ExecutionProfileSummary,
     helper_profile: HelperEnvironmentProfile,
     capability_requirements: Vec<String>,
     diagnostics: Vec<SemanticDiagnostic>,
+    library_context_snapshot: Option<LibraryContextSnapshot>,
 }
 
 impl SemanticCompiler {
@@ -281,6 +350,15 @@ impl SemanticCompiler {
 
     fn visit_reference_expr(&mut self, reference: &ReferenceExpr) {
         match reference {
+            ReferenceExpr::Atom(NormalizedReference::External(_)) => {
+                self.execution_profile.requires_host_interaction = true;
+                self.execution_profile.requires_async_coupling = true;
+                self.execution_profile.contains_external_event_dependence = true;
+                self.execution_profile.requires_serial_scheduler_lane = true;
+                self.execution_profile.single_flight_advisable = true;
+                self.push_evaluation_requirement(EvaluationRequirement::ExternalReferenceDeferred);
+                self.push_capability_requirement("external_reference");
+            }
             ReferenceExpr::Atom(_) => {}
             ReferenceExpr::Range { start, end }
             | ReferenceExpr::Union {
@@ -346,7 +424,27 @@ impl SemanticCompiler {
 
     fn record_function_call(&mut self, function_name: &str, arg_count: usize) {
         self.record_special_function_lane(function_name);
-        let Some(meta) = lookup_function_meta(function_name) else {
+        let meta = lookup_function_meta(function_name);
+        let availability_summary = self.function_availability_summary(function_name, meta);
+        self.availability_summaries
+            .push(availability_summary.clone());
+
+        let Some(meta) = meta else {
+            if availability_summary.parse_bind_state != LibraryAvailabilityState::UnknownSurface {
+                self.diagnostics.push(SemanticDiagnostic {
+                    message: format!(
+                        "function {function_name} availability preserved as {:?}",
+                        availability_summary.parse_bind_state
+                    ),
+                    function_name: Some(function_name.to_string()),
+                });
+                return;
+            }
+
+            if self.is_special_surface(function_name) {
+                return;
+            }
+
             self.diagnostics.push(SemanticDiagnostic {
                 message: format!("no OxFunc metadata registered for function {function_name}"),
                 function_name: Some(function_name.to_string()),
@@ -495,6 +593,56 @@ impl SemanticCompiler {
                 self.push_capability_requirement("random_provider");
             }
             _ => {}
+        }
+    }
+
+    fn is_special_surface(&self, function_name: &str) -> bool {
+        matches!(function_name, "_XLFN.SINGLE" | "SINGLE" | "LET" | "LAMBDA")
+    }
+
+    fn function_availability_summary(
+        &self,
+        function_name: &str,
+        meta: Option<FunctionMeta>,
+    ) -> FunctionAvailabilitySummary {
+        if let Some(snapshot) = &self.library_context_snapshot {
+            if let Some(entry) = snapshot
+                .entries
+                .iter()
+                .find(|entry| entry.surface_name.eq_ignore_ascii_case(function_name))
+            {
+                return FunctionAvailabilitySummary {
+                    surface_name: function_name.to_string(),
+                    canonical_id: entry.canonical_id.clone(),
+                    registration_source_kind: Some(entry.registration_source_kind),
+                    parse_bind_state: entry.parse_bind_state,
+                    semantic_plan_state: entry.semantic_plan_state,
+                    runtime_capability_state: entry.runtime_capability_state,
+                    post_dispatch_state: entry.post_dispatch_state,
+                };
+            }
+        }
+
+        if let Some(meta) = meta {
+            return FunctionAvailabilitySummary {
+                surface_name: function_name.to_string(),
+                canonical_id: Some(meta.function_id.to_string()),
+                registration_source_kind: Some(RegistrationSourceKind::BuiltIn),
+                parse_bind_state: LibraryAvailabilityState::CatalogKnown,
+                semantic_plan_state: LibraryAvailabilityState::CatalogKnown,
+                runtime_capability_state: None,
+                post_dispatch_state: None,
+            };
+        }
+
+        FunctionAvailabilitySummary {
+            surface_name: function_name.to_string(),
+            canonical_id: None,
+            registration_source_kind: None,
+            parse_bind_state: LibraryAvailabilityState::UnknownSurface,
+            semantic_plan_state: LibraryAvailabilityState::UnknownSurface,
+            runtime_capability_state: None,
+            post_dispatch_state: None,
         }
     }
 

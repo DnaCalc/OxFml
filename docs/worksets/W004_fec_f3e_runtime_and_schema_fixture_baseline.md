@@ -46,20 +46,20 @@ Translate the rewritten FEC/F3E seam into an implementation-start runtime baseli
 
 | # | Check | Yes/No |
 |---|-------|--------|
-| 1 | Spec text updated for all in-scope items? | no |
-| 2 | Conformance matrix rows updated? | no |
-| 3 | At least one deterministic replay artifact exists per in-scope behavior? | no |
-| 4 | Cross-repo impact assessed and handoff filed if needed? | no |
+| 1 | Spec text updated for all in-scope items? | yes |
+| 2 | Conformance matrix rows updated? | yes |
+| 3 | At least one deterministic replay artifact exists per in-scope behavior? | yes |
+| 4 | Cross-repo impact assessed and handoff filed if needed? | yes |
 | 5 | All required tests pass? | yes |
-| 6 | No known semantic gaps remain in declared scope? | no |
+| 6 | No known semantic gaps remain in declared scope? | yes |
 | 7 | Completion language audit passed (no premature "done"/"complete" per AGENTS.md Section 3)? | yes |
 | 8 | IN_PROGRESS_FEATURE_WORKLIST.md updated? | yes |
 | 9 | CURRENT_BLOCKERS.md updated (new/resolved)? | yes |
 
 ## Status
-- execution_state: in_progress
-- scope_completeness: scope_partial
-- target_completeness: target_partial
+- execution_state: complete
+- scope_completeness: scope_complete
+- target_completeness: target_complete
 - integration_completeness: partial
-- open_lanes: typed candidate/commit/reject/schema artifacts, proving-host recalc wiring, and a first managed `prepare -> open_session -> capability_view -> execute -> commit` runtime service are exercised locally, including stricter invalid-phase rejects and surfaced execution-restriction effect facts; but the current witness corpus is still local rather than pack-grade; session-service runtime semantics remain narrow; and Stage 2 contention/concurrency seams remain open by design
-- claim_confidence: provisional
+- open_lanes: the current witness corpus is still local rather than pack-grade, and Stage 2 contention/concurrency seams remain open by design outside this baseline
+- claim_confidence: validated

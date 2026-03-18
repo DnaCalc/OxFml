@@ -2,7 +2,7 @@
 
 Status: no active blockers.
 
-Last reviewed: 2026-03-15.
+Last reviewed: 2026-03-18 after `W030` validation.
 
 ---
 
@@ -14,7 +14,15 @@ Last reviewed: 2026-03-15.
 
 ## Resolved Blockers
 
-(none)
+### BLK-FML-001: OxFunc sibling compile failure blocks OxFml validation
+
+- **Status**: resolved
+- **Impact**: blocked `W004`, `W009`, and `W010` gate closure because required `cargo test -p oxfml_core` validation could not complete
+- **Current state**: subsequent rerun of `cargo test -p oxfml_core` completed successfully after the sibling compile surface recovered
+- **Exact unblock steps**: completed; rerun validation succeeded
+- **Recommendation**: workaround
+- **Opened**: 2026-03-16
+- **Resolved**: 2026-03-16
 
 ---
 

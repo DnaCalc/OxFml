@@ -1,0 +1,12 @@
+{
+  "witness_id": "oxfml.local.witness.execution_contract_host_query.v1",
+  "source_bundle_ref": "crates/oxfml_core/tests/fixtures/execution_contract_replay_cases.json",
+  "reduction_manifest_ref": "crates/oxfml_core/tests/fixtures/witness_distillation/execution_contract_host_query_reduction_manifest.json",
+  "lifecycle_state": "wit.retained_local",
+  "retention_policy_id": "oxfml.local.retention.manual_review",
+  "promotion_refs": [],
+  "supersedes": [],
+  "quarantine_reason": null,
+  "gc_eligibility": "not_eligible",
+  "notes": "Retained local execution-contract witness for host-query restriction surface."
+}

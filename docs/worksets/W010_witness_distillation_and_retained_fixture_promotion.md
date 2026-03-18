@@ -44,20 +44,20 @@ Turn the replay-adapter rollout into an OxFml-local witness distillation and ret
 
 | # | Check | Yes/No |
 |---|-------|--------|
-| 1 | Spec text updated for all in-scope items? | no |
-| 2 | Conformance matrix rows updated? | no |
-| 3 | At least one deterministic replay artifact exists per in-scope behavior? | no |
-| 4 | Cross-repo impact assessed and handoff filed if needed? | no |
-| 5 | All required tests pass? | no |
-| 6 | No known semantic gaps remain in declared scope? | no |
-| 7 | Completion language audit passed (no premature "done"/"complete" per AGENTS.md Section 3)? | no |
-| 8 | IN_PROGRESS_FEATURE_WORKLIST.md updated? | no |
-| 9 | CURRENT_BLOCKERS.md updated (new/resolved)? | no |
+| 1 | Spec text updated for all in-scope items? | yes |
+| 2 | Conformance matrix rows updated? | yes |
+| 3 | At least one deterministic replay artifact exists per in-scope behavior? | yes |
+| 4 | Cross-repo impact assessed and handoff filed if needed? | yes |
+| 5 | All required tests pass? | yes |
+| 6 | No known semantic gaps remain in declared scope? | yes |
+| 7 | Completion language audit passed (no premature "done"/"complete" per AGENTS.md Section 3)? | yes |
+| 8 | IN_PROGRESS_FEATURE_WORKLIST.md updated? | yes |
+| 9 | CURRENT_BLOCKERS.md updated (new/resolved)? | yes |
 
 ## Status
-- execution_state: planned
-- scope_completeness: scope_partial
-- target_completeness: target_partial
+- execution_state: complete
+- scope_completeness: scope_complete
+- target_completeness: target_complete
 - integration_completeness: partial
-- open_lanes: reduced-witness replay validity still needs exercised evidence; retained-fixture promotion remains local-policy only until local lifecycle evidence exists; pack-grade promotion remains outside this workset
-- claim_confidence: draft
+- open_lanes: retained-fixture promotion remains local-policy only, and pack-grade promotion remains outside this workset
+- claim_confidence: validated

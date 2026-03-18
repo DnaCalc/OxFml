@@ -1,0 +1,33 @@
+{
+  "witness_id": "oxfml.local.witness.session_capability_denied.v1",
+  "source_fixture_family": "session_lifecycle_replay_cases",
+  "reduced_role": "replay_closed_witness",
+  "bundle_state": "replay_valid",
+  "source_case_ids": [
+    "session_002_capability_denied"
+  ],
+  "scenario_cases": [
+    {
+      "case_id": "session_002_capability_denied",
+      "formula": "=INFO(\"directory\")",
+      "with_input_name": false,
+      "capability_spec": {
+        "host_query_enabled": false,
+        "locale_format_enabled": true,
+        "caller_context_enabled": true,
+        "external_provider_enabled": false
+      },
+      "action": "capability_only",
+      "expected": {
+        "phase": "Rejected",
+        "decision": "rejected",
+        "reject_code": "CapabilityDenied",
+        "published_payload": null,
+        "trace_event_kinds": [
+          "SessionOpened",
+          "RejectIssued"
+        ]
+      }
+    }
+  ]
+}

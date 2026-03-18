@@ -1,0 +1,38 @@
+{
+  "reduction_id": "oxfml.local.reduction.empirical_oracle_host_query_reference.v1",
+  "source_bundle_ref": "crates/oxfml_core/tests/fixtures/empirical_oracle_scenarios.json",
+  "source_scope_ref": "fixture_family:empirical_oracle_scenarios",
+  "predicate_ref": {
+    "predicate_id": "oxfml.local.predicate.empirical_oracle_host_query_reference.v1",
+    "predicate_kind": "pred.publication.accepted_payload_present",
+    "required_reject_code": null,
+    "required_mismatch_member_kind": null,
+    "required_publication_value_class": "Text",
+    "required_execution_restriction": null
+  },
+  "strategy_id": "hierarchy_first",
+  "unit_kinds": [
+    "oxfml.local.reduction_unit.fixture_case"
+  ],
+  "retained_units": [
+    "oracle_007_cell_filename"
+  ],
+  "removed_units": [
+    "oracle_001_text",
+    "oracle_002_info",
+    "oracle_003_implicit_intersection",
+    "oracle_004_legacy_single",
+    "oracle_005_lambda_invocation",
+    "oracle_006_sequence_spill"
+  ],
+  "rewritten_units": [],
+  "closure_rules_applied": [
+    "identity_closure",
+    "candidate_commit_lineage",
+    "host_query_capability_closure",
+    "host_cell_binding_closure"
+  ],
+  "iteration_count": 1,
+  "final_status": "red.preserved",
+  "witness_bundle_ref": "crates/oxfml_core/tests/fixtures/witness_distillation/empirical_oracle_host_query_reference_witness_bundle.json"
+}

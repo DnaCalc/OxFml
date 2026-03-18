@@ -262,6 +262,86 @@
     }
   },
   {
+    "case_id": "sp_009_row_caller_context",
+    "formula": "=ROW()",
+    "expected": {
+      "function_ids": [
+        "FUNC.ROW"
+      ],
+      "evaluation_requirements": [
+        "CallerContextSensitive",
+        "ReferencePreservedCalls"
+      ],
+      "execution_profile": {
+        "thread_safety": "HostSerialized",
+        "volatility": "Stable",
+        "determinism": "Deterministic",
+        "requires_host_query": false,
+        "requires_caller_context": true,
+        "requires_reference_preservation": true,
+        "uses_implicit_intersection": false,
+        "uses_spill_reference": false,
+        "requires_branch_laziness": false,
+        "requires_fallback_laziness": false,
+        "requires_serial_scheduler_lane": true
+      },
+      "helper_profile": {
+        "contains_let": false,
+        "contains_lambda": false,
+        "contains_lambda_invocation": false,
+        "lambda_literal_count": 0,
+        "lambda_invocation_count": 0,
+        "max_lambda_arity": 0,
+        "lexical_capture_required": false
+      },
+      "capability_requirements": [
+        "caller_context"
+      ]
+    }
+  },
+  {
+    "case_id": "sp_010_indirect_offset_iferror",
+    "formula": "=IFERROR(INDIRECT(\"A1\"),OFFSET(A1,0,0))",
+    "expected": {
+      "function_ids": [
+        "FUNC.IFERROR",
+        "FUNC.INDIRECT",
+        "FUNC.OFFSET"
+      ],
+      "evaluation_requirements": [
+        "CallerContextSensitive",
+        "FallbackLazy",
+        "ReferenceExpression",
+        "ReferencePreservedCalls"
+      ],
+      "execution_profile": {
+        "thread_safety": "HostSerialized",
+        "volatility": "Contextual",
+        "determinism": "Deterministic",
+        "requires_host_query": false,
+        "requires_caller_context": true,
+        "requires_reference_preservation": true,
+        "uses_implicit_intersection": false,
+        "uses_spill_reference": false,
+        "requires_branch_laziness": false,
+        "requires_fallback_laziness": true,
+        "requires_serial_scheduler_lane": true
+      },
+      "helper_profile": {
+        "contains_let": false,
+        "contains_lambda": false,
+        "contains_lambda_invocation": false,
+        "lambda_literal_count": 0,
+        "lambda_invocation_count": 0,
+        "max_lambda_arity": 0,
+        "lexical_capture_required": false
+      },
+      "capability_requirements": [
+        "caller_context"
+      ]
+    }
+  },
+  {
     "case_id": "sp_008_lambda_capture_profile",
     "formula": "=LET(x,10,LAMBDA(y,x+y))",
     "expected": {
@@ -294,6 +374,42 @@
       },
       "capability_requirements": [
         "helper_environment"
+      ]
+    }
+  },
+  {
+    "case_id": "sp_011_external_reference_deferred",
+    "formula": "=[Book.xlsx]Sheet2!A1",
+    "expected": {
+      "function_ids": [],
+      "evaluation_requirements": [
+        "ReferenceExpression",
+        "ExternalReferenceDeferred"
+      ],
+      "execution_profile": {
+        "thread_safety": "SafeConcurrent",
+        "volatility": "Stable",
+        "determinism": "Deterministic",
+        "requires_host_query": false,
+        "requires_caller_context": false,
+        "requires_reference_preservation": true,
+        "uses_implicit_intersection": false,
+        "uses_spill_reference": false,
+        "requires_branch_laziness": false,
+        "requires_fallback_laziness": false,
+        "requires_serial_scheduler_lane": true
+      },
+      "helper_profile": {
+        "contains_let": false,
+        "contains_lambda": false,
+        "contains_lambda_invocation": false,
+        "lambda_literal_count": 0,
+        "lambda_invocation_count": 0,
+        "max_lambda_arity": 0,
+        "lexical_capture_required": false
+      },
+      "capability_requirements": [
+        "external_reference"
       ]
     }
   }

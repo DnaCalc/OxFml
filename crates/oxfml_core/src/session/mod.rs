@@ -11,7 +11,8 @@ use crate::eval::{
 use crate::scheduler::{ExecutionRestriction, build_execution_contract};
 use crate::seam::{
     AcceptDecision, AcceptedCandidateResult, CapabilityDenialContext, CapabilityEffectFact,
-    CommitRequest, Extent, FenceSnapshot, FormatDependencyFact, Locus, RejectCode, RejectContext,
+    CommitRequest, DependencyConsequenceFact, DisplayDelta, DynamicReferenceFact, Extent,
+    FenceSnapshot, FormatDelta, FormatDependencyFact, Locus, RejectCode, RejectContext,
     RejectRecord, ResourceInvariantContext, SessionTerminationContext, ShapeDelta,
     ShapeOutcomeClass, SpillEvent, SpillEventKind, TopologyDelta, TraceEvent, TraceEventKind,
     TracePayload, ValueDelta, ValuePayload, WorksheetValueClass, commit_candidate,
@@ -88,6 +89,15 @@ pub struct SessionRecord {
     pub trace_events: Vec<TraceEvent>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OverlayEntry {
+    pub overlay_entry_id: String,
+    pub overlay_scope_key: String,
+    pub overlay_family: String,
+    pub session_id: String,
+    pub formula_stable_id: String,
+}
+
 pub struct ExecuteRequest<'a> {
     pub session_id: String,
     pub backend: EvaluationBackend,
@@ -105,6 +115,8 @@ pub struct ExecuteRequest<'a> {
 pub struct SessionService {
     next_session_id: u64,
     sessions: BTreeMap<String, SessionRecord>,
+    active_locus_claims: BTreeMap<String, String>,
+    session_overlays: BTreeMap<String, Vec<OverlayEntry>>,
 }
 
 impl SessionService {
@@ -112,6 +124,8 @@ impl SessionService {
         Self {
             next_session_id: 1,
             sessions: BTreeMap::new(),
+            active_locus_claims: BTreeMap::new(),
+            session_overlays: BTreeMap::new(),
         }
     }
 
@@ -260,137 +274,199 @@ impl SessionService {
         &mut self,
         request: ExecuteRequest<'_>,
     ) -> Result<AcceptedCandidateResult, RejectRecord> {
-        let record = self
-            .sessions
-            .get_mut(&request.session_id)
-            .expect("session should exist for execute");
+        let should_claim = {
+            let record = self
+                .sessions
+                .get_mut(&request.session_id)
+                .expect("session should exist for execute");
+            match record.phase {
+                SessionPhase::Aborted | SessionPhase::Expired => {
+                    let reject = session_terminated_reject(
+                        &record.prepared.source.formula_stable_id.0,
+                        &request.session_id,
+                        "terminated_before_execute",
+                        matches!(record.phase, SessionPhase::Expired),
+                        None,
+                    );
+                    record.last_reject = Some(reject.clone());
+                    return Err(reject);
+                }
+                SessionPhase::Rejected => {
+                    return Err(record
+                        .last_reject
+                        .clone()
+                        .expect("rejected session should carry reject"));
+                }
+                SessionPhase::Executed => {
+                    let reject = structural_conflict_reject(
+                        &record.prepared.source.formula_stable_id.0,
+                        &request.session_id,
+                        "candidate_already_built",
+                        "not_admissible",
+                    );
+                    record.phase = SessionPhase::Rejected;
+                    record.last_reject = Some(reject.clone());
+                    let order = record.trace_events.len() as u64 + 1;
+                    record.trace_events.push(trace_reject_event(
+                        &record.prepared.source.formula_stable_id.0,
+                        &request.session_id,
+                        order,
+                        reject.reject_code,
+                    ));
+                    return Err(reject);
+                }
+                SessionPhase::Committed => {
+                    let reject = structural_conflict_reject(
+                        &record.prepared.source.formula_stable_id.0,
+                        &request.session_id,
+                        "execute_after_commit",
+                        "not_admissible",
+                    );
+                    record.last_reject = Some(reject.clone());
+                    let order = record.trace_events.len() as u64 + 1;
+                    record.trace_events.push(trace_reject_event(
+                        &record.prepared.source.formula_stable_id.0,
+                        &request.session_id,
+                        order,
+                        reject.reject_code,
+                    ));
+                    return Err(reject);
+                }
+                SessionPhase::Open => {
+                    let reject = capability_denial_reject(
+                        &record.prepared.source.formula_stable_id.0,
+                        &request.session_id,
+                        "capability_view",
+                        "execute",
+                        "not_established",
+                    );
+                    record.phase = SessionPhase::Rejected;
+                    record.last_reject = Some(reject.clone());
+                    return Err(reject);
+                }
+                SessionPhase::CapabilityViewEstablished => {}
+            }
+            requires_single_locus_claim(&record.prepared.semantic_plan)
+        };
 
-        match record.phase {
-            SessionPhase::Aborted | SessionPhase::Expired => {
-                let reject = session_terminated_reject(
-                    &record.prepared.source.formula_stable_id.0,
+        let (formula_stable_id, primary_locus) = {
+            let record = self
+                .sessions
+                .get(&request.session_id)
+                .expect("session should exist for execute");
+            (
+                record.prepared.source.formula_stable_id.0.clone(),
+                record.prepared.primary_locus.clone(),
+            )
+        };
+        let locus_claim_key = locus_claim_key(&primary_locus);
+        if let Some(owner_session_id) = self.active_locus_claims.get(&locus_claim_key) {
+            if owner_session_id != &request.session_id {
+                let reject = contention_conflict_reject(
+                    &formula_stable_id,
                     &request.session_id,
-                    "terminated_before_execute",
-                    matches!(record.phase, SessionPhase::Expired),
-                    None,
+                    &primary_locus,
+                    owner_session_id,
                 );
-                record.last_reject = Some(reject.clone());
-                return Err(reject);
-            }
-            SessionPhase::Rejected => {
-                return Err(record
-                    .last_reject
-                    .clone()
-                    .expect("rejected session should carry reject"));
-            }
-            SessionPhase::Executed => {
-                let reject = structural_conflict_reject(
-                    &record.prepared.source.formula_stable_id.0,
-                    &request.session_id,
-                    "candidate_already_built",
-                    "not_admissible",
-                );
+                let record = self
+                    .sessions
+                    .get_mut(&request.session_id)
+                    .expect("session should exist for execute");
                 record.phase = SessionPhase::Rejected;
                 record.last_reject = Some(reject.clone());
                 let order = record.trace_events.len() as u64 + 1;
                 record.trace_events.push(trace_reject_event(
-                    &record.prepared.source.formula_stable_id.0,
+                    &formula_stable_id,
                     &request.session_id,
                     order,
                     reject.reject_code,
                 ));
                 return Err(reject);
             }
-            SessionPhase::Committed => {
-                let reject = structural_conflict_reject(
-                    &record.prepared.source.formula_stable_id.0,
-                    &request.session_id,
-                    "execute_after_commit",
-                    "not_admissible",
-                );
-                record.last_reject = Some(reject.clone());
-                let order = record.trace_events.len() as u64 + 1;
-                record.trace_events.push(trace_reject_event(
-                    &record.prepared.source.formula_stable_id.0,
-                    &request.session_id,
-                    order,
-                    reject.reject_code,
-                ));
-                return Err(reject);
-            }
-            SessionPhase::Open => {
-                let reject = capability_denial_reject(
-                    &record.prepared.source.formula_stable_id.0,
-                    &request.session_id,
-                    "capability_view",
-                    "execute",
-                    "not_established",
-                );
-                record.phase = SessionPhase::Rejected;
-                record.last_reject = Some(reject.clone());
-                return Err(reject);
-            }
-            SessionPhase::CapabilityViewEstablished => {}
+        } else if should_claim {
+            self.active_locus_claims
+                .insert(locus_claim_key.clone(), request.session_id.clone());
         }
 
-        let mut evaluation_context = EvaluationContext::new(
-            &record.prepared.bound_formula,
-            &record.prepared.semantic_plan,
-        );
-        evaluation_context.backend = request.backend;
-        evaluation_context.caller_row = request.caller_row;
-        evaluation_context.caller_col = request.caller_col;
-        evaluation_context.cell_values = request.cell_values;
-        evaluation_context.defined_names = request.defined_names;
-        evaluation_context.locale_ctx = request.locale_ctx;
-        evaluation_context.host_info = request.host_info;
-        evaluation_context.now_serial = request.now_serial;
-        evaluation_context.random_value = request.random_value;
+        let candidate = {
+            let record = self
+                .sessions
+                .get_mut(&request.session_id)
+                .expect("session should exist for execute");
+            let mut evaluation_context = EvaluationContext::new(
+                &record.prepared.bound_formula,
+                &record.prepared.semantic_plan,
+            );
+            evaluation_context.backend = request.backend;
+            evaluation_context.caller_row = request.caller_row;
+            evaluation_context.caller_col = request.caller_col;
+            evaluation_context.cell_values = request.cell_values;
+            evaluation_context.defined_names = request.defined_names;
+            evaluation_context.locale_ctx = request.locale_ctx;
+            evaluation_context.host_info = request.host_info;
+            evaluation_context.now_serial = request.now_serial;
+            evaluation_context.random_value = request.random_value;
 
-        let evaluation = evaluate_formula(evaluation_context).map_err(|error| {
-            let reject = RejectRecord {
-                formula_stable_id: record.prepared.source.formula_stable_id.0.clone(),
-                session_id: Some(request.session_id.clone()),
-                commit_attempt_id: None,
-                reject_code: RejectCode::ResourceInvariantFailure,
-                context: RejectContext::ResourceInvariant(ResourceInvariantContext {
-                    failure_family: "execute_failure".to_string(),
-                    machine_detail_code: error.message,
-                    resource_class: Some("evaluation".to_string()),
-                }),
-                trace_correlation_id: format!("trace:{}", request.session_id),
+            let evaluation = match evaluate_formula(evaluation_context) {
+                Ok(evaluation) => evaluation,
+                Err(error) => {
+                    let reject = RejectRecord {
+                        formula_stable_id: record.prepared.source.formula_stable_id.0.clone(),
+                        session_id: Some(request.session_id.clone()),
+                        commit_attempt_id: None,
+                        reject_code: RejectCode::ResourceInvariantFailure,
+                        context: RejectContext::ResourceInvariant(ResourceInvariantContext {
+                            failure_family: "execute_failure".to_string(),
+                            machine_detail_code: error.message,
+                            resource_class: Some("evaluation".to_string()),
+                        }),
+                        trace_correlation_id: format!("trace:{}", request.session_id),
+                    };
+                    record.phase = SessionPhase::Rejected;
+                    record.last_reject = Some(reject.clone());
+                    let order = record.trace_events.len() as u64 + 1;
+                    record.trace_events.push(trace_reject_event(
+                        &record.prepared.source.formula_stable_id.0,
+                        &request.session_id,
+                        order,
+                        reject.reject_code,
+                    ));
+                    return Err(reject);
+                }
             };
-            record.phase = SessionPhase::Rejected;
-            record.last_reject = Some(reject.clone());
-            reject
-        })?;
 
-        let candidate = build_candidate_result(
-            &record.prepared.source,
-            &record.prepared.semantic_plan,
-            &evaluation,
-            &record.prepared.primary_locus,
-            &request.session_id,
-            record
-                .capability_view
-                .as_ref()
-                .map(|view| view.capability_view_key.as_str()),
+            let candidate = build_candidate_result(
+                &record.prepared.source,
+                &record.prepared.semantic_plan,
+                &evaluation,
+                &record.prepared.primary_locus,
+                &request.session_id,
+                record
+                    .capability_view
+                    .as_ref()
+                    .map(|view| view.capability_view_key.as_str()),
+            );
+            let order = record.trace_events.len() as u64 + 1;
+            record.trace_events.push(TraceEvent {
+                trace_schema_id: "trace:v1".to_string(),
+                event_kind: TraceEventKind::AcceptedCandidateResultBuilt,
+                formula_stable_id: candidate.formula_stable_id.clone(),
+                session_id: Some(request.session_id.clone()),
+                candidate_result_id: Some(candidate.candidate_result_id.clone()),
+                commit_attempt_id: None,
+                event_order_key: order,
+                event_payload: TracePayload::CandidateBuilt {
+                    candidate_result_id: candidate.candidate_result_id.clone(),
+                },
+            });
+            record.phase = SessionPhase::Executed;
+            record.candidate_result = Some(candidate.clone());
+            candidate
+        };
+        self.session_overlays.insert(
+            request.session_id.clone(),
+            overlay_entries_for_candidate(&candidate),
         );
-        let order = record.trace_events.len() as u64 + 1;
-        record.trace_events.push(TraceEvent {
-            trace_schema_id: "trace:v1".to_string(),
-            event_kind: TraceEventKind::AcceptedCandidateResultBuilt,
-            formula_stable_id: candidate.formula_stable_id.clone(),
-            session_id: Some(request.session_id.clone()),
-            candidate_result_id: Some(candidate.candidate_result_id.clone()),
-            commit_attempt_id: None,
-            event_order_key: order,
-            event_payload: TracePayload::CandidateBuilt {
-                candidate_result_id: candidate.candidate_result_id.clone(),
-            },
-        });
-        record.phase = SessionPhase::Executed;
-        record.candidate_result = Some(candidate.clone());
         Ok(candidate)
     }
 
@@ -485,110 +561,143 @@ impl SessionService {
         });
         let order = record.trace_events.len() as u64 + 1;
 
-        match &decision {
-            AcceptDecision::Accepted(bundle) => {
-                record.phase = SessionPhase::Committed;
-                record.trace_events.push(TraceEvent {
-                    trace_schema_id: "trace:v1".to_string(),
-                    event_kind: TraceEventKind::CommitAccepted,
-                    formula_stable_id: bundle.formula_stable_id.clone(),
-                    session_id: Some(session_id.to_string()),
-                    candidate_result_id: Some(bundle.candidate_result_id.clone()),
-                    commit_attempt_id: Some(commit_attempt_id.clone()),
-                    event_order_key: order,
-                    event_payload: TracePayload::CommitAccepted {
-                        commit_attempt_id,
-                        candidate_result_id: bundle.candidate_result_id.clone(),
-                    },
-                });
+        let should_release = {
+            match &decision {
+                AcceptDecision::Accepted(bundle) => {
+                    record.phase = SessionPhase::Committed;
+                    record.trace_events.push(TraceEvent {
+                        trace_schema_id: "trace:v1".to_string(),
+                        event_kind: TraceEventKind::CommitAccepted,
+                        formula_stable_id: bundle.formula_stable_id.clone(),
+                        session_id: Some(session_id.to_string()),
+                        candidate_result_id: Some(bundle.candidate_result_id.clone()),
+                        commit_attempt_id: Some(commit_attempt_id.clone()),
+                        event_order_key: order,
+                        event_payload: TracePayload::CommitAccepted {
+                            commit_attempt_id,
+                            candidate_result_id: bundle.candidate_result_id.clone(),
+                        },
+                    });
+                    true
+                }
+                AcceptDecision::Rejected(reject) => {
+                    record.phase = SessionPhase::Rejected;
+                    record.last_reject = Some(reject.clone());
+                    record.trace_events.push(TraceEvent {
+                        trace_schema_id: "trace:v1".to_string(),
+                        event_kind: TraceEventKind::CommitRejected,
+                        formula_stable_id: reject.formula_stable_id.clone(),
+                        session_id: reject.session_id.clone(),
+                        candidate_result_id: record
+                            .candidate_result
+                            .as_ref()
+                            .map(|candidate| candidate.candidate_result_id.clone()),
+                        commit_attempt_id: Some(commit_attempt_id.clone()),
+                        event_order_key: order,
+                        event_payload: TracePayload::CommitRejected {
+                            commit_attempt_id,
+                            reject_code: reject.reject_code,
+                        },
+                    });
+                    true
+                }
             }
-            AcceptDecision::Rejected(reject) => {
-                record.phase = SessionPhase::Rejected;
-                record.last_reject = Some(reject.clone());
-                record.trace_events.push(TraceEvent {
-                    trace_schema_id: "trace:v1".to_string(),
-                    event_kind: TraceEventKind::CommitRejected,
-                    formula_stable_id: reject.formula_stable_id.clone(),
-                    session_id: reject.session_id.clone(),
-                    candidate_result_id: record
-                        .candidate_result
-                        .as_ref()
-                        .map(|candidate| candidate.candidate_result_id.clone()),
-                    commit_attempt_id: Some(commit_attempt_id.clone()),
-                    event_order_key: order,
-                    event_payload: TracePayload::CommitRejected {
-                        commit_attempt_id,
-                        reject_code: reject.reject_code,
-                    },
-                });
-            }
+        };
+        if should_release {
+            self.release_runtime_state(session_id);
         }
-
         decision
     }
 
     pub fn abort_session(&mut self, session_id: &str, cause: Option<String>) -> RejectRecord {
-        let record = self
-            .sessions
-            .get_mut(session_id)
-            .expect("session should exist for abort");
-        record.phase = SessionPhase::Aborted;
-        let reject = session_terminated_reject(
-            &record.prepared.source.formula_stable_id.0,
-            session_id,
-            "session_aborted",
-            false,
-            cause,
-        );
-        record.last_reject = Some(reject.clone());
-        let order = record.trace_events.len() as u64 + 1;
-        record.trace_events.push(TraceEvent {
-            trace_schema_id: "trace:v1".to_string(),
-            event_kind: TraceEventKind::SessionAborted,
-            formula_stable_id: record.prepared.source.formula_stable_id.0.clone(),
-            session_id: Some(session_id.to_string()),
-            candidate_result_id: None,
-            commit_attempt_id: None,
-            event_order_key: order,
-            event_payload: TracePayload::SessionAborted {
-                termination_class: "aborted".to_string(),
-            },
-        });
+        let reject = {
+            let record = self
+                .sessions
+                .get_mut(session_id)
+                .expect("session should exist for abort");
+            record.phase = SessionPhase::Aborted;
+            let reject = session_terminated_reject(
+                &record.prepared.source.formula_stable_id.0,
+                session_id,
+                "session_aborted",
+                false,
+                cause,
+            );
+            record.last_reject = Some(reject.clone());
+            let order = record.trace_events.len() as u64 + 1;
+            record.trace_events.push(TraceEvent {
+                trace_schema_id: "trace:v1".to_string(),
+                event_kind: TraceEventKind::SessionAborted,
+                formula_stable_id: record.prepared.source.formula_stable_id.0.clone(),
+                session_id: Some(session_id.to_string()),
+                candidate_result_id: None,
+                commit_attempt_id: None,
+                event_order_key: order,
+                event_payload: TracePayload::SessionAborted {
+                    termination_class: "aborted".to_string(),
+                },
+            });
+            reject
+        };
+        self.release_runtime_state(session_id);
         reject
     }
 
     pub fn expire_session(&mut self, session_id: &str, cause: Option<String>) -> RejectRecord {
-        let record = self
-            .sessions
-            .get_mut(session_id)
-            .expect("session should exist for expire");
-        record.phase = SessionPhase::Expired;
-        let reject = session_terminated_reject(
-            &record.prepared.source.formula_stable_id.0,
-            session_id,
-            "session_expired",
-            true,
-            cause,
-        );
-        record.last_reject = Some(reject.clone());
-        let order = record.trace_events.len() as u64 + 1;
-        record.trace_events.push(TraceEvent {
-            trace_schema_id: "trace:v1".to_string(),
-            event_kind: TraceEventKind::SessionExpired,
-            formula_stable_id: record.prepared.source.formula_stable_id.0.clone(),
-            session_id: Some(session_id.to_string()),
-            candidate_result_id: None,
-            commit_attempt_id: None,
-            event_order_key: order,
-            event_payload: TracePayload::SessionExpired {
-                termination_class: "expired".to_string(),
-            },
-        });
+        let reject = {
+            let record = self
+                .sessions
+                .get_mut(session_id)
+                .expect("session should exist for expire");
+            record.phase = SessionPhase::Expired;
+            let reject = session_terminated_reject(
+                &record.prepared.source.formula_stable_id.0,
+                session_id,
+                "session_expired",
+                true,
+                cause,
+            );
+            record.last_reject = Some(reject.clone());
+            let order = record.trace_events.len() as u64 + 1;
+            record.trace_events.push(TraceEvent {
+                trace_schema_id: "trace:v1".to_string(),
+                event_kind: TraceEventKind::SessionExpired,
+                formula_stable_id: record.prepared.source.formula_stable_id.0.clone(),
+                session_id: Some(session_id.to_string()),
+                candidate_result_id: None,
+                commit_attempt_id: None,
+                event_order_key: order,
+                event_payload: TracePayload::SessionExpired {
+                    termination_class: "expired".to_string(),
+                },
+            });
+            reject
+        };
+        self.release_runtime_state(session_id);
         reject
     }
 
     pub fn session(&self, session_id: &str) -> Option<&SessionRecord> {
         self.sessions.get(session_id)
+    }
+
+    pub fn overlay_entries(&self, session_id: &str) -> &[OverlayEntry] {
+        self.session_overlays
+            .get(session_id)
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+
+    pub fn active_locus_claim_owner(&self, locus: &Locus) -> Option<&str> {
+        self.active_locus_claims
+            .get(&locus_claim_key(locus))
+            .map(String::as_str)
+    }
+
+    fn release_runtime_state(&mut self, session_id: &str) {
+        self.session_overlays.remove(session_id);
+        self.active_locus_claims
+            .retain(|_, owner_session_id| owner_session_id != session_id);
     }
 }
 
@@ -720,6 +829,27 @@ fn structural_conflict_reject(
     }
 }
 
+fn contention_conflict_reject(
+    formula_stable_id: &str,
+    session_id: &str,
+    locus: &Locus,
+    owner_session_id: &str,
+) -> RejectRecord {
+    RejectRecord {
+        formula_stable_id: formula_stable_id.to_string(),
+        session_id: Some(session_id.to_string()),
+        commit_attempt_id: None,
+        reject_code: RejectCode::StructuralConflict,
+        context: RejectContext::StructuralConflict(crate::seam::StructuralConflictContext {
+            conflict_kind: "locus_busy".to_string(),
+            conflicting_loci: vec![locus.clone()],
+            conflicting_extent: Some(Extent { rows: 1, cols: 1 }),
+            retry_admissibility: format!("retry_after_release:{owner_session_id}"),
+        }),
+        trace_correlation_id: format!("trace:{session_id}"),
+    }
+}
+
 fn session_terminated_reject(
     formula_stable_id: &str,
     session_id: &str,
@@ -766,6 +896,100 @@ fn trace_reject_event(
     }
 }
 
+fn requires_single_locus_claim(plan: &SemanticPlan) -> bool {
+    let contract = build_execution_contract(plan);
+    contract.restrictions.iter().any(|restriction| {
+        matches!(
+            restriction,
+            ExecutionRestriction::ThreadAffine
+                | ExecutionRestriction::SerialOnly
+                | ExecutionRestriction::SingleFlightAdvisable
+                | ExecutionRestriction::HostSerialized
+                | ExecutionRestriction::NotThreadSafe
+        )
+    })
+}
+
+fn overlay_entries_for_candidate(candidate: &AcceptedCandidateResult) -> Vec<OverlayEntry> {
+    let mut overlays = Vec::new();
+    let Some(session_id) = candidate.session_id.as_deref() else {
+        return overlays;
+    };
+    let overlay_scope_key = format!(
+        "{}:{}:{}:{}",
+        candidate.fence_snapshot.snapshot_epoch,
+        candidate.fence_snapshot.formula_token,
+        candidate.fence_snapshot.bind_hash,
+        candidate.fence_snapshot.profile_version
+    );
+
+    overlays.push(OverlayEntry {
+        overlay_entry_id: format!("overlay:{session_id}:dependency"),
+        overlay_scope_key: overlay_scope_key.clone(),
+        overlay_family: "dependency_overlay".to_string(),
+        session_id: session_id.to_string(),
+        formula_stable_id: candidate.formula_stable_id.clone(),
+    });
+    if !candidate.spill_events.is_empty() {
+        overlays.push(OverlayEntry {
+            overlay_entry_id: format!("overlay:{session_id}:spill"),
+            overlay_scope_key: overlay_scope_key.clone(),
+            overlay_family: "spill_overlay".to_string(),
+            session_id: session_id.to_string(),
+            formula_stable_id: candidate.formula_stable_id.clone(),
+        });
+    }
+    if !candidate.topology_delta.format_dependency_facts.is_empty() {
+        overlays.push(OverlayEntry {
+            overlay_entry_id: format!("overlay:{session_id}:format"),
+            overlay_scope_key,
+            overlay_family: "format_dependency_overlay".to_string(),
+            session_id: session_id.to_string(),
+            formula_stable_id: candidate.formula_stable_id.clone(),
+        });
+    }
+    if candidate
+        .topology_delta
+        .capability_effect_facts
+        .iter()
+        .any(|fact| fact.capability_kind == "async_coupling")
+    {
+        overlays.push(OverlayEntry {
+            overlay_entry_id: format!("overlay:{session_id}:runtime_async"),
+            overlay_scope_key: format!(
+                "{}:{}:{}:{}",
+                candidate.fence_snapshot.snapshot_epoch,
+                candidate.fence_snapshot.formula_token,
+                candidate.fence_snapshot.bind_hash,
+                candidate.fence_snapshot.profile_version
+            ),
+            overlay_family: "runtime_async_overlay".to_string(),
+            session_id: session_id.to_string(),
+            formula_stable_id: candidate.formula_stable_id.clone(),
+        });
+    }
+    if candidate.format_delta.is_some() || candidate.display_delta.is_some() {
+        overlays.push(OverlayEntry {
+            overlay_entry_id: format!("overlay:{session_id}:publication_surface"),
+            overlay_scope_key: format!(
+                "{}:{}:{}:{}",
+                candidate.fence_snapshot.snapshot_epoch,
+                candidate.fence_snapshot.formula_token,
+                candidate.fence_snapshot.bind_hash,
+                candidate.fence_snapshot.profile_version
+            ),
+            overlay_family: "publication_surface_overlay".to_string(),
+            session_id: session_id.to_string(),
+            formula_stable_id: candidate.formula_stable_id.clone(),
+        });
+    }
+    overlays
+}
+
+fn locus_claim_key(locus: &Locus) -> String {
+    format!("{}:{}:{}", locus.sheet_id, locus.row, locus.col)
+}
+
 fn build_candidate_result(
     source: &FormulaSourceRecord,
     semantic_plan: &SemanticPlan,
@@ -808,6 +1032,8 @@ fn build_candidate_result(
     } else {
         Vec::new()
     };
+    let format_delta = format_delta_from_evaluation(source, evaluation, primary_locus);
+    let display_delta = display_delta_from_evaluation(source, evaluation, primary_locus);
 
     AcceptedCandidateResult {
         formula_stable_id: source.formula_stable_id.0.clone(),
@@ -820,6 +1046,7 @@ fn build_candidate_result(
                     formula_stable_id: source.formula_stable_id.0.clone(),
                     green_tree_key: String::new(),
                     structure_context_version: String::new(),
+                    bind_context_fingerprint: String::new(),
                     bind_hash: semantic_plan.bind_hash.clone(),
                     root: crate::binding::BoundExpr::NumberLiteral("0".to_string()),
                     normalized_references: Vec::new(),
@@ -859,15 +1086,19 @@ fn build_candidate_result(
                 .map(|diag| diag.message.clone())
                 .collect(),
             dependency_removals: Vec::new(),
-            dependency_reclassifications: Vec::new(),
-            dynamic_reference_facts: Vec::new(),
+            dependency_reclassifications: dependency_reclassifications_for_plan(semantic_plan),
+            dependency_consequence_facts: dependency_consequence_facts_for_plan(
+                source,
+                semantic_plan,
+            ),
+            dynamic_reference_facts: dynamic_reference_facts_for_plan(source, semantic_plan),
             spill_facts: Vec::new(),
             format_dependency_facts,
             capability_effect_facts,
             candidate_result_id: Some(candidate_result_id.clone()),
         },
-        format_delta: None,
-        display_delta: None,
+        format_delta,
+        display_delta,
         spill_events,
         execution_profile: Some(semantic_plan.execution_profile.clone()),
         trace_correlation_id: format!("trace:{candidate_result_id}"),
@@ -926,6 +1157,19 @@ fn capability_effect_facts_for_plan(
             fallback_class: None,
         });
     }
+    if semantic_plan.execution_profile.requires_async_coupling
+        || semantic_plan
+            .execution_profile
+            .contains_external_event_dependence
+    {
+        facts.push(CapabilityEffectFact {
+            formula_stable_id: formula_stable_id.clone(),
+            capability_kind: "external_provider".to_string(),
+            phase_kind: "evaluate".to_string(),
+            effect_class: "admitted".to_string(),
+            fallback_class: Some("deferred_without_provider".to_string()),
+        });
+    }
 
     let contract = build_execution_contract(semantic_plan);
     for restriction in contract.restrictions {
@@ -935,6 +1179,7 @@ fn capability_effect_facts_for_plan(
             ExecutionRestriction::SingleFlightAdvisable => ("single_flight", "schedule"),
             ExecutionRestriction::HostSerialized => ("host_serialized", "schedule"),
             ExecutionRestriction::NotThreadSafe => ("not_thread_safe", "schedule"),
+            ExecutionRestriction::AsyncCoupled => ("async_coupling", "schedule"),
             _ => continue,
         };
         facts.push(CapabilityEffectFact {
@@ -947,6 +1192,111 @@ fn capability_effect_facts_for_plan(
     }
 
     facts
+}
+
+fn dynamic_reference_facts_for_plan(
+    source: &FormulaSourceRecord,
+    semantic_plan: &SemanticPlan,
+) -> Vec<DynamicReferenceFact> {
+    let mut facts = Vec::new();
+
+    if semantic_plan
+        .capability_requirements
+        .iter()
+        .any(|item| item == "external_reference")
+    {
+        facts.push(DynamicReferenceFact {
+            formula_stable_id: source.formula_stable_id.0.clone(),
+            discovery_site: "semantic_plan.external_reference".to_string(),
+            reference_identity: Some("external_reference".to_string()),
+            target_extent: None,
+            resolution_failure_class: Some("external_reference_deferred".to_string()),
+        });
+    }
+
+    facts
+}
+
+fn dependency_consequence_facts_for_plan(
+    source: &FormulaSourceRecord,
+    semantic_plan: &SemanticPlan,
+) -> Vec<DependencyConsequenceFact> {
+    let mut facts = semantic_plan
+        .diagnostics
+        .iter()
+        .enumerate()
+        .map(|(index, diagnostic)| DependencyConsequenceFact {
+            formula_stable_id: source.formula_stable_id.0.clone(),
+            dependency_identity: format!("diagnostic:{index}"),
+            consequence_kind: "addition".to_string(),
+            evidence_class: "semantic_diagnostic".to_string(),
+            projection_state: diagnostic.message.clone(),
+        })
+        .collect::<Vec<_>>();
+
+    if semantic_plan
+        .capability_requirements
+        .iter()
+        .any(|item| item == "external_reference")
+    {
+        facts.push(DependencyConsequenceFact {
+            formula_stable_id: source.formula_stable_id.0.clone(),
+            dependency_identity: "reference_lane:external_reference".to_string(),
+            consequence_kind: "reclassification".to_string(),
+            evidence_class: "dynamic_reference_deferred".to_string(),
+            projection_state: "retained_without_target_resolution".to_string(),
+        });
+    }
+
+    facts
+}
+
+fn format_delta_from_evaluation(
+    source: &FormulaSourceRecord,
+    evaluation: &EvaluationOutput,
+    primary_locus: &Locus,
+) -> Option<FormatDelta> {
+    evaluation
+        .result
+        .format_hint
+        .as_ref()
+        .map(|hint| FormatDelta {
+            formula_stable_id: source.formula_stable_id.0.clone(),
+            target_loci: vec![primary_locus.clone()],
+            format_effect_class: hint.clone(),
+            format_effect_payload: evaluation.result.payload_summary.clone(),
+        })
+}
+
+fn display_delta_from_evaluation(
+    source: &FormulaSourceRecord,
+    evaluation: &EvaluationOutput,
+    primary_locus: &Locus,
+) -> Option<DisplayDelta> {
+    evaluation
+        .result
+        .publication_hint
+        .as_ref()
+        .map(|hint| DisplayDelta {
+            formula_stable_id: source.formula_stable_id.0.clone(),
+            target_loci: vec![primary_locus.clone()],
+            display_effect_class: hint.clone(),
+            display_effect_payload: evaluation.result.payload_summary.clone(),
+        })
+}
+
+fn dependency_reclassifications_for_plan(semantic_plan: &SemanticPlan) -> Vec<String> {
+    let mut reclassifications = Vec::new();
+
+    if semantic_plan
+        .capability_requirements
+        .iter()
+        .any(|item| item == "external_reference")
+    {
+        reclassifications.push("reference_lane:external_reference_deferred".to_string());
+    }
+
+    reclassifications
 }
 
 fn value_payload_for_eval_value(

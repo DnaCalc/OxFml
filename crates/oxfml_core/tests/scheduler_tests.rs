@@ -94,10 +94,12 @@ fn scheduler_contract_can_express_async_coupled_external_lanes() {
         formula_stable_id: "formula:async".to_string(),
         bind_hash: "bind:async".to_string(),
         oxfunc_catalog_identity: "oxfunc:test".to_string(),
+        library_context_snapshot_ref: None,
         locale_profile: None,
         date_system: None,
         format_profile: None,
         function_bindings: Vec::new(),
+        availability_summaries: Vec::new(),
         evaluation_requirements: Vec::new(),
         execution_profile: oxfml_core::ExecutionProfileSummary {
             requires_async_coupling: true,
@@ -153,6 +155,7 @@ fn contract_for(formula: &str) -> oxfml_core::ExecutionContract {
         locale_profile: Some("en-US".to_string()),
         date_system: Some("1900".to_string()),
         format_profile: Some("excel-default".to_string()),
+        library_context_snapshot: None,
     })
     .semantic_plan;
 

@@ -1,0 +1,37 @@
+{
+  "index_id": "oxfml.local.retained_witness_set_index.v1",
+  "lane_id": "oxfml",
+  "adapter_id": "oxfml.replay_adapter.v1",
+  "index_state": "retained_local_floor",
+  "retained_witness_refs": [
+    "crates/oxfml_core/tests/fixtures/witness_distillation/fec_reject_formula_token_lifecycle.json",
+    "crates/oxfml_core/tests/fixtures/witness_distillation/fec_accept_publication_lifecycle.json",
+    "crates/oxfml_core/tests/fixtures/witness_distillation/session_capability_denied_lifecycle.json",
+    "crates/oxfml_core/tests/fixtures/witness_distillation/execution_contract_host_query_lifecycle.json",
+    "crates/oxfml_core/tests/fixtures/witness_distillation/single_formula_host_scalarization_lifecycle.json",
+    "crates/oxfml_core/tests/fixtures/witness_distillation/empirical_oracle_host_query_reference_lifecycle.json"
+  ],
+  "quarantined_witness_refs": [
+    "crates/oxfml_core/tests/fixtures/witness_distillation/session_contention_quarantine_lifecycle.json"
+  ],
+  "family_counts": {
+    "fec_commit": 2,
+    "session_lifecycle": 1,
+    "execution_contract": 1,
+    "single_formula_host": 1,
+    "empirical_oracle": 1
+  },
+  "capability_residuals": [
+    "cap.C4.distill_valid remains unclaimed because retained-local breadth is still local-only and not yet promotion-grade across all critical families.",
+    "cap.C4.distill_valid remains blocked on broader retained witness coverage, explicit irreducibility coverage, and stronger promotion governance."
+  ],
+  "promotion_blockers": [
+    "local_witness_tier_only",
+    "cap_c4_breadth_not_satisfied",
+    "pack_grade_bundle_governance_not_satisfied"
+  ],
+  "notes": [
+    "This index records the current retained-local witness floor only.",
+    "Retained-local witness breadth is broader than the first rehearsal set but remains below pack-grade promotion."
+  ]
+}

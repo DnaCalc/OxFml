@@ -15,20 +15,22 @@ When starting OxFml design or implementation work, read these documents and igno
 8. `docs/spec/OXFML_HIGH_RISK_AND_EARLY_ATTENTION_AREAS.md`
 9. `docs/spec/OXFML_PUBLIC_API_AND_RUNTIME_SERVICE_SKETCH.md`
 10. `docs/spec/OXFML_TEST_LADDER_AND_PROVING_HOSTS.md`
-11. `docs/spec/OXFML_FORMALIZATION_AND_VERIFICATION.md`
-12. `docs/spec/OXFML_FORMAL_ARTIFACT_REGISTER.md`
-13. `docs/spec/OXFML_REPLAY_APPLIANCE_ADAPTER_V1.md`
-14. `docs/spec/OXFML_REPLAY_ADAPTER_CAPABILITY_MANIFEST_V1.json`
-15. `docs/spec/formula-language/OXFML_FORMULA_ENGINE_ARCHITECTURE.md`
-16. `docs/spec/formula-language/OXFML_PARSER_AND_BINDER_REALIZATION.md`
-17. `docs/spec/formula-language/OXFML_NORMALIZED_REFERENCE_ADTS.md`
-18. `docs/spec/formula-language/OXFML_OXFUNC_SEMANTIC_BOUNDARY.md`
-19. `docs/spec/fec-f3e/FEC_F3E_DESIGN_SPEC.md`
-20. `docs/spec/fec-f3e/FEC_F3E_FORMAL_AND_ASSURANCE_MAP.md`
-21. `docs/spec/fec-f3e/FEC_F3E_TESTING_AND_REPLAY.md`
-22. `docs/spec/fec-f3e/FEC_F3E_SCHEMA_REPLAY_FIXTURE_PLAN.md`
-23. `docs/spec/formula-language/EXCEL_FORMULA_LANGUAGE_CONCRETE_RULES.md`
-24. `docs/spec/formatting/EXCEL_FORMATTING_HIERARCHY_AND_VISIBILITY_MODEL.md`
+11. `docs/spec/OXFML_DNA_ONECALC_HOST_POLICY_BASELINE.md`
+12. `docs/spec/OXFML_EMPIRICAL_PACK_PLANNING.md`
+13. `docs/spec/OXFML_FORMALIZATION_AND_VERIFICATION.md`
+14. `docs/spec/OXFML_FORMAL_ARTIFACT_REGISTER.md`
+15. `docs/spec/OXFML_REPLAY_APPLIANCE_ADAPTER_V1.md`
+16. `docs/spec/OXFML_REPLAY_ADAPTER_CAPABILITY_MANIFEST_V1.json`
+17. `docs/spec/formula-language/OXFML_FORMULA_ENGINE_ARCHITECTURE.md`
+18. `docs/spec/formula-language/OXFML_PARSER_AND_BINDER_REALIZATION.md`
+19. `docs/spec/formula-language/OXFML_NORMALIZED_REFERENCE_ADTS.md`
+20. `docs/spec/formula-language/OXFML_OXFUNC_SEMANTIC_BOUNDARY.md`
+21. `docs/spec/fec-f3e/FEC_F3E_DESIGN_SPEC.md`
+22. `docs/spec/fec-f3e/FEC_F3E_FORMAL_AND_ASSURANCE_MAP.md`
+23. `docs/spec/fec-f3e/FEC_F3E_TESTING_AND_REPLAY.md`
+24. `docs/spec/fec-f3e/FEC_F3E_SCHEMA_REPLAY_FIXTURE_PLAN.md`
+25. `docs/spec/formula-language/EXCEL_FORMULA_LANGUAGE_CONCRETE_RULES.md`
+26. `docs/spec/formatting/EXCEL_FORMATTING_HIERARCHY_AND_VISIBILITY_MODEL.md`
 
 ## Canonical Document Groups
 ### System and formal posture
@@ -42,6 +44,8 @@ When starting OxFml design or implementation work, read these documents and igno
 - `docs/spec/OXFML_HIGH_RISK_AND_EARLY_ATTENTION_AREAS.md`
 - `docs/spec/OXFML_PUBLIC_API_AND_RUNTIME_SERVICE_SKETCH.md`
 - `docs/spec/OXFML_TEST_LADDER_AND_PROVING_HOSTS.md`
+- `docs/spec/OXFML_DNA_ONECALC_HOST_POLICY_BASELINE.md`
+- `docs/spec/OXFML_EMPIRICAL_PACK_PLANNING.md`
 - `docs/spec/OXFML_FORMALIZATION_AND_VERIFICATION.md`
 - `docs/spec/OXFML_FORMAL_ARTIFACT_REGISTER.md`
 - `docs/spec/OXFML_REPLAY_APPLIANCE_ADAPTER_V1.md`
@@ -50,6 +54,8 @@ When starting OxFml design or implementation work, read these documents and igno
 ### Replay appliance rollout
 - `docs/spec/OXFML_REPLAY_APPLIANCE_ADAPTER_V1.md`
 - `docs/spec/OXFML_REPLAY_ADAPTER_CAPABILITY_MANIFEST_V1.json`
+- `docs/spec/OXFML_DNA_ONECALC_HOST_POLICY_BASELINE.md`
+- `docs/spec/OXFML_EMPIRICAL_PACK_PLANNING.md`
 - `docs/spec/fec-f3e/FEC_F3E_TESTING_AND_REPLAY.md`
 - `docs/spec/fec-f3e/FEC_F3E_SCHEMA_REPLAY_FIXTURE_PLAN.md`
 - `docs/spec/fec-f3e/FEC_F3E_FORMAL_AND_ASSURANCE_MAP.md`

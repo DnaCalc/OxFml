@@ -94,23 +94,30 @@ Minimum fields:
    - optional `semantic_plan_fingerprint`
 2. `formula_stable_id`
 3. `bind_hash`
-4. relevant OxFunc catalog/profile identity
-5. operator/function dispatch graph
-6. evaluation-mode requirements
-7. reduction policy requirements
-8. reference-preservation requirements
-9. helper-environment profile
+4. relevant library-context snapshot identity
+5. relevant OxFunc catalog/profile identity
+6. operator/function dispatch graph
+7. evaluation-mode requirements
+8. reduction policy requirements
+9. reference-preservation requirements
+10. helper-environment profile
    - at minimum whether `LET`, `LAMBDA`, and helper invocation are present
    - and whether lexical helper capture is required by the formula shape
-10. overlay participation flags
-11. locale/format service requirements
-12. execution and scheduling profile requirements
-13. fast-path classification
-14. semantic diagnostics or unsupported-lane markers
+11. overlay participation flags
+12. locale/format service requirements
+13. execution and scheduling profile requirements
+14. availability/gating summary where formula admission or runtime capability depends on catalog/profile/provider state
+15. fast-path classification
+16. semantic diagnostics or unsupported-lane markers
+
+Current local floor:
+1. `library_context_snapshot_ref` records the consumed external library-context snapshot identity when present,
+2. `availability_summaries` preserve parse/bind, semantic-plan, runtime-capability, and post-dispatch/provider states per surfaced function lane.
 
 Canonical property:
 1. `SemanticPlan` explains how evaluation should proceed,
-2. it does not itself contain runtime session state.
+2. it does not itself contain runtime session state,
+3. it may carry library-context and availability truth needed to preserve semantic admission distinctions without owning mutable registry state.
 
 ## 7. PreparedArgument
 Prepared arguments are the canonical OxFml-to-OxFunc call-shape units.
@@ -157,11 +164,13 @@ Minimum fields:
 4. optional `reference_identity`
 5. optional `format_hint`
 6. optional `publication_hint`
-7. optional provenance/derivation marker
-8. result diagnostics if the result carries degraded or version-scoped semantics
+7. optional callable-value profile and structured callable detail
+8. optional provenance/derivation marker
+9. result diagnostics if the result carries degraded or version-scoped semantics
 
 Canonical property:
 1. prepared results must distinguish scalar, array, reference, and error outcomes without collapsing them prematurely.
+2. callable helper values may remain semantically first-class even when publication carriers remain narrower than the full callable transport problem.
 
 ## 10. Evaluator Facts
 Evaluator facts are the intermediate execution facts that later feed the seam.
@@ -234,7 +243,8 @@ Minimum fields:
 `topology_delta` should contain:
 1. dependency and invalidation-relevant evaluator facts,
 2. dynamic-reference facts,
-3. other coordinator-consumable facts that are not scheduler policy.
+3. typed dependency consequence facts for additions, removals, or reclassifications,
+4. other coordinator-consumable facts that are not scheduler policy.
 
 What does not belong in `CommitBundle`:
 1. scheduler decisions,
@@ -312,6 +322,8 @@ Projection guidance:
    - normalized `publication.*` events plus published-view material
 10. `RejectRecord`
    - normalized `reject.*` events plus reject-set material
+11. promotion-readiness and retained-witness material
+   - replay-family refs, lifecycle refs, and reduction-manifest lineage remain additive sidecars rather than replacements for OxFml artifact meaning
 
 Projection rule:
 1. source schema ids remain preserved,

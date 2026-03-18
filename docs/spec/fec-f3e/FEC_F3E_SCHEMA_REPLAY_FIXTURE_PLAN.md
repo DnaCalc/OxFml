@@ -84,12 +84,18 @@ Current first local artifact locations:
 5. `crates/oxfml_core/tests/fixtures/execution_contract_replay_cases.json`
 6. `crates/oxfml_core/tests/fixtures/session_lifecycle_replay_cases.json`
 7. `crates/oxfml_core/tests/fixtures/single_formula_host_replay_cases.json`
+   Current exercised lanes: reuse-sensitive recalc, scalarization, helper forms, spill publication, formatting, and host-query
 8. `crates/oxfml_core/tests/fixtures/empirical_oracle_scenarios.json`
+   Current exercised lanes: formatting, host-query, scalarization, helper-form invocation, spill publication, and seam-significant `format_delta` / `display_delta`
+9. `crates/oxfml_core/tests/fixtures/library_context_snapshot_cases.json`
+10. `crates/oxfml_core/tests/fixtures/replay_bundle_normalization/promotion_candidate_families.json`
+11. `crates/oxfml_core/tests/fixtures/replay_bundle_normalization/promotion_readiness_index.json`
 
 Current rule:
 1. these are local deterministic witness artifacts for the implementation-start slice,
 2. they are not yet the full pack-grade replay corpus,
 3. future fixture families should reuse the same scenario-id discipline instead of introducing ad hoc naming.
+4. when host or seam artifacts gain new coordinator-relevant facts, the affected host and replay fixture families should expand in the same wave rather than lagging behind the schema change.
 
 ## 5. Witness Distillation Planning
 ### 5.1 Reduction Units
@@ -108,10 +114,18 @@ The current additive predicate families for planning are:
    - preserve one typed reject family and context class
 2. `pred.publication.not_published_reason`
    - preserve one non-publication reason with candidate-versus-no-publish boundary intact
-3. `pred.diff.mismatch_present`
+3. `pred.publication.accepted_payload_present`
+   - preserve one accepted publication payload class and candidate-to-publication lineage
+4. `pred.execution.restriction_present`
+   - preserve one execution-restriction family and replay-sensitivity classification
+5. `pred.diff.mismatch_present`
    - preserve one commit, reject, effect, or topology mismatch class
-4. `pred.invariant.failed`
+6. `pred.invariant.failed`
    - preserve one resource or invariant failure class where applicable
+7. `pred.topology.dependency_consequence_present`
+   - preserve one typed dependency-consequence evidence class with its causal lane
+8. `pred.publication.format_display_present`
+   - preserve one seam-significant format or display publication consequence
 
 ### 5.3 Closure Rules
 Current closure rules are:
@@ -120,6 +134,7 @@ Current closure rules are:
 3. retaining a reject-context slice keeps the surrounding reject family and triggering lifecycle boundary,
 4. retaining an effect slice keeps the effect family id, relevant causal lifecycle phase, and typed correlation ids,
 5. retaining a sidecar-backed artifact keeps its content fingerprint and source schema identity.
+6. retaining a host-facing witness that depends on concrete cell resolution keeps any direct cell bindings needed to replay that semantic path faithfully.
 
 ### 5.4 Allowed Transforms
 The currently allowed transform families are:
@@ -137,6 +152,45 @@ The current replay rollout does not declare these rewrite families replay-safe:
 
 Working rule:
 1. these rewrites remain prohibited unless a later OxFml workset declares them replay-safe and locally evidenced.
+
+### 5.6 Current Authored Local Reduction Artifacts
+The first authored local reduction artifact set is:
+1. `crates/oxfml_core/tests/fixtures/witness_distillation/fec_reject_formula_token_reduction_manifest.json`
+2. `crates/oxfml_core/tests/fixtures/witness_distillation/fec_reject_formula_token_witness_bundle.json`
+3. `crates/oxfml_core/tests/fixtures/witness_distillation/fec_reject_formula_token_lifecycle.json`
+4. `crates/oxfml_core/tests/fixtures/witness_distillation/fec_accept_publication_reduction_manifest.json`
+5. `crates/oxfml_core/tests/fixtures/witness_distillation/fec_accept_publication_witness_bundle.json`
+6. `crates/oxfml_core/tests/fixtures/witness_distillation/fec_accept_publication_lifecycle.json`
+7. `crates/oxfml_core/tests/fixtures/witness_distillation/session_capability_denied_reduction_manifest.json`
+8. `crates/oxfml_core/tests/fixtures/witness_distillation/session_capability_denied_witness_bundle.json`
+9. `crates/oxfml_core/tests/fixtures/witness_distillation/session_capability_denied_lifecycle.json`
+10. `crates/oxfml_core/tests/fixtures/witness_distillation/execution_contract_host_query_reduction_manifest.json`
+11. `crates/oxfml_core/tests/fixtures/witness_distillation/execution_contract_host_query_witness_bundle.json`
+12. `crates/oxfml_core/tests/fixtures/witness_distillation/execution_contract_host_query_lifecycle.json`
+13. `crates/oxfml_core/tests/fixtures/witness_distillation/single_formula_host_scalarization_reduction_manifest.json`
+14. `crates/oxfml_core/tests/fixtures/witness_distillation/single_formula_host_scalarization_witness_bundle.json`
+15. `crates/oxfml_core/tests/fixtures/witness_distillation/single_formula_host_scalarization_lifecycle.json`
+16. `crates/oxfml_core/tests/fixtures/witness_distillation/empirical_oracle_host_query_reference_reduction_manifest.json`
+17. `crates/oxfml_core/tests/fixtures/witness_distillation/empirical_oracle_host_query_reference_witness_bundle.json`
+18. `crates/oxfml_core/tests/fixtures/witness_distillation/empirical_oracle_host_query_reference_lifecycle.json`
+19. `crates/oxfml_core/tests/fixtures/witness_distillation/retained_witness_set_index.json`
+
+Current rule:
+1. this artifact set proves the intended shape of retained local witness reduction over the existing FEC commit/reject fixture family,
+2. the local floor is now broadened across accepted publication, session rejection, execution-restriction, single-formula host, and empirical-oracle families,
+3. retained-local breadth is now indexable across more than one source family,
+4. broader replay-valid reduction claims remain open until additional witness families are exercised.
+
+### 5.7 Local Normalized Bundle Evidence
+Current local normalized bundle evidence is:
+1. `crates/oxfml_core/tests/fixtures/replay_bundle_normalization/fec_commit_pack_candidate_bundle.json`
+2. `crates/oxfml_core/tests/fixtures/replay_bundle_normalization/session_lifecycle_pack_candidate_bundle.json`
+3. `crates/oxfml_core/tests/fixtures/replay_bundle_normalization/pack_candidate_index.json`
+
+Current rule:
+1. these normalized bundles remain local-only rehearsal artifacts,
+2. they must preserve source schema ids, witness refs, and non-pack-eligible state,
+3. they do not authorize pack-grade promotion.
 
 ## 6. Initial Pack Mapping
 The first pack-family alignment is:

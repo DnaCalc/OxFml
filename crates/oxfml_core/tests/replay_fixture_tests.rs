@@ -110,9 +110,20 @@ struct PreparedCallExpected {
     result_structure_class: String,
     payload_summary: String,
     blankness_class: String,
+    callable_profile: Option<String>,
+    callable_profile_detail: Option<CallableProfileExpected>,
+    deferred_reason: Option<String>,
     format_hint: Option<String>,
     publication_hint: Option<String>,
     capability_dependencies: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CallableProfileExpected {
+    arity: usize,
+    parameter_names: Vec<String>,
+    capture_names: Vec<String>,
+    body_kind: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -128,6 +139,8 @@ struct PreparedArgumentExpected {
     evaluation_mode: String,
     blankness_class: String,
     caller_context_sensitive: bool,
+    reference_target: Option<String>,
+    opaque_reason: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -150,7 +163,10 @@ struct SingleFormulaHostReplayFixture {
     case_id: String,
     formula: String,
     backend: String,
+    #[serde(default)]
     defined_names: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    cell_bindings: std::collections::BTreeMap<String, String>,
     host_query_profile: Option<String>,
     expected: SingleFormulaHostExpected,
 }
@@ -160,6 +176,12 @@ struct SingleFormulaHostExpected {
     payload_summary: String,
     commit_decision: String,
     trace_event_kinds: Vec<String>,
+    #[serde(default)]
+    capability_effect_kinds: Vec<String>,
+    #[serde(default)]
+    format_dependency_tokens: Vec<String>,
+    #[serde(default)]
+    spill_event_kinds: Vec<String>,
 }
 
 #[test]
@@ -425,6 +447,48 @@ fn prepared_call_replay_fixtures_match_expected_snapshots() {
             fixture.case_id
         );
         assert_eq!(
+            output.result.callable_profile, fixture.expected.callable_profile,
+            "callable profile mismatch for {}",
+            fixture.case_id
+        );
+        match (
+            output.result.callable_profile_detail.as_ref(),
+            fixture.expected.callable_profile_detail.as_ref(),
+        ) {
+            (Some(actual), Some(expected)) => {
+                assert_eq!(
+                    actual.arity, expected.arity,
+                    "callable arity mismatch for {}",
+                    fixture.case_id
+                );
+                assert_eq!(
+                    actual.parameter_names, expected.parameter_names,
+                    "callable parameter names mismatch for {}",
+                    fixture.case_id
+                );
+                assert_eq!(
+                    actual.capture_names, expected.capture_names,
+                    "callable capture names mismatch for {}",
+                    fixture.case_id
+                );
+                assert_eq!(
+                    actual.body_kind, expected.body_kind,
+                    "callable body kind mismatch for {}",
+                    fixture.case_id
+                );
+            }
+            (None, None) => {}
+            _ => panic!(
+                "callable profile detail presence mismatch for {}",
+                fixture.case_id
+            ),
+        }
+        assert_eq!(
+            output.result.deferred_reason, fixture.expected.deferred_reason,
+            "deferred reason mismatch for {}",
+            fixture.case_id
+        );
+        assert_eq!(
             output.result.format_hint, fixture.expected.format_hint,
             "format hint mismatch for {}",
             fixture.case_id
@@ -496,6 +560,20 @@ fn prepared_call_replay_fixtures_match_expected_snapshots() {
                     "prepared arg caller-context sensitivity mismatch for {}",
                     fixture.case_id
                 );
+                if expected_arg.reference_target.is_some() {
+                    assert_eq!(
+                        actual_arg.reference_target, expected_arg.reference_target,
+                        "prepared arg reference target mismatch for {}",
+                        fixture.case_id
+                    );
+                }
+                if expected_arg.opaque_reason.is_some() {
+                    assert_eq!(
+                        actual_arg.opaque_reason, expected_arg.opaque_reason,
+                        "prepared arg opaque reason mismatch for {}",
+                        fixture.case_id
+                    );
+                }
             }
         }
     }
@@ -549,6 +627,9 @@ fn single_formula_host_replay_fixtures_match_expected_snapshots() {
         for (name, value) in &fixture.defined_names {
             apply_defined_name_summary(&mut host, name, value);
         }
+        for (target, value) in &fixture.cell_bindings {
+            host.set_cell_value(target, parse_eval_value_summary(value));
+        }
         let host_info = fixture
             .host_query_profile
             .as_deref()
@@ -585,6 +666,41 @@ fn single_formula_host_replay_fixtures_match_expected_snapshots() {
             "trace kind mismatch for {}",
             fixture.case_id
         );
+        let actual_capability_effect_kinds = output
+            .candidate_result
+            .topology_delta
+            .capability_effect_facts
+            .iter()
+            .map(|fact| fact.capability_kind.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            actual_capability_effect_kinds, fixture.expected.capability_effect_kinds,
+            "capability effect mismatch for {}",
+            fixture.case_id
+        );
+        let actual_format_dependency_tokens = output
+            .candidate_result
+            .topology_delta
+            .format_dependency_facts
+            .iter()
+            .map(|fact| fact.dependency_token.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            actual_format_dependency_tokens, fixture.expected.format_dependency_tokens,
+            "format dependency mismatch for {}",
+            fixture.case_id
+        );
+        let actual_spill_event_kinds = output
+            .candidate_result
+            .spill_events
+            .iter()
+            .map(|event| spill_event_name(event.spill_event_kind))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            actual_spill_event_kinds, fixture.expected.spill_event_kinds,
+            "spill event mismatch for {}",
+            fixture.case_id
+        );
     }
 }
 
@@ -610,6 +726,7 @@ fn compile(formula: &str) -> oxfml_core::SemanticPlan {
         locale_profile: Some("en-US".to_string()),
         date_system: Some("1900".to_string()),
         format_profile: Some("excel-default".to_string()),
+        library_context_snapshot: None,
     })
     .semantic_plan
 }
@@ -655,6 +772,7 @@ fn sample_candidate() -> AcceptedCandidateResult {
             dependency_additions: vec!["name:InputA".to_string()],
             dependency_removals: Vec::new(),
             dependency_reclassifications: Vec::new(),
+            dependency_consequence_facts: Vec::new(),
             dynamic_reference_facts: vec![DynamicReferenceFact {
                 formula_stable_id: "formula:001".to_string(),
                 discovery_site: "OFFSET".to_string(),
@@ -737,6 +855,7 @@ fn eval_requirement_name(requirement: &EvaluationRequirement) -> String {
         EvaluationRequirement::ImplicitIntersection => "ImplicitIntersection",
         EvaluationRequirement::SpillReference => "SpillReference",
         EvaluationRequirement::ReferenceExpression => "ReferenceExpression",
+        EvaluationRequirement::ExternalReferenceDeferred => "ExternalReferenceDeferred",
         EvaluationRequirement::LegacySingleCompat => "LegacySingleCompat",
         EvaluationRequirement::HelperEnvironment => "HelperEnvironment",
     }
@@ -807,7 +926,10 @@ fn prepared_source_class_name(class: oxfml_core::PreparedSourceClass) -> String 
         oxfml_core::PreparedSourceClass::FunctionCall => "FunctionCall",
         oxfml_core::PreparedSourceClass::CellReference => "CellReference",
         oxfml_core::PreparedSourceClass::AreaReference => "AreaReference",
+        oxfml_core::PreparedSourceClass::WholeRowReference => "WholeRowReference",
+        oxfml_core::PreparedSourceClass::WholeColumnReference => "WholeColumnReference",
         oxfml_core::PreparedSourceClass::NameReference => "NameReference",
+        oxfml_core::PreparedSourceClass::ExternalReference => "ExternalReference",
         oxfml_core::PreparedSourceClass::SpillReference => "SpillReference",
         oxfml_core::PreparedSourceClass::ImplicitIntersection => "ImplicitIntersection",
         oxfml_core::PreparedSourceClass::BinaryExpression => "BinaryExpression",
@@ -931,6 +1053,7 @@ fn evaluate_fixture_formula(
         locale_profile: Some("en-US".to_string()),
         date_system: Some("1900".to_string()),
         format_profile: Some("excel-default".to_string()),
+        library_context_snapshot: None,
     })
     .semantic_plan;
 
@@ -941,6 +1064,12 @@ fn evaluate_fixture_formula(
     context
         .cell_values
         .insert("A1".to_string(), EvalValue::Number(7.0));
+    context
+        .cell_values
+        .insert("A2".to_string(), EvalValue::Number(11.0));
+    context
+        .cell_values
+        .insert("B2".to_string(), EvalValue::Number(13.0));
     if host_query_profile.is_some() {
         context.host_info = Some(&ReplayHostInfoProvider);
     }
@@ -951,16 +1080,48 @@ fn evaluate_fixture_formula(
 }
 
 fn parse_defined_name_summary(summary: &str) -> DefinedNameBinding {
+    if let Some(target) = summary
+        .strip_prefix("Reference(")
+        .and_then(|rest| rest.strip_suffix(')'))
+    {
+        return DefinedNameBinding::Reference(ReferenceLike {
+            kind: oxfunc_core::value::ReferenceKind::A1,
+            target: target.to_string(),
+        });
+    }
+
+    DefinedNameBinding::Value(parse_eval_value_summary(summary))
+}
+
+fn parse_eval_value_summary(summary: &str) -> EvalValue {
     if let Some(number) = summary
         .strip_prefix("Number(")
         .and_then(|rest| rest.strip_suffix(')'))
     {
-        return DefinedNameBinding::Value(EvalValue::Number(
-            number.parse::<f64>().expect("numeric fixture binding"),
+        return EvalValue::Number(number.parse::<f64>().expect("numeric fixture binding"));
+    }
+
+    if let Some(text) = summary
+        .strip_prefix("Text(")
+        .and_then(|rest| rest.strip_suffix(')'))
+    {
+        return EvalValue::Text(ExcelText::from_utf16_code_units(
+            text.encode_utf16().collect(),
         ));
     }
 
-    panic!("unsupported defined-name summary {summary}");
+    if let Some(logical) = summary
+        .strip_prefix("Logical(")
+        .and_then(|rest| rest.strip_suffix(')'))
+    {
+        return match logical {
+            "true" | "True" | "TRUE" => EvalValue::Logical(true),
+            "false" | "False" | "FALSE" => EvalValue::Logical(false),
+            _ => panic!("unsupported logical fixture binding {summary}"),
+        };
+    }
+
+    panic!("unsupported eval-value summary {summary}");
 }
 
 fn apply_defined_name_summary(host: &mut SingleFormulaHost, name: &str, summary: &str) {

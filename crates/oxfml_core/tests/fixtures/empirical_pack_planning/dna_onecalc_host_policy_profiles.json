@@ -1,0 +1,115 @@
+[
+  {
+    "profile_id": "dna_onecalc.single_formula.local_bootstrap.v1",
+    "host_case_ids": [
+      "host_001_defined_name_recalc",
+      "host_002_local_bootstrap"
+    ],
+    "empirical_oracle_scenario_ids": [],
+    "requires_direct_cell_bindings": false,
+    "host_query_profile_required": false,
+    "allowed_backends": [
+      "LocalBootstrap",
+      "OxFuncBacked"
+    ],
+    "pack_state": "planning_only",
+    "notes": [
+      "Covers single-formula proving with mutable defined-name inputs and no OxCalc scheduler policy."
+    ]
+  },
+  {
+    "profile_id": "dna_onecalc.single_formula.scalarization_direct_cell.v1",
+    "host_case_ids": [
+      "host_004_implicit_intersection",
+      "host_005_legacy_single"
+    ],
+    "empirical_oracle_scenario_ids": [
+      "oracle_003_implicit_intersection",
+      "oracle_004_legacy_single"
+    ],
+    "requires_direct_cell_bindings": true,
+    "host_query_profile_required": false,
+    "allowed_backends": [
+      "OxFuncBacked"
+    ],
+    "pack_state": "planning_only",
+    "notes": [
+      "Reference-sensitive scalarization lanes require preserved direct cell bindings in the proving host."
+    ]
+  },
+  {
+    "profile_id": "dna_onecalc.single_formula.helper_and_spill.v1",
+    "host_case_ids": [
+      "host_006_let_helper",
+      "host_007_lambda_invocation",
+      "host_008_spill_sequence"
+    ],
+    "empirical_oracle_scenario_ids": [
+      "oracle_005_lambda_invocation",
+      "oracle_006_sequence_spill"
+    ],
+    "requires_direct_cell_bindings": false,
+    "host_query_profile_required": false,
+    "allowed_backends": [
+      "OxFuncBacked"
+    ],
+    "pack_state": "planning_only",
+    "notes": [
+      "Helper forms and spill-shaped publication are part of the current single-formula proving floor."
+    ]
+  },
+  {
+    "profile_id": "dna_onecalc.single_formula.formatting.v1",
+    "host_case_ids": [
+      "host_009_formatting"
+    ],
+    "empirical_oracle_scenario_ids": [
+      "oracle_001_text"
+    ],
+    "requires_direct_cell_bindings": false,
+    "host_query_profile_required": false,
+    "allowed_backends": [
+      "OxFuncBacked"
+    ],
+    "pack_state": "planning_only",
+    "notes": [
+      "Semantic formatting lanes require locale and date-system context but do not imply pack-grade promotion."
+    ]
+  },
+  {
+    "profile_id": "dna_onecalc.single_formula.host_query_environment.v1",
+    "host_case_ids": [
+      "host_003_host_query"
+    ],
+    "empirical_oracle_scenario_ids": [
+      "oracle_002_info"
+    ],
+    "requires_direct_cell_bindings": false,
+    "host_query_profile_required": true,
+    "allowed_backends": [
+      "OxFuncBacked"
+    ],
+    "pack_state": "planning_only",
+    "notes": [
+      "Host-query lanes require typed host-query profiles even when no direct cell binding is involved."
+    ]
+  },
+  {
+    "profile_id": "dna_onecalc.single_formula.host_query_reference_sensitive.v1",
+    "host_case_ids": [
+      "host_010_cell_filename"
+    ],
+    "empirical_oracle_scenario_ids": [
+      "oracle_007_cell_filename"
+    ],
+    "requires_direct_cell_bindings": true,
+    "host_query_profile_required": true,
+    "allowed_backends": [
+      "OxFuncBacked"
+    ],
+    "pack_state": "planning_only",
+    "notes": [
+      "Reference-sensitive host-query lanes require both typed host-query capability and preserved direct cell bindings."
+    ]
+  }
+]

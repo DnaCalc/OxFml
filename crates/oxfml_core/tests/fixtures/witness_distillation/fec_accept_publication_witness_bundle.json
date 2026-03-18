@@ -1,0 +1,27 @@
+{
+  "witness_id": "oxfml.local.witness.fec_accept_publication.v1",
+  "source_fixture_family": "fec_commit_replay_cases",
+  "reduced_role": "replay_closed_witness",
+  "bundle_state": "replay_valid",
+  "source_case_ids": [
+    "fec_001_accept"
+  ],
+  "scenario_cases": [
+    {
+      "case_id": "fec_001_accept",
+      "observed_fence": {
+        "formula_token": "token:v1",
+        "snapshot_epoch": "epoch:10",
+        "bind_hash": "bind:abc",
+        "profile_version": "profile:v1",
+        "capability_view_key": "cap:view:v1"
+      },
+      "expected": {
+        "decision": "accepted",
+        "published_payload": "Number(42)",
+        "shape_outcome_class": "Established",
+        "spill_event_kind": "SpillTakeover"
+      }
+    }
+  ]
+}

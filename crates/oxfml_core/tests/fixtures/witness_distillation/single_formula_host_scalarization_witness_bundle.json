@@ -1,0 +1,34 @@
+{
+  "witness_id": "oxfml.local.witness.single_formula_host_scalarization.v1",
+  "source_fixture_family": "single_formula_host_replay_cases",
+  "reduced_role": "replay_closed_witness",
+  "bundle_state": "replay_valid",
+  "source_case_ids": [
+    "host_004_implicit_intersection"
+  ],
+  "scenario_cases": [
+    {
+      "case_id": "host_004_implicit_intersection",
+      "formula": "=@InputRef",
+      "backend": "OxFuncBacked",
+      "defined_names": {
+        "InputRef": "Reference(A1)"
+      },
+      "cell_bindings": {
+        "A1": "Number(7)"
+      },
+      "host_query_profile": null,
+      "expected": {
+        "payload_summary": "Number(7)",
+        "commit_decision": "accepted",
+        "trace_event_kinds": [
+          "AcceptedCandidateResultBuilt",
+          "CommitAccepted"
+        ],
+        "capability_effect_kinds": [],
+        "format_dependency_tokens": [],
+        "spill_event_kinds": []
+      }
+    }
+  ]
+}

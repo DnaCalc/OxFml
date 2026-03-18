@@ -1,0 +1,12 @@
+{
+  "witness_id": "oxfml.local.witness.single_formula_host_scalarization.v1",
+  "source_bundle_ref": "crates/oxfml_core/tests/fixtures/single_formula_host_replay_cases.json",
+  "reduction_manifest_ref": "crates/oxfml_core/tests/fixtures/witness_distillation/single_formula_host_scalarization_reduction_manifest.json",
+  "lifecycle_state": "wit.retained_local",
+  "retention_policy_id": "oxfml.local.retention.manual_review",
+  "promotion_refs": [],
+  "supersedes": [],
+  "quarantine_reason": null,
+  "gc_eligibility": "not_eligible",
+  "notes": "Retained local witness for direct-cell-bound scalarization without host-query dependence."
+}

@@ -1,0 +1,12 @@
+{
+  "witness_id": "oxfml.local.witness.empirical_oracle_host_query_reference.v1",
+  "source_bundle_ref": "crates/oxfml_core/tests/fixtures/empirical_oracle_scenarios.json",
+  "reduction_manifest_ref": "crates/oxfml_core/tests/fixtures/witness_distillation/empirical_oracle_host_query_reference_reduction_manifest.json",
+  "lifecycle_state": "wit.retained_local",
+  "retention_policy_id": "oxfml.local.retention.manual_review",
+  "promotion_refs": [],
+  "supersedes": [],
+  "quarantine_reason": null,
+  "gc_eligibility": "not_eligible",
+  "notes": "Retained local witness for host-query-plus-reference empirical oracle behavior with preserved direct cell binding."
+}

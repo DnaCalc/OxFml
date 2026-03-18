@@ -1,0 +1,30 @@
+{
+  "witness_id": "oxfml.local.witness.execution_contract_host_query.v1",
+  "source_fixture_family": "execution_contract_replay_cases",
+  "reduced_role": "replay_closed_witness",
+  "bundle_state": "replay_valid",
+  "source_case_ids": [
+    "contract_002_cell"
+  ],
+  "scenario_cases": [
+    {
+      "case_id": "contract_002_cell",
+      "formula": "=CELL(\"filename\",A1)",
+      "expected": {
+        "lane_class": "Serialized",
+        "replay_sensitivity": "Stable",
+        "single_flight_advisable": true,
+        "restrictions": [
+          "ContextualVolatility",
+          "HostSerialized",
+          "ThreadAffine",
+          "SerialOnly",
+          "SingleFlightAdvisable",
+          "HostQuery",
+          "CallerContext",
+          "ReferencePreserved"
+        ]
+      }
+    }
+  ]
+}

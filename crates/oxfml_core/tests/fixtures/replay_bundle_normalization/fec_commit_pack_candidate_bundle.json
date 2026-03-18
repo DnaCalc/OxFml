@@ -1,0 +1,33 @@
+{
+  "bundle_id": "oxfml.local.normalized_bundle.fec_commit_pack_candidate.v1",
+  "bundle_schema_version": "dna-replay-bundle/v1",
+  "lane_id": "oxfml",
+  "adapter_id": "oxfml.replay_adapter.v1",
+  "source_schema_id": "oxfml.local.source_schema.fec_commit_replay_cases.v1",
+  "source_fixture_family": "fec_commit_replay_cases",
+  "bundle_role": "local_pack_candidate",
+  "pack_eligibility_state": "not_pack_eligible",
+  "required_capability_level": "cap.C3.explain_valid",
+  "registry_pin": "oxfml.local.registry_pin.foundation_handoff_20260315_pass01",
+  "authorized_transform_family": "subset_projection_only",
+  "rewrite_authorizations": [],
+  "witness_lifecycle_refs": [
+    "crates/oxfml_core/tests/fixtures/witness_distillation/fec_accept_publication_lifecycle.json",
+    "crates/oxfml_core/tests/fixtures/witness_distillation/fec_reject_formula_token_lifecycle.json"
+  ],
+  "normalized_event_families": [
+    "candidate.*",
+    "publication.*",
+    "reject.*"
+  ],
+  "source_artifact_refs": [
+    "crates/oxfml_core/tests/fixtures/fec_commit_replay_cases.json",
+    "crates/oxfml_core/tests/fixtures/witness_distillation/fec_accept_publication_witness_bundle.json",
+    "crates/oxfml_core/tests/fixtures/witness_distillation/fec_reject_formula_token_witness_bundle.json"
+  ],
+  "promotion_blockers": [
+    "local_witness_tier_only",
+    "no_replay_safe_rewrite_families_declared",
+    "pack_grade_bundle_governance_not_satisfied"
+  ]
+}

@@ -8,6 +8,7 @@ Define daily execution rules for formula-language and evaluator seam delivery.
 2. No hidden protocol semantics: contract text and traces must match.
 3. Reject semantics must be typed and replay-stable.
 4. Formula-semantic formatting behavior must be evaluated in the seam path, not deferred to display-only layers.
+5. Shared-workspace validation dependencies must be made explicit when sibling repos affect OxFml gate validation.
 
 ## 3. Execution Lanes
 1. Formula-language lane: grammar, parsing, bind/reference normalization.
@@ -35,6 +36,11 @@ No seam change is promoted without:
 2. updated matrix rows,
 3. at least one deterministic replay artifact proving intended behavior,
 4. explicit statement of impact on OxCalc coordinator logic.
+
+Validation rule in the shared workspace:
+1. if OxFml validation is blocked by a sibling-repo compile or test regression in the shared workspace, the agent may apply the smallest reasonable unblock change in that sibling repo,
+2. that unblock must be reported explicitly as a validation dependency, not as OxFml-owned semantic progress,
+3. the sibling unblock should not be used to overstate OxFml integration completeness.
 
 ## 7. Pre-Closure Verification Checklist
 
@@ -105,6 +111,20 @@ Normative wording rules:
 2. Do not use `complete for declared scope` for semantically bounded subsets that still carry known gaps; report those as `scope_partial`.
 3. Do not claim `fully complete` unless all three completeness axes are complete and evidence links are present.
 
+## 10A. Workset Status Freshness Rule
+
+Workset status documents are part of the operating record and must stay in sync with actual execution.
+
+Required rule:
+1. when a workset materially starts, its `execution_state` must move from `planned` to `in_progress` in the same execution wave,
+2. when a workset gate is reached, its checklist and status block must be updated before the completion report is emitted,
+3. if a workset is superseded or split, the original workset must say so explicitly rather than silently drifting stale.
+
+Rationale:
+1. stale workset status causes bootstrap drift,
+2. it hides what has actually been exercised,
+3. it makes later sequencing and doctrine checks harder than necessary.
+
 ## 11. Carried-Forward Operating Lessons
 
 These five lessons are derived from observed execution failures in OxVba (86+ worksets) and OxFunc (13 worksets). They are not speculative — each addresses a real failure mode.
@@ -140,6 +160,31 @@ Typical examples include helper-environment shape, lexical-capture need, and oth
 When canonical artifacts evolve, hand-written struct literals create noisy, low-signal breakage that obscures the real semantic change. Core artifact tests should prefer fixture/builders or factory helpers wherever practical.
 This is especially important for `SemanticPlan`, commit artifacts, and other schema-bearing types expected to grow over time.
 *Source: OxFml W003 helper-profile promotion.*
+
+### Lesson 8: Shared-Workspace Validation Must Be Reported As A Dependency
+When OxFml validation depends on sibling crates in the shared workspace, compile or test regressions outside this repo can block gate closure even when OxFml code is locally sound.
+Minimal unblock patches may be necessary, but they must be reported as validation dependencies rather than treated as OxFml feature progress.
+*Source: OxFml W013-W018 validation passes.*
+
+### Lesson 9: Workset Status Drift Is A Process Defect
+If a workset has materially started or reached a gate but its status file still says `planned`, the planning record is wrong even if the code and evidence are correct.
+Status freshness is part of the execution discipline, not optional bookkeeping.
+*Source: OxFml W013-W018 closure cleanup.*
+
+### Lesson 10: Proving-Host Coverage Needs Direct Cell Bindings, Not Only Defined Names
+Reference-sensitive formula behavior such as `@`, `_xlfn.SINGLE`, spill-linked paths, and some host-query cases cannot be exercised cleanly through defined names alone.
+The proving-host model must allow direct cell bindings anywhere reference resolution truth depends on concrete cell state.
+*Source: OxFml W018 host/oracle expansion.*
+
+### Lesson 11: Checked Local Formal Artifacts Need A Canonical Runner
+A local formal artifact is much more useful when the repo also contains the deterministic command surface that checks it.
+Lean or TLA+ files without a canonical local runner remain materially weaker operationally than checked artifacts with a single known command path.
+*Source: OxFml W016 checked-formal execution.*
+
+### Lesson 12: Host And Replay Fixtures Should Expand Together
+When host or seam artifacts gain new coordinator-relevant facts such as capability effects, format dependencies, spill events, or reuse signals, replay and host fixtures should expand in the same wave.
+Otherwise the spec surface outruns the deterministic witness surface.
+*Source: OxFml W018 host/oracle fixture expansion.*
 
 ## 11A. Artifact Construction Discipline
 

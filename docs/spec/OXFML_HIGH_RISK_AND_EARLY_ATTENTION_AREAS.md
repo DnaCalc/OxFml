@@ -124,6 +124,23 @@ Current expected primary owners:
 5. `W006`: formatting and host-query follow-through
 6. `W007`: execution-profile narrowing and concurrency-contract follow-through
 7. `W008`: single-formula host and empirical-oracle bootstrap
+8. `W013`: broader parser/binder surface and incremental reuse for high-risk reference lanes
+9. `W014`: wider semantic breadth and OxFunc catalog expansion over helper, scalarization, and host-query lanes
+10. `W015`: Stage 2 runtime/contention hardening for concurrency-sensitive reject and effect paths
+11. `W016`: checked local formal artifacts and model runs over the runtime and replay floor
+12. `W017`: replay promotion toward `cap.C4.distill_valid`
+13. `W018`: broader proving-host and empirical-oracle follow-through
+14. `W019`: remaining high-value reference breadth and formula-language closure
+15. `W020`: broader OxFunc semantic breadth and callable-value follow-through
+16. `W021`: async-facing runtime and scheduler-surface follow-through
+17. `W022`: broader checked formal families over the widened runtime and replay floor
+18. `W023`: retained witness-set and replay-promotion follow-through
+19. `W024`: DNA OneCalc host-policy and empirical-pack planning follow-through
+20. `W031`: `MS-OE376` rule review and gap classification for structured refs, R1C1, external names, and related formatting-rule surfaces
+21. `W032`: OxFunc catalog, callable transport, and provider-stage closure
+22. `W033`: broader replay promotion toward `cap.C4.distill_valid`
+23. `W034`: distributed runtime and coordinator consequence boundary
+24. `W035`: broader checked formal families over replay-promotion and distributed-runtime surfaces
 
 ## 6. Working Rule
 If a design or implementation decision touches one of these lanes:

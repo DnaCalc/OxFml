@@ -97,11 +97,21 @@ pub struct CapabilityEffectFact {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DependencyConsequenceFact {
+    pub formula_stable_id: String,
+    pub dependency_identity: String,
+    pub consequence_kind: String,
+    pub evidence_class: String,
+    pub projection_state: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TopologyDelta {
     pub formula_stable_id: String,
     pub dependency_additions: Vec<String>,
     pub dependency_removals: Vec<String>,
     pub dependency_reclassifications: Vec<String>,
+    pub dependency_consequence_facts: Vec<DependencyConsequenceFact>,
     pub dynamic_reference_facts: Vec<DynamicReferenceFact>,
     pub spill_facts: Vec<SpillFact>,
     pub format_dependency_facts: Vec<FormatDependencyFact>,

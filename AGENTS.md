@@ -83,15 +83,9 @@ Rationale: premature completion is exacerbated by speed pressure. Conservative g
 
 ### 4.1 Current User-Authorized Override
 Current explicit user override:
-1. AutoRun is enabled for the declared sequence `W002 -> W003 -> W004 -> W005 -> W006 -> W007 -> W008`.
-2. The sequence exit gate is completion of `W008`.
-3. Within that sequence, the agent should continue across intermediate workset boundaries without checkpoint-pausing, while still respecting declared dependencies and blocker handling rules.
-4. If the user explicitly instructs "no checkpoint until the AutoRun gate" or equivalent wording, the agent must remain silent between gates unless:
-   - a blocker is reached,
-   - user input is strictly required to avoid unsafe or out-of-scope action,
-   - or the AutoRun gate itself is reached.
-5. This override does not weaken the anti-premature-completion doctrine or permit unsupported completion claims.
-6. All other prescriptive directions in this `AGENTS.md` remain in force exactly as written; the override changes only checkpoint-pausing behavior for the authorized sequence.
+1. No temporary AutoRun override is currently active.
+2. Default checkpoint-at-gates behavior is in force.
+3. Any future override must be explicitly user-authorized for a bounded scope and exit gate.
 
 ## 5. Blocker Handling
 

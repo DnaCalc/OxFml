@@ -1,0 +1,12 @@
+{
+  "witness_id": "oxfml.local.witness.session_contention_quarantine.v1",
+  "source_bundle_ref": "crates/oxfml_core/tests/fixtures/session_lifecycle_replay_cases.json",
+  "reduction_manifest_ref": "crates/oxfml_core/tests/fixtures/witness_distillation/session_contention_quarantine_reduction_manifest.json",
+  "lifecycle_state": "wit.quarantined_local",
+  "retention_policy_id": "oxfml.local.retention.manual_review",
+  "promotion_refs": [],
+  "supersedes": [],
+  "quarantine_reason": "contention_interleaving_not_replay_safe_rewrite",
+  "gc_eligibility": "manual_review",
+  "notes": "Contention witness retained for local explanation only until replay-safe interleaving reduction is proven."
+}

@@ -94,11 +94,39 @@ Current baseline sequence after `W001`:
 7. `W008` single-formula host and empirical oracle bootstrap
 8. `W009` replay appliance adapter and witness rollout
 9. `W010` witness distillation and retained fixture promotion
+10. `W011` reduced witness family breadth
+11. `W012` bundle normalization and pack-candidate evidence
+12. `W013` parser binder breadth and incremental reuse
+13. `W014` semantic breadth and OxFunc catalog expansion
+14. `W015` Stage 2 runtime contention and concurrency hardening
+15. `W016` checked formal artifacts and model runs
+16. `W017` replay promotion toward `cap.C4.distill_valid`
+17. `W018` proving host and empirical oracle expansion
+18. `W019` reference breadth and formula-language closure
+19. `W020` semantic catalog and callable-value breadth
+20. `W021` async runtime and scheduler surface baseline
+21. `W022` formal family expansion and checked clause mapping
+22. `W023` replay promotion and retained witness sets
+23. `W024` DNA OneCalc host policy and empirical-pack planning
+24. `W025` pack-grade replay promotion baseline
+25. `W026` library-context snapshot and availability taxonomy
+26. `W027` callable-value and helper-transport narrowing
+27. `W028` commit, publication, and topology breadth
+28. `W029` runtime async and distributed consequences
+29. `W030` semantic formatting and display boundary closure
+30. `W031` MS-OE376 formula and formatting rule review
+31. `W032` OxFunc catalog, callable transport, and provider closure
+32. `W033` replay promotion toward `cap.C4.distill_valid`
+33. `W034` distributed runtime and coordinator consequence boundary
+34. `W035` broader formal family and concurrency model expansion
 
 This sequence is the current planning baseline.
 It may be refined, but new worksets should preserve dependency clarity rather than bypass it informally.
 
+Supporting planning artifact:
+1. `docs/worksets/NEXT_WAVE_EXECUTION_MAP.md`
+
 Current user-authorized execution override:
-1. AutoRun is enabled for the active sequence `W002 -> W008`.
-2. Sequence exit gate is completion of `W008`.
-3. All other `AGENTS.md` directions remain in force exactly as written; this override only removes intermediate checkpoint-pausing across the authorized sequence.
+1. No AutoRun override is currently active.
+2. The repo is back on default checkpoint-at-gates behavior.
+3. A new AutoRun override must be explicitly authorized by the user for a bounded scope.

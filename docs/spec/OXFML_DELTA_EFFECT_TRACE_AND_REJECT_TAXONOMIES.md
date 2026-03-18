@@ -56,10 +56,11 @@ The current minimum families are:
 1. dynamic dependency additions
 2. dynamic dependency removals
 3. dependency classification changes
-4. runtime-discovered reference target facts
-5. invalidation-relevant spill facts
-6. format-dependency facts that affect future invalidation behavior
-7. capability-sensitive execution facts when they alter coordinator interpretation
+4. typed dependency consequence facts that explain why additions or reclassifications were surfaced
+5. runtime-discovered reference target facts
+6. invalidation-relevant spill facts
+7. format-dependency facts that affect future invalidation behavior
+8. capability-sensitive execution facts when they alter coordinator interpretation
 
 `topology_delta` must not contain:
 1. global scheduling decisions,
@@ -75,13 +76,15 @@ The current minimum families are:
 
 Open boundary:
 1. the exact split between `format_delta` and prepared-result `format_hint` remains profile-sensitive.
+2. the current local floor derives `format_delta` from explicit prepared-result `format_hint` only when the hint is treated as seam-significant publication evidence.
 
 ### 3.5 `display_delta`
 `display_delta` is optional and only for publication-surface consequences that are explicit seam obligations.
 
 Current rule:
 1. if a display-facing consequence is purely renderer/UI-local, it does not belong here,
-2. if a display-facing consequence is required for evaluator/publication semantics, it may appear here.
+2. if a display-facing consequence is required for evaluator/publication semantics, it may appear here,
+3. the current local floor derives `display_delta` from prepared-result `publication_hint` only when the publication surface itself is seam-significant.
 
 ## 4. Evaluator-Fact Taxonomy
 Evaluator facts are pre-publication execution observations that may feed `topology_delta`, typed event sets, or trace payloads.
@@ -112,8 +115,16 @@ Current minimum families:
 1. feature/capability path exercised
 2. capability-denied path classification
 3. fallback path chosen due to capability profile
+4. async-coupled runtime transport requirement
+5. scheduler-visible serial or single-flight restriction that remains evaluator/runtime fact rather than coordinator policy
 
-### 4.5 Fact Relationship Rule
+### 4.5 Dependency Consequence Facts
+Current minimum families:
+1. semantic-diagnostic-backed dependency addition
+2. dynamic-reference-deferred reclassification
+3. retained topology explanation needed for replay or publication interpretation
+
+### 4.6 Fact Relationship Rule
 Evaluator facts:
 1. may remain local if they have no coordinator or replay consequence,
 2. must be surfaced or made derivable when they affect accept/reject/publication correctness,
@@ -213,6 +224,8 @@ Current minimum families:
 3. `FormatDependencyObserved`
 4. `OverlayRegistered`
 5. `OverlayEvicted`
+6. `RuntimeAsyncOverlayRegistered`
+7. `PublicationSurfaceOverlayRegistered`
 
 ### 7.5 Correlation Rule
 Every trace event should be able to correlate to some combination of:

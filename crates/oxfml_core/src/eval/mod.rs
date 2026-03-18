@@ -33,7 +33,10 @@ pub enum PreparedSourceClass {
     FunctionCall,
     CellReference,
     AreaReference,
+    WholeRowReference,
+    WholeColumnReference,
     NameReference,
+    ExternalReference,
     SpillReference,
     ImplicitIntersection,
     BinaryExpression,
@@ -63,6 +66,7 @@ pub struct PreparedArgument {
     pub blankness_class: PreparedBlanknessClass,
     pub caller_context_sensitive: bool,
     pub reference_target: Option<String>,
+    pub opaque_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -91,9 +95,20 @@ pub struct PreparedResult {
     pub payload_summary: String,
     pub blankness_class: PreparedBlanknessClass,
     pub reference_target: Option<String>,
+    pub callable_profile: Option<String>,
+    pub callable_profile_detail: Option<CallableValueProfile>,
+    pub deferred_reason: Option<String>,
     pub format_hint: Option<String>,
     pub publication_hint: Option<String>,
     pub capability_dependencies: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallableValueProfile {
+    pub arity: usize,
+    pub parameter_names: Vec<String>,
+    pub capture_names: Vec<String>,
+    pub body_kind: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -104,6 +119,7 @@ pub struct EvaluationTrace {
 const SPECIAL_LET_FUNCTION_ID: &str = "SPECIAL.LET";
 const SPECIAL_LAMBDA_FUNCTION_ID: &str = "SPECIAL.LAMBDA";
 const SPECIAL_LEGACY_SINGLE_FUNCTION_ID: &str = "SPECIAL.LEGACY_SINGLE";
+const SPECIAL_EXTERNAL_REFERENCE_DEFERRED_FUNCTION_ID: &str = "SPECIAL.EXTERNAL_REFERENCE_DEFERRED";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EvaluationBackend {
@@ -264,6 +280,7 @@ fn evaluate_expr_value(
                 resolver,
                 helper_bindings,
                 false,
+                trace,
             )?;
             materialize_call_arg(arg, resolver)
         }
@@ -377,6 +394,7 @@ fn evaluate_expr_as_call_arg(
             resolver,
             helper_bindings,
             preserve_reference,
+            trace,
         ),
         BoundExpr::ImplicitIntersection(inner) => {
             let value = evaluate_expr_value(inner, context, resolver, helper_bindings, trace)?;
@@ -398,6 +416,7 @@ fn evaluate_reference_as_call_arg(
     resolver: &mut LocalReferenceResolver<'_>,
     helper_bindings: &BTreeMap<String, HelperBinding>,
     preserve_reference: bool,
+    trace: &mut EvaluationTrace,
 ) -> Result<CallArgValue, EvaluationError> {
     match reference {
         ReferenceExpr::Atom(NormalizedReference::Cell(cell)) => {
@@ -406,8 +425,48 @@ fn evaluate_reference_as_call_arg(
         ReferenceExpr::Atom(NormalizedReference::Area(area)) => {
             call_arg_for_reference_like(reference_like_for_area(area), preserve_reference, resolver)
         }
+        ReferenceExpr::Atom(NormalizedReference::WholeRow(rows)) => call_arg_for_reference_like(
+            ReferenceLike {
+                kind: ReferenceKind::Area,
+                target: whole_row_target(rows),
+            },
+            preserve_reference,
+            resolver,
+        ),
+        ReferenceExpr::Atom(NormalizedReference::WholeColumn(columns)) => {
+            call_arg_for_reference_like(
+                ReferenceLike {
+                    kind: ReferenceKind::Area,
+                    target: whole_column_target(columns),
+                },
+                preserve_reference,
+                resolver,
+            )
+        }
         ReferenceExpr::Atom(NormalizedReference::Name(name)) => {
             call_arg_for_name(name, preserve_reference, context, resolver, helper_bindings)
+        }
+        ReferenceExpr::Atom(NormalizedReference::External(external)) => {
+            push_special_prepared_call(
+                trace,
+                "EXTERNAL_REFERENCE_DEFERRED",
+                SPECIAL_EXTERNAL_REFERENCE_DEFERRED_FUNCTION_ID,
+                ArgPreparationProfile::RefsVisibleInAdapter,
+                vec![PreparedArgument {
+                    ordinal: 0,
+                    structure_class: PreparedStructureClass::ReferenceVisible,
+                    source_class: PreparedSourceClass::ExternalReference,
+                    evaluation_mode: PreparedEvaluationMode::ReferencePreserved,
+                    blankness_class: PreparedBlanknessClass::NonBlank,
+                    caller_context_sensitive: false,
+                    reference_target: Some(external.target_summary.clone()),
+                    opaque_reason: Some("external_reference_deferred".to_string()),
+                }],
+                context,
+            );
+            Ok(CallArgValue::Eval(EvalValue::Error(
+                WorksheetErrorCode::Ref,
+            )))
         }
         ReferenceExpr::Atom(NormalizedReference::Error(error)) => Ok(CallArgValue::Eval(
             EvalValue::Error(error_code_for_error_ref(error)),
@@ -536,6 +595,7 @@ fn evaluate_let_call(
             blankness_class: PreparedBlanknessClass::NonBlank,
             caller_context_sensitive: false,
             reference_target: None,
+            opaque_reason: None,
         });
         if index + 1 >= args.len() {
             return Err(EvaluationError {
@@ -614,6 +674,7 @@ fn evaluate_lambda_call(
                     blankness_class: PreparedBlanknessClass::NonBlank,
                     caller_context_sensitive: false,
                     reference_target: None,
+                    opaque_reason: None,
                 });
                 Ok(name.clone())
             }
@@ -630,6 +691,7 @@ fn evaluate_lambda_call(
         blankness_class: PreparedBlanknessClass::NonBlank,
         caller_context_sensitive: false,
         reference_target: None,
+        opaque_reason: None,
     });
     push_special_prepared_call(
         trace,
@@ -870,6 +932,7 @@ fn prepared_argument_for_call_arg(
             blankness_class: PreparedBlanknessClass::NonBlank,
             caller_context_sensitive: matches!(expr, BoundExpr::ImplicitIntersection(_)),
             reference_target: Some(reference.target.clone()),
+            opaque_reason: prepared_argument_opaque_reason(expr),
         },
         CallArgValue::MissingArg => PreparedArgument {
             ordinal,
@@ -879,6 +942,7 @@ fn prepared_argument_for_call_arg(
             blankness_class: PreparedBlanknessClass::Omitted,
             caller_context_sensitive: false,
             reference_target: None,
+            opaque_reason: prepared_argument_opaque_reason(expr),
         },
         CallArgValue::EmptyCell => PreparedArgument {
             ordinal,
@@ -888,6 +952,7 @@ fn prepared_argument_for_call_arg(
             blankness_class: PreparedBlanknessClass::EmptyCell,
             caller_context_sensitive: false,
             reference_target: None,
+            opaque_reason: prepared_argument_opaque_reason(expr),
         },
         CallArgValue::Eval(value) => PreparedArgument {
             ordinal,
@@ -904,6 +969,7 @@ fn prepared_argument_for_call_arg(
             blankness_class: blankness_class_for_eval_value(value),
             caller_context_sensitive: matches!(expr, BoundExpr::ImplicitIntersection(_)),
             reference_target: None,
+            opaque_reason: prepared_argument_opaque_reason(expr),
         },
     }
 }
@@ -920,10 +986,28 @@ fn prepared_source_class(expr: &BoundExpr) -> PreparedSourceClass {
         BoundExpr::Reference(reference) => match reference {
             ReferenceExpr::Atom(NormalizedReference::Cell(_)) => PreparedSourceClass::CellReference,
             ReferenceExpr::Atom(NormalizedReference::Area(_)) => PreparedSourceClass::AreaReference,
+            ReferenceExpr::Atom(NormalizedReference::WholeRow(_)) => {
+                PreparedSourceClass::WholeRowReference
+            }
+            ReferenceExpr::Atom(NormalizedReference::WholeColumn(_)) => {
+                PreparedSourceClass::WholeColumnReference
+            }
             ReferenceExpr::Atom(NormalizedReference::Name(_)) => PreparedSourceClass::NameReference,
+            ReferenceExpr::Atom(NormalizedReference::External(_)) => {
+                PreparedSourceClass::ExternalReference
+            }
             ReferenceExpr::Spill { .. } => PreparedSourceClass::SpillReference,
             _ => PreparedSourceClass::FunctionCall,
         },
+    }
+}
+
+fn prepared_argument_opaque_reason(expr: &BoundExpr) -> Option<String> {
+    match expr {
+        BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::External(_))) => {
+            Some("external_reference_deferred".to_string())
+        }
+        _ => None,
     }
 }
 
@@ -962,6 +1046,16 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
         None
     };
     let capability_dependencies = prepared_result_capability_dependencies(plan);
+    let deferred_reason = if matches!(value, EvalValue::Error(WorksheetErrorCode::Ref))
+        && plan
+            .capability_requirements
+            .iter()
+            .any(|item| item == "external_reference")
+    {
+        Some("external_reference_deferred".to_string())
+    } else {
+        None
+    };
 
     match value {
         EvalValue::Number(number) => PreparedResult {
@@ -970,6 +1064,9 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
             payload_summary: format!("Number({number})"),
             blankness_class: PreparedBlanknessClass::NonBlank,
             reference_target: None,
+            callable_profile: None,
+            callable_profile_detail: None,
+            deferred_reason: deferred_reason.clone(),
             format_hint,
             publication_hint,
             capability_dependencies,
@@ -980,6 +1077,9 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
             payload_summary: format!("Text({})", text.to_string_lossy()),
             blankness_class: blankness_class_for_eval_value(value),
             reference_target: None,
+            callable_profile: None,
+            callable_profile_detail: None,
+            deferred_reason: deferred_reason.clone(),
             format_hint,
             publication_hint,
             capability_dependencies,
@@ -990,6 +1090,9 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
             payload_summary: format!("Logical({value})"),
             blankness_class: PreparedBlanknessClass::NonBlank,
             reference_target: None,
+            callable_profile: None,
+            callable_profile_detail: None,
+            deferred_reason: deferred_reason.clone(),
             format_hint,
             publication_hint,
             capability_dependencies,
@@ -1000,6 +1103,9 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
             payload_summary: format!("Error({code:?})"),
             blankness_class: PreparedBlanknessClass::NonBlank,
             reference_target: None,
+            callable_profile: None,
+            callable_profile_detail: None,
+            deferred_reason,
             format_hint,
             publication_hint,
             capability_dependencies,
@@ -1010,6 +1116,9 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
             payload_summary: format!("Array({}x{})", array.shape().rows, array.shape().cols),
             blankness_class: PreparedBlanknessClass::NonBlank,
             reference_target: None,
+            callable_profile: None,
+            callable_profile_detail: None,
+            deferred_reason: deferred_reason.clone(),
             format_hint,
             publication_hint,
             capability_dependencies,
@@ -1020,6 +1129,9 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
             payload_summary: format!("Reference({:?})", reference.kind),
             blankness_class: PreparedBlanknessClass::NonBlank,
             reference_target: Some(reference.target.clone()),
+            callable_profile: None,
+            callable_profile_detail: None,
+            deferred_reason: deferred_reason.clone(),
             format_hint,
             publication_hint,
             capability_dependencies,
@@ -1030,6 +1142,9 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
             payload_summary: format!("Lambda({name})"),
             blankness_class: PreparedBlanknessClass::NonBlank,
             reference_target: None,
+            callable_profile: Some(name.clone()),
+            callable_profile_detail: callable_profile_detail_from_summary(name),
+            deferred_reason: deferred_reason.clone(),
             format_hint,
             publication_hint,
             capability_dependencies,
@@ -1060,6 +1175,7 @@ fn prepared_result_capability_dependencies(plan: &SemanticPlan) -> Vec<String> {
                     | "random_provider"
                     | "helper_environment"
                     | "legacy_single_compat"
+                    | "external_reference"
                     | "spill_reference"
             )
         })
@@ -1068,6 +1184,49 @@ fn prepared_result_capability_dependencies(plan: &SemanticPlan) -> Vec<String> {
     dependencies.sort();
     dependencies.dedup();
     dependencies
+}
+
+fn callable_profile_detail_from_summary(summary: &str) -> Option<CallableValueProfile> {
+    let mut arity = None;
+    let mut parameter_names = None;
+    let mut capture_names = None;
+    let mut body_kind = None;
+
+    for part in summary.split(';') {
+        let (key, value) = part.split_once('=')?;
+        match key {
+            "arity" => {
+                arity = value.parse::<usize>().ok();
+            }
+            "params" => {
+                parameter_names = Some(split_profile_list(value));
+            }
+            "captures" => {
+                capture_names = Some(split_profile_list(value));
+            }
+            "body" => {
+                body_kind = Some(value.to_string());
+            }
+            _ => {}
+        }
+    }
+
+    Some(CallableValueProfile {
+        arity: arity?,
+        parameter_names: parameter_names.unwrap_or_default(),
+        capture_names: capture_names.unwrap_or_default(),
+        body_kind: body_kind?,
+    })
+}
+
+fn split_profile_list(value: &str) -> Vec<String> {
+    if value == "-" || value.is_empty() {
+        Vec::new()
+    } else if value.contains('|') {
+        value.split('|').map(|item| item.to_string()).collect()
+    } else {
+        value.split(',').map(|item| item.to_string()).collect()
+    }
 }
 
 fn decode_string_literal(text: &str) -> String {
@@ -1127,7 +1286,17 @@ fn reference_target_string(reference: &ReferenceExpr) -> Result<String, Evaluati
     match reference {
         ReferenceExpr::Atom(NormalizedReference::Cell(cell)) => Ok(a1_for_cell(cell)),
         ReferenceExpr::Atom(NormalizedReference::Area(area)) => Ok(a1_for_area(area)),
+        ReferenceExpr::Atom(NormalizedReference::WholeRow(rows)) => Ok(whole_row_target(rows)),
+        ReferenceExpr::Atom(NormalizedReference::WholeColumn(columns)) => {
+            Ok(whole_column_target(columns))
+        }
         ReferenceExpr::Atom(NormalizedReference::Name(name)) => Ok(name.name.clone()),
+        ReferenceExpr::Atom(NormalizedReference::External(external)) => Err(EvaluationError {
+            message: format!(
+                "cannot create executable reference target for {}",
+                external.target_summary
+            ),
+        }),
         ReferenceExpr::Atom(NormalizedReference::Error(error)) => Err(EvaluationError {
             message: format!("cannot create reference target for {}", error.error_class),
         }),
@@ -1153,6 +1322,20 @@ fn a1_for_area(area: &AreaRef) -> String {
     let end_row = area.top_left.row + area.height - 1;
     let end = format!("{}{}", column_letters(end_col), end_row);
     format!("{start}:{end}")
+}
+
+fn whole_row_target(rows: &crate::binding::WholeRowRef) -> String {
+    let row_end = rows.row_start + rows.row_count - 1;
+    format!("{}:{}", rows.row_start, row_end)
+}
+
+fn whole_column_target(columns: &crate::binding::WholeColumnRef) -> String {
+    let end_col = columns.col_start + columns.col_count - 1;
+    format!(
+        "{}:{}",
+        column_letters(columns.col_start),
+        column_letters(end_col)
+    )
 }
 
 fn reference_like_for_cell(cell: &CellRef) -> ReferenceLike {

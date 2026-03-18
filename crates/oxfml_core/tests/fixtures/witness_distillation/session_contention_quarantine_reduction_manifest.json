@@ -1,0 +1,37 @@
+{
+  "reduction_id": "oxfml.local.reduction.session_contention_quarantine.v1",
+  "source_bundle_ref": "crates/oxfml_core/tests/fixtures/session_lifecycle_replay_cases.json",
+  "source_scope_ref": "fixture_family:session_lifecycle_replay_cases",
+  "predicate_ref": {
+    "predicate_id": "oxfml.local.predicate.session_contention_conflict.v1",
+    "predicate_kind": "pred.reject.family_present",
+    "required_reject_code": "StructuralConflict",
+    "required_mismatch_member_kind": null,
+    "required_publication_value_class": null,
+    "required_execution_restriction": null
+  },
+  "strategy_id": "hierarchy_first",
+  "unit_kinds": [
+    "oxfml.local.reduction_unit.fixture_case"
+  ],
+  "retained_units": [
+    "session_008_contention_execute_rejected"
+  ],
+  "removed_units": [
+    "session_001_commit",
+    "session_002_capability_denied",
+    "session_003_abort",
+    "session_004_expire",
+    "session_005_execute_twice",
+    "session_006_commit_without_execute",
+    "session_007_commit_stale_fence"
+  ],
+  "rewritten_units": [],
+  "closure_rules_applied": [
+    "identity_closure",
+    "contention_interleaving_closure"
+  ],
+  "iteration_count": 1,
+  "final_status": "red.unsupported",
+  "witness_bundle_ref": "crates/oxfml_core/tests/fixtures/witness_distillation/session_contention_quarantine_witness_bundle.json"
+}

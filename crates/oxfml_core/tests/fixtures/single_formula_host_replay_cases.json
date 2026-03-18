@@ -6,6 +6,7 @@
     "defined_names": {
       "InputValue": "Number(5)"
     },
+    "cell_bindings": {},
     "host_query_profile": null,
     "expected": {
       "payload_summary": "Number(7)",
@@ -13,7 +14,10 @@
       "trace_event_kinds": [
         "AcceptedCandidateResultBuilt",
         "CommitAccepted"
-      ]
+      ],
+      "capability_effect_kinds": [],
+      "format_dependency_tokens": [],
+      "spill_event_kinds": []
     }
   },
   {
@@ -23,6 +27,7 @@
     "defined_names": {
       "InputValue": "Number(5)"
     },
+    "cell_bindings": {},
     "host_query_profile": null,
     "expected": {
       "payload_summary": "Number(7)",
@@ -30,7 +35,10 @@
       "trace_event_kinds": [
         "AcceptedCandidateResultBuilt",
         "CommitAccepted"
-      ]
+      ],
+      "capability_effect_kinds": [],
+      "format_dependency_tokens": [],
+      "spill_event_kinds": []
     }
   },
   {
@@ -38,6 +46,7 @@
     "formula": "=INFO(\"directory\")",
     "backend": "OxFuncBacked",
     "defined_names": {},
+    "cell_bindings": {},
     "host_query_profile": "DirectoryOnly",
     "expected": {
       "payload_summary": "Text(C:\\Work)",
@@ -45,7 +54,169 @@
       "trace_event_kinds": [
         "AcceptedCandidateResultBuilt",
         "CommitAccepted"
+      ],
+      "capability_effect_kinds": [
+        "host_query"
+      ],
+      "format_dependency_tokens": [],
+      "spill_event_kinds": []
+    }
+  },
+  {
+    "case_id": "host_004_implicit_intersection",
+    "formula": "=@InputRef",
+    "backend": "OxFuncBacked",
+    "defined_names": {
+      "InputRef": "Reference(A1)"
+    },
+    "cell_bindings": {
+      "A1": "Number(7)"
+    },
+    "host_query_profile": null,
+    "expected": {
+      "payload_summary": "Number(7)",
+      "commit_decision": "accepted",
+      "trace_event_kinds": [
+        "AcceptedCandidateResultBuilt",
+        "CommitAccepted"
+      ],
+      "capability_effect_kinds": [],
+      "format_dependency_tokens": [],
+      "spill_event_kinds": []
+    }
+  },
+  {
+    "case_id": "host_005_legacy_single",
+    "formula": "=_xlfn.SINGLE(InputRef)",
+    "backend": "OxFuncBacked",
+    "defined_names": {
+      "InputRef": "Reference(A1)"
+    },
+    "cell_bindings": {
+      "A1": "Number(7)"
+    },
+    "host_query_profile": null,
+    "expected": {
+      "payload_summary": "Number(7)",
+      "commit_decision": "accepted",
+      "trace_event_kinds": [
+        "AcceptedCandidateResultBuilt",
+        "CommitAccepted"
+      ],
+      "capability_effect_kinds": [],
+      "format_dependency_tokens": [],
+      "spill_event_kinds": []
+    }
+  },
+  {
+    "case_id": "host_006_let_helper",
+    "formula": "=LET(x,InputValue,x+2)",
+    "backend": "OxFuncBacked",
+    "defined_names": {
+      "InputValue": "Number(5)"
+    },
+    "cell_bindings": {},
+    "host_query_profile": null,
+    "expected": {
+      "payload_summary": "Number(7)",
+      "commit_decision": "accepted",
+      "trace_event_kinds": [
+        "AcceptedCandidateResultBuilt",
+        "CommitAccepted"
+      ],
+      "capability_effect_kinds": [],
+      "format_dependency_tokens": [],
+      "spill_event_kinds": []
+    }
+  },
+  {
+    "case_id": "host_007_lambda_invocation",
+    "formula": "=LET(f,LAMBDA(x,x+1),f(InputValue))",
+    "backend": "OxFuncBacked",
+    "defined_names": {
+      "InputValue": "Number(2)"
+    },
+    "cell_bindings": {},
+    "host_query_profile": null,
+    "expected": {
+      "payload_summary": "Number(3)",
+      "commit_decision": "accepted",
+      "trace_event_kinds": [
+        "AcceptedCandidateResultBuilt",
+        "CommitAccepted"
+      ],
+      "capability_effect_kinds": [],
+      "format_dependency_tokens": [],
+      "spill_event_kinds": []
+    }
+  },
+  {
+    "case_id": "host_008_spill_sequence",
+    "formula": "=SEQUENCE(2)",
+    "backend": "OxFuncBacked",
+    "defined_names": {},
+    "cell_bindings": {},
+    "host_query_profile": null,
+    "expected": {
+      "payload_summary": "Array(2x1)",
+      "commit_decision": "accepted",
+      "trace_event_kinds": [
+        "AcceptedCandidateResultBuilt",
+        "CommitAccepted"
+      ],
+      "capability_effect_kinds": [],
+      "format_dependency_tokens": [],
+      "spill_event_kinds": [
+        "SpillTakeover"
       ]
+    }
+  },
+  {
+    "case_id": "host_009_formatting",
+    "formula": "=TEXT(InputValue,\"0.00\")",
+    "backend": "OxFuncBacked",
+    "defined_names": {
+      "InputValue": "Number(12.5)"
+    },
+    "cell_bindings": {},
+    "host_query_profile": null,
+    "expected": {
+      "payload_summary": "Text(12.50)",
+      "commit_decision": "accepted",
+      "trace_event_kinds": [
+        "AcceptedCandidateResultBuilt",
+        "CommitAccepted"
+      ],
+      "capability_effect_kinds": [],
+      "format_dependency_tokens": [
+        "locale_format_context"
+      ],
+      "spill_event_kinds": []
+    }
+  },
+  {
+    "case_id": "host_010_cell_filename",
+    "formula": "=CELL(\"filename\",InputRef)",
+    "backend": "OxFuncBacked",
+    "defined_names": {
+      "InputRef": "Reference(A1)"
+    },
+    "cell_bindings": {
+      "A1": "Number(7)"
+    },
+    "host_query_profile": "FilenameOnly",
+    "expected": {
+      "payload_summary": "Text([Book1]Sheet1)",
+      "commit_decision": "accepted",
+      "trace_event_kinds": [
+        "AcceptedCandidateResultBuilt",
+        "CommitAccepted"
+      ],
+      "capability_effect_kinds": [
+        "host_query"
+      ],
+      "format_dependency_tokens": [],
+      "spill_event_kinds": []
     }
   }
 ]

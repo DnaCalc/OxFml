@@ -135,5 +135,92 @@
         "CommitRejected"
       ]
     }
+  },
+  {
+    "case_id": "session_008_contention_execute_rejected",
+    "formula": "=INFO(\"directory\")",
+    "with_input_name": false,
+    "capability_spec": {
+      "host_query_enabled": true,
+      "locale_format_enabled": true,
+      "caller_context_enabled": true,
+      "external_provider_enabled": false
+    },
+    "action": "contention_execute_rejected",
+    "expected": {
+      "phase": "Rejected",
+      "decision": "rejected",
+      "reject_code": "StructuralConflict",
+      "published_payload": null,
+      "trace_event_kinds": [
+        "SessionOpened",
+        "CapabilityViewEstablished",
+        "RejectIssued"
+      ]
+    }
+  },
+  {
+    "case_id": "session_007_commit_stale_fence",
+    "formula": "=SUM(InputValue,2)",
+    "with_input_name": true,
+    "capability_spec": {
+      "host_query_enabled": false,
+      "locale_format_enabled": false,
+      "caller_context_enabled": true,
+      "external_provider_enabled": false
+    },
+    "action": "execute_commit_rejected",
+    "expected": {
+      "phase": "Rejected",
+      "decision": "rejected",
+      "reject_code": "FenceMismatch",
+      "published_payload": null,
+      "trace_event_kinds": [
+        "SessionOpened",
+        "CapabilityViewEstablished",
+        "AcceptedCandidateResultBuilt",
+        "CommitRejected"
+      ]
+    }
+  },
+  {
+    "case_id": "session_009_external_provider_execute_commit",
+    "formula": "=[Book.xlsx]Sheet2!A1",
+    "with_input_name": false,
+    "capability_spec": {
+      "host_query_enabled": false,
+      "locale_format_enabled": false,
+      "caller_context_enabled": true,
+      "external_provider_enabled": true
+    },
+    "action": "execute_commit",
+    "expected": {
+      "phase": "Committed",
+      "decision": "accepted",
+      "reject_code": null,
+      "published_payload": "ErrorCode(Ref)",
+      "trace_event_kinds": [
+        "SessionOpened",
+        "CapabilityViewEstablished",
+        "AcceptedCandidateResultBuilt",
+        "CommitAccepted"
+      ],
+      "capability_effect_kinds": [
+        "async_coupling",
+        "external_provider",
+        "serial_scheduler_lane",
+        "single_flight"
+      ],
+      "dependency_consequence_evidence_classes": [
+        "dynamic_reference_deferred"
+      ],
+      "overlay_families": [
+        "dependency_overlay",
+        "runtime_async_overlay"
+      ],
+      "dynamic_reference_failure_classes": [
+        "external_reference_deferred"
+      ]
+    }
   }
 ]

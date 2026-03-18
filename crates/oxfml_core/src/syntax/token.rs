@@ -23,6 +23,8 @@ pub enum TokenKind {
     Equals,
     Number,
     Identifier,
+    QuotedIdentifier,
+    BracketedQualifier,
     StringLiteral,
     LParen,
     RParen,

@@ -1,0 +1,32 @@
+{
+  "reduction_id": "oxfml.local.reduction.execution_contract_host_query.v1",
+  "source_bundle_ref": "crates/oxfml_core/tests/fixtures/execution_contract_replay_cases.json",
+  "source_scope_ref": "fixture_family:execution_contract_replay_cases",
+  "predicate_ref": {
+    "predicate_id": "oxfml.local.predicate.execution_contract_host_query.v1",
+    "predicate_kind": "pred.execution.restriction_present",
+    "required_reject_code": null,
+    "required_mismatch_member_kind": null,
+    "required_publication_value_class": null,
+    "required_execution_restriction": "HostQuery"
+  },
+  "strategy_id": "hierarchy_first",
+  "unit_kinds": [
+    "oxfml.local.reduction_unit.fixture_case"
+  ],
+  "retained_units": [
+    "contract_002_cell"
+  ],
+  "removed_units": [
+    "contract_001_sum",
+    "contract_003_rand"
+  ],
+  "rewritten_units": [],
+  "closure_rules_applied": [
+    "identity_closure",
+    "execution_profile_closure"
+  ],
+  "iteration_count": 1,
+  "final_status": "red.preserved",
+  "witness_bundle_ref": "crates/oxfml_core/tests/fixtures/witness_distillation/execution_contract_host_query_witness_bundle.json"
+}

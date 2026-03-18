@@ -65,7 +65,8 @@ Minimum request fields:
 4. `structure_context_version`
 5. scope and table metadata
 6. caller anchor and address-mode context
-7. profile and capability context
+7. library-context snapshot or function/operator lookup surface
+8. profile and capability context
 
 Minimum result fields:
 1. `BoundFormula`
@@ -75,14 +76,16 @@ Minimum result fields:
 ### 4.4 `CompileSemanticPlanRequest` -> `CompileSemanticPlanResult`
 Minimum request fields:
 1. `BoundFormula`
-2. OxFunc catalog or trait surface identity
-3. locale, date-system, and format-service context
+2. library-context snapshot identity or handle
+3. OxFunc catalog or trait surface identity
+4. locale, date-system, and format-service context
 
 Minimum result fields:
 1. `SemanticPlan`
 2. semantic diagnostics and unsupported-lane markers
 3. execution-profile summary
 4. helper-environment profile summary
+5. availability/gating summary where formula admission or runtime capability depends on catalog/profile/provider state
 
 ### 4.5 `EvaluateRequest` -> `AcceptedCandidateResult | RejectRecord`
 Minimum request fields:
@@ -177,7 +180,9 @@ The following remain open:
 2. whether the direct transform surface is free-function based or service-object based,
 3. whether red projection is publicly exposed or kept as an internal helper surface,
 4. whether proving-host helpers live in the main library or a sibling support package,
-5. exact error/result carrier style for language bindings.
+5. exact error/result carrier style for language bindings,
+6. the smallest honest library-context snapshot shape,
+7. the final callable-value carrier beyond the current local replay-summary floor.
 
 ## 11. Workset Implications
 Current expected primary owners:

@@ -1,0 +1,32 @@
+{
+  "reduction_id": "oxfml.local.reduction.fec_accept_publication.v1",
+  "source_bundle_ref": "crates/oxfml_core/tests/fixtures/fec_commit_replay_cases.json",
+  "source_scope_ref": "fixture_family:fec_commit_replay_cases",
+  "predicate_ref": {
+    "predicate_id": "oxfml.local.predicate.fec_accept_publication.v1",
+    "predicate_kind": "pred.publication.accepted_payload_present",
+    "required_reject_code": null,
+    "required_mismatch_member_kind": null,
+    "required_publication_value_class": "Number",
+    "required_execution_restriction": null
+  },
+  "strategy_id": "hierarchy_first",
+  "unit_kinds": [
+    "oxfml.local.reduction_unit.fixture_case"
+  ],
+  "retained_units": [
+    "fec_001_accept"
+  ],
+  "removed_units": [
+    "fec_002_formula_token_reject",
+    "fec_003_capability_view_reject"
+  ],
+  "rewritten_units": [],
+  "closure_rules_applied": [
+    "identity_closure",
+    "candidate_commit_lineage"
+  ],
+  "iteration_count": 1,
+  "final_status": "red.preserved",
+  "witness_bundle_ref": "crates/oxfml_core/tests/fixtures/witness_distillation/fec_accept_publication_witness_bundle.json"
+}

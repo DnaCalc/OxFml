@@ -66,16 +66,18 @@ Minimum fields:
 3. optional `dependency_additions`
 4. optional `dependency_removals`
 5. optional `dependency_reclassifications`
-6. optional `dynamic_reference_fact_refs`
-7. optional `spill_fact_refs`
-8. optional `format_dependency_tokens`
-9. optional `capability_effect_refs`
-10. optional correlation to candidate result or commit attempt
+6. optional `dependency_consequence_fact_refs`
+7. optional `dynamic_reference_fact_refs`
+8. optional `spill_fact_refs`
+9. optional `format_dependency_tokens`
+10. optional `capability_effect_refs`
+11. optional correlation to candidate result or commit attempt
 
 Minimum rules:
 1. topology facts must be typed and machine-comparable,
 2. topology payloads must not contain scheduler or fairness policy,
-3. if a surfaced evaluator fact is coordinator-relevant but carried outside `TopologyDelta`, this delta must still make the publication consequence derivable.
+3. if a surfaced evaluator fact is coordinator-relevant but carried outside `TopologyDelta`, this delta must still make the publication consequence derivable,
+4. dependency consequence facts are additive evidence and do not replace explicit removals or reclassifications where those are already contractual.
 
 ### 3.4 `FormatDelta`
 `FormatDelta` carries semantic formatting consequences that must cross the seam.
@@ -88,6 +90,10 @@ Minimum fields:
 5. `format_effect_payload`
 6. optional `dependency_token_refs`
 
+Working rule:
+1. `FormatDelta` may be derived from prepared-result `format_hint` when the hint crosses the seam as a publication obligation,
+2. a local prepared-result hint alone does not imply a seam-significant `FormatDelta`.
+
 ### 3.5 `DisplayDelta`
 `DisplayDelta` is optional and exists only when a publication-surface consequence is a seam obligation.
 
@@ -97,6 +103,10 @@ Minimum fields:
 3. `target_loci`
 4. `display_effect_class`
 5. `display_effect_payload`
+
+Working rule:
+1. `DisplayDelta` may be derived from prepared-result `publication_hint` when the publication surface itself is seam-significant,
+2. renderer-only display changes remain out of scope.
 
 ## 4. Evaluator Fact and Event Schema Objects
 ### 4.1 `DynamicReferenceFact`
@@ -136,7 +146,22 @@ Minimum fields:
 5. `effect_class`
 6. optional `fallback_class`
 
-### 4.5 `SpillEvent`
+Current local exercised families additionally include:
+1. `async_coupling`
+2. `serial_scheduler_lane`
+3. `single_flight`
+4. `thread_affinity`
+
+### 4.5 `DependencyConsequenceFact`
+Minimum fields:
+1. `fact_kind`
+2. `formula_stable_id`
+3. `dependency_identity`
+4. `consequence_kind`
+5. `evidence_class`
+6. `projection_state`
+
+### 4.6 `SpillEvent`
 Minimum fields:
 1. `spill_event_kind`
 2. `formula_stable_id`

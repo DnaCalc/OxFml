@@ -5,8 +5,8 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 pub use reference::{
-    AddressMode, AreaRef, CellCoord, CellRef, ErrorRef, NameKind, NameRef, NormalizedReference,
-    ReferenceExpr,
+    AddressMode, AreaRef, CellCoord, CellRef, ErrorRef, ExternalRef, NameKind, NameRef,
+    NormalizedReference, ReferenceExpr, WholeColumnRef, WholeRowRef,
 };
 
 use crate::red::RedProjection;
@@ -64,6 +64,7 @@ pub struct BoundFormula {
     pub formula_stable_id: String,
     pub green_tree_key: String,
     pub structure_context_version: String,
+    pub bind_context_fingerprint: String,
     pub bind_hash: String,
     pub root: BoundExpr,
     pub normalized_references: Vec<NormalizedReference>,
@@ -111,13 +112,30 @@ pub struct BindResult {
     pub bound_formula: BoundFormula,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IncrementalBindResult {
+    pub bound_formula: BoundFormula,
+    pub reused_bound_formula: bool,
+}
+
 pub fn bind_formula(request: BindRequest) -> BindResult {
+    let bind_context_fingerprint = hash_debug(&(
+        request.context.workbook_id.clone(),
+        request.context.sheet_id.clone(),
+        request.context.caller_row,
+        request.context.caller_col,
+        request.context.formula_token.0.clone(),
+        request.context.structure_context_version.0.clone(),
+        request.context.names.clone(),
+    ));
+
     let mut binder = Binder {
         context: request.context,
         diagnostics: Vec::new(),
         normalized_references: Vec::new(),
         dependency_seeds: Vec::new(),
         unresolved_references: Vec::new(),
+        capability_requirements: Vec::new(),
         helper_local_names: Vec::new(),
     };
 
@@ -140,14 +158,48 @@ pub fn bind_formula(request: BindRequest) -> BindResult {
             formula_stable_id: request.source.formula_stable_id.0,
             green_tree_key: request.green_tree.green_tree_key,
             structure_context_version: binder.context.structure_context_version.0.clone(),
+            bind_context_fingerprint,
             bind_hash,
             root,
             normalized_references: binder.normalized_references,
             dependency_seeds: binder.dependency_seeds,
             unresolved_references: binder.unresolved_references,
-            capability_requirements: Vec::new(),
+            capability_requirements: binder.capability_requirements,
             diagnostics: binder.diagnostics,
         },
+    }
+}
+
+pub fn bind_formula_incremental(
+    request: BindRequest,
+    previous_bound_formula: Option<&BoundFormula>,
+) -> IncrementalBindResult {
+    let bind_context_fingerprint = hash_debug(&(
+        request.context.workbook_id.clone(),
+        request.context.sheet_id.clone(),
+        request.context.caller_row,
+        request.context.caller_col,
+        request.context.formula_token.0.clone(),
+        request.context.structure_context_version.0.clone(),
+        request.context.names.clone(),
+    ));
+
+    if let Some(previous_bound_formula) = previous_bound_formula {
+        if previous_bound_formula.formula_stable_id == request.source.formula_stable_id.0
+            && previous_bound_formula.green_tree_key == request.green_tree.green_tree_key
+            && previous_bound_formula.bind_context_fingerprint == bind_context_fingerprint
+        {
+            return IncrementalBindResult {
+                bound_formula: previous_bound_formula.clone(),
+                reused_bound_formula: true,
+            };
+        }
+    }
+
+    let bind = bind_formula(request);
+    IncrementalBindResult {
+        bound_formula: bind.bound_formula,
+        reused_bound_formula: false,
     }
 }
 
@@ -157,6 +209,7 @@ struct Binder {
     normalized_references: Vec<NormalizedReference>,
     dependency_seeds: Vec<DependencySeed>,
     unresolved_references: Vec<UnresolvedReferenceRecord>,
+    capability_requirements: Vec<String>,
     helper_local_names: Vec<String>,
 }
 
@@ -170,7 +223,10 @@ impl Binder {
             SyntaxKind::StringLiteralExpr => {
                 BoundExpr::StringLiteral(self.first_token_text(node).unwrap_or_default())
             }
-            SyntaxKind::IdentifierExpr => self.bind_identifier(node),
+            SyntaxKind::IdentifierExpr | SyntaxKind::QuotedIdentifierExpr => {
+                self.bind_identifier(node)
+            }
+            SyntaxKind::QualifiedReferenceExpr => self.bind_qualified_reference(node),
             SyntaxKind::RangeExpr => self.bind_range(node),
             SyntaxKind::UnionExpr => self.bind_union(node),
             SyntaxKind::IntersectionExpr => self.bind_intersection(node),
@@ -249,7 +305,7 @@ impl Binder {
 
     fn bind_identifier(&mut self, node: &GreenNode) -> BoundExpr {
         let text = self.first_token_text(node).unwrap_or_default();
-        if let Some(cell_ref) = parse_cell_reference(&text, &self.context) {
+        if let Some(cell_ref) = parse_cell_reference(&text, &self.context.sheet_id, &self.context) {
             let normalized = NormalizedReference::Cell(cell_ref);
             self.push_reference_seed(&normalized);
             BoundExpr::Reference(ReferenceExpr::Atom(normalized))
@@ -289,13 +345,99 @@ impl Binder {
         }
     }
 
+    fn bind_qualified_reference(&mut self, node: &GreenNode) -> BoundExpr {
+        let qualifier = node
+            .children
+            .iter()
+            .find_map(|child| match child {
+                GreenChild::Token(token)
+                    if matches!(
+                        token.kind,
+                        crate::syntax::token::TokenKind::Identifier
+                            | crate::syntax::token::TokenKind::QuotedIdentifier
+                            | crate::syntax::token::TokenKind::BracketedQualifier
+                    ) =>
+                {
+                    Some(token.text.clone())
+                }
+                _ => None,
+            })
+            .unwrap_or_default();
+        let qualifier = parse_reference_qualifier(&qualifier);
+
+        let target = node
+            .children
+            .iter()
+            .find_map(|child| match child {
+                GreenChild::Node(node) => Some(node.as_ref()),
+                GreenChild::Token(_) => None,
+            })
+            .expect("qualified reference should contain target node");
+
+        match target.kind {
+            SyntaxKind::IdentifierExpr | SyntaxKind::QuotedIdentifierExpr => {
+                let text = self.first_token_text(target).unwrap_or_default();
+                if qualifier.is_external {
+                    let normalized = NormalizedReference::External(ExternalRef {
+                        external_target_id: qualifier
+                            .external_target_id
+                            .clone()
+                            .unwrap_or_else(|| qualifier.raw.clone()),
+                        sheet_selector_summary: qualifier.sheet_id.clone(),
+                        capability_requirement: "external_reference".to_string(),
+                        external_reference_class: "workbook_sheet_qualified".to_string(),
+                        target_summary: format!("{}!{text}", qualifier.raw),
+                    });
+                    self.capability_requirements
+                        .push("external_reference".to_string());
+                    self.push_reference_seed(&normalized);
+                    BoundExpr::Reference(ReferenceExpr::Atom(normalized))
+                } else if let Some(cell_ref) =
+                    parse_cell_reference(&text, &qualifier.sheet_id, &self.context)
+                {
+                    let normalized = NormalizedReference::Cell(cell_ref);
+                    self.push_reference_seed(&normalized);
+                    BoundExpr::Reference(ReferenceExpr::Atom(normalized))
+                } else {
+                    let normalized = NormalizedReference::Name(NameRef {
+                        name: format!("{}!{text}", qualifier.sheet_id),
+                        workbook_id: self.context.workbook_id.clone(),
+                        sheet_id: qualifier.sheet_id.clone(),
+                        kind: NameKind::ReferenceLike,
+                        caller_context_dependent: false,
+                    });
+                    self.push_reference_seed(&normalized);
+                    BoundExpr::Reference(ReferenceExpr::Atom(normalized))
+                }
+            }
+            _ => {
+                self.diagnostics.push(BindDiagnostic {
+                    message: "qualified reference target did not bind as identifier".to_string(),
+                    span: node.span,
+                });
+                BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Error(ErrorRef {
+                    error_class: "#REF!".to_string(),
+                    source_text: qualifier.raw,
+                })))
+            }
+        }
+    }
+
     fn bind_range(&mut self, node: &GreenNode) -> BoundExpr {
         let mut child_nodes = node.children.iter().filter_map(|child| match child {
             GreenChild::Node(node) => Some(node.as_ref()),
             GreenChild::Token(_) => None,
         });
-        let left = self.bind_expr(child_nodes.next().expect("range left"));
-        let right = self.bind_expr(child_nodes.next().expect("range right"));
+        let left_node = child_nodes.next().expect("range left");
+        let right_node = child_nodes.next().expect("range right");
+
+        if let Some(normalized) = self.try_bind_whole_row_or_column_range(left_node, right_node) {
+            self.push_reference_seed(&normalized);
+            return BoundExpr::Reference(ReferenceExpr::Atom(normalized));
+        }
+
+        let left = self.bind_expr(left_node);
+        let right = self.bind_expr(right_node);
 
         match (left, right) {
             (
@@ -340,6 +482,53 @@ impl Binder {
                 })))
             }
         }
+    }
+
+    fn try_bind_whole_row_or_column_range(
+        &mut self,
+        left_node: &GreenNode,
+        right_node: &GreenNode,
+    ) -> Option<NormalizedReference> {
+        let left_simple = try_parse_simple_reference_fragment(left_node, &self.context)?;
+        let right_simple = try_parse_simple_reference_fragment(right_node, &self.context)?;
+        if left_simple.qualifier.raw != right_simple.qualifier.raw
+            || left_simple.qualifier.is_external
+            || right_simple.qualifier.is_external
+        {
+            return None;
+        }
+
+        if let (Some(start_row), Some(end_row)) = (
+            parse_row_reference(&left_simple.target_text),
+            parse_row_reference(&right_simple.target_text),
+        ) {
+            let top_row = start_row.min(end_row);
+            let bottom_row = start_row.max(end_row);
+            return Some(NormalizedReference::WholeRow(WholeRowRef {
+                workbook_id: self.context.workbook_id.clone(),
+                sheet_id: left_simple.qualifier.sheet_id,
+                row_start: top_row,
+                row_count: bottom_row - top_row + 1,
+                address_mode: AddressMode::default(),
+            }));
+        }
+
+        if let (Some(start_col), Some(end_col)) = (
+            parse_column_reference(&left_simple.target_text),
+            parse_column_reference(&right_simple.target_text),
+        ) {
+            let left_col = start_col.min(end_col);
+            let right_col = start_col.max(end_col);
+            return Some(NormalizedReference::WholeColumn(WholeColumnRef {
+                workbook_id: self.context.workbook_id.clone(),
+                sheet_id: left_simple.qualifier.sheet_id,
+                col_start: left_col,
+                col_count: right_col - left_col + 1,
+                address_mode: AddressMode::default(),
+            }));
+        }
+
+        None
     }
 
     fn bind_union(&mut self, node: &GreenNode) -> BoundExpr {
@@ -581,7 +770,7 @@ impl Binder {
     }
 
     fn bind_identifier_expr_from_name(&mut self, text: &str) -> BoundExpr {
-        if let Some(cell_ref) = parse_cell_reference(text, &self.context) {
+        if let Some(cell_ref) = parse_cell_reference(text, &self.context.sheet_id, &self.context) {
             let normalized = NormalizedReference::Cell(cell_ref);
             self.push_reference_seed(&normalized);
             BoundExpr::Reference(ReferenceExpr::Atom(normalized))
@@ -622,6 +811,20 @@ impl Binder {
     }
 }
 
+#[derive(Debug, Clone)]
+struct ParsedQualifier {
+    raw: String,
+    sheet_id: String,
+    external_target_id: Option<String>,
+    is_external: bool,
+}
+
+#[derive(Debug, Clone)]
+struct SimpleReferenceFragment {
+    qualifier: ParsedQualifier,
+    target_text: String,
+}
+
 fn token_text<'a>(node: &'a GreenNode, expected: &str) -> Option<&'a str> {
     node.children.iter().find_map(|child| match child {
         GreenChild::Token(token) if token.text == expected => Some(token.text.as_str()),
@@ -629,7 +832,85 @@ fn token_text<'a>(node: &'a GreenNode, expected: &str) -> Option<&'a str> {
     })
 }
 
-fn parse_cell_reference(text: &str, context: &BindContext) -> Option<CellRef> {
+fn try_parse_simple_reference_fragment(
+    node: &GreenNode,
+    context: &BindContext,
+) -> Option<SimpleReferenceFragment> {
+    match node.kind {
+        SyntaxKind::IdentifierExpr
+        | SyntaxKind::QuotedIdentifierExpr
+        | SyntaxKind::NumberLiteralExpr => Some(SimpleReferenceFragment {
+            qualifier: ParsedQualifier {
+                raw: context.sheet_id.clone(),
+                sheet_id: context.sheet_id.clone(),
+                external_target_id: None,
+                is_external: false,
+            },
+            target_text: first_token_text_free(node)?,
+        }),
+        SyntaxKind::QualifiedReferenceExpr => {
+            let qualifier = node.children.iter().find_map(|child| match child {
+                GreenChild::Token(token) => Some(parse_reference_qualifier(&token.text)),
+                GreenChild::Node(_) => None,
+            })?;
+            let target = node.children.iter().find_map(|child| match child {
+                GreenChild::Node(node) => Some(node.as_ref()),
+                GreenChild::Token(_) => None,
+            })?;
+            match target.kind {
+                SyntaxKind::IdentifierExpr
+                | SyntaxKind::QuotedIdentifierExpr
+                | SyntaxKind::NumberLiteralExpr => Some(SimpleReferenceFragment {
+                    qualifier,
+                    target_text: first_token_text_free(target)?,
+                }),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+fn first_token_text_free(node: &GreenNode) -> Option<String> {
+    node.children.iter().find_map(|child| match child {
+        GreenChild::Token(token) => Some(token.text.clone()),
+        GreenChild::Node(_) => None,
+    })
+}
+
+fn parse_reference_qualifier(text: &str) -> ParsedQualifier {
+    if let Some(rest) = text.strip_prefix('[') {
+        if let Some(close_index) = rest.find(']') {
+            let external_target_id = rest[..close_index].to_string();
+            let sheet_id = rest[close_index + 1..].to_string();
+            return ParsedQualifier {
+                raw: text.to_string(),
+                sheet_id: if sheet_id.is_empty() {
+                    "sheet:external".to_string()
+                } else {
+                    sheet_id
+                },
+                external_target_id: Some(external_target_id),
+                is_external: true,
+            };
+        }
+    }
+
+    let sheet_id = if text.starts_with('\'') && text.ends_with('\'') && text.len() >= 2 {
+        text[1..text.len() - 1].replace("''", "'")
+    } else {
+        text.to_string()
+    };
+
+    ParsedQualifier {
+        raw: text.to_string(),
+        sheet_id,
+        external_target_id: None,
+        is_external: false,
+    }
+}
+
+fn parse_cell_reference(text: &str, sheet_id: &str, context: &BindContext) -> Option<CellRef> {
     let mut chars = text.chars().peekable();
     let mut col_text = String::new();
     while matches!(chars.peek(), Some(c) if c.is_ascii_alphabetic() || *c == '$') {
@@ -656,11 +937,25 @@ fn parse_cell_reference(text: &str, context: &BindContext) -> Option<CellRef> {
 
     Some(CellRef {
         workbook_id: context.workbook_id.clone(),
-        sheet_id: context.sheet_id.clone(),
+        sheet_id: sheet_id.to_string(),
         coord: CellCoord { row, col },
         address_mode: AddressMode::default(),
         caller_anchor_used: true,
     })
+}
+
+fn parse_row_reference(text: &str) -> Option<u32> {
+    if text.is_empty() || !text.chars().all(|ch| ch.is_ascii_digit()) {
+        return None;
+    }
+    text.parse::<u32>().ok()
+}
+
+fn parse_column_reference(text: &str) -> Option<u32> {
+    if text.is_empty() || text.len() > 3 || !text.chars().all(|ch| ch.is_ascii_alphabetic()) {
+        return None;
+    }
+    column_to_index(text)
 }
 
 fn column_to_index(text: &str) -> Option<u32> {

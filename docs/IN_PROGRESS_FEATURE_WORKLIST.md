@@ -3,7 +3,7 @@
 Canonical repo-level register of feature areas that are in-progress under workset completion doctrine.
 
 Status: active.
-Last updated: 2026-03-15.
+Last updated: 2026-03-18.
 
 ## Status Vocabulary
 
@@ -16,39 +16,47 @@ Last updated: 2026-03-15.
 ### IP-01: Formula Grammar, Parse, and Bind
 
 - **Status**: in-progress
-- **Current floor**: architectural baseline plus first exercised implementation slices in place for formula source records, tokenization, green syntax, red projections, a small expression parser subset, normalized reference ADTs, bind fixture scaffolding, semantic-plan compilation with a first helper-environment profile for `LET`/`LAMBDA`/invocation shape and lexical-capture need, narrow prepared-call/result lowering with blankness and caller-context provenance plus helper/scalarization prepared-call traces, and first local evaluation semantics for `_xlfn.SINGLE`, `LET`, symbolic `LAMBDA` values, immediate/helper-bound `LAMBDA` invocation, and lexical helper capture that survives shadowing on top of a narrow OxFunc function registry.
-- **Remaining gaps**: broader grammar definition, richer parser coverage, bind/reference normalization breadth, incremental reuse mechanics, broader OxFunc catalog coverage, richer prepared-call/result provenance families, broader helper-form semantics beyond the first callable/lexical-capture baseline, and replay-backed evidence beyond local fixture scaffolding.
-- **Why still open**: implementation has started under `W002` and `W003`, but still only for a narrow parser/binder/semantic-plan subset and not yet with pack-grade replay or checked formal evidence.
-- **Canonical owner**: `W001` now; active follow-on `W002` and `W003`; planned `W008`.
+- **Current floor**: architectural baseline plus exercised implementation slices for formula source records, tokenization, green syntax, red projections, a widened expression parser subset including additional qualified-name handling, normalized reference ADTs, bind fixture scaffolding with richer assertions, host-path incremental parse/red/bind reuse, semantic-plan compilation with helper-environment profiling, stage-aware availability summaries, external library-context snapshot refs, prepared-call/result lowering with blankness, caller-context provenance, callable-profile detail, helper/scalarization prepared-call traces, and local evaluation semantics for `_xlfn.SINGLE`, `LET`, callable `LAMBDA`, lexical helper capture, `ROW`, `COLUMN`, `INDIRECT`, `OFFSET`, and `IFERROR` on top of a still-narrow OxFunc function registry.
+- **Remaining gaps**: fuller Excel grammar closure, richer structured/external reference coverage, broader OxFunc catalog coverage, final shared callable transport, and replay-backed evidence beyond the current local witness tier.
+- **Why still open**: `W026` and `W027` materially narrowed library-context, availability, and callable-value baselines, but the repo-level feature remains broader than the exercised subset and still lacks pack-grade replay, fuller catalog breadth, and broader formal closure.
+- **Canonical owner**: `W001` now; exercised follow-on `W002`, `W003`, `W013`, `W014`, `W019`, `W020`, `W026`, and `W027`; planned next owners `W031` and `W032`.
 
 ### IP-02: FEC/F3E Evaluator Session
 
 - **Status**: in-progress
-- **Current floor**: OxFml-owned seam design and implementation-start planning baseline is in place, with exercised accepted-candidate, commit-bundle, reject-record, fence snapshots, typed no-publish fence rejection, single-formula host recalc wiring, and a first managed `prepare -> open_session -> capability_view -> execute -> commit` session-service slice with abort/expire handling, invalid-phase structural-conflict rejection, and surfaced execution-restriction effect facts.
-- **Remaining gaps**: broader contention/concurrency runtime behavior, pack-grade replay/model artifacts, and broader host integration beyond the single-formula proving path.
-- **Why still open**: the seam baseline now has a narrow managed evaluator-session surface, but not the broader Stage 2 runtime semantics or pack-grade evidence.
-- **Canonical owner**: `W001` now; active follow-on `W004`; planned `W007` and `W008`.
+- **Current floor**: OxFml-owned seam design and exercised implementation now include accepted-candidate, commit-bundle, reject-record, fence snapshots, typed no-publish fence rejection, single-formula host recalc wiring, a managed `prepare -> open_session -> capability_view -> execute -> commit` session-service slice with abort/expire handling, invalid-phase structural-conflict rejection, surfaced execution-restriction effect facts, runtime contention enforcement across sessions, async-coupled external-provider consequence surfacing, runtime-async overlay registration, and checked local formal artifacts for the external capability gate.
+- **Remaining gaps**: broader async/distributed runtime behavior beyond the local external-provider and contention floor, pack-grade replay/model artifacts, and broader host integration beyond the single-formula proving path.
+- **Why still open**: `W029` materially widened the local async-facing runtime and formal floor, but repo-level runtime scope still extends beyond the exercised local contention and external-provider model.
+- **Canonical owner**: `W001` now; exercised follow-on `W004`, `W015`, `W018`, `W021`, `W024`, and `W029`; planned next owners `W034` and `W035`.
 
 ### IP-03: Commit Output Contract
 
 - **Status**: in-progress
-- **Current floor**: atomic bundle, schema, and fixture-planning baseline exist in OxFml-owned docs, and a first exercised implementation slice now constructs commit bundles from accepted candidate results under matching fences and rejects mismatched fences with typed no-publish outcomes.
-- **Remaining gaps**: broader commit bundle construction, open-session-to-commit runtime wiring, richer topology-fact encoding, and replay evidence.
-- **Why still open**: a minimal commit boundary slice now exists under `W004`, but it does not yet represent the full evaluator publication pipeline or replay-grade coverage.
-- **Canonical owner**: `W001` now; active follow-on `W004`; planned `W008`.
+- **Current floor**: atomic bundle, schema, and fixture-planning baseline exist in OxFml-owned docs, and the exercised implementation now constructs commit bundles from accepted candidate results under matching fences, derives seam-significant `format_delta` and `display_delta` from prepared-result hints where applicable, rejects mismatched fences with typed no-publish outcomes, and surfaces typed dependency consequence facts inside `topology_delta`.
+- **Remaining gaps**: broader commit bundle construction beyond the current local publication families, wider distributed publication policy, and pack-grade replay evidence.
+- **Why still open**: `W028` materially widened the local publication and topology floor, but the repo-level feature still does not represent the full evaluator publication pipeline or pack-grade coverage.
+- **Canonical owner**: `W001` now; exercised follow-on `W004`, `W015`, `W017`, `W018`, `W021`, `W023`, and `W028`; planned next owner `W034`.
 
 ### IP-04: Reject Taxonomy and Trace Schema
 
 - **Status**: in-progress
-- **Current floor**: reject and trace taxonomy, minimum schemas, and formal/replay planning baseline exist, plus exercised typed reject records for fence mismatch, capability denial, abort, and expire paths; local replay fixtures for semantic-plan, prepared-call/result, execution-contract, session lifecycle, FEC commit/reject, and single-formula host slices; and first local Lean/TLA+ skeleton artifacts.
-- **Remaining gaps**: broader typed reject coverage, pack-grade deterministic replay infrastructure, and checked Lean/TLA+ coupling.
-- **Why still open**: the witness and formal floor is now broader, but still local and not yet promoted into Green-owned packs or checked proof/model artifacts.
-- **Canonical owner**: `W001` now; active follow-on `W004` and `W005`; planned `W007`.
+- **Current floor**: reject and trace taxonomy, minimum schemas, and formal/replay planning baseline exist, with exercised typed reject records for fence mismatch, capability denial, abort, expire, and contention-sensitive paths; local replay fixtures for semantic-plan, prepared-call/result, execution-contract, session lifecycle, FEC commit/reject, single-formula host, and empirical-oracle slices; broadened local reduced-witness artifacts; local normalized replay bundles; plus a checked local Lean run and checked local TLA+ model run.
+- **Remaining gaps**: broader typed reject coverage, pack-grade deterministic replay infrastructure, and broader formal families beyond the first checked runs.
+- **Why still open**: `W022` and `W023` materially widened the local witness/formal floor, but the evidence remains local and not yet promoted into pack-grade corpus or wider formal coverage.
+- **Canonical owner**: `W001` now; exercised follow-on `W004`, `W005`, `W015`, `W016`, `W017`, `W022`, and `W023`; planned next owners `W033`, `W034`, and `W035`.
 
 ### IP-05: Formula-Semantic Formatting
 
 - **Status**: in-progress
-- **Current floor**: formatting behavior crossing the seam is chartered and now exercised through `TEXT`, `VALUE`, `NOW`, `TODAY`, `CELL`, and `INFO` with explicit locale-format and host-query context, prepared-result format/publication hints, and first locale format-dependency facts surfaced through the proving host.
-- **Remaining gaps**: broader semantic formatting family coverage, richer publication consequences, and pack-grade proving scenarios.
-- **Why still open**: `W006` closed its initial baseline, but the repo-level feature remains much broader than that first formatting/host-query slice.
-- **Canonical owner**: active `W006`.
+- **Current floor**: formatting behavior crossing the seam is chartered and exercised through `TEXT`, `VALUE`, `NOW`, `TODAY`, `CELL`, and `INFO` with explicit locale-format and host-query context, prepared-result format/publication hints, locale format-dependency facts surfaced through the proving host, seam-significant `format_delta` and `display_delta` publication artifacts, and empirical-oracle scenarios covering formatting and host-query lanes.
+- **Remaining gaps**: broader semantic formatting family coverage, fuller display-boundary closure beyond the current seam-significant subset, and pack-grade proving scenarios.
+- **Why still open**: `W030` materially widened the local semantic-format and display-boundary floor, but the repo-level feature remains much broader than the exercised slice.
+- **Canonical owner**: exercised follow-on `W006`, `W014`, `W018`, `W020`, `W021`, `W024`, and `W030`; planned next owner `W031`.
+
+### IP-06: Replay Appliance Adapter and Witness Governance
+
+- **Status**: in-progress
+- **Current floor**: OxFml-local replay adapter governance is written into the canonical spec set, including the adapter note, conservative capability manifest through `cap.C3.explain_valid`, additive registry bindings, witness lifecycle usage rules, passing local conformance tests, broadened local reduced-witness artifacts across FEC commit/reject, session lifecycle, execution-contract, host, and empirical-oracle outcome classes, local normalized replay bundle and pack-candidate evidence, and machine-readable promotion-readiness indices.
+- **Remaining gaps**: pack-grade replay promotion, broader reduced-witness breadth beyond the current local families, and any claim toward `cap.C4.distill_valid` or `cap.C5.pack_valid` remain open.
+- **Why still open**: `W025` materially widened the promotion-governance floor, but the replay evidence remains local-only and intentionally non-pack-eligible.
+- **Canonical owner**: exercised follow-on `W009` through `W017`, `W022`, `W023`, and `W025`; planned next owners `W033` and `W035`.

@@ -13,12 +13,44 @@ pub struct ParseResult {
     pub green_tree: GreenTreeRoot,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IncrementalParseResult {
+    pub green_tree: GreenTreeRoot,
+    pub reused_green_tree: bool,
+}
+
 pub fn parse_formula(request: ParseRequest) -> ParseResult {
     let full_tokens = lex(&request.source.entered_formula_text);
     let mut parser = Parser::new(full_tokens.clone());
     let root = parser.parse_formula_root();
     ParseResult {
         green_tree: GreenTreeRoot::from_parts(root, full_tokens, parser.diagnostics),
+    }
+}
+
+pub fn parse_formula_incremental(
+    request: ParseRequest,
+    previous_green_tree: Option<&GreenTreeRoot>,
+) -> IncrementalParseResult {
+    if let Some(previous_green_tree) = previous_green_tree {
+        let previous_text = previous_green_tree
+            .full_fidelity_tokens
+            .iter()
+            .filter(|token| token.kind != TokenKind::Eof)
+            .map(|token| token.text.as_str())
+            .collect::<String>();
+        if previous_text == request.source.entered_formula_text {
+            return IncrementalParseResult {
+                green_tree: previous_green_tree.clone(),
+                reused_green_tree: true,
+            };
+        }
+    }
+
+    let parse = parse_formula(request);
+    IncrementalParseResult {
+        green_tree: parse.green_tree,
+        reused_green_tree: false,
     }
 }
 
@@ -192,10 +224,27 @@ impl Parser {
                 SyntaxKind::StringLiteralExpr,
                 vec![GreenChild::Token(self.bump())],
             ),
-            TokenKind::Identifier => {
+            TokenKind::Identifier | TokenKind::QuotedIdentifier | TokenKind::BracketedQualifier => {
                 let ident = self.bump();
-                if self.at(TokenKind::LParen) {
+                if self.at(TokenKind::Bang) {
+                    let bang = self.bump();
+                    self.skip_whitespace();
+                    let target = self.parse_primary();
+                    GreenNode::new(
+                        SyntaxKind::QualifiedReferenceExpr,
+                        vec![
+                            GreenChild::Token(ident),
+                            GreenChild::Token(bang),
+                            GreenChild::Node(Box::new(target)),
+                        ],
+                    )
+                } else if ident.kind == TokenKind::Identifier && self.at(TokenKind::LParen) {
                     self.parse_call_expr(ident)
+                } else if ident.kind == TokenKind::QuotedIdentifier {
+                    GreenNode::new(
+                        SyntaxKind::QuotedIdentifierExpr,
+                        vec![GreenChild::Token(ident)],
+                    )
                 } else {
                     GreenNode::new(SyntaxKind::IdentifierExpr, vec![GreenChild::Token(ident)])
                 }
@@ -277,7 +326,12 @@ impl Parser {
     fn starts_reference_expr(&self) -> bool {
         matches!(
             self.current().kind,
-            TokenKind::Identifier | TokenKind::At | TokenKind::LParen
+            TokenKind::Identifier
+                | TokenKind::QuotedIdentifier
+                | TokenKind::BracketedQualifier
+                | TokenKind::Number
+                | TokenKind::At
+                | TokenKind::LParen
         )
     }
 

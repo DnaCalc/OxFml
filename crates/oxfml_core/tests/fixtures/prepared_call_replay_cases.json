@@ -252,6 +252,15 @@
       "result_class": "Scalar",
       "result_structure_class": "DirectScalar",
       "payload_summary": "Lambda(arity=1;params=x;captures=-;body=Binary)",
+      "callable_profile": "arity=1;params=x;captures=-;body=Binary",
+      "callable_profile_detail": {
+        "arity": 1,
+        "parameter_names": [
+          "x"
+        ],
+        "capture_names": [],
+        "body_kind": "Binary"
+      },
       "blankness_class": "NonBlank",
       "format_hint": null,
       "publication_hint": null,
@@ -368,6 +377,172 @@
     }
   },
   {
+    "case_id": "prepared_011_row_caller_context",
+    "formula": "=ROW()",
+    "defined_names": {},
+    "host_query_profile": null,
+    "expected": {
+      "prepared_calls": [
+        {
+          "function_id": "FUNC.ROW",
+          "prepared_arguments": []
+        }
+      ],
+      "result_class": "Scalar",
+      "result_structure_class": "DirectScalar",
+      "payload_summary": "Number(1)",
+      "blankness_class": "NonBlank",
+      "format_hint": null,
+      "publication_hint": null,
+      "capability_dependencies": [
+        "caller_context"
+      ]
+    }
+  },
+  {
+    "case_id": "prepared_012_column_area_reference",
+    "formula": "=COLUMN(A1:B2)",
+    "defined_names": {},
+    "host_query_profile": null,
+    "expected": {
+      "prepared_calls": [
+        {
+          "function_id": "FUNC.COLUMN",
+          "prepared_arguments": [
+            {
+              "structure_class": "ReferenceVisible",
+              "source_class": "AreaReference",
+              "evaluation_mode": "ReferencePreserved",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        }
+      ],
+      "result_class": "Array",
+      "result_structure_class": "ArrayLike",
+      "payload_summary": "Array(1x2)",
+      "blankness_class": "NonBlank",
+      "format_hint": null,
+      "publication_hint": null,
+      "capability_dependencies": [
+        "caller_context"
+      ]
+    }
+  },
+  {
+    "case_id": "prepared_013_indirect_reference_result",
+    "formula": "=INDIRECT(\"A1\")",
+    "defined_names": {},
+    "host_query_profile": null,
+    "expected": {
+      "prepared_calls": [
+        {
+          "function_id": "FUNC.INDIRECT",
+          "prepared_arguments": [
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "Literal",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        }
+      ],
+      "result_class": "Reference",
+      "result_structure_class": "ReferenceVisible",
+      "payload_summary": "Reference(A1)",
+      "blankness_class": "NonBlank",
+      "format_hint": null,
+      "publication_hint": null,
+      "capability_dependencies": [
+        "caller_context"
+      ]
+    }
+  },
+  {
+    "case_id": "prepared_014_offset_reference_result",
+    "formula": "=OFFSET(A1,0,0)",
+    "defined_names": {},
+    "host_query_profile": null,
+    "expected": {
+      "prepared_calls": [
+        {
+          "function_id": "FUNC.OFFSET",
+          "prepared_arguments": [
+            {
+              "structure_class": "ReferenceVisible",
+              "source_class": "CellReference",
+              "evaluation_mode": "ReferencePreserved",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "Literal",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "Literal",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        }
+      ],
+      "result_class": "Reference",
+      "result_structure_class": "ReferenceVisible",
+      "payload_summary": "Reference(A1)",
+      "blankness_class": "NonBlank",
+      "format_hint": null,
+      "publication_hint": null,
+      "capability_dependencies": [
+        "caller_context"
+      ]
+    }
+  },
+  {
+    "case_id": "prepared_015_iferror_fallback",
+    "formula": "=IFERROR(UnknownName,2)",
+    "defined_names": {},
+    "host_query_profile": null,
+    "expected": {
+      "prepared_calls": [
+        {
+          "function_id": "FUNC.IFERROR",
+          "prepared_arguments": [
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "FunctionCall",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "Literal",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        }
+      ],
+      "result_class": "Scalar",
+      "result_structure_class": "DirectScalar",
+      "payload_summary": "Number(2)",
+      "blankness_class": "NonBlank",
+      "format_hint": null,
+      "publication_hint": null,
+      "capability_dependencies": []
+    }
+  },
+  {
     "case_id": "prepared_010_lambda_capture_trace",
     "formula": "=LET(x,10,LAMBDA(y,x+y))",
     "defined_names": {},
@@ -423,11 +598,56 @@
       "result_class": "Scalar",
       "result_structure_class": "DirectScalar",
       "payload_summary": "Lambda(arity=1;params=y;captures=x;body=Binary)",
+      "callable_profile": "arity=1;params=y;captures=x;body=Binary",
+      "callable_profile_detail": {
+        "arity": 1,
+        "parameter_names": [
+          "y"
+        ],
+        "capture_names": [
+          "x"
+        ],
+        "body_kind": "Binary"
+      },
       "blankness_class": "NonBlank",
       "format_hint": null,
       "publication_hint": null,
       "capability_dependencies": [
         "helper_environment"
+      ]
+    }
+  },
+  {
+    "case_id": "prepared_016_external_reference_deferred",
+    "formula": "=[Book.xlsx]Sheet2!A1",
+    "defined_names": {},
+    "host_query_profile": null,
+    "expected": {
+      "prepared_calls": [
+        {
+          "function_id": "SPECIAL.EXTERNAL_REFERENCE_DEFERRED",
+          "prepared_arguments": [
+            {
+              "structure_class": "ReferenceVisible",
+              "source_class": "ExternalReference",
+              "evaluation_mode": "ReferencePreserved",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false,
+              "reference_target": "[Book.xlsx]Sheet2!A1",
+              "opaque_reason": "external_reference_deferred"
+            }
+          ]
+        }
+      ],
+      "result_class": "Error",
+      "result_structure_class": "DirectScalar",
+      "payload_summary": "Error(Ref)",
+      "blankness_class": "NonBlank",
+      "deferred_reason": "external_reference_deferred",
+      "format_hint": null,
+      "publication_hint": null,
+      "capability_dependencies": [
+        "external_reference"
       ]
     }
   }

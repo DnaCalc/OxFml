@@ -33,6 +33,24 @@ pub struct AreaRef {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WholeRowRef {
+    pub workbook_id: String,
+    pub sheet_id: String,
+    pub row_start: u32,
+    pub row_count: u32,
+    pub address_mode: AddressMode,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WholeColumnRef {
+    pub workbook_id: String,
+    pub sheet_id: String,
+    pub col_start: u32,
+    pub col_count: u32,
+    pub address_mode: AddressMode,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NameKind {
     ReferenceLike,
     ValueLike,
@@ -56,10 +74,22 @@ pub struct ErrorRef {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalRef {
+    pub external_target_id: String,
+    pub sheet_selector_summary: String,
+    pub capability_requirement: String,
+    pub external_reference_class: String,
+    pub target_summary: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NormalizedReference {
     Cell(CellRef),
     Area(AreaRef),
+    WholeRow(WholeRowRef),
+    WholeColumn(WholeColumnRef),
     Name(NameRef),
+    External(ExternalRef),
     Error(ErrorRef),
 }
 
@@ -98,7 +128,22 @@ impl fmt::Display for NormalizedReference {
                 "{}!R{}C{}:{}x{}",
                 area.sheet_id, area.top_left.row, area.top_left.col, area.height, area.width
             ),
+            Self::WholeRow(rows) => write!(
+                f,
+                "{}!R{}:R{}",
+                rows.sheet_id,
+                rows.row_start,
+                rows.row_start + rows.row_count - 1
+            ),
+            Self::WholeColumn(columns) => write!(
+                f,
+                "{}!C{}:C{}",
+                columns.sheet_id,
+                columns.col_start,
+                columns.col_start + columns.col_count - 1
+            ),
             Self::Name(name) => write!(f, "name:{}", name.name),
+            Self::External(external) => write!(f, "external:{}", external.target_summary),
             Self::Error(error) => write!(f, "error:{}", error.error_class),
         }
     }

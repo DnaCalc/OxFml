@@ -1,0 +1,12 @@
+{
+  "witness_id": "oxfml.local.witness.session_capability_denied.v1",
+  "source_bundle_ref": "crates/oxfml_core/tests/fixtures/session_lifecycle_replay_cases.json",
+  "reduction_manifest_ref": "crates/oxfml_core/tests/fixtures/witness_distillation/session_capability_denied_reduction_manifest.json",
+  "lifecycle_state": "wit.retained_local",
+  "retention_policy_id": "oxfml.local.retention.manual_review",
+  "promotion_refs": [],
+  "supersedes": [],
+  "quarantine_reason": null,
+  "gc_eligibility": "not_eligible",
+  "notes": "Retained local session witness for typed capability-denied lifecycle path."
+}

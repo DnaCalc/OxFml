@@ -30,6 +30,8 @@ The live FEC/F3E seam is defined by:
 14. `../OXFML_FORMALIZATION_AND_VERIFICATION.md`
 15. `../OXFML_FORMAL_ARTIFACT_REGISTER.md`
 16. `../formula-language/OXFML_OXFUNC_SEMANTIC_BOUNDARY.md`
+17. `../OXFML_DNA_ONECALC_HOST_POLICY_BASELINE.md`
+18. `../OXFML_EMPIRICAL_PACK_PLANNING.md`
 
 Archive material may support evidence work later, but it is not bootstrap authority.
 
@@ -54,6 +56,8 @@ The FEC/F3E conformance matrix uses these document evidence identifiers:
 | `DOC-OXFML-FORMAL` | OxFml-wide formalization posture in `../OXFML_FORMALIZATION_AND_VERIFICATION.md`. |
 | `DOC-OXFML-FORMAL-REGISTER` | OxFml formal artifact register in `../OXFML_FORMAL_ARTIFACT_REGISTER.md`. |
 | `DOC-OXFML-OXFUNC` | OxFml to OxFunc semantic boundary in `../formula-language/OXFML_OXFUNC_SEMANTIC_BOUNDARY.md`. |
+| `DOC-OXFML-DNA-HOST` | DNA OneCalc host-policy baseline in `../OXFML_DNA_ONECALC_HOST_POLICY_BASELINE.md`. |
+| `DOC-OXFML-EMP-PACK` | Empirical-pack planning baseline in `../OXFML_EMPIRICAL_PACK_PLANNING.md`. |
 
 These identifiers mean "specified by the current live spec set".
 They are not claims that replay or formal artifacts already exist.
@@ -78,7 +82,7 @@ If one of these is missing, the gap remains open and must stay visible in status
 | Reject taxonomy | typed non-publishing failures | reject-detail replay pack | reject-code families and no-publish-on-reject theorem surface | reject transitions and abort cleanup |
 | Overlay lifecycle | dynamic refs, spill, format overlays | overlay creation/reuse/eviction scenarios | overlay token and delta typing | visibility, pinning, and epoch-safe eviction |
 | Spill event semantics | takeover, clearance, blocked | spill event replay bundles | event payload typing | interaction with concurrent sessions and retries |
-| Runtime-derived effect surfacing | coordinator-relevant evaluator facts and derived effects | effect-report replay packs | fact/delta typing | coordinator-visible consequences under concurrency |
+| Runtime-derived effect surfacing | coordinator-relevant evaluator facts and derived effects | effect-report replay packs including async-coupled external-provider lanes | fact/delta typing | coordinator-visible consequences under concurrency |
 | OxFunc preparation boundary | prepared args/results and caller context | prepared-call trace packs | prepared-call ADTs and invariants | not primary unless concurrency affects evaluation context |
 | Host-mode compatibility | OxCalc-integrated vs DNA OneCalc reduced profile | reduced-profile acceptance packs | profile-gated contract surfaces | reduced-profile state-space constraints |
 
@@ -108,7 +112,7 @@ Current evidence targets:
 4. `cap.C3.explain_valid`
    - proving artifacts should include why-rejected or why-not-published explanation evidence with source refs
 5. `cap.C4.distill_valid`
-   - remains scaffolded only until OxFml has at least one locally evidenced replay-valid reduced witness, one irreducibility or unsupported case, and one lifecycle record
+   - remains scaffolded only until OxFml has broader retained-local witness breadth, at least one irreducibility or unsupported case, and stronger promotion-grade governance over those retained sets
 6. `cap.C5.pack_valid`
    - remains out of scope in this pass
 
@@ -129,13 +133,23 @@ Current rules:
 ## 9. Open Assurance Lanes
 The following remain explicitly open:
 1. the current replay corpus is still local and not yet promoted into pack-grade seam artifacts,
-2. the first local Lean and TLA+ session lifecycle skeletons now exist, but no checked proof runs or model-check runs exist yet,
-3. no TLA+ model has yet been authored for concurrent evaluator sessions or publish fences beyond the local sequential lifecycle skeleton,
+2. the first local Lean and TLA+ session lifecycle artifacts are now checked locally, but broader formal families remain unproved,
+3. no TLA+ model has yet been authored for concurrent evaluator sessions or publish fences beyond the checked local sequential lifecycle model,
 4. recorded OxCalc-facing seam handoffs remain open for ad hoc future coordination where coordinator-facing clauses materially change,
 5. minimum provenance vocabulary for prepared-call and prepared-result structures is still being tightened with the OxFunc boundary,
 6. timeout, abort, and overlay-cleanup closure remains open before Stage 2 promotion,
 7. current adapter capability claims still rely on local witness-tier evidence rather than pack-grade corpus,
-8. witness lifecycle and quarantine governance are now specified, but no reduced witness assets exist yet for exercised local lanes.
+8. witness lifecycle and quarantine governance are now specified and broadened local reduced-witness coverage exists across host and oracle families, but pack-facing promotion does not exist yet,
+9. local normalized pack-candidate bundles now exist as rehearsal evidence, but remain intentionally non-pack-eligible,
+10. DNA OneCalc host-policy and empirical-pack planning are now explicit, but they remain planning-only and do not imply host or pack maturity.
+
+Current checked local formal floor also includes:
+1. `formal/lean/OxFmlExternalReferenceDeferred.lean`
+   - external-provider admissibility plus async-capability consequence lemmas
+2. `formal/tla/FecExternalCapabilityGate.tla`
+   - external-provider gate with checked async-consequence invariant
+3. `formal/run_formal.ps1`
+   - canonical local runner for those checked artifacts
 
 ## 10. Working Rule
 Use the live design and assurance docs for bootstrap and implementation planning.

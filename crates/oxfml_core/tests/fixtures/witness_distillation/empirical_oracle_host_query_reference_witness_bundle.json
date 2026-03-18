@@ -1,0 +1,36 @@
+{
+  "witness_id": "oxfml.local.witness.empirical_oracle_host_query_reference.v1",
+  "source_fixture_family": "empirical_oracle_scenarios",
+  "reduced_role": "replay_closed_witness",
+  "bundle_state": "replay_valid",
+  "source_case_ids": [
+    "oracle_007_cell_filename"
+  ],
+  "scenario_cases": [
+    {
+      "scenario_id": "oracle_007_cell_filename",
+      "formula": "=CELL(\"filename\",InputRef)",
+      "entered_formula_text": "=CELL(\"filename\",InputRef)",
+      "stored_formula_text": "=CELL(\"filename\",InputRef)",
+      "input_bindings": {
+        "InputRef": "Reference(A1)"
+      },
+      "cell_bindings": {
+        "A1": "Number(7)"
+      },
+      "expected_result_summary": "Text([Book1]Sheet1)",
+      "locale_profile": "EnUs",
+      "date_system": "System1900",
+      "host_query_profile": "FilenameOnly",
+      "expected_trace_event_kinds": [
+        "AcceptedCandidateResultBuilt",
+        "CommitAccepted"
+      ],
+      "expected_capability_effect_kinds": [
+        "host_query"
+      ],
+      "expected_format_dependency_tokens": [],
+      "expected_spill_event_kinds": []
+    }
+  ]
+}

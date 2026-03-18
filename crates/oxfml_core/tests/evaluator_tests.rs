@@ -1,14 +1,13 @@
 use std::collections::BTreeMap;
 
+mod common;
+
 use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
 use oxfunc_core::locale_format::{LocaleFormatContext, en_us_context};
 use oxfunc_core::value::{EvalValue, ExcelText, ReferenceKind, ReferenceLike};
 
-use oxfml_core::binding::{BindContext, BindRequest, NameKind, bind_formula};
+use oxfml_core::binding::NameKind;
 use oxfml_core::eval::{DefinedNameBinding, EvaluationContext, evaluate_formula};
-use oxfml_core::red::project_red_view;
-use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
-use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
 
 #[test]
 fn evaluator_runs_text_with_locale_format_context() {
@@ -84,6 +83,51 @@ fn evaluator_runs_info_with_host_info_provider() {
 }
 
 #[test]
+fn evaluator_runs_row_and_column_with_caller_context() {
+    let row_output = evaluate("=ROW()", None, None, Some(&en_us_context()));
+    assert_eq!(row_output.result.payload_summary, "Number(1)");
+    assert_eq!(row_output.trace.prepared_calls[0].function_id, "FUNC.ROW");
+    assert_eq!(
+        row_output.result.capability_dependencies,
+        vec!["caller_context".to_string()]
+    );
+
+    let column_output = evaluate("=COLUMN(A1:B2)", None, None, Some(&en_us_context()));
+    assert_eq!(column_output.result.payload_summary, "Array(1x2)");
+    assert_eq!(
+        column_output.trace.prepared_calls[0].function_id,
+        "FUNC.COLUMN"
+    );
+}
+
+#[test]
+fn evaluator_runs_indirect_offset_and_iferror() {
+    let indirect_output = evaluate("=INDIRECT(\"A1\")", None, None, Some(&en_us_context()));
+    assert_eq!(
+        indirect_output.trace.prepared_calls[0].function_id,
+        "FUNC.INDIRECT"
+    );
+
+    let offset_output = evaluate("=OFFSET(A1,0,0)", None, None, Some(&en_us_context()));
+    assert_eq!(
+        offset_output.trace.prepared_calls[0].function_id,
+        "FUNC.OFFSET"
+    );
+
+    let iferror_output = evaluate(
+        "=IFERROR(UnknownName,2)",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(iferror_output.result.payload_summary, "Number(2)");
+    assert_eq!(
+        iferror_output.trace.prepared_calls[0].function_id,
+        "FUNC.IFERROR"
+    );
+}
+
+#[test]
 fn evaluator_runs_now_and_today_with_supplied_serial() {
     let now_output = evaluate("=NOW()", None, None, Some(&en_us_context()));
     assert_eq!(now_output.result.payload_summary, "Number(46000)");
@@ -155,6 +199,19 @@ fn evaluator_returns_lambda_value_summary() {
         output.result.payload_summary,
         "Lambda(arity=1;params=x;captures=-;body=Binary)"
     );
+    assert_eq!(
+        output.result.callable_profile.as_deref(),
+        Some("arity=1;params=x;captures=-;body=Binary")
+    );
+    let detail = output
+        .result
+        .callable_profile_detail
+        .as_ref()
+        .expect("callable detail should exist");
+    assert_eq!(detail.arity, 1);
+    assert_eq!(detail.parameter_names, vec!["x".to_string()]);
+    assert!(detail.capture_names.is_empty());
+    assert_eq!(detail.body_kind, "Binary");
 }
 
 #[test]
@@ -169,6 +226,19 @@ fn evaluator_returns_lambda_value_summary_with_lexical_capture_metadata() {
         output.result.payload_summary,
         "Lambda(arity=1;params=y;captures=x;body=Binary)"
     );
+    assert_eq!(
+        output.result.callable_profile.as_deref(),
+        Some("arity=1;params=y;captures=x;body=Binary")
+    );
+    let detail = output
+        .result
+        .callable_profile_detail
+        .as_ref()
+        .expect("callable detail should exist");
+    assert_eq!(detail.arity, 1);
+    assert_eq!(detail.parameter_names, vec!["y".to_string()]);
+    assert_eq!(detail.capture_names, vec!["x".to_string()]);
+    assert_eq!(detail.body_kind, "Binary");
 }
 
 #[test]
@@ -214,18 +284,66 @@ fn evaluator_uses_lexical_not_dynamic_scope_for_helper_bound_lambda() {
     assert_eq!(output.result.payload_summary, "Number(12)");
 }
 
+#[test]
+fn evaluator_surfaces_typed_external_reference_deferment() {
+    let output = evaluate("=[Book.xlsx]Sheet2!A1", None, None, Some(&en_us_context()));
+    assert_eq!(output.result.payload_summary, "Error(Ref)");
+    assert_eq!(
+        output.result.deferred_reason.as_deref(),
+        Some("external_reference_deferred")
+    );
+    assert_eq!(
+        output.result.capability_dependencies,
+        vec!["external_reference".to_string()]
+    );
+    assert_eq!(output.trace.prepared_calls.len(), 1);
+    assert_eq!(
+        output.trace.prepared_calls[0].function_id,
+        "SPECIAL.EXTERNAL_REFERENCE_DEFERRED"
+    );
+    assert_eq!(
+        output.trace.prepared_calls[0].prepared_arguments[0].source_class,
+        oxfml_core::PreparedSourceClass::ExternalReference
+    );
+    assert_eq!(
+        output.trace.prepared_calls[0].prepared_arguments[0]
+            .opaque_reason
+            .as_deref(),
+        Some("external_reference_deferred")
+    );
+}
+
+#[test]
+fn evaluator_runs_index_and_xmatch_catalog_lanes() {
+    let index_output = evaluate("=INDEX(SEQUENCE(3),2)", None, None, Some(&en_us_context()));
+    assert_eq!(index_output.result.payload_summary, "Number(2)");
+    assert_eq!(
+        index_output.trace.prepared_calls[0].function_id,
+        "FUNC.SEQUENCE"
+    );
+    assert_eq!(
+        index_output.trace.prepared_calls[1].function_id,
+        "FUNC.INDEX"
+    );
+
+    let xmatch_output = evaluate("=XMATCH(3,SEQUENCE(5))", None, None, Some(&en_us_context()));
+    assert_eq!(xmatch_output.result.payload_summary, "Number(3)");
+    assert_eq!(
+        xmatch_output.trace.prepared_calls[0].function_id,
+        "FUNC.SEQUENCE"
+    );
+    assert_eq!(
+        xmatch_output.trace.prepared_calls[1].function_id,
+        "FUNC.XMATCH"
+    );
+}
+
 fn evaluate(
     formula: &str,
     defined_names: Option<BTreeMap<String, DefinedNameBinding>>,
     host_info: Option<&dyn HostInfoProvider>,
     locale_ctx: Option<&LocaleFormatContext<'_>>,
 ) -> oxfml_core::EvaluationOutput {
-    let source = FormulaSourceRecord::new("eval-fixture", 1, formula.to_string());
-    let parse = parse_formula(ParseRequest {
-        source: source.clone(),
-    });
-    let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
-
     let mut names = BTreeMap::new();
     if let Some(bindings) = &defined_names {
         for (name, binding) in bindings {
@@ -239,30 +357,24 @@ fn evaluate(
         }
     }
 
-    let bind = bind_formula(BindRequest {
-        source,
-        green_tree: parse.green_tree,
-        red_projection: red,
-        context: BindContext {
-            structure_context_version: StructureContextVersion("eval-struct-v1".to_string()),
-            names,
-            ..BindContext::default()
-        },
-    });
+    let compiled = common::compile_formula(
+        "eval-fixture",
+        formula,
+        names,
+        "eval-struct-v1",
+        "oxfunc:test",
+    );
 
-    let plan = oxfml_core::compile_semantic_plan(oxfml_core::CompileSemanticPlanRequest {
-        bound_formula: bind.bound_formula.clone(),
-        oxfunc_catalog_identity: "oxfunc:test".to_string(),
-        locale_profile: Some("en-US".to_string()),
-        date_system: Some("1900".to_string()),
-        format_profile: Some("excel-default".to_string()),
-    })
-    .semantic_plan;
-
-    let mut context = EvaluationContext::new(&bind.bound_formula, &plan);
+    let mut context = EvaluationContext::new(&compiled.bound_formula, &compiled.semantic_plan);
     context
         .cell_values
         .insert("A1".to_string(), EvalValue::Number(7.0));
+    context
+        .cell_values
+        .insert("A2".to_string(), EvalValue::Number(11.0));
+    context
+        .cell_values
+        .insert("B2".to_string(), EvalValue::Number(13.0));
     context.defined_names = defined_names.unwrap_or_default();
     context.host_info = host_info;
     context.locale_ctx = locale_ctx;

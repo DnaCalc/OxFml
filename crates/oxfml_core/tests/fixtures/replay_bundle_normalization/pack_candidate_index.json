@@ -1,0 +1,21 @@
+{
+  "index_id": "oxfml.local.pack_candidate_index.v1",
+  "bundle_schema_version": "dna-replay-bundle/v1",
+  "lane_id": "oxfml",
+  "adapter_id": "oxfml.replay_adapter.v1",
+  "index_state": "local_candidate_only",
+  "pack_eligibility_state": "not_pack_eligible",
+  "required_capability_level": "cap.C3.explain_valid",
+  "bundle_refs": [
+    "crates/oxfml_core/tests/fixtures/replay_bundle_normalization/fec_commit_pack_candidate_bundle.json",
+    "crates/oxfml_core/tests/fixtures/replay_bundle_normalization/session_lifecycle_pack_candidate_bundle.json"
+  ],
+  "promotion_blockers": [
+    "local_witness_tier_only",
+    "pack_grade_bundle_governance_not_satisfied"
+  ],
+  "notes": [
+    "These bundle candidates are local normalization evidence only.",
+    "They are not pack-grade artifacts and remain explicitly non-pack-eligible."
+  ]
+}
