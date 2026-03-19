@@ -1,0 +1,100 @@
+[
+  {
+    "family_id": "structured_references",
+    "coverage_classification": "partial",
+    "follow_on_owner": "W036",
+    "requires_enclosing_table_context": true,
+    "same_external_book_only": false,
+    "formula_channel_kind": "WorksheetCarrier",
+    "restriction_profile_id": "table_context_sensitive",
+    "source_anchor_ids": [
+      "SPEC-discovered-ms-oe376-88e93023-48236",
+      "CONF-discovered-ms-oe376-220816-823374c7-1423"
+    ]
+  },
+  {
+    "family_id": "conditional_formatting_formulas",
+    "coverage_classification": "partial_to_missing",
+    "follow_on_owner": "W039",
+    "requires_enclosing_table_context": false,
+    "same_external_book_only": false,
+    "formula_channel_kind": "ConditionalFormattingCarrier",
+    "restriction_profile_id": "cf_restricted_not_equal_to_dv",
+    "source_anchor_ids": [
+      "CONF-discovered-ms-oe376-220816-823374c7-1427",
+      "CONF-discovered-ms-oe376-220816-823374c7-1428",
+      "CONF-discovered-ms-oe376-220816-823374c7-1429",
+      "CONF-discovered-ms-oe376-220816-823374c7-1430"
+    ]
+  },
+  {
+    "family_id": "name_formulas",
+    "coverage_classification": "partial",
+    "follow_on_owner": "W038",
+    "requires_enclosing_table_context": false,
+    "same_external_book_only": false,
+    "formula_channel_kind": "DefinedNameCarrier",
+    "restriction_profile_id": "name_formula_carrier",
+    "source_anchor_ids": [
+      "CONF-discovered-ms-oe376-220816-823374c7-0362",
+      "CONF-discovered-ms-oe376-220816-823374c7-0363",
+      "SPEC-discovered-ms-oe376-88e93023-48424"
+    ]
+  },
+  {
+    "family_id": "external_name_formulas",
+    "coverage_classification": "missing_to_partial",
+    "follow_on_owner": "W038",
+    "requires_enclosing_table_context": false,
+    "same_external_book_only": true,
+    "formula_channel_kind": "ExternalNameCarrier",
+    "restriction_profile_id": "same_external_book_only",
+    "source_anchor_ids": [
+      "SPEC-discovered-ms-oe376-88e93023-48443",
+      "SPEC-discovered-ms-oe376-88e93023-48448",
+      "SPEC-discovered-ms-oe376-88e93023-48451"
+    ]
+  },
+  {
+    "family_id": "r1c1_formulas",
+    "coverage_classification": "missing",
+    "follow_on_owner": "W037",
+    "requires_enclosing_table_context": false,
+    "same_external_book_only": false,
+    "formula_channel_kind": "R1C1Channel",
+    "restriction_profile_id": "r1c1_not_a1_render_only",
+    "source_anchor_ids": [
+      "CONF-discovered-ms-oe376-220816-823374c7-1434",
+      "SPEC-discovered-ms-oe376-88e93023-48474",
+      "SPEC-discovered-ms-oe376-88e93023-48487"
+    ]
+  },
+  {
+    "family_id": "data_validation_formulas",
+    "coverage_classification": "missing",
+    "follow_on_owner": "W039",
+    "requires_enclosing_table_context": false,
+    "same_external_book_only": false,
+    "formula_channel_kind": "DataValidationCarrier",
+    "restriction_profile_id": "dv_restricted_not_equal_to_cf",
+    "source_anchor_ids": [
+      "CONF-discovered-ms-oe376-220816-823374c7-1431",
+      "SPEC-discovered-ms-oe376-171212-fc69605e-23574",
+      "SPEC-discovered-ms-oe376-88e93023-51882"
+    ]
+  },
+  {
+    "family_id": "formula_significant_table_and_formatting_surfaces",
+    "coverage_classification": "partial",
+    "follow_on_owner": "W039",
+    "requires_enclosing_table_context": false,
+    "same_external_book_only": false,
+    "formula_channel_kind": "FormattingHostSurface",
+    "restriction_profile_id": "formula_host_semantic_not_ui_only",
+    "source_anchor_ids": [
+      "CONF-discovered-ms-oe376-220816-823374c7-0111",
+      "CONF-discovered-ms-oe376-220816-823374c7-1427",
+      "CONF-discovered-ms-oe376-220816-823374c7-1431"
+    ]
+  }
+]

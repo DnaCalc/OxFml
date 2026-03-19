@@ -223,8 +223,9 @@ Current OxFml reading:
 1. library-context snapshot work is primarily an OxFml/OxFunc seam topic and does not yet change coordinator-facing seam meaning,
 2. availability/feature/provider taxonomy is also primarily an OxFml/OxFunc semantic-boundary topic, but it may later affect typed reject or execution-fact breadth where runtime provider failure becomes coordinator-visible,
 3. callable-value carrier work is primarily an OxFml/OxFunc semantic topic today, but publication restrictions on callable values could become coordinator-relevant later if callable publication paths widen,
-4. operator/literal/value-universe refinement remains upstream semantic-boundary work and does not currently require an OxCalc-facing seam change,
-5. the latest OxFunc round closure position does not add a new coordinator-facing pressure point; it mostly confirms that current OxFml canonical seam docs are the right active baseline until a narrower trigger appears.
+4. the next OxFml/OxFunc narrowing round is likely to focus specifically on the `LET` / `LAMBDA` callable seam, but that still remains upstream-semantic at the current stage,
+5. operator/literal/value-universe refinement remains upstream semantic-boundary work and does not currently require an OxCalc-facing seam change,
+6. the latest OxFunc round closure position does not add a new coordinator-facing pressure point; it mostly confirms that current OxFml canonical seam docs are the right active baseline until a narrower trigger appears.
 
 Working rule from this combined read:
 1. do not prematurely project OxFunc transport narrowing into OxCalc coordinator assumptions,

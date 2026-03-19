@@ -3,7 +3,7 @@
 Canonical repo-level register of feature areas that are in-progress under workset completion doctrine.
 
 Status: active.
-Last updated: 2026-03-18.
+Last updated: 2026-03-19.
 
 ## Status Vocabulary
 
@@ -16,10 +16,10 @@ Last updated: 2026-03-18.
 ### IP-01: Formula Grammar, Parse, and Bind
 
 - **Status**: in-progress
-- **Current floor**: architectural baseline plus exercised implementation slices for formula source records, tokenization, green syntax, red projections, a widened expression parser subset including additional qualified-name handling, normalized reference ADTs, bind fixture scaffolding with richer assertions, host-path incremental parse/red/bind reuse, semantic-plan compilation with helper-environment profiling, stage-aware availability summaries, external library-context snapshot refs, prepared-call/result lowering with blankness, caller-context provenance, callable-profile detail, helper/scalarization prepared-call traces, and local evaluation semantics for `_xlfn.SINGLE`, `LET`, callable `LAMBDA`, lexical helper capture, `ROW`, `COLUMN`, `INDIRECT`, `OFFSET`, and `IFERROR` on top of a still-narrow OxFunc function registry.
-- **Remaining gaps**: fuller Excel grammar closure, richer structured/external reference coverage, broader OxFunc catalog coverage, final shared callable transport, and replay-backed evidence beyond the current local witness tier.
-- **Why still open**: `W026` and `W027` materially narrowed library-context, availability, and callable-value baselines, but the repo-level feature remains broader than the exercised subset and still lacks pack-grade replay, fuller catalog breadth, and broader formal closure.
-- **Canonical owner**: `W001` now; exercised follow-on `W002`, `W003`, `W013`, `W014`, `W019`, `W020`, `W026`, and `W027`; planned next owners `W031` and `W032`.
+- **Current floor**: architectural baseline plus exercised implementation slices for formula source records, tokenization, green syntax, red projections, a widened expression parser subset including additional qualified-name handling, normalized reference ADTs, bind fixture scaffolding with richer assertions, host-path incremental parse/red/bind reuse, semantic-plan compilation with helper-environment profiling, stage-aware availability summaries, external library-context snapshot refs, narrower per-surface library-context fields (`surface_stable_id`, `name_resolution_table_ref`, `semantic_trait_profile_ref`, `gating_profile_ref`), prepared-call/result lowering with blankness, caller-context provenance, typed callable carriers plus callable-profile detail, helper/scalarization prepared-call traces, and local evaluation semantics for `_xlfn.SINGLE`, `LET`, callable `LAMBDA`, exact free-helper lexical capture, adopted defined-name callable transport, `ROW`, `COLUMN`, `INDIRECT`, `OFFSET`, and `IFERROR` on top of a still-narrow OxFunc function registry.
+- **Remaining gaps**: fuller Excel grammar closure, richer structured/external reference coverage, broader OxFunc catalog coverage, final shared callable transport, higher-order callable seam evidence beyond the current `LET` / `LAMBDA` floor, and replay-backed evidence beyond the current local witness tier.
+- **Why still open**: `W032` has materially narrowed the minimum library-context and callable-carrier floor, but the repo-level feature remains broader than the exercised subset and still lacks pack-grade replay, fuller catalog breadth, broader higher-order callable evidence, and broader formal closure.
+- **Canonical owner**: `W001` now; exercised follow-on `W002`, `W003`, `W013`, `W014`, `W019`, `W020`, `W026`, `W027`, and `W031`; active next owner `W032`; planned follow-on owners `W036`, `W037`, `W038`, and `W040`.
 
 ### IP-02: FEC/F3E Evaluator Session
 
@@ -51,7 +51,7 @@ Last updated: 2026-03-18.
 - **Current floor**: formatting behavior crossing the seam is chartered and exercised through `TEXT`, `VALUE`, `NOW`, `TODAY`, `CELL`, and `INFO` with explicit locale-format and host-query context, prepared-result format/publication hints, locale format-dependency facts surfaced through the proving host, seam-significant `format_delta` and `display_delta` publication artifacts, and empirical-oracle scenarios covering formatting and host-query lanes.
 - **Remaining gaps**: broader semantic formatting family coverage, fuller display-boundary closure beyond the current seam-significant subset, and pack-grade proving scenarios.
 - **Why still open**: `W030` materially widened the local semantic-format and display-boundary floor, but the repo-level feature remains much broader than the exercised slice.
-- **Canonical owner**: exercised follow-on `W006`, `W014`, `W018`, `W020`, `W021`, `W024`, and `W030`; planned next owner `W031`.
+- **Canonical owner**: exercised follow-on `W006`, `W014`, `W018`, `W020`, `W021`, `W024`, `W030`, and `W031`; planned next owners `W036` and `W039`.
 
 ### IP-06: Replay Appliance Adapter and Witness Governance
 

@@ -33,6 +33,10 @@ Working interpretation rule:
 | FML-R-010 | `=SUM(A1,,B1)` behavior is treated as build-scoped provisional ambiguity; parser policy must remain configurable until resolved. | XLS-CF-FL-010 | EMP-0001;ECS-EB-031 | provisional |
 | FML-R-011 | Dot-field syntax (`=A1.Price`) is tracked as syntax-accepted in current evidence, with runtime semantics constrained by linked-data context. | XLS-CF-FL-011 | ECS-024;ECS-025;EMP-0002;ECS-EB-032 | provisional |
 | FML-R-012 | Function-call conformance must distinguish formula-entry rejection from accepted-formula runtime errors, including required-argument omission and array-lifted element error behavior. | XLS-CF-FL-012 | ECS-008;ECS-109;ECS-113;ECS-114;ECS-115 | provisional |
+| FML-R-013 | Structured references require table-aware bind context; omitted table-name forms must not be resolved from syntax alone, and table identifiers must remain distinct from user-defined names. | XLS-CF-FL-009 | SPEC-discovered-ms-oe376-88e93023-48236;CONF-discovered-ms-oe376-220816-823374c7-1423 | provisional |
+| FML-R-014 | `R1C1` formulas are a distinct formula channel and must use `R1C1`-style references rather than being treated only as an A1 display mode. | XLS-CF-FL-006 | CONF-discovered-ms-oe376-220816-823374c7-1434;SPEC-discovered-ms-oe376-88e93023-48474;SPEC-discovered-ms-oe376-88e93023-48487 | provisional |
+| FML-R-015 | Name formulas and external-name formulas are distinct formula-bearing carriers; external-name formulas are narrower than generic external references and require explicit external-book identity. | XLS-CF-FL-008 | CONF-discovered-ms-oe376-220816-823374c7-0362;CONF-discovered-ms-oe376-220816-823374c7-0363;SPEC-discovered-ms-oe376-88e93023-48443;SPEC-discovered-ms-oe376-88e93023-48448;SPEC-discovered-ms-oe376-88e93023-48451 | provisional |
+| FML-R-016 | Conditional-formatting and data-validation formulas are restricted formula-bearing sublanguages; they are similar but not safely identical, and their rule-host fields remain formula-semantic rather than display-only metadata. | XLS-CF-FL-006 | CONF-discovered-ms-oe376-220816-823374c7-1427;CONF-discovered-ms-oe376-220816-823374c7-1428;CONF-discovered-ms-oe376-220816-823374c7-1429;CONF-discovered-ms-oe376-220816-823374c7-1430;CONF-discovered-ms-oe376-220816-823374c7-1431 | provisional |
 
 ## 3. Evidence Posture
 Rule wording in this document is canonical only at the policy level. Wave-specific runs, matrices, and dated execution summaries are archive material.
@@ -137,3 +141,4 @@ Primary unresolved closures currently depend on:
 4. `P2-FML-008` spill-blocking/update expansion for `FML-R-005`,
 5. cross-build replay of `P2-FML-003`, `P2-FML-005`, `P2-FML-009`, and `P2-FML-010`.
 6. `P2-FML-011` required-argument omission vs runtime error mapping (`FML-R-012`).
+7. `W036`, `W037`, `W038`, and `W039` for the `MS-OE376`-reviewed carrier and sublanguage families (`FML-R-013` through `FML-R-016`).

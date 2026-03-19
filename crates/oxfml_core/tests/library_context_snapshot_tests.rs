@@ -29,6 +29,10 @@ struct LibraryContextSnapshotWire {
 struct LibraryContextSnapshotEntryWire {
     surface_name: String,
     canonical_id: Option<String>,
+    surface_stable_id: Option<String>,
+    name_resolution_table_ref: Option<String>,
+    semantic_trait_profile_ref: Option<String>,
+    gating_profile_ref: Option<String>,
     registration_source_kind: String,
     parse_bind_state: String,
     semantic_plan_state: String,
@@ -46,6 +50,10 @@ struct LibraryContextExpected {
 struct AvailabilitySummaryExpected {
     surface_name: String,
     canonical_id: Option<String>,
+    surface_stable_id: Option<String>,
+    name_resolution_table_ref: Option<String>,
+    semantic_trait_profile_ref: Option<String>,
+    gating_profile_ref: Option<String>,
     registration_source_kind: Option<String>,
     parse_bind_state: String,
     semantic_plan_state: String,
@@ -98,6 +106,26 @@ fn semantic_plan_library_context_snapshot_fixtures_round_trip() {
             assert_eq!(
                 actual.canonical_id, expected.canonical_id,
                 "canonical id mismatch for {}",
+                fixture.case_id
+            );
+            assert_eq!(
+                actual.surface_stable_id, expected.surface_stable_id,
+                "surface stable id mismatch for {}",
+                fixture.case_id
+            );
+            assert_eq!(
+                actual.name_resolution_table_ref, expected.name_resolution_table_ref,
+                "name-resolution table ref mismatch for {}",
+                fixture.case_id
+            );
+            assert_eq!(
+                actual.semantic_trait_profile_ref, expected.semantic_trait_profile_ref,
+                "semantic trait profile ref mismatch for {}",
+                fixture.case_id
+            );
+            assert_eq!(
+                actual.gating_profile_ref, expected.gating_profile_ref,
+                "gating profile ref mismatch for {}",
                 fixture.case_id
             );
             assert_eq!(
@@ -161,6 +189,10 @@ fn into_snapshot_entry(wire: &LibraryContextSnapshotEntryWire) -> LibraryContext
     LibraryContextSnapshotEntry {
         surface_name: wire.surface_name.clone(),
         canonical_id: wire.canonical_id.clone(),
+        surface_stable_id: wire.surface_stable_id.clone(),
+        name_resolution_table_ref: wire.name_resolution_table_ref.clone(),
+        semantic_trait_profile_ref: wire.semantic_trait_profile_ref.clone(),
+        gating_profile_ref: wire.gating_profile_ref.clone(),
         registration_source_kind: parse_registration_source_kind(&wire.registration_source_kind),
         parse_bind_state: parse_availability_state(&wire.parse_bind_state),
         semantic_plan_state: parse_availability_state(&wire.semantic_plan_state),

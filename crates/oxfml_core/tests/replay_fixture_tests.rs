@@ -110,6 +110,7 @@ struct PreparedCallExpected {
     result_structure_class: String,
     payload_summary: String,
     blankness_class: String,
+    callable_carrier: Option<CallableCarrierExpected>,
     callable_profile: Option<String>,
     callable_profile_detail: Option<CallableProfileExpected>,
     deferred_reason: Option<String>,
@@ -124,6 +125,14 @@ struct CallableProfileExpected {
     parameter_names: Vec<String>,
     capture_names: Vec<String>,
     body_kind: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CallableCarrierExpected {
+    origin_kind: String,
+    invocation_model: String,
+    capture_mode: String,
+    arity: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -444,6 +453,62 @@ fn prepared_call_replay_fixtures_match_expected_snapshots() {
             prepared_blankness_class_name(output.result.blankness_class),
             fixture.expected.blankness_class,
             "result blankness mismatch for {}",
+            fixture.case_id
+        );
+        assert_eq!(
+            output
+                .result
+                .callable_carrier
+                .as_ref()
+                .map(callable_origin_kind_name),
+            fixture
+                .expected
+                .callable_carrier
+                .as_ref()
+                .map(|carrier| carrier.origin_kind.as_str()),
+            "callable origin mismatch for {}",
+            fixture.case_id
+        );
+        assert_eq!(
+            output
+                .result
+                .callable_carrier
+                .as_ref()
+                .map(callable_invocation_model_name),
+            fixture
+                .expected
+                .callable_carrier
+                .as_ref()
+                .map(|carrier| carrier.invocation_model.as_str()),
+            "callable invocation model mismatch for {}",
+            fixture.case_id
+        );
+        assert_eq!(
+            output
+                .result
+                .callable_carrier
+                .as_ref()
+                .map(callable_capture_mode_name),
+            fixture
+                .expected
+                .callable_carrier
+                .as_ref()
+                .map(|carrier| carrier.capture_mode.as_str()),
+            "callable capture mode mismatch for {}",
+            fixture.case_id
+        );
+        assert_eq!(
+            output
+                .result
+                .callable_carrier
+                .as_ref()
+                .map(|carrier| carrier.arity),
+            fixture
+                .expected
+                .callable_carrier
+                .as_ref()
+                .map(|carrier| carrier.arity),
+            "callable carrier arity mismatch for {}",
             fixture.case_id
         );
         assert_eq!(
@@ -1130,6 +1195,7 @@ fn apply_defined_name_summary(host: &mut SingleFormulaHost, name: &str, summary:
         DefinedNameBinding::Reference(reference) => {
             host.set_defined_name_reference(name, reference)
         }
+        DefinedNameBinding::Callable(callable) => host.set_defined_name_callable(name, callable),
     }
 }
 
@@ -1189,4 +1255,23 @@ fn reject_code_name(code: oxfml_core::RejectCode) -> String {
         oxfml_core::RejectCode::ResourceInvariantFailure => "ResourceInvariantFailure",
     }
     .to_string()
+}
+
+fn callable_origin_kind_name(carrier: &oxfml_core::CallableValueCarrier) -> &'static str {
+    match carrier.origin_kind {
+        oxfml_core::CallableOriginKind::HelperLambda => "HelperLambda",
+    }
+}
+
+fn callable_invocation_model_name(carrier: &oxfml_core::CallableValueCarrier) -> &'static str {
+    match carrier.invocation_model {
+        oxfml_core::CallableInvocationModel::TypedInvocationOnly => "TypedInvocationOnly",
+    }
+}
+
+fn callable_capture_mode_name(carrier: &oxfml_core::CallableValueCarrier) -> &'static str {
+    match carrier.capture_mode {
+        oxfml_core::CallableCaptureMode::NoCapture => "NoCapture",
+        oxfml_core::CallableCaptureMode::LexicalCapture => "LexicalCapture",
+    }
 }

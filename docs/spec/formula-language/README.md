@@ -19,10 +19,14 @@ This directory contains the canonical OxFml formula-language design documents pl
   canonical normalized reference atom and reference-expression baseline.
 - `OXFML_OXFUNC_SEMANTIC_BOUNDARY.md`
   promoted OxFunc-facing semantic boundary requirements.
+- `OXFML_OXFUNC_LET_LAMBDA_PIN_DOWN_PREP.md`
+  focused prep note for narrowing the `LET` / `LAMBDA` seam with OxFunc.
 - `EXCEL_FORMULA_LANGUAGE_CONCRETE_RULES.md`
   Excel-facing rule corpus and policy wording.
 - `EXCEL_FORMULA_LANGUAGE_CONFORMANCE_MATRIX.csv`
   rule register, evidence posture, and promotion criteria.
+- `MS_OE376_FORMULA_AND_FORMATTING_REVIEW.md`
+  OxFml-owned review and gap map for the `MS-OE376` rule families not yet fully realized locally.
 
 ## Archive
 Historical empirical probe plans and seed manifests that are useful for evidence work but not required startup reading live under `archive/`.

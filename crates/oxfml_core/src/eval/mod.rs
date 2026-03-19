@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use oxfunc_core::function::ArgPreparationProfile;
 use oxfunc_core::functions::surface_dispatch::eval_surface_value_call;
@@ -95,6 +95,7 @@ pub struct PreparedResult {
     pub payload_summary: String,
     pub blankness_class: PreparedBlanknessClass,
     pub reference_target: Option<String>,
+    pub callable_carrier: Option<CallableValueCarrier>,
     pub callable_profile: Option<String>,
     pub callable_profile_detail: Option<CallableValueProfile>,
     pub deferred_reason: Option<String>,
@@ -103,12 +104,46 @@ pub struct PreparedResult {
     pub capability_dependencies: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CallableOriginKind {
+    HelperLambda,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CallableInvocationModel {
+    TypedInvocationOnly,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CallableCaptureMode {
+    NoCapture,
+    LexicalCapture,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallableValueCarrier {
+    pub origin_kind: CallableOriginKind,
+    pub invocation_model: CallableInvocationModel,
+    pub capture_mode: CallableCaptureMode,
+    pub arity: usize,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CallableValueProfile {
     pub arity: usize,
     pub parameter_names: Vec<String>,
     pub capture_names: Vec<String>,
     pub body_kind: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CallableDefinedNameBinding {
+    pub summary: String,
+    pub carrier: CallableValueCarrier,
+    pub profile: CallableValueProfile,
+    pub params: Vec<String>,
+    pub body: BoundExpr,
+    pub closure: BTreeMap<String, DefinedNameBinding>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -143,6 +178,7 @@ pub struct EvaluationError {
 pub enum DefinedNameBinding {
     Value(EvalValue),
     Reference(ReferenceLike),
+    Callable(CallableDefinedNameBinding),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -561,6 +597,9 @@ fn call_arg_for_name(
                     .map_err(map_resolution_error)
             }
         }
+        DefinedNameBinding::Callable(binding) => Ok(CallArgValue::Eval(EvalValue::Lambda(
+            binding.summary.clone(),
+        ))),
     }
 }
 
@@ -752,12 +791,15 @@ fn evaluate_invocation(
 ) -> Result<EvalValue, EvaluationError> {
     let lambda = match lambda_binding_for_callee(callee, helper_bindings) {
         Some(binding) => binding,
-        None => {
-            return Err(EvaluationError {
-                message: "only immediate or helper-bound LAMBDA invocation is supported"
-                    .to_string(),
-            });
-        }
+        None => match lambda_binding_for_defined_name_callee(callee, &context.defined_names) {
+            Some(binding) => binding,
+            None => {
+                return Err(EvaluationError {
+                    message: "only immediate, helper-bound, or defined-name callable invocation is supported"
+                        .to_string(),
+                });
+            }
+        },
     };
     if lambda.params.len() != args.len() {
         return Err(EvaluationError {
@@ -808,10 +850,11 @@ fn helper_binding_from_expr(
                     _ => None,
                 })
                 .collect::<Vec<_>>();
+            let capture_names = helper_capture_names(&args[body_index], &params, helper_bindings);
             HelperBinding::Lambda {
                 params,
                 body: args[body_index].clone(),
-                closure: helper_bindings.clone(),
+                closure: helper_closure_from_names(helper_bindings, &capture_names),
             }
         }
         _ => HelperBinding::Arg(fallback),
@@ -842,10 +885,11 @@ fn lambda_binding_for_callee(
                     _ => None,
                 })
                 .collect::<Option<Vec<_>>>()?;
+            let capture_names = helper_capture_names(&args[body_index], &params, helper_bindings);
             Some(LambdaBinding {
                 params,
                 body: args[body_index].clone(),
-                closure: helper_bindings.clone(),
+                closure: helper_closure_from_names(helper_bindings, &capture_names),
             })
         }
         BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Name(name)))
@@ -868,12 +912,47 @@ fn lambda_binding_for_callee(
     }
 }
 
+fn lambda_binding_for_defined_name_callee(
+    callee: &BoundExpr,
+    defined_names: &BTreeMap<String, DefinedNameBinding>,
+) -> Option<LambdaBinding> {
+    match callee {
+        BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Name(name))) => {
+            match defined_names.get(&name.name) {
+                Some(DefinedNameBinding::Callable(binding)) => Some(LambdaBinding {
+                    params: binding.params.clone(),
+                    body: binding.body.clone(),
+                    closure: binding
+                        .closure
+                        .iter()
+                        .filter_map(|(name, binding)| match binding {
+                            DefinedNameBinding::Value(value) => Some((
+                                name.clone(),
+                                HelperBinding::Arg(CallArgValue::Eval(value.clone())),
+                            )),
+                            DefinedNameBinding::Reference(reference) => Some((
+                                name.clone(),
+                                HelperBinding::Arg(CallArgValue::Reference(reference.clone())),
+                            )),
+                            DefinedNameBinding::Callable(_) => None,
+                        })
+                        .collect(),
+                }),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
 fn lambda_value_summary(
     parameter_names: &[String],
     helper_bindings: &BTreeMap<String, HelperBinding>,
     body: &BoundExpr,
 ) -> String {
-    let mut captures = helper_bindings.keys().cloned().collect::<Vec<_>>();
+    let mut captures = helper_capture_names(body, parameter_names, helper_bindings)
+        .into_iter()
+        .collect::<Vec<_>>();
     captures.sort();
     let captures = if captures.is_empty() {
         "-".to_string()
@@ -900,6 +979,173 @@ fn lambda_body_kind(body: &BoundExpr) -> &'static str {
         BoundExpr::Reference(_) => "Reference",
         BoundExpr::ImplicitIntersection(_) => "ImplicitIntersection",
     }
+}
+
+fn helper_capture_names(
+    body: &BoundExpr,
+    parameter_names: &[String],
+    helper_bindings: &BTreeMap<String, HelperBinding>,
+) -> BTreeSet<String> {
+    let mut bound_names = parameter_names.iter().cloned().collect::<BTreeSet<_>>();
+    helper_free_names_in_expr(body, &mut bound_names, helper_bindings)
+}
+
+fn helper_free_names_in_expr(
+    expr: &BoundExpr,
+    bound_names: &mut BTreeSet<String>,
+    helper_bindings: &BTreeMap<String, HelperBinding>,
+) -> BTreeSet<String> {
+    match expr {
+        BoundExpr::NumberLiteral(_)
+        | BoundExpr::StringLiteral(_)
+        | BoundExpr::HelperParameterName(_) => BTreeSet::new(),
+        BoundExpr::Binary { left, right, .. } => {
+            let mut names = helper_free_names_in_expr(left, bound_names, helper_bindings);
+            names.extend(helper_free_names_in_expr(
+                right,
+                bound_names,
+                helper_bindings,
+            ));
+            names
+        }
+        BoundExpr::FunctionCall {
+            function_name,
+            args,
+        } if function_name == "LET" => helper_free_names_in_let(args, bound_names, helper_bindings),
+        BoundExpr::FunctionCall {
+            function_name,
+            args,
+        } if function_name == "LAMBDA" => {
+            helper_free_names_in_lambda(args, bound_names, helper_bindings)
+        }
+        BoundExpr::FunctionCall { args, .. } => {
+            let mut names = BTreeSet::new();
+            for arg in args {
+                names.extend(helper_free_names_in_expr(arg, bound_names, helper_bindings));
+            }
+            names
+        }
+        BoundExpr::Invocation { callee, args } => {
+            let mut names = helper_free_names_in_expr(callee, bound_names, helper_bindings);
+            for arg in args {
+                names.extend(helper_free_names_in_expr(arg, bound_names, helper_bindings));
+            }
+            names
+        }
+        BoundExpr::Reference(reference) => {
+            helper_free_names_in_reference(reference, bound_names, helper_bindings)
+        }
+        BoundExpr::ImplicitIntersection(inner) => {
+            helper_free_names_in_expr(inner, bound_names, helper_bindings)
+        }
+    }
+}
+
+fn helper_free_names_in_let(
+    args: &[BoundExpr],
+    bound_names: &mut BTreeSet<String>,
+    helper_bindings: &BTreeMap<String, HelperBinding>,
+) -> BTreeSet<String> {
+    if args.is_empty() {
+        return BTreeSet::new();
+    }
+
+    let mut names = BTreeSet::new();
+    let mut local_bound = bound_names.clone();
+    let last_index = args.len() - 1;
+    let mut index = 0usize;
+    while index < last_index {
+        if index + 1 >= args.len() {
+            break;
+        }
+        names.extend(helper_free_names_in_expr(
+            &args[index + 1],
+            &mut local_bound,
+            helper_bindings,
+        ));
+        if let BoundExpr::HelperParameterName(name) = &args[index] {
+            local_bound.insert(name.clone());
+        }
+        index += 2;
+    }
+    names.extend(helper_free_names_in_expr(
+        &args[last_index],
+        &mut local_bound,
+        helper_bindings,
+    ));
+    names
+}
+
+fn helper_free_names_in_lambda(
+    args: &[BoundExpr],
+    bound_names: &mut BTreeSet<String>,
+    helper_bindings: &BTreeMap<String, HelperBinding>,
+) -> BTreeSet<String> {
+    if args.is_empty() {
+        return BTreeSet::new();
+    }
+
+    let body_index = args.len() - 1;
+    let mut nested_bound = bound_names.clone();
+    for arg in &args[..body_index] {
+        if let BoundExpr::HelperParameterName(name) = arg {
+            nested_bound.insert(name.clone());
+        }
+    }
+    helper_free_names_in_expr(&args[body_index], &mut nested_bound, helper_bindings)
+}
+
+fn helper_free_names_in_reference(
+    reference: &ReferenceExpr,
+    bound_names: &mut BTreeSet<String>,
+    helper_bindings: &BTreeMap<String, HelperBinding>,
+) -> BTreeSet<String> {
+    match reference {
+        ReferenceExpr::Atom(NormalizedReference::Name(name))
+            if matches!(name.kind, crate::binding::NameKind::HelperLocal)
+                && !bound_names.contains(&name.name)
+                && helper_bindings.contains_key(&name.name) =>
+        {
+            BTreeSet::from([name.name.clone()])
+        }
+        ReferenceExpr::Atom(_) => BTreeSet::new(),
+        ReferenceExpr::Spill { anchor } => {
+            helper_free_names_in_reference(anchor, bound_names, helper_bindings)
+        }
+        ReferenceExpr::Range { start, end }
+        | ReferenceExpr::Union {
+            left: start,
+            right: end,
+        }
+        | ReferenceExpr::Intersection {
+            left: start,
+            right: end,
+        } => {
+            let mut names = helper_free_names_in_reference(start, bound_names, helper_bindings);
+            names.extend(helper_free_names_in_reference(
+                end,
+                bound_names,
+                helper_bindings,
+            ));
+            names
+        }
+    }
+}
+
+fn helper_closure_from_names(
+    helper_bindings: &BTreeMap<String, HelperBinding>,
+    capture_names: &BTreeSet<String>,
+) -> BTreeMap<String, HelperBinding> {
+    helper_bindings
+        .iter()
+        .filter_map(|(name, binding)| {
+            if capture_names.contains(name) {
+                Some((name.clone(), binding.clone()))
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 fn materialize_call_arg(
@@ -1064,6 +1310,7 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
             payload_summary: format!("Number({number})"),
             blankness_class: PreparedBlanknessClass::NonBlank,
             reference_target: None,
+            callable_carrier: None,
             callable_profile: None,
             callable_profile_detail: None,
             deferred_reason: deferred_reason.clone(),
@@ -1077,6 +1324,7 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
             payload_summary: format!("Text({})", text.to_string_lossy()),
             blankness_class: blankness_class_for_eval_value(value),
             reference_target: None,
+            callable_carrier: None,
             callable_profile: None,
             callable_profile_detail: None,
             deferred_reason: deferred_reason.clone(),
@@ -1090,6 +1338,7 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
             payload_summary: format!("Logical({value})"),
             blankness_class: PreparedBlanknessClass::NonBlank,
             reference_target: None,
+            callable_carrier: None,
             callable_profile: None,
             callable_profile_detail: None,
             deferred_reason: deferred_reason.clone(),
@@ -1103,6 +1352,7 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
             payload_summary: format!("Error({code:?})"),
             blankness_class: PreparedBlanknessClass::NonBlank,
             reference_target: None,
+            callable_carrier: None,
             callable_profile: None,
             callable_profile_detail: None,
             deferred_reason,
@@ -1116,6 +1366,7 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
             payload_summary: format!("Array({}x{})", array.shape().rows, array.shape().cols),
             blankness_class: PreparedBlanknessClass::NonBlank,
             reference_target: None,
+            callable_carrier: None,
             callable_profile: None,
             callable_profile_detail: None,
             deferred_reason: deferred_reason.clone(),
@@ -1129,6 +1380,7 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
             payload_summary: format!("Reference({:?})", reference.kind),
             blankness_class: PreparedBlanknessClass::NonBlank,
             reference_target: Some(reference.target.clone()),
+            callable_carrier: None,
             callable_profile: None,
             callable_profile_detail: None,
             deferred_reason: deferred_reason.clone(),
@@ -1142,6 +1394,7 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
             payload_summary: format!("Lambda({name})"),
             blankness_class: PreparedBlanknessClass::NonBlank,
             reference_target: None,
+            callable_carrier: callable_carrier_from_summary(name),
             callable_profile: Some(name.clone()),
             callable_profile_detail: callable_profile_detail_from_summary(name),
             deferred_reason: deferred_reason.clone(),
@@ -1216,6 +1469,20 @@ fn callable_profile_detail_from_summary(summary: &str) -> Option<CallableValuePr
         parameter_names: parameter_names.unwrap_or_default(),
         capture_names: capture_names.unwrap_or_default(),
         body_kind: body_kind?,
+    })
+}
+
+fn callable_carrier_from_summary(summary: &str) -> Option<CallableValueCarrier> {
+    let detail = callable_profile_detail_from_summary(summary)?;
+    Some(CallableValueCarrier {
+        origin_kind: CallableOriginKind::HelperLambda,
+        invocation_model: CallableInvocationModel::TypedInvocationOnly,
+        capture_mode: if detail.capture_names.is_empty() {
+            CallableCaptureMode::NoCapture
+        } else {
+            CallableCaptureMode::LexicalCapture
+        },
+        arity: detail.arity,
     })
 }
 
@@ -1387,6 +1654,9 @@ impl ReferenceResolver for LocalReferenceResolver<'_> {
                 DefinedNameBinding::Value(value) => Ok(value.clone()),
                 DefinedNameBinding::Reference(reference_like) => {
                     self.resolve_reference(reference_like)
+                }
+                DefinedNameBinding::Callable(binding) => {
+                    Ok(EvalValue::Lambda(binding.summary.clone()))
                 }
             };
         }

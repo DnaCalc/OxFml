@@ -601,6 +601,11 @@ impl Binder {
             .helper_local_names
             .iter()
             .any(|name| name.eq_ignore_ascii_case(&function_name))
+            || self
+                .context
+                .names
+                .keys()
+                .any(|name| name.eq_ignore_ascii_case(&function_name))
         {
             let callee = self.bind_identifier_expr_from_name(&function_name);
             return BoundExpr::Invocation {

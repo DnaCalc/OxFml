@@ -73,12 +73,22 @@ Minimum result fields:
 2. bind diagnostics
 3. unresolved-reference records
 
+Result rule:
+1. `bind` may reject a formula edit when the submitted text cannot honestly enter the bound-artifact world,
+2. `bind` may also accept the formula text and produce a `BoundFormula` with unresolved-reference or bind-diagnostic records,
+3. accepting the formula into bound-artifact state is not the same thing as claiming later evaluation success.
+
 ### 4.4 `CompileSemanticPlanRequest` -> `CompileSemanticPlanResult`
 Minimum request fields:
 1. `BoundFormula`
 2. library-context snapshot identity or handle
 3. OxFunc catalog or trait surface identity
 4. locale, date-system, and format-service context
+5. per-surface availability identity sufficient to explain:
+   - stable surface identity
+   - name-resolution table reference
+   - semantic trait/profile reference
+   - gating/profile reference
 
 Minimum result fields:
 1. `SemanticPlan`
@@ -86,6 +96,14 @@ Minimum result fields:
 3. execution-profile summary
 4. helper-environment profile summary
 5. availability/gating summary where formula admission or runtime capability depends on catalog/profile/provider state
+6. typed callable-carrier summary where semantically callable results must remain recoverable in replay or later dispatch, including callable values preserved through adopted defined-name context in the current local floor
+
+Result rule:
+1. `compile_semantic_plan` must preserve the difference between:
+   - edit rejection before canonical artifact adoption,
+   - accepted formula text with bind-time unresolved-name or unsupported-lane diagnostics,
+   - runtime capability/provider outcomes that only become knowable later.
+2. when a formula is accepted into the canonical artifact ladder but still has unresolved-name meaning, OxFml preserves that classification and OxFunc remains authoritative for the eventual `#NAME?` value payload and related value-universe behavior.
 
 ### 4.5 `EvaluateRequest` -> `AcceptedCandidateResult | RejectRecord`
 Minimum request fields:
@@ -98,6 +116,7 @@ Minimum request fields:
 Minimum result rule:
 1. evaluation returns an accepted candidate or a typed reject,
 2. evaluation does not publish.
+3. evaluation is not the place where edit rejection is decided; edit rejection belongs to earlier parse/bind/plan acceptance rules.
 
 ### 4.6 `CommitRequest` -> `CommitBundle | RejectRecord`
 Minimum request fields:
@@ -181,8 +200,8 @@ The following remain open:
 3. whether red projection is publicly exposed or kept as an internal helper surface,
 4. whether proving-host helpers live in the main library or a sibling support package,
 5. exact error/result carrier style for language bindings,
-6. the smallest honest library-context snapshot shape,
-7. the final callable-value carrier beyond the current local replay-summary floor.
+6. the smallest honest library-context snapshot shape beyond the current local minimum field floor,
+7. the final callable-value carrier beyond the current typed minimum plus replay-summary floor.
 
 ## 11. Workset Implications
 Current expected primary owners:

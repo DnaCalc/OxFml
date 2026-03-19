@@ -6,7 +6,8 @@ use oxfunc_core::value::{EvalValue, ExcelText, ReferenceLike};
 
 use crate::binding::{BindContext, BindRequest, BoundFormula, NameKind, bind_formula_incremental};
 use crate::eval::{
-    DefinedNameBinding, EvaluationBackend, EvaluationContext, EvaluationOutput, evaluate_formula,
+    CallableDefinedNameBinding, DefinedNameBinding, EvaluationBackend, EvaluationContext,
+    EvaluationOutput, evaluate_formula,
 };
 use crate::red::{RedProjection, project_red_view_incremental};
 use crate::scheduler::{ExecutionContract, build_execution_contract};
@@ -130,6 +131,15 @@ impl SingleFormulaHost {
             .insert(name.into(), DefinedNameBinding::Reference(reference));
     }
 
+    pub fn set_defined_name_callable(
+        &mut self,
+        name: impl Into<String>,
+        callable: CallableDefinedNameBinding,
+    ) {
+        self.defined_names
+            .insert(name.into(), DefinedNameBinding::Callable(callable));
+    }
+
     pub fn set_cell_value(&mut self, target: impl Into<String>, value: EvalValue) {
         self.cell_values.insert(target.into(), value);
     }
@@ -186,6 +196,7 @@ impl SingleFormulaHost {
                                 match binding {
                                     DefinedNameBinding::Value(_) => NameKind::ValueLike,
                                     DefinedNameBinding::Reference(_) => NameKind::ReferenceLike,
+                                    DefinedNameBinding::Callable(_) => NameKind::ValueLike,
                                 },
                             )
                         })
@@ -536,6 +547,7 @@ fn apply_empirical_input_binding(
         DefinedNameBinding::Reference(reference) => {
             host.set_defined_name_reference(name, reference)
         }
+        DefinedNameBinding::Callable(callable) => host.set_defined_name_callable(name, callable),
     }
     Ok(())
 }
@@ -552,6 +564,9 @@ fn apply_empirical_cell_binding(
         }
         DefinedNameBinding::Reference(_) => Err(format!(
             "cell empirical binding cannot be a reference for {target}: {summary}"
+        )),
+        DefinedNameBinding::Callable(_) => Err(format!(
+            "cell empirical binding cannot be callable for {target}: {summary}"
         )),
     }
 }

@@ -15,10 +15,11 @@ pub use binding::{
     bind_formula_incremental,
 };
 pub use eval::{
-    CallableValueProfile, DefinedNameBinding, EvaluationBackend, EvaluationContext,
-    EvaluationError, EvaluationOutput, EvaluationTrace, PreparedArgument, PreparedBlanknessClass,
-    PreparedCall, PreparedEvaluationMode, PreparedResult, PreparedResultClass, PreparedSourceClass,
-    PreparedStructureClass, evaluate_formula,
+    CallableCaptureMode, CallableDefinedNameBinding, CallableInvocationModel, CallableOriginKind,
+    CallableValueCarrier, CallableValueProfile, DefinedNameBinding, EvaluationBackend,
+    EvaluationContext, EvaluationError, EvaluationOutput, EvaluationTrace, PreparedArgument,
+    PreparedBlanknessClass, PreparedCall, PreparedEvaluationMode, PreparedResult,
+    PreparedResultClass, PreparedSourceClass, PreparedStructureClass, evaluate_formula,
 };
 pub use host::{ArtifactReuseReport, EmpiricalOracleScenario, HostRecalcOutput, SingleFormulaHost};
 pub use red::{

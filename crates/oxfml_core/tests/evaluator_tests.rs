@@ -6,8 +6,13 @@ use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, Inf
 use oxfunc_core::locale_format::{LocaleFormatContext, en_us_context};
 use oxfunc_core::value::{EvalValue, ExcelText, ReferenceKind, ReferenceLike};
 
-use oxfml_core::binding::NameKind;
-use oxfml_core::eval::{DefinedNameBinding, EvaluationContext, evaluate_formula};
+use oxfml_core::binding::{
+    BinaryOp, BoundExpr, NameKind, NameRef, NormalizedReference, ReferenceExpr,
+};
+use oxfml_core::eval::{
+    CallableDefinedNameBinding, CallableValueCarrier, CallableValueProfile, DefinedNameBinding,
+    EvaluationContext, evaluate_formula,
+};
 
 #[test]
 fn evaluator_runs_text_with_locale_format_context() {
@@ -203,6 +208,24 @@ fn evaluator_returns_lambda_value_summary() {
         output.result.callable_profile.as_deref(),
         Some("arity=1;params=x;captures=-;body=Binary")
     );
+    let carrier = output
+        .result
+        .callable_carrier
+        .as_ref()
+        .expect("callable carrier should exist");
+    assert_eq!(
+        carrier.origin_kind,
+        oxfml_core::CallableOriginKind::HelperLambda
+    );
+    assert_eq!(
+        carrier.invocation_model,
+        oxfml_core::CallableInvocationModel::TypedInvocationOnly
+    );
+    assert_eq!(
+        carrier.capture_mode,
+        oxfml_core::CallableCaptureMode::NoCapture
+    );
+    assert_eq!(carrier.arity, 1);
     let detail = output
         .result
         .callable_profile_detail
@@ -230,6 +253,24 @@ fn evaluator_returns_lambda_value_summary_with_lexical_capture_metadata() {
         output.result.callable_profile.as_deref(),
         Some("arity=1;params=y;captures=x;body=Binary")
     );
+    let carrier = output
+        .result
+        .callable_carrier
+        .as_ref()
+        .expect("callable carrier should exist");
+    assert_eq!(
+        carrier.origin_kind,
+        oxfml_core::CallableOriginKind::HelperLambda
+    );
+    assert_eq!(
+        carrier.invocation_model,
+        oxfml_core::CallableInvocationModel::TypedInvocationOnly
+    );
+    assert_eq!(
+        carrier.capture_mode,
+        oxfml_core::CallableCaptureMode::LexicalCapture
+    );
+    assert_eq!(carrier.arity, 1);
     let detail = output
         .result
         .callable_profile_detail
@@ -282,6 +323,137 @@ fn evaluator_uses_lexical_not_dynamic_scope_for_helper_bound_lambda() {
         Some(&en_us_context()),
     );
     assert_eq!(output.result.payload_summary, "Number(12)");
+}
+
+#[test]
+fn evaluator_invokes_defined_name_callable_binding() {
+    let mut bindings = BTreeMap::new();
+    bindings.insert(
+        "NamedLambda".to_string(),
+        DefinedNameBinding::Callable(local_callable_binding(
+            "arity=1;params=x;captures=-;body=Binary",
+            vec!["x"],
+            BoundExpr::Binary {
+                op: BinaryOp::Add,
+                left: Box::new(name_ref_expr("x", NameKind::HelperLocal)),
+                right: Box::new(BoundExpr::NumberLiteral("1".to_string())),
+            },
+            BTreeMap::new(),
+        )),
+    );
+
+    let output = evaluate(
+        "=NamedLambda(2)",
+        Some(bindings),
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.result.payload_summary, "Number(3)");
+    assert_eq!(output.trace.prepared_calls.len(), 1);
+    assert_eq!(
+        output.trace.prepared_calls[0].function_id,
+        "SPECIAL.LAMBDA_INVOKE"
+    );
+}
+
+#[test]
+fn evaluator_preserves_defined_name_callable_as_first_class_value() {
+    let mut bindings = BTreeMap::new();
+    let mut closure = BTreeMap::new();
+    closure.insert(
+        "x".to_string(),
+        DefinedNameBinding::Value(EvalValue::Number(10.0)),
+    );
+    bindings.insert(
+        "NamedLambda".to_string(),
+        DefinedNameBinding::Callable(local_callable_binding(
+            "arity=1;params=y;captures=x;body=Binary",
+            vec!["y"],
+            BoundExpr::Binary {
+                op: BinaryOp::Add,
+                left: Box::new(name_ref_expr("x", NameKind::ValueLike)),
+                right: Box::new(name_ref_expr("y", NameKind::HelperLocal)),
+            },
+            closure,
+        )),
+    );
+
+    let value_output = evaluate(
+        "=NamedLambda",
+        Some(bindings.clone()),
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(
+        value_output.result.payload_summary,
+        "Lambda(arity=1;params=y;captures=x;body=Binary)"
+    );
+    assert_eq!(
+        value_output
+            .result
+            .callable_carrier
+            .as_ref()
+            .expect("callable carrier should exist")
+            .capture_mode,
+        oxfml_core::CallableCaptureMode::LexicalCapture
+    );
+
+    let invoke_output = evaluate(
+        "=NamedLambda(2)",
+        Some(bindings),
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(invoke_output.result.payload_summary, "Number(12)");
+}
+
+#[test]
+fn evaluator_lambda_summary_ignores_unused_helper_bindings() {
+    let output = evaluate(
+        "=LET(x,10,unused,99,LAMBDA(y,x+y))",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(
+        output.result.payload_summary,
+        "Lambda(arity=1;params=y;captures=x;body=Binary)"
+    );
+    let detail = output
+        .result
+        .callable_profile_detail
+        .as_ref()
+        .expect("callable detail should exist");
+    assert_eq!(detail.capture_names, vec!["x".to_string()]);
+}
+
+#[test]
+fn evaluator_lambda_summary_respects_parameter_shadowing() {
+    let output = evaluate(
+        "=LET(x,10,LAMBDA(x,x+1))",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(
+        output.result.payload_summary,
+        "Lambda(arity=1;params=x;captures=-;body=Binary)"
+    );
+    let carrier = output
+        .result
+        .callable_carrier
+        .as_ref()
+        .expect("callable carrier should exist");
+    assert_eq!(
+        carrier.capture_mode,
+        oxfml_core::CallableCaptureMode::NoCapture
+    );
+    let detail = output
+        .result
+        .callable_profile_detail
+        .as_ref()
+        .expect("callable detail should exist");
+    assert!(detail.capture_names.is_empty());
 }
 
 #[test]
@@ -352,6 +524,7 @@ fn evaluate(
                 match binding {
                     DefinedNameBinding::Value(_) => NameKind::ValueLike,
                     DefinedNameBinding::Reference(_) => NameKind::ReferenceLike,
+                    DefinedNameBinding::Callable(_) => NameKind::ValueLike,
                 },
             );
         }
@@ -382,6 +555,79 @@ fn evaluate(
     context.random_value = Some(0.25);
 
     evaluate_formula(context).expect("evaluation should succeed")
+}
+
+fn local_callable_binding(
+    summary: &str,
+    params: Vec<&str>,
+    body: BoundExpr,
+    closure: BTreeMap<String, DefinedNameBinding>,
+) -> CallableDefinedNameBinding {
+    let profile = callable_profile_from_summary(summary);
+    CallableDefinedNameBinding {
+        summary: summary.to_string(),
+        carrier: CallableValueCarrier {
+            origin_kind: oxfml_core::CallableOriginKind::HelperLambda,
+            invocation_model: oxfml_core::CallableInvocationModel::TypedInvocationOnly,
+            capture_mode: if profile.capture_names.is_empty() {
+                oxfml_core::CallableCaptureMode::NoCapture
+            } else {
+                oxfml_core::CallableCaptureMode::LexicalCapture
+            },
+            arity: profile.arity,
+        },
+        profile,
+        params: params.into_iter().map(|value| value.to_string()).collect(),
+        body,
+        closure,
+    }
+}
+
+fn callable_profile_from_summary(summary: &str) -> CallableValueProfile {
+    let mut arity = None;
+    let mut parameter_names = None;
+    let mut capture_names = None;
+    let mut body_kind = None;
+
+    for part in summary.split(';') {
+        let (key, value) = part
+            .split_once('=')
+            .expect("callable summary entries should be key=value");
+        match key {
+            "arity" => arity = Some(value.parse::<usize>().expect("callable arity should parse")),
+            "params" => parameter_names = Some(split_profile_list(value)),
+            "captures" => capture_names = Some(split_profile_list(value)),
+            "body" => body_kind = Some(value.to_string()),
+            _ => {}
+        }
+    }
+
+    CallableValueProfile {
+        arity: arity.expect("callable arity should exist"),
+        parameter_names: parameter_names.unwrap_or_default(),
+        capture_names: capture_names.unwrap_or_default(),
+        body_kind: body_kind.expect("callable body kind should exist"),
+    }
+}
+
+fn split_profile_list(value: &str) -> Vec<String> {
+    if value == "-" || value.is_empty() {
+        Vec::new()
+    } else if value.contains('|') {
+        value.split('|').map(|item| item.to_string()).collect()
+    } else {
+        value.split(',').map(|item| item.to_string()).collect()
+    }
+}
+
+fn name_ref_expr(name: &str, kind: NameKind) -> BoundExpr {
+    BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Name(NameRef {
+        name: name.to_string(),
+        workbook_id: "book:default".to_string(),
+        sheet_id: "sheet:default".to_string(),
+        kind,
+        caller_context_dependent: false,
+    })))
 }
 
 struct MockHostInfoProvider;

@@ -119,6 +119,11 @@ Current baseline sequence after `W001`:
 32. `W033` replay promotion toward `cap.C4.distill_valid`
 33. `W034` distributed runtime and coordinator consequence boundary
 34. `W035` broader formal family and concurrency model expansion
+35. `W036` structured reference and table formula semantics
+36. `W037` R1C1 formula channels and reference translation
+37. `W038` name and external-name formula carriers
+38. `W039` conditional-formatting and data-validation formula sublanguages
+39. `W040` higher-order callable evidence and seam reopen
 
 This sequence is the current planning baseline.
 It may be refined, but new worksets should preserve dependency clarity rather than bypass it informally.

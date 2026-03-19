@@ -44,28 +44,33 @@ Planned follow-on review lane after that wave:
 4. keep commit/publication ownership explicit in the runtime lane, not implied by adjacent seam work
 5. keep semantic-format versus display closure coupled to actual publication/runtime evidence rather than prose-only clarification
 
-## Next Planned Sequence
-The next planned post-`W030` sequence is:
-1. `W031` `MS-OE376` formula and formatting rule review
-2. `W032` OxFunc catalog, callable transport, and provider closure
-3. `W033` replay promotion toward `cap.C4.distill_valid`
-4. `W034` distributed runtime and coordinator consequence boundary
-5. `W035` broader formal family and concurrency model expansion
+## Post-W031 State
+`W031` is now exercised and should be treated as the classification bridge between the earlier `W025 -> W030` wave and the next execution wave.
 
 ## Next Critical Path
-1. `W031` `MS-OE376` formula and formatting rule review
-2. `W032` OxFunc catalog, callable transport, and provider closure
-3. `W034` distributed runtime and coordinator consequence boundary
-4. `W035` broader formal family and concurrency model expansion
+1. `W032` OxFunc catalog, callable transport, and provider closure
+2. `W034` distributed runtime and coordinator consequence boundary
+3. `W035` broader formal family and concurrency model expansion
+4. `W038` name and external-name formula carriers
+5. `W039` conditional-formatting and data-validation formula sublanguages
+6. `W040` higher-order callable evidence and seam reopen
 
 ## Next Parallelism
-1. `W033` can proceed after `W025`, `W028`, `W029`, and `W030` without waiting for the full `W031 -> W032 -> W034` chain.
-2. `W031` is a review-and-classification lane and should inform grammar and semantic backlog shaping without blocking all replay-promotion work.
-3. `W035` should wait for both the wider replay and runtime floors so the new checked artifacts match exercised local behavior rather than speculative designs.
+1. `W033` can proceed after `W025`, `W028`, `W029`, `W030`, and the now-exercised `W031` classification floor without waiting for the full `W032 -> W034` chain.
+2. `W036` and `W037` can proceed after `W031` without waiting for the full runtime/distributed chain.
+3. `W038` should follow the OxFunc/provider narrowing from `W032`.
+4. `W039` should follow `W030` and `W034` so CF/DV semantics do not outrun current semantic-format and runtime consequence boundaries.
+5. `W035` should wait for both the wider replay and runtime floors so the new checked artifacts match exercised local behavior rather than speculative designs.
+6. `W040` should wait until `W032` has narrowed the first callable carrier/provenance split and `W038` has kept callable/name-carrier pressure explicit, so higher-order callable evidence reopens the seam on local proof rather than note pressure.
 
 ## Why This Next Sequence
-1. `W031` converts the pending `MS-OE376` rule families into explicit OxFml-owned backlog and semantic classification before those surfaces get mixed into generic parser work,
+1. `W031` has already converted the pending `MS-OE376` rule families into explicit OxFml-owned backlog and semantic classification,
 2. `W032` directly addresses the narrowest active OxFml/OxFunc seam topics left open by the latest note exchanges,
 3. `W033` addresses the largest remaining assurance gap by moving beyond promotion-readiness planning toward broader `cap.C4`-adjacent evidence,
 4. `W034` takes the current local async/runtime floor into the next coordinator-visible consequence boundary without collapsing OxCalc policy into OxFml,
-5. `W035` broadens checked local formal coverage only after replay and runtime surfaces are stronger than they are today.
+5. `W035` broadens checked local formal coverage only after replay and runtime surfaces are stronger than they are today,
+6. `W036` turns structured references from a provisional rule into a wider local semantic floor,
+7. `W037` adds the missing R1C1 formula channel instead of silently overloading the A1-first parser,
+8. `W038` makes name and external-name formulas first-class carriers rather than generic scoped-name fallout,
+9. `W039` treats conditional-formatting and data-validation formulas as distinct sublanguage lanes instead of assuming worksheet-formula parity,
+10. `W040` gives the deferred higher-order callable lanes a future evidence path instead of forcing them into the current callable seam exchange prematurely.

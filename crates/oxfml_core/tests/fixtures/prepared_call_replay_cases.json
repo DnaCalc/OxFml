@@ -252,6 +252,12 @@
       "result_class": "Scalar",
       "result_structure_class": "DirectScalar",
       "payload_summary": "Lambda(arity=1;params=x;captures=-;body=Binary)",
+      "callable_carrier": {
+        "origin_kind": "HelperLambda",
+        "invocation_model": "TypedInvocationOnly",
+        "capture_mode": "NoCapture",
+        "arity": 1
+      },
       "callable_profile": "arity=1;params=x;captures=-;body=Binary",
       "callable_profile_detail": {
         "arity": 1,
@@ -598,6 +604,12 @@
       "result_class": "Scalar",
       "result_structure_class": "DirectScalar",
       "payload_summary": "Lambda(arity=1;params=y;captures=x;body=Binary)",
+      "callable_carrier": {
+        "origin_kind": "HelperLambda",
+        "invocation_model": "TypedInvocationOnly",
+        "capture_mode": "LexicalCapture",
+        "arity": 1
+      },
       "callable_profile": "arity=1;params=y;captures=x;body=Binary",
       "callable_profile_detail": {
         "arity": 1,
@@ -648,6 +660,180 @@
       "publication_hint": null,
       "capability_dependencies": [
         "external_reference"
+      ]
+    }
+  },
+  {
+    "case_id": "prepared_017_lambda_ignores_unused_helper_binding",
+    "formula": "=LET(x,10,unused,99,LAMBDA(y,x+y))",
+    "defined_names": {},
+    "host_query_profile": null,
+    "expected": {
+      "prepared_calls": [
+        {
+          "function_id": "SPECIAL.LAMBDA",
+          "prepared_arguments": [
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "HelperParameter",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "BinaryExpression",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        },
+        {
+          "function_id": "SPECIAL.LET",
+          "prepared_arguments": [
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "HelperParameter",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "Literal",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "HelperParameter",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "Literal",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "FunctionCall",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        }
+      ],
+      "result_class": "Scalar",
+      "result_structure_class": "DirectScalar",
+      "payload_summary": "Lambda(arity=1;params=y;captures=x;body=Binary)",
+      "callable_carrier": {
+        "origin_kind": "HelperLambda",
+        "invocation_model": "TypedInvocationOnly",
+        "capture_mode": "LexicalCapture",
+        "arity": 1
+      },
+      "callable_profile": "arity=1;params=y;captures=x;body=Binary",
+      "callable_profile_detail": {
+        "arity": 1,
+        "parameter_names": [
+          "y"
+        ],
+        "capture_names": [
+          "x"
+        ],
+        "body_kind": "Binary"
+      },
+      "blankness_class": "NonBlank",
+      "format_hint": null,
+      "publication_hint": null,
+      "capability_dependencies": [
+        "helper_environment"
+      ]
+    }
+  },
+  {
+    "case_id": "prepared_018_lambda_parameter_shadowing",
+    "formula": "=LET(x,10,LAMBDA(x,x+1))",
+    "defined_names": {},
+    "host_query_profile": null,
+    "expected": {
+      "prepared_calls": [
+        {
+          "function_id": "SPECIAL.LAMBDA",
+          "prepared_arguments": [
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "HelperParameter",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "BinaryExpression",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        },
+        {
+          "function_id": "SPECIAL.LET",
+          "prepared_arguments": [
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "HelperParameter",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "Literal",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "FunctionCall",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        }
+      ],
+      "result_class": "Scalar",
+      "result_structure_class": "DirectScalar",
+      "payload_summary": "Lambda(arity=1;params=x;captures=-;body=Binary)",
+      "callable_carrier": {
+        "origin_kind": "HelperLambda",
+        "invocation_model": "TypedInvocationOnly",
+        "capture_mode": "NoCapture",
+        "arity": 1
+      },
+      "callable_profile": "arity=1;params=x;captures=-;body=Binary",
+      "callable_profile_detail": {
+        "arity": 1,
+        "parameter_names": [
+          "x"
+        ],
+        "capture_names": [],
+        "body_kind": "Binary"
+      },
+      "blankness_class": "NonBlank",
+      "format_hint": null,
+      "publication_hint": null,
+      "capability_dependencies": [
+        "helper_environment"
       ]
     }
   }

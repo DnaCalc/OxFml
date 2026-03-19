@@ -1,0 +1,74 @@
+[
+  {
+    "case_id": "callable_transport_001_defined_name_value_preserved",
+    "formula": "=NamedLambda",
+    "callable_name": "NamedLambda",
+    "binding_summary": "arity=1;params=y;captures=x;body=Binary",
+    "callable_body_formula": "=x+y",
+    "callable_params": ["y"],
+    "closure_bindings": {
+      "x": "Number(10)"
+    },
+    "expected": {
+      "payload_summary": "Lambda(arity=1;params=y;captures=x;body=Binary)",
+      "prepared_call_functions": [],
+      "callable_carrier": {
+        "origin_kind": "HelperLambda",
+        "invocation_model": "TypedInvocationOnly",
+        "capture_mode": "LexicalCapture",
+        "arity": 1
+      },
+      "callable_profile": "arity=1;params=y;captures=x;body=Binary",
+      "callable_profile_detail": {
+        "arity": 1,
+        "parameter_names": ["y"],
+        "capture_names": ["x"],
+        "body_kind": "Binary"
+      }
+    }
+  },
+  {
+    "case_id": "callable_transport_002_defined_name_invocation",
+    "formula": "=NamedLambda(2)",
+    "callable_name": "NamedLambda",
+    "binding_summary": "arity=1;params=y;captures=x;body=Binary",
+    "callable_body_formula": "=x+y",
+    "callable_params": ["y"],
+    "closure_bindings": {
+      "x": "Number(10)"
+    },
+    "expected": {
+      "payload_summary": "Number(12)",
+      "prepared_call_functions": ["SPECIAL.LAMBDA_INVOKE"],
+      "callable_carrier": null,
+      "callable_profile": null,
+      "callable_profile_detail": null
+    }
+  },
+  {
+    "case_id": "callable_transport_003_defined_name_no_capture",
+    "formula": "=NamedLambda",
+    "callable_name": "NamedLambda",
+    "binding_summary": "arity=1;params=x;captures=-;body=Binary",
+    "callable_body_formula": "=x+1",
+    "callable_params": ["x"],
+    "closure_bindings": {},
+    "expected": {
+      "payload_summary": "Lambda(arity=1;params=x;captures=-;body=Binary)",
+      "prepared_call_functions": [],
+      "callable_carrier": {
+        "origin_kind": "HelperLambda",
+        "invocation_model": "TypedInvocationOnly",
+        "capture_mode": "NoCapture",
+        "arity": 1
+      },
+      "callable_profile": "arity=1;params=x;captures=-;body=Binary",
+      "callable_profile_detail": {
+        "arity": 1,
+        "parameter_names": ["x"],
+        "capture_names": [],
+        "body_kind": "Binary"
+      }
+    }
+  }
+]

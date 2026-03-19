@@ -4,11 +4,15 @@
     "formula": "=SUM(1)+FUTUREFUNC(2)",
     "snapshot": {
       "snapshot_id": "libctx.fixture.round1",
-      "snapshot_version": "v1",
+      "snapshot_version": "v2",
       "entries": [
         {
           "surface_name": "SUM",
           "canonical_id": "FUNC.SUM",
+          "surface_stable_id": "surface.sum.core",
+          "name_resolution_table_ref": "libctx.names.core.en-US@v1",
+          "semantic_trait_profile_ref": "oxfunc.profile.sum@v1",
+          "gating_profile_ref": null,
           "registration_source_kind": "BuiltIn",
           "parse_bind_state": "CatalogKnown",
           "semantic_plan_state": "CatalogKnown",
@@ -18,6 +22,10 @@
         {
           "surface_name": "FUTUREFUNC",
           "canonical_id": "FUNC.FUTUREFUNC",
+          "surface_stable_id": "surface.futurefunc.core",
+          "name_resolution_table_ref": "libctx.names.preview.en-US@v1",
+          "semantic_trait_profile_ref": "oxfunc.profile.futurefunc@v1",
+          "gating_profile_ref": "gate.preview-functions@v1",
           "registration_source_kind": "BuiltIn",
           "parse_bind_state": "FeatureGated",
           "semantic_plan_state": "FeatureGated",
@@ -27,11 +35,15 @@
       ]
     },
     "expected": {
-      "snapshot_ref": "libctx.fixture.round1@v1",
+      "snapshot_ref": "libctx.fixture.round1@v2",
       "availability_summaries": [
         {
           "surface_name": "SUM",
           "canonical_id": "FUNC.SUM",
+          "surface_stable_id": "surface.sum.core",
+          "name_resolution_table_ref": "libctx.names.core.en-US@v1",
+          "semantic_trait_profile_ref": "oxfunc.profile.sum@v1",
+          "gating_profile_ref": null,
           "registration_source_kind": "BuiltIn",
           "parse_bind_state": "CatalogKnown",
           "semantic_plan_state": "CatalogKnown",
@@ -41,6 +53,10 @@
         {
           "surface_name": "FUTUREFUNC",
           "canonical_id": "FUNC.FUTUREFUNC",
+          "surface_stable_id": "surface.futurefunc.core",
+          "name_resolution_table_ref": "libctx.names.preview.en-US@v1",
+          "semantic_trait_profile_ref": "oxfunc.profile.futurefunc@v1",
+          "gating_profile_ref": "gate.preview-functions@v1",
           "registration_source_kind": "BuiltIn",
           "parse_bind_state": "FeatureGated",
           "semantic_plan_state": "FeatureGated",
@@ -55,20 +71,28 @@
     "formula": "=TRANSLATE(1)+MYADDINFUNC(2)",
     "snapshot": {
       "snapshot_id": "libctx.fixture.round2",
-      "snapshot_version": "v1",
+      "snapshot_version": "v2",
       "entries": [
         {
           "surface_name": "TRANSLATE",
           "canonical_id": "FUNC.TRANSLATE",
+          "surface_stable_id": "surface.translate.provider",
+          "name_resolution_table_ref": "libctx.names.provider.en-US@v1",
+          "semantic_trait_profile_ref": "oxfunc.profile.translate@v2",
+          "gating_profile_ref": "gate.translate-provider@v1",
           "registration_source_kind": "ProviderBacked",
           "parse_bind_state": "CatalogKnown",
           "semantic_plan_state": "CatalogKnown",
-          "runtime_capability_state": "ProviderUnavailable",
+          "runtime_capability_state": "CatalogKnown",
           "post_dispatch_state": "ProviderUnavailable"
         },
         {
           "surface_name": "MYADDINFUNC",
           "canonical_id": "FUNC.MYADDINFUNC",
+          "surface_stable_id": "surface.myaddin.addin",
+          "name_resolution_table_ref": "libctx.names.addin.en-US@v1",
+          "semantic_trait_profile_ref": "oxfunc.profile.myaddin@v1",
+          "gating_profile_ref": "gate.addin-registration@v1",
           "registration_source_kind": "AddIn",
           "parse_bind_state": "CatalogKnown",
           "semantic_plan_state": "CatalogKnown",
@@ -78,24 +102,99 @@
       ]
     },
     "expected": {
-      "snapshot_ref": "libctx.fixture.round2@v1",
+      "snapshot_ref": "libctx.fixture.round2@v2",
       "availability_summaries": [
         {
           "surface_name": "TRANSLATE",
           "canonical_id": "FUNC.TRANSLATE",
+          "surface_stable_id": "surface.translate.provider",
+          "name_resolution_table_ref": "libctx.names.provider.en-US@v1",
+          "semantic_trait_profile_ref": "oxfunc.profile.translate@v2",
+          "gating_profile_ref": "gate.translate-provider@v1",
           "registration_source_kind": "ProviderBacked",
           "parse_bind_state": "CatalogKnown",
           "semantic_plan_state": "CatalogKnown",
-          "runtime_capability_state": "ProviderUnavailable",
+          "runtime_capability_state": "CatalogKnown",
           "post_dispatch_state": "ProviderUnavailable"
         },
         {
           "surface_name": "MYADDINFUNC",
           "canonical_id": "FUNC.MYADDINFUNC",
+          "surface_stable_id": "surface.myaddin.addin",
+          "name_resolution_table_ref": "libctx.names.addin.en-US@v1",
+          "semantic_trait_profile_ref": "oxfunc.profile.myaddin@v1",
+          "gating_profile_ref": "gate.addin-registration@v1",
           "registration_source_kind": "AddIn",
           "parse_bind_state": "CatalogKnown",
           "semantic_plan_state": "CatalogKnown",
           "runtime_capability_state": "AddInAbsent",
+          "post_dispatch_state": null
+        }
+      ]
+    }
+  },
+  {
+    "case_id": "lc_003_alias_localized_and_host_profile_gating",
+    "formula": "=SOMME(1)+LEGACYFUNC(2)",
+    "snapshot": {
+      "snapshot_id": "libctx.fixture.round3",
+      "snapshot_version": "v2",
+      "entries": [
+        {
+          "surface_name": "SOMME",
+          "canonical_id": "FUNC.SUM",
+          "surface_stable_id": "surface.sum.core",
+          "name_resolution_table_ref": "libctx.names.core.fr-FR@v1",
+          "semantic_trait_profile_ref": "oxfunc.profile.sum@v1",
+          "gating_profile_ref": null,
+          "registration_source_kind": "CompatibilityAlias",
+          "parse_bind_state": "CatalogKnown",
+          "semantic_plan_state": "CatalogKnown",
+          "runtime_capability_state": null,
+          "post_dispatch_state": null
+        },
+        {
+          "surface_name": "LEGACYFUNC",
+          "canonical_id": "FUNC.LEGACYFUNC",
+          "surface_stable_id": "surface.legacy.compat",
+          "name_resolution_table_ref": "libctx.names.compat.en-US@v2",
+          "semantic_trait_profile_ref": "oxfunc.profile.legacyfunc@v1",
+          "gating_profile_ref": "gate.host-profile-macro-sheet@v1",
+          "registration_source_kind": "CompatibilityAlias",
+          "parse_bind_state": "CompatibilityGated",
+          "semantic_plan_state": "CompatibilityGated",
+          "runtime_capability_state": "HostProfileUnavailable",
+          "post_dispatch_state": null
+        }
+      ]
+    },
+    "expected": {
+      "snapshot_ref": "libctx.fixture.round3@v2",
+      "availability_summaries": [
+        {
+          "surface_name": "SOMME",
+          "canonical_id": "FUNC.SUM",
+          "surface_stable_id": "surface.sum.core",
+          "name_resolution_table_ref": "libctx.names.core.fr-FR@v1",
+          "semantic_trait_profile_ref": "oxfunc.profile.sum@v1",
+          "gating_profile_ref": null,
+          "registration_source_kind": "CompatibilityAlias",
+          "parse_bind_state": "CatalogKnown",
+          "semantic_plan_state": "CatalogKnown",
+          "runtime_capability_state": null,
+          "post_dispatch_state": null
+        },
+        {
+          "surface_name": "LEGACYFUNC",
+          "canonical_id": "FUNC.LEGACYFUNC",
+          "surface_stable_id": "surface.legacy.compat",
+          "name_resolution_table_ref": "libctx.names.compat.en-US@v2",
+          "semantic_trait_profile_ref": "oxfunc.profile.legacyfunc@v1",
+          "gating_profile_ref": "gate.host-profile-macro-sheet@v1",
+          "registration_source_kind": "CompatibilityAlias",
+          "parse_bind_state": "CompatibilityGated",
+          "semantic_plan_state": "CompatibilityGated",
+          "runtime_capability_state": "HostProfileUnavailable",
           "post_dispatch_state": null
         }
       ]

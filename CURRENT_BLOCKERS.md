@@ -2,7 +2,7 @@
 
 Status: no active blockers.
 
-Last reviewed: 2026-03-18 after `W030` validation.
+Last reviewed: 2026-03-19 after `W031` review closure.
 
 ---
 

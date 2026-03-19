@@ -80,6 +80,10 @@ Bound expression root should preserve:
 3. caller-context-dependent bindings where they are already resolved at bind stage,
 4. explicit unresolved nodes where binding cannot finish honestly.
 
+Canonical rule:
+1. a formula edit may still be rejected before `BoundFormula` exists when the submitted text cannot honestly enter the canonical artifact ladder,
+2. once a `BoundFormula` exists, unresolved-name or unresolved-bind facts are preserved as artifact truth rather than being silently converted into edit rejection.
+
 What does not belong in `BoundFormula`:
 1. evaluator session state,
 2. mutable overlay state,
@@ -112,12 +116,21 @@ Minimum fields:
 
 Current local floor:
 1. `library_context_snapshot_ref` records the consumed external library-context snapshot identity when present,
-2. `availability_summaries` preserve parse/bind, semantic-plan, runtime-capability, and post-dispatch/provider states per surfaced function lane.
+2. `availability_summaries` preserve parse/bind, semantic-plan, runtime-capability, and post-dispatch/provider states per surfaced function lane,
+3. `availability_summaries` now also preserve a smaller concrete per-surface identity floor:
+   - `surface_stable_id`
+   - `name_resolution_table_ref`
+   - `semantic_trait_profile_ref`
+   - `gating_profile_ref`
 
 Canonical property:
 1. `SemanticPlan` explains how evaluation should proceed,
 2. it does not itself contain runtime session state,
 3. it may carry library-context and availability truth needed to preserve semantic admission distinctions without owning mutable registry state.
+4. it must preserve the distinction between:
+   - edit rejection before artifact adoption,
+   - accepted formula text with bind-time unresolved-name or unsupported-lane diagnostics,
+   - later runtime capability denial or provider-failure outcomes.
 
 ## 7. PreparedArgument
 Prepared arguments are the canonical OxFml-to-OxFunc call-shape units.
@@ -164,13 +177,17 @@ Minimum fields:
 4. optional `reference_identity`
 5. optional `format_hint`
 6. optional `publication_hint`
-7. optional callable-value profile and structured callable detail
-8. optional provenance/derivation marker
-9. result diagnostics if the result carries degraded or version-scoped semantics
+7. optional typed callable carrier
+   - at minimum origin kind, invocation model, capture mode, and arity
+8. optional callable-value profile and structured callable detail
+9. optional provenance/derivation marker
+10. result diagnostics if the result carries degraded or version-scoped semantics
 
 Canonical property:
 1. prepared results must distinguish scalar, array, reference, and error outcomes without collapsing them prematurely.
 2. callable helper values may remain semantically first-class even when publication carriers remain narrower than the full callable transport problem.
+3. callable capture detail should reflect exact free-helper capture when OxFml can know it, not merely every helper symbol visible in the surrounding environment.
+4. the current callable floor may also be preserved through defined-name bindings when OxFml has adopted a callable value into name context, but that does not by itself settle wider publication or transport policy.
 
 ## 10. Evaluator Facts
 Evaluator facts are the intermediate execution facts that later feed the seam.

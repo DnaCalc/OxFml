@@ -60,7 +60,12 @@ Minimum library-context concerns that must remain representable are:
 Current local floor:
 1. OxFml now preserves `library_context_snapshot_ref` on the semantic plan when an external snapshot is supplied,
 2. availability summaries are stage-aware across parse/bind, semantic-plan, runtime-capability, and post-dispatch/provider lanes,
-3. transport remains intentionally open beyond those preserved semantic distinctions.
+3. per-surface availability summaries now preserve a smaller concrete field floor for:
+   - `surface_stable_id`
+   - `name_resolution_table_ref`
+   - `semantic_trait_profile_ref`
+   - `gating_profile_ref`
+4. transport remains intentionally open beyond those preserved semantic distinctions.
 
 Working rule:
 1. preserve the semantic distinction first,
@@ -121,10 +126,15 @@ The canonical prepared-result surface must carry at least:
    - when later seam or host layers need an explicit non-value publication decision.
 7. helper-result provenance when the result is a helper-produced callable value
    - at minimum a replayable summary of arity, helper-capture presence, and body-shape class in the current baseline.
+8. a typed callable carrier when the result is semantically callable
+   - at minimum origin kind, invocation model, capture mode, and arity.
 
 Current local floor:
-1. callable helper values additionally carry structured callable detail for arity, parameter names, capture names, and body kind,
-2. that detail is still a baseline carrier and not yet the final shared callable transport contract.
+1. callable helper values now additionally carry a typed callable carrier for helper-lambda origin, typed-invocation-only admission, lexical-vs-none capture mode, and arity,
+2. callable helper values also carry structured callable detail for arity, parameter names, capture names, and body kind,
+3. helper capture reporting is now based on exact free-helper capture rather than every helper name merely in scope,
+4. parameter shadowing and unused helper bindings must not appear as false captures in callable carriers,
+5. those fields are still a baseline carrier and not yet the final shared callable transport contract.
 
 ## 5A. Execution and Scheduling Profile Boundary
 Some function traits materially affect whether a formula or call path is safely schedulable under concurrent or async calculation.
@@ -186,12 +196,22 @@ The current intended split is:
 Current OxFml baseline:
 1. helper forms are exercised locally,
 2. lexical helper capture is preserved semantically,
-3. the current callable-value carrier remains provisional and replay-summary-oriented rather than finalized as a shared downstream transport.
+3. callable results now carry a typed minimum carrier for origin, invocation model, capture mode, and arity,
+4. that callable floor now also covers defined-name callable bindings, so callable meaning is no longer confined to immediate helper-local scope in the local proving floor,
+5. the current callable-value carrier remains provisional and replay-summary-oriented rather than finalized as a shared downstream transport.
+
+Current narrowing direction:
+1. the next smaller shared carrier may legitimately converge toward an opaque callable identity plus minimum semantic fields,
+2. parameter names, capture names, and body-kind detail do not necessarily belong in that minimum carrier if provenance/replay surfaces preserve them explicitly,
+3. any opaque callable identity is still too weak if origin, capture mode, arity shape, or invocation contract become unrecoverable.
 
 Working rule:
 1. publication restrictions on callable values remain separate from the question of whether callable values are semantically admissible,
 2. lexical capture must not be approximated away by dynamic helper-name lookup,
-3. transport details remain open, but callable-value meaning must stay recoverable.
+3. callable capture reporting must not be approximated by "all visible helpers" when exact free-helper capture is knowable,
+4. named callable bindings adopted into OxFml-defined name context may preserve callable meaning and typed invocation without forcing immediate publication-policy closure,
+5. transport details remain open, but callable-value meaning must stay recoverable.
+6. parameter-name, capture-name, and body-kind detail may remain provenance/replay detail rather than minimum transport fields if the smaller shared callable carrier still preserves lexical meaning honestly.
 
 ## 6B. Availability, Feature, And Provider Gating Boundary
 OxFml and OxFunc need a shared way to distinguish function availability states without collapsing them into one generic unknown-function bucket.
@@ -209,11 +229,23 @@ Working split:
 2. runtime host or provider presence belongs primarily in capability view or runtime execution truth,
 3. early formula rejection, runtime `#NAME?`, typed capability denial, and provider-failure outcomes must remain distinguishable.
 
+Current edit-path reading:
+1. OxFml may reject an edit attempt before formula adoption when the submitted string cannot honestly enter the canonical parse/bind artifact ladder,
+2. OxFml may also accept the formula text as syntactically and artifact-valid while preserving unresolved-name or unresolved-bind facts in `BoundFormula` or `SemanticPlan`,
+3. in that accepted-but-unresolved lane, OxFunc remains authoritative for the eventual `#NAME?` value payload and broader value-universe behavior,
+4. OxFml remains authoritative for the unresolved-name classification, bind diagnostics, and stage at which the failure first became knowable.
+
 Current stage-oriented reading:
 1. parse and bind should be able to observe catalog-known, alias/localization, feature-gated, and compatibility-gated states where early admission depends on them,
 2. semantic planning should preserve the relevant availability/gating summary rather than collapsing it into one generic unsupported marker,
 3. runtime capability view should carry genuinely host- or session-dependent unavailable states,
-4. post-dispatch or runtime execution may still surface provider-failure outcomes that are distinct from both early unknown-name classification and capability denial.
+4. post-dispatch or runtime execution may still surface provider-failure outcomes that are distinct from both early unknown-name classification and capability denial,
+5. the stage split is only honest if the semantic-plan layer preserves enough identity to explain which catalog surface and which gate/profile produced the observed state.
+
+Working rule:
+1. do not collapse accepted-but-unresolved formula state into edit rejection,
+2. do not collapse unresolved-name classification into provider-failure or runtime capability denial,
+3. do not collapse OxFml bind-time knowledge into OxFunc-owned value payload ownership.
 
 ## 7. Source and Structure Classes
 The current minimum semantic vocabulary should distinguish at least:

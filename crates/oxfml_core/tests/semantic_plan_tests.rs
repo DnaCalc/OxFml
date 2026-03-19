@@ -1,6 +1,7 @@
 use oxfml_core::semantics::{
     EvaluationRequirement, FormulaDeterminismClass, FormulaThreadSafetyClass,
-    FormulaVolatilityClass,
+    FormulaVolatilityClass, LibraryAvailabilityState, LibraryContextSnapshot,
+    LibraryContextSnapshotEntry, RegistrationSourceKind,
 };
 use oxfunc_core::function::FecDependencyProfile;
 
@@ -301,6 +302,79 @@ fn semantic_plan_preserves_helper_environment_for_let_and_lambda() {
     assert_eq!(invocation_plan.helper_profile.lambda_invocation_count, 1);
     assert_eq!(lambda_plan.helper_profile.max_lambda_arity, 1);
     assert!(lexical_capture_plan.helper_profile.lexical_capture_required);
+}
+
+#[test]
+fn semantic_plan_uses_snapshot_minimum_fields_and_builtin_fallback_refs() {
+    let compiled = common::compile_formula_with_library_context(
+        "semantic-library-snapshot",
+        "=SUM(1)+TRANSLATE(2)",
+        std::collections::BTreeMap::new(),
+        "semantic-struct-v1",
+        "oxfunc:fixture",
+        Some(LibraryContextSnapshot {
+            snapshot_id: "libctx.semantic".to_string(),
+            snapshot_version: "v1".to_string(),
+            entries: vec![LibraryContextSnapshotEntry {
+                surface_name: "TRANSLATE".to_string(),
+                canonical_id: Some("FUNC.TRANSLATE".to_string()),
+                surface_stable_id: Some("surface.translate.provider".to_string()),
+                name_resolution_table_ref: Some("libctx.names.provider.en-US@v1".to_string()),
+                semantic_trait_profile_ref: Some("oxfunc.profile.translate@v2".to_string()),
+                gating_profile_ref: Some("gate.translate-provider@v1".to_string()),
+                registration_source_kind: RegistrationSourceKind::ProviderBacked,
+                parse_bind_state: LibraryAvailabilityState::CatalogKnown,
+                semantic_plan_state: LibraryAvailabilityState::CatalogKnown,
+                runtime_capability_state: Some(LibraryAvailabilityState::CatalogKnown),
+                post_dispatch_state: Some(LibraryAvailabilityState::ProviderUnavailable),
+            }],
+        }),
+    );
+    let plan = compiled.semantic_plan;
+
+    assert_eq!(
+        plan.library_context_snapshot_ref.as_deref(),
+        Some("libctx.semantic@v1")
+    );
+
+    let sum = plan
+        .availability_summaries
+        .iter()
+        .find(|summary| summary.surface_name == "SUM")
+        .expect("SUM summary should exist");
+    assert_eq!(sum.surface_stable_id.as_deref(), Some("FUNC.SUM"));
+    assert_eq!(sum.semantic_trait_profile_ref.as_deref(), Some("FUNC.SUM"));
+    assert_eq!(sum.name_resolution_table_ref, None);
+
+    let translate = plan
+        .availability_summaries
+        .iter()
+        .find(|summary| summary.surface_name == "TRANSLATE")
+        .expect("TRANSLATE summary should exist");
+    assert_eq!(
+        translate.surface_stable_id.as_deref(),
+        Some("surface.translate.provider")
+    );
+    assert_eq!(
+        translate.name_resolution_table_ref.as_deref(),
+        Some("libctx.names.provider.en-US@v1")
+    );
+    assert_eq!(
+        translate.semantic_trait_profile_ref.as_deref(),
+        Some("oxfunc.profile.translate@v2")
+    );
+    assert_eq!(
+        translate.gating_profile_ref.as_deref(),
+        Some("gate.translate-provider@v1")
+    );
+    assert_eq!(
+        translate.runtime_capability_state,
+        Some(LibraryAvailabilityState::CatalogKnown)
+    );
+    assert_eq!(
+        translate.post_dispatch_state,
+        Some(LibraryAvailabilityState::ProviderUnavailable)
+    );
 }
 
 fn compile(formula: &str) -> oxfml_core::SemanticPlan {

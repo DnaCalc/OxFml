@@ -30,6 +30,7 @@ Narrow the remaining OxFml/OxFunc seam around broader catalog breadth, callable-
 1. A narrower canonical OxFml/OxFunc boundary for library-context snapshot, callable carrier, and provider-stage outcomes.
 2. Broader exercised semantic-plan and prepared-result evidence for those lanes.
 3. Updated outbound observation notes for OxFunc if the narrowed baseline materially changes the shared reading.
+4. A focused prep artifact for pinning down the `LET` / `LAMBDA` callable seam once the general callable floor is narrow enough.
 
 ## Gate Model
 ### Entry gate
@@ -57,9 +58,14 @@ Narrow the remaining OxFml/OxFunc seam around broader catalog breadth, callable-
 | 9 | CURRENT_BLOCKERS.md updated (new/resolved)? | |
 
 ## Status
-- execution_state: planned
+- execution_state: in_progress
 - scope_completeness: scope_partial
 - target_completeness: target_partial
 - integration_completeness: partial
-- open_lanes: broader UDF/product transport, final callable publication policy, and broader catalog breadth remain outside this workset scope
-- claim_confidence: draft
+- open_lanes:
+  - broader OxFunc catalog coverage for currently exercised semantic lanes is still partial
+  - the split between early formula rejection, semantic-plan unsupported states, runtime capability denial, and provider-failure outcomes is narrower locally but not yet final
+  - the callable-value carrier now covers helper-local and adopted defined-name callable lanes, but it is still provisional rather than final
+  - the `LET` / `LAMBDA` seam pin-down agenda is now explicit, but the final carrier vs provenance vs invocation split is still open
+  - broader UDF/product transport and final callable publication policy remain outside this workset scope
+- claim_confidence: moderate
