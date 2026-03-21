@@ -1,3 +1,6 @@
+use std::collections::BTreeMap;
+
+use oxfml_core::binding::NameKind;
 use oxfml_core::semantics::{
     EvaluationRequirement, FormulaDeterminismClass, FormulaThreadSafetyClass,
     FormulaVolatilityClass, LibraryAvailabilityState, LibraryContextSnapshot,
@@ -177,6 +180,24 @@ fn semantic_plan_for_external_reference_marks_deferred_capability_lane() {
 }
 
 #[test]
+fn semantic_plan_for_mixed_name_reference_marks_name_formula_carrier_lane() {
+    let mut names = BTreeMap::new();
+    names.insert("NamedFormula".to_string(), NameKind::MixedOrDeferred);
+    let plan = compile_with_names("=NamedFormula", names);
+
+    assert!(plan.function_bindings.is_empty());
+    assert!(
+        plan.evaluation_requirements
+            .contains(&EvaluationRequirement::NameCarrierDeferred)
+    );
+    assert!(
+        plan.capability_requirements
+            .iter()
+            .any(|item| item == "name_formula_carrier")
+    );
+}
+
+#[test]
 fn semantic_plan_for_index_and_xmatch_binds_registered_catalog_entries() {
     let index_plan = compile("=INDEX(SEQUENCE(3),2)");
     let xmatch_plan = compile("=XMATCH(3,SEQUENCE(5))");
@@ -322,6 +343,13 @@ fn semantic_plan_uses_snapshot_minimum_fields_and_builtin_fallback_refs() {
                 name_resolution_table_ref: Some("libctx.names.provider.en-US@v1".to_string()),
                 semantic_trait_profile_ref: Some("oxfunc.profile.translate@v2".to_string()),
                 gating_profile_ref: Some("gate.translate-provider@v1".to_string()),
+                metadata_status: None,
+                special_interface_kind: None,
+                admission_interface_kind: None,
+                preparation_owner: None,
+                runtime_boundary_kind: None,
+                arity_shape_note: None,
+                interface_contract_ref: None,
                 registration_source_kind: RegistrationSourceKind::ProviderBacked,
                 parse_bind_state: LibraryAvailabilityState::CatalogKnown,
                 semantic_plan_state: LibraryAvailabilityState::CatalogKnown,
@@ -381,7 +409,21 @@ fn compile(formula: &str) -> oxfml_core::SemanticPlan {
     common::compile_formula(
         "semantic-fixture",
         formula,
-        std::collections::BTreeMap::new(),
+        BTreeMap::new(),
+        "semantic-struct-v1",
+        "oxfunc:fixture",
+    )
+    .semantic_plan
+}
+
+fn compile_with_names(
+    formula: &str,
+    names: BTreeMap<String, NameKind>,
+) -> oxfml_core::SemanticPlan {
+    common::compile_formula(
+        "semantic-fixture",
+        formula,
+        names,
         "semantic-struct-v1",
         "oxfunc:fixture",
     )

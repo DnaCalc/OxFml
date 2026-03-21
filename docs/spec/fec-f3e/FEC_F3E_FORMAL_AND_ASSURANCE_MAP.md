@@ -146,9 +146,31 @@ The following remain explicitly open:
 Current checked local formal floor also includes:
 1. `formal/lean/OxFmlExternalReferenceDeferred.lean`
    - external-provider admissibility plus async-capability consequence lemmas
-2. `formal/tla/FecExternalCapabilityGate.tla`
+2. `formal/lean/OxFmlNameCarrierDeferred.lean`
+   - mixed/deferred name carrier plans require explicit deferred evaluation and capability markers
+3. `formal/lean/OxFmlFailureStageSplit.lean`
+   - edit rejection remains distinct from accepted-unresolved, semantic-plan gated, runtime-capability denied, and post-dispatch provider-unavailable outcomes
+4. `formal/lean/OxFmlExternalNameCarrier.lean`
+   - explicit external-book identity, same-external-book restriction, and provider-stage outcomes remain distinct for external-name carriers
+5. `formal/tla/FecExternalCapabilityGate.tla`
    - external-provider gate with checked async-consequence invariant
-3. `formal/run_formal.ps1`
+6. `formal/tla/FecHigherOrderCallableBoundary.tla`
+   - catalog-admitted higher-order lanes may still reject at the callable-invoker boundary without collapsing back into catalog or parse/bind failure
+7. `formal/tla/FecSessionContentionBoundary.tla`
+   - busy-locus multi-session rejection remains distinct from publishable execution and does not imply scheduler-policy closure
+8. `formal/tla/FecRetryAfterReleaseBoundary.tla`
+   - retry-admissibility after busy-locus rejection is modeled separately from scheduler fairness or placement policy
+9. `formal/tla/FecOverlayCleanupBoundary.tla`
+   - session-local overlays are cleaned on commit, abort, and expiry and do not survive epoch advance as stale active overlays
+10. `formal/tla/FecPinnedEpochOverlayBoundary.tla`
+   - retained overlay epochs may be reused only on exact snapshot-epoch match and are evictable only after executed-session pins are released
+11. `formal/tla/FecDistributedPlacementBoundary.tla`
+   - local placement admission remains distinct from remote-placement deferral and no publishable result exists until a locally admitted execution reaches commit
+12. `formal/tla/FecRetryOrderingBoundary.tla`
+   - once retry-admissibility ordering is surfaced, later retries do not overtake earlier admissible retries without explicit rejection or release
+13. `formal/tla/FecPlacementDeferralExpiryBoundary.tla`
+   - deferred remote-placement lanes may expire or reject without acquiring a local claim and without becoming publishable
+14. `formal/run_formal.ps1`
    - canonical local runner for those checked artifacts
 
 ## 10. Working Rule

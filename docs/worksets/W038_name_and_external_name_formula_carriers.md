@@ -51,9 +51,12 @@ Make defined-name formulas and external-name formulas first-class OxFml carrier 
 | 9 | CURRENT_BLOCKERS.md updated (new/resolved)? | |
 
 ## Status
-- execution_state: planned
+- execution_state: in_progress
 - scope_completeness: scope_partial
 - target_completeness: target_partial
 - integration_completeness: partial
-- open_lanes: broader workbook/object-management semantics and wider provider-host policy remain outside this workset scope
+- open_lanes:
+  - semantic-plan classification now treats `NameKind::MixedOrDeferred` as an explicit name-formula-carrier lane (`name_formula_carrier` / `NameCarrierDeferred`), a first checked Lean artifact now fixes that distinction formally, and adopted defined-name callable values now preserve a distinct `DefinedNameCallable` origin kind at runtime with first exercised higher-order execution through `MAP`, but executable formula-bearing defined-name storage and wider evaluation are still missing
+  - external-name formulas now have a first checked Lean carrier artifact for same-external-book restriction and provider-stage runtime typing, but they still do not have a first-class executable local carrier artifact
+  - broader workbook/object-management semantics and wider provider-host policy remain outside this workset scope
 - claim_confidence: draft

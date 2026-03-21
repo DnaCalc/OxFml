@@ -1342,7 +1342,7 @@ fn value_payload_for_eval_value(
         ),
         EvalValue::Lambda(name) => (
             WorksheetValueClass::Scalar,
-            ValuePayload::Text(format!("Lambda({name})")),
+            ValuePayload::Text(format!("Lambda({})", name.callable_token)),
             Some(Extent { rows: 1, cols: 1 }),
         ),
     }

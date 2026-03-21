@@ -1,0 +1,82 @@
+[
+  {
+    "case_id": "stage_001_accepted_unresolved_name",
+    "lane": "AcceptedUnresolvedName",
+    "formula": "=UnknownName",
+    "snapshot": null,
+    "expected": {
+      "unresolved_reasons": [
+        "unknown identifier or name"
+      ]
+    }
+  },
+  {
+    "case_id": "stage_002_semantic_feature_gated",
+    "lane": "SemanticPlanGated",
+    "formula": "=FUTUREFUNC(1)",
+    "snapshot": {
+      "snapshot_id": "libctx.failure-stage",
+      "snapshot_version": "v1",
+      "entries": [
+        {
+          "surface_name": "FUTUREFUNC",
+          "canonical_id": "FUNC.FUTUREFUNC",
+          "surface_stable_id": "surface.futurefunc.core",
+          "name_resolution_table_ref": "libctx.names.preview.en-US@v1",
+          "semantic_trait_profile_ref": "oxfunc.profile.futurefunc@v1",
+          "gating_profile_ref": "gate.preview-functions@v1",
+          "registration_source_kind": "BuiltIn",
+          "parse_bind_state": "FeatureGated",
+          "semantic_plan_state": "FeatureGated",
+          "runtime_capability_state": null,
+          "post_dispatch_state": null
+        }
+      ]
+    },
+    "expected": {
+      "surface_name": "FUTUREFUNC",
+      "parse_bind_state": "FeatureGated",
+      "semantic_plan_state": "FeatureGated"
+    }
+  },
+  {
+    "case_id": "stage_003_runtime_capability_denied",
+    "lane": "RuntimeCapabilityDenied",
+    "formula": "=INFO(\"directory\")",
+    "snapshot": null,
+    "expected": {
+      "reject_code": "CapabilityDenied"
+    }
+  },
+  {
+    "case_id": "stage_004_post_dispatch_provider_unavailable",
+    "lane": "PostDispatchProviderUnavailable",
+    "formula": "=TRANSLATE(1)",
+    "snapshot": {
+      "snapshot_id": "libctx.failure-stage",
+      "snapshot_version": "v1",
+      "entries": [
+        {
+          "surface_name": "TRANSLATE",
+          "canonical_id": "FUNC.TRANSLATE",
+          "surface_stable_id": "surface.translate.provider",
+          "name_resolution_table_ref": "libctx.names.provider.en-US@v1",
+          "semantic_trait_profile_ref": "oxfunc.profile.translate@v2",
+          "gating_profile_ref": "gate.translate-provider@v1",
+          "registration_source_kind": "ProviderBacked",
+          "parse_bind_state": "CatalogKnown",
+          "semantic_plan_state": "CatalogKnown",
+          "runtime_capability_state": "CatalogKnown",
+          "post_dispatch_state": "ProviderUnavailable"
+        }
+      ]
+    },
+    "expected": {
+      "surface_name": "TRANSLATE",
+      "parse_bind_state": "CatalogKnown",
+      "semantic_plan_state": "CatalogKnown",
+      "runtime_capability_state": "CatalogKnown",
+      "post_dispatch_state": "ProviderUnavailable"
+    }
+  }
+]

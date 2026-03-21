@@ -29,7 +29,9 @@ The local exercised floor now includes:
 8. parameter-shadowing-sensitive capture exclusion,
 9. callable summary/detail plus typed minimum callable carrier,
 10. callable preservation through adopted defined-name context,
-11. deterministic replay/proving fixtures for helper-local callable outcomes and defined-name callable transport.
+11. deterministic replay/proving fixtures for helper-local callable outcomes and defined-name callable transport,
+12. typed higher-order helper execution for `MAP`, `REDUCE`, `SCAN`, `BYROW`, `BYCOL`, and `MAKEARRAY` through a local callable invoker with inline and helper-bound lambdas,
+13. first higher-order execution through an adopted defined-name callable carrier (`MAP(...,NamedLambda)`).
 
 Primary exercised evidence currently lives in:
 1. `crates/oxfml_core/tests/evaluator_tests.rs`
@@ -108,7 +110,8 @@ Current processed OxFunc response:
 
 Current OxFml response:
 1. adopt: typed invocation over a narrower callable carrier is the right direction,
-2. alternative: `invocation_contract_ref` is acceptable only if it points to stable semantic invocation meaning rather than an implementation-specific callback or ABI handle.
+2. adopted local evidence: typed invocation over opaque callable identity is already viable for the first higher-order helper floor and does not require direct AST transfer,
+3. alternative: `invocation_contract_ref` is acceptable only if it points to stable semantic invocation meaning rather than an implementation-specific callback or ABI handle.
 
 ### Q3. Callable Provenance Vs Callable Transport
 What belongs in prepared-result provenance versus the callable carrier itself?
@@ -156,7 +159,7 @@ OxFml should push the next round in this order:
 
 Reason:
 1. lexical and capture truth is already exercised locally,
-2. transport narrowing is now blocked more by carrier ambiguity than by parser/bind uncertainty,
+2. transport narrowing is now blocked more by carrier/provenance ambiguity than by parser/bind uncertainty, invocation viability, or the first higher-order helper runtime floor,
 3. broader provider/runtime interaction can be tightened more honestly once the callable object crossing the seam is smaller and less ambiguous.
 
 ## OxCalc Trigger Condition
@@ -175,6 +178,23 @@ The next useful OxFunc reply should answer:
 2. fields that may remain provenance or replay detail,
 3. preferred callable invocation boundary,
 4. callable-specific stage distinctions that must stay typed.
+
+For the immediate next sync, OxFml wants those answers grounded in the currently exercised rows rather than in abstract carrier debate:
+1. `LET`
+2. `LAMBDA`
+3. `MAP`
+4. `REDUCE`
+5. `SCAN`
+6. `BYROW`
+7. `BYCOL`
+8. `MAKEARRAY`
+9. `ISOMITTED` only if OxFunc thinks it is already necessary to avoid a misleading carrier lock
+
+Current OxFml working question set for that sync:
+1. are `origin kind`, `capture mode`, `arity shape`, and `invocation-contract meaning` all semantically required shared minimums,
+2. can parameter-name, capture-name, and body-kind detail remain provenance-only for this round,
+3. does OxFunc still need an explicit invocation-model field beyond an opaque callable identity plus invocation-contract-style reference,
+4. should adopted defined-name callable origin already count as part of the minimum carrier discussion rather than a later extension.
 
 ## Exit Condition For This Prep Note
 This prep note has served its purpose when either:

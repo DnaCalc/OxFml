@@ -31,6 +31,8 @@ Narrow the remaining OxFml/OxFunc seam around broader catalog breadth, callable-
 2. Broader exercised semantic-plan and prepared-result evidence for those lanes.
 3. Updated outbound observation notes for OxFunc if the narrowed baseline materially changes the shared reading.
 4. A focused prep artifact for pinning down the `LET` / `LAMBDA` callable seam once the general callable floor is narrow enough.
+5. A concrete OxFml-side ask for a pinned OxFunc catalog snapshot export or stable pointer suitable for semantic-plan and test consumption.
+6. A bounded integration-round posture that uses concrete exports and concrete seam mismatches rather than indefinite note-only narrowing.
 
 ## Gate Model
 ### Entry gate
@@ -63,9 +65,13 @@ Narrow the remaining OxFml/OxFunc seam around broader catalog breadth, callable-
 - target_completeness: target_partial
 - integration_completeness: partial
 - open_lanes:
-  - broader OxFunc catalog coverage for currently exercised semantic lanes is still partial
-  - the split between early formula rejection, semantic-plan unsupported states, runtime capability denial, and provider-failure outcomes is narrower locally but not yet final
-  - the callable-value carrier now covers helper-local and adopted defined-name callable lanes, but it is still provisional rather than final
-  - the `LET` / `LAMBDA` seam pin-down agenda is now explicit, but the final carrier vs provenance vs invocation split is still open
-  - broader UDF/product transport and final callable publication policy remain outside this workset scope
+  - broader OxFunc catalog coverage for currently exercised semantic lanes is still partial, even though first-pass `W044` snapshot consumption now covers selected ordinary, seam-heavy, and higher-order helper rows
+  - the split between accepted-unresolved, semantic-plan gated, runtime capability denied, and post-dispatch provider-unavailable outcomes now has dedicated deterministic evidence and a first checked Lean artifact, but the full edit-rejection policy boundary and final seam lock are still not final
+  - the callable-value carrier now covers helper-local, helper-bound, and adopted defined-name callable lanes, and OxFml now executes `MAP`, `REDUCE`, `SCAN`, `BYROW`, `BYCOL`, and `MAKEARRAY` through a local typed callable-invoker bridge, but the carrier is still provisional rather than final
+  - the `LET` / `LAMBDA` seam pin-down agenda is now explicit, and typed invocation over opaque callable identity is now locally exercised; the remaining open question is the final carrier vs provenance field split rather than whether the invocation boundary itself is viable
+  - first-pass local consumption of the downstream `W044` snapshot export now exists for selected seam-heavy, ordinary, and higher-order helper rows, but broader replacement of narrow local catalog assumptions is still incomplete
+  - higher-order helper rows now have first local end-to-end runtime evidence for `MAP`, `REDUCE`, `SCAN`, `BYROW`, `BYCOL`, and `MAKEARRAY`, but `ISOMITTED` and broader callable-family closure remain outside the exercised runtime floor
+  - the next useful narrowing step is now to use the exercised typed-invocation floor plus broader `W044` field or interpretation mismatches to lock a smaller honest callable carrier
+  - the next OxFunc sync is now prepared as a bounded `W044` field-and-row review plus minimum callable-carrier discussion, not as a broad semantic reopen
+- broader UDF/product transport and final callable publication policy remain outside this workset scope
 - claim_confidence: moderate

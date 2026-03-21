@@ -33,6 +33,13 @@ struct LibraryContextSnapshotEntryWire {
     name_resolution_table_ref: Option<String>,
     semantic_trait_profile_ref: Option<String>,
     gating_profile_ref: Option<String>,
+    metadata_status: Option<String>,
+    special_interface_kind: Option<String>,
+    admission_interface_kind: Option<String>,
+    preparation_owner: Option<String>,
+    runtime_boundary_kind: Option<String>,
+    arity_shape_note: Option<String>,
+    interface_contract_ref: Option<String>,
     registration_source_kind: String,
     parse_bind_state: String,
     semantic_plan_state: String,
@@ -54,6 +61,13 @@ struct AvailabilitySummaryExpected {
     name_resolution_table_ref: Option<String>,
     semantic_trait_profile_ref: Option<String>,
     gating_profile_ref: Option<String>,
+    metadata_status: Option<String>,
+    special_interface_kind: Option<String>,
+    admission_interface_kind: Option<String>,
+    preparation_owner: Option<String>,
+    runtime_boundary_kind: Option<String>,
+    arity_shape_note: Option<String>,
+    interface_contract_ref: Option<String>,
     registration_source_kind: Option<String>,
     parse_bind_state: String,
     semantic_plan_state: String,
@@ -129,6 +143,41 @@ fn semantic_plan_library_context_snapshot_fixtures_round_trip() {
                 fixture.case_id
             );
             assert_eq!(
+                actual.metadata_status, expected.metadata_status,
+                "metadata status mismatch for {}",
+                fixture.case_id
+            );
+            assert_eq!(
+                actual.special_interface_kind, expected.special_interface_kind,
+                "special interface kind mismatch for {}",
+                fixture.case_id
+            );
+            assert_eq!(
+                actual.admission_interface_kind, expected.admission_interface_kind,
+                "admission interface kind mismatch for {}",
+                fixture.case_id
+            );
+            assert_eq!(
+                actual.preparation_owner, expected.preparation_owner,
+                "preparation owner mismatch for {}",
+                fixture.case_id
+            );
+            assert_eq!(
+                actual.runtime_boundary_kind, expected.runtime_boundary_kind,
+                "runtime boundary kind mismatch for {}",
+                fixture.case_id
+            );
+            assert_eq!(
+                actual.arity_shape_note, expected.arity_shape_note,
+                "arity shape note mismatch for {}",
+                fixture.case_id
+            );
+            assert_eq!(
+                actual.interface_contract_ref, expected.interface_contract_ref,
+                "interface contract ref mismatch for {}",
+                fixture.case_id
+            );
+            assert_eq!(
                 actual
                     .registration_source_kind
                     .map(registration_source_kind_name),
@@ -193,6 +242,13 @@ fn into_snapshot_entry(wire: &LibraryContextSnapshotEntryWire) -> LibraryContext
         name_resolution_table_ref: wire.name_resolution_table_ref.clone(),
         semantic_trait_profile_ref: wire.semantic_trait_profile_ref.clone(),
         gating_profile_ref: wire.gating_profile_ref.clone(),
+        metadata_status: wire.metadata_status.clone(),
+        special_interface_kind: wire.special_interface_kind.clone(),
+        admission_interface_kind: wire.admission_interface_kind.clone(),
+        preparation_owner: wire.preparation_owner.clone(),
+        runtime_boundary_kind: wire.runtime_boundary_kind.clone(),
+        arity_shape_note: wire.arity_shape_note.clone(),
+        interface_contract_ref: wire.interface_contract_ref.clone(),
         registration_source_kind: parse_registration_source_kind(&wire.registration_source_kind),
         parse_bind_state: parse_availability_state(&wire.parse_bind_state),
         semantic_plan_state: parse_availability_state(&wire.semantic_plan_state),

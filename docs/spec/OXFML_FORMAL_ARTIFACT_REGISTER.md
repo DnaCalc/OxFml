@@ -12,11 +12,30 @@ It is the planning register for:
 It is primarily a planning register, but the first checked local formal artifacts now exist at:
 1. `../../formal/lean/OxFmlSessionLifecycle.lean`
 2. `../../formal/lean/OxFmlExternalReferenceDeferred.lean`
-3. `../../formal/tla/FecSessionLifecycle.tla`
-4. `../../formal/tla/FecSessionLifecycle.cfg`
-5. `../../formal/tla/FecExternalCapabilityGate.tla`
-6. `../../formal/tla/FecExternalCapabilityGate.cfg`
-7. `../../formal/run_formal.ps1`
+3. `../../formal/lean/OxFmlNameCarrierDeferred.lean`
+4. `../../formal/lean/OxFmlFailureStageSplit.lean`
+5. `../../formal/lean/OxFmlExternalNameCarrier.lean`
+6. `../../formal/tla/FecSessionLifecycle.tla`
+7. `../../formal/tla/FecSessionLifecycle.cfg`
+8. `../../formal/tla/FecExternalCapabilityGate.tla`
+9. `../../formal/tla/FecExternalCapabilityGate.cfg`
+10. `../../formal/tla/FecHigherOrderCallableBoundary.tla`
+11. `../../formal/tla/FecHigherOrderCallableBoundary.cfg`
+12. `../../formal/tla/FecSessionContentionBoundary.tla`
+13. `../../formal/tla/FecSessionContentionBoundary.cfg`
+14. `../../formal/tla/FecRetryAfterReleaseBoundary.tla`
+15. `../../formal/tla/FecRetryAfterReleaseBoundary.cfg`
+16. `../../formal/tla/FecOverlayCleanupBoundary.tla`
+17. `../../formal/tla/FecOverlayCleanupBoundary.cfg`
+18. `../../formal/tla/FecPinnedEpochOverlayBoundary.tla`
+19. `../../formal/tla/FecPinnedEpochOverlayBoundary.cfg`
+20. `../../formal/tla/FecDistributedPlacementBoundary.tla`
+21. `../../formal/tla/FecDistributedPlacementBoundary.cfg`
+22. `../../formal/tla/FecRetryOrderingBoundary.tla`
+23. `../../formal/tla/FecRetryOrderingBoundary.cfg`
+24. `../../formal/tla/FecPlacementDeferralExpiryBoundary.tla`
+25. `../../formal/tla/FecPlacementDeferralExpiryBoundary.cfg`
+26. `../../formal/run_formal.ps1`
 
 Read together with:
 1. `OXFML_FORMALIZATION_AND_VERIFICATION.md`
@@ -32,6 +51,17 @@ Read together with:
 | Bind normalization | normalized reference ADTs and unresolved-reference classifications | none initially | bind snapshot fixtures | `PACK.oxfml.bind.reference_normalization` |
 | Prepared-call structure | prepared-arg/result ADTs and invariants | none initially | prepared-call contract fixtures | `PACK.oxfml.oxfunc.prepared_contract` |
 | Host-query boundary | capability-view and host-query ADTs | capability-denial paths in evaluator lifecycle model | host-query schema fixtures | `PACK.oxfml.oxfunc.prepared_contract` |
+| Name-formula carrier classification | formula-bearing name carrier ADTs and explicit deferred-name requirements | none initially | name-carrier classification fixtures | `PACK.oxfml.bind.reference_normalization` |
+| Failure-stage split | edit-adoption and unresolved/gated/runtime/provider classification ADTs | none initially | failure-stage classification fixtures | `PACK.fec.reject_detail_replay` |
+| External-name carrier boundary | explicit external-book identity, same-book restriction, and provider-stage outcome ADTs | none initially | external-name carrier fixtures | `PACK.oxfml.bind.reference_normalization` |
+| Higher-order callable boundary | callable-carrier and invocation-boundary invariants | catalog-admitted callable-invoker rejection model | higher-order callable boundary fixtures | `PACK.oxfml.oxfunc.prepared_contract` |
+| Session contention boundary | busy-locus rejection and publish exclusion under multi-session overlap | busy-locus contention model | session contention fixtures | `PACK.fec.transaction_boundary` |
+| Retry-after-release boundary | retry-admissibility after busy-locus rejection | retry-after-release contention model | contention retry fixtures | `PACK.fec.transaction_boundary` |
+| Overlay cleanup boundary | session-local overlay cleanup and epoch-scoped release | commit/abort/expire cleanup model | session overlay fixtures | `PACK.fec.overlay_lifecycle` |
+| Pinned-epoch overlay boundary | retained overlay epoch and pin-count ADTs | exact-match retained reuse and unpinned deterministic eviction model | overlay reuse/eviction fixtures | `PACK.fec.overlay_lifecycle` |
+| Distributed placement boundary | placement outcome classes and locus-claim ADTs | local-admission versus remote-deferral model | placement consequence fixtures | `PACK.fec.transaction_boundary` |
+| Retry-ordering fairness boundary | surfaced retry-admissibility order facts | non-overtaking admissible-retry model | retry-order consequence fixtures | `PACK.fec.transaction_boundary` |
+| Placement-deferral expiry boundary | deferred placement timeout and terminal no-claim outcome ADTs | remote-placement expiry or reject without local claim/publication model | placement-expiry consequence fixtures | `PACK.fec.transaction_boundary` |
 | Candidate/publication split | accepted-candidate and commit-bundle relation invariants | publish/no-publish state split | candidate-vs-commit replay fixtures | `PACK.fec.transaction_boundary` |
 | Reject taxonomy | typed reject-context ADTs and no-publish theorem surface | reject transition safety | reject-context schema fixtures | `PACK.fec.reject_detail_replay` |
 | Minimum payload schemas | payload-field sufficiency invariants | payload sufficiency for commit/reject transitions | schema-validation fixtures | `PACK.fec.minimum_payload_schemas` |
@@ -77,11 +107,30 @@ The current executed ownership floor is:
 The current local formal artifact floor is:
 1. Lean session lifecycle and no-publish artifact: `formal/lean/OxFmlSessionLifecycle.lean`
 2. Lean external-reference deferment artifact: `formal/lean/OxFmlExternalReferenceDeferred.lean`
-3. TLA+ session lifecycle and publish-safety model: `formal/tla/FecSessionLifecycle.tla`
-4. TLA+ model configuration: `formal/tla/FecSessionLifecycle.cfg`
-5. TLA+ external capability gate model: `formal/tla/FecExternalCapabilityGate.tla`
-6. TLA+ external capability gate configuration: `formal/tla/FecExternalCapabilityGate.cfg`
-7. Local formal runner: `formal/run_formal.ps1`
+3. Lean deferred-name-carrier artifact: `formal/lean/OxFmlNameCarrierDeferred.lean`
+4. Lean failure-stage split artifact: `formal/lean/OxFmlFailureStageSplit.lean`
+5. Lean external-name carrier artifact: `formal/lean/OxFmlExternalNameCarrier.lean`
+6. TLA+ session lifecycle and publish-safety model: `formal/tla/FecSessionLifecycle.tla`
+7. TLA+ model configuration: `formal/tla/FecSessionLifecycle.cfg`
+8. TLA+ external capability gate model: `formal/tla/FecExternalCapabilityGate.tla`
+9. TLA+ external capability gate configuration: `formal/tla/FecExternalCapabilityGate.cfg`
+10. TLA+ higher-order callable boundary model: `formal/tla/FecHigherOrderCallableBoundary.tla`
+11. TLA+ higher-order callable boundary configuration: `formal/tla/FecHigherOrderCallableBoundary.cfg`
+12. TLA+ session-contention boundary model: `formal/tla/FecSessionContentionBoundary.tla`
+13. TLA+ session-contention boundary configuration: `formal/tla/FecSessionContentionBoundary.cfg`
+14. TLA+ retry-after-release boundary model: `formal/tla/FecRetryAfterReleaseBoundary.tla`
+15. TLA+ retry-after-release boundary configuration: `formal/tla/FecRetryAfterReleaseBoundary.cfg`
+16. TLA+ overlay-cleanup boundary model: `formal/tla/FecOverlayCleanupBoundary.tla`
+17. TLA+ overlay-cleanup boundary configuration: `formal/tla/FecOverlayCleanupBoundary.cfg`
+18. TLA+ pinned-epoch overlay boundary model: `formal/tla/FecPinnedEpochOverlayBoundary.tla`
+19. TLA+ pinned-epoch overlay boundary configuration: `formal/tla/FecPinnedEpochOverlayBoundary.cfg`
+20. TLA+ distributed-placement boundary model: `formal/tla/FecDistributedPlacementBoundary.tla`
+21. TLA+ distributed-placement boundary configuration: `formal/tla/FecDistributedPlacementBoundary.cfg`
+22. TLA+ retry-ordering fairness boundary model: `formal/tla/FecRetryOrderingBoundary.tla`
+23. TLA+ retry-ordering fairness boundary configuration: `formal/tla/FecRetryOrderingBoundary.cfg`
+24. TLA+ placement-deferral expiry boundary model: `formal/tla/FecPlacementDeferralExpiryBoundary.tla`
+25. TLA+ placement-deferral expiry boundary configuration: `formal/tla/FecPlacementDeferralExpiryBoundary.cfg`
+26. Local formal runner: `formal/run_formal.ps1`
 
 These are checked local artifacts.
 They are not yet Green-owned canonical formal artifacts, and broader clause families still remain open.

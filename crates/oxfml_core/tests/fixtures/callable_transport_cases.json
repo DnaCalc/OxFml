@@ -13,7 +13,7 @@
       "payload_summary": "Lambda(arity=1;params=y;captures=x;body=Binary)",
       "prepared_call_functions": [],
       "callable_carrier": {
-        "origin_kind": "HelperLambda",
+        "origin_kind": "DefinedNameCallable",
         "invocation_model": "TypedInvocationOnly",
         "capture_mode": "LexicalCapture",
         "arity": 1
@@ -57,7 +57,7 @@
       "payload_summary": "Lambda(arity=1;params=x;captures=-;body=Binary)",
       "prepared_call_functions": [],
       "callable_carrier": {
-        "origin_kind": "HelperLambda",
+        "origin_kind": "DefinedNameCallable",
         "invocation_model": "TypedInvocationOnly",
         "capture_mode": "NoCapture",
         "arity": 1

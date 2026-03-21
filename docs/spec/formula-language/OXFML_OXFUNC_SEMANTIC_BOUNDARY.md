@@ -67,6 +67,32 @@ Current local floor:
    - `gating_profile_ref`
 4. transport remains intentionally open beyond those preserved semantic distinctions.
 
+Current integration preference:
+1. OxFunc has now exposed a first-pass pinned machine-readable catalog snapshot export and reading guide,
+2. OxFml should treat that export as the current best downstream stabilization artifact rather than continuing note-only catalog narrowing,
+3. the snapshot should be suitable for OxFml-side semantic-plan consumption, replay correlation, and generated test synthesis rather than only for human note exchange,
+4. the minimum useful export should include:
+   - snapshot identity/version,
+   - source commit/tag identity,
+   - canonical surface ids,
+   - aliases/localized-name table refs or embedded tables,
+   - semantic trait/profile refs,
+   - gating profile refs,
+   - registration source kind,
+   - stage-aware availability fields where already known,
+5. richer profile/detail registries may remain separate as long as the exported snapshot points to them stably.
+
+Current first-pass downstream artifact:
+1. `../OxFunc/docs/function-lane/OXFUNC_LIBRARY_CONTEXT_SNAPSHOT_EXPORT_V1.csv`
+2. `../OxFunc/docs/function-lane/OXFUNC_LIBRARY_CONTEXT_SNAPSHOT_EXPORT_V1_README.md`
+
+Current OxFml reading of that artifact:
+1. the export is useful now for initial consumption and mismatch discovery,
+2. `snapshot_id`, `snapshot_generation`, `source_commit_short`, `source_commit_full`, `source_tree_state`, canonical surface ids, `registration_source_kind`, `special_interface_kind`, `preparation_owner`, `runtime_boundary_kind`, and `interface_contract_ref` are already useful first-pass fields,
+3. refreshed ordinary extracted rows such as `FUNC.CHOOSECOLS`, `FUNC.FILTER`, `FUNC.UNIQUE`, and `FUNC.VSTACK` are now useful first-pass planning and test-synthesis inputs rather than mere catalog placeholders,
+4. OxFml now consumes selected seam-heavy and ordinary rows from this export directly in local semantic-plan tests,
+5. exact shared field names and fuller dereferenceable profile bundles remain open.
+
 Working rule:
 1. preserve the semantic distinction first,
 2. keep the exact transport or runtime ownership shape open until later narrowing,
@@ -197,13 +223,17 @@ Current OxFml baseline:
 1. helper forms are exercised locally,
 2. lexical helper capture is preserved semantically,
 3. callable results now carry a typed minimum carrier for origin, invocation model, capture mode, and arity,
-4. that callable floor now also covers defined-name callable bindings, so callable meaning is no longer confined to immediate helper-local scope in the local proving floor,
-5. the current callable-value carrier remains provisional and replay-summary-oriented rather than finalized as a shared downstream transport.
+4. that callable floor now also covers helper-bound and defined-name callable bindings, so callable meaning is no longer confined to immediate helper-local scope in the local proving floor,
+5. typed invocation over an opaque callable identity is now exercised locally for `MAP`, `REDUCE`, `SCAN`, `BYROW`, `BYCOL`, and `MAKEARRAY` rather than remaining a note-only boundary,
+6. the current callable-value carrier remains provisional and replay-summary-oriented rather than finalized as a shared downstream transport.
 
 Current narrowing direction:
 1. the next smaller shared carrier may legitimately converge toward an opaque callable identity plus minimum semantic fields,
 2. parameter names, capture names, and body-kind detail do not necessarily belong in that minimum carrier if provenance/replay surfaces preserve them explicitly,
-3. any opaque callable identity is still too weak if origin, capture mode, arity shape, or invocation contract become unrecoverable.
+3. any opaque callable identity is still too weak if origin, capture mode, arity shape, or invocation contract become unrecoverable,
+4. workbook Defined Name callable preservation should be treated as first-pass seam pressure rather than deferred callable transport cleanup,
+5. higher-order helper evidence from OxFunc is now strong downstream pressure, and OxFml now has matching local evidence for `MAP`, `REDUCE`, `SCAN`, `BYROW`, `BYCOL`, and `MAKEARRAY`: their `W044` catalog rows are consumed directly in local semantic-plan tests and their runtime lanes now execute through a local typed callable invoker,
+6. that newer runtime evidence narrows the open question toward minimum callable carrier and provenance fields rather than whether typed invocation itself is viable.
 
 Working rule:
 1. publication restrictions on callable values remain separate from the question of whether callable values are semantically admissible,
@@ -212,6 +242,22 @@ Working rule:
 4. named callable bindings adopted into OxFml-defined name context may preserve callable meaning and typed invocation without forcing immediate publication-policy closure,
 5. transport details remain open, but callable-value meaning must stay recoverable.
 6. parameter-name, capture-name, and body-kind detail may remain provenance/replay detail rather than minimum transport fields if the smaller shared callable carrier still preserves lexical meaning honestly.
+
+## 6AA. Host-Provider And Subscription Seam Pattern
+Some function families should be treated as prepared request plus typed host/provider outcome seams rather than as ordinary pure-function kernels or generic provider fetches.
+
+Current pressure example:
+1. `RTD`
+
+Current intended split:
+1. OxFml owns parse, bind, semantic planning, prepared request formation, and higher-level host/runtime orchestration concerns such as topic lifecycle, subscription tables, callback threading, and recalc scheduling,
+2. OxFunc may own admitted call shape, typed request/result projection, and worksheet-semantic interpretation of typed provider outcomes once a prepared request is supplied,
+3. broader lifecycle/runtime orchestration should remain above OxFunc rather than being smuggled into the function-semantic carrier.
+
+Working rule:
+1. prefer a prepared request plus typed host/provider outcome surface,
+2. keep host/provider capability denial, connection failure, and provider error outcomes typed and distinct,
+3. do not use this pattern to reopen the callable boundary broadly unless a coordinator-visible consequence or stronger OxFml-local evidence requires it.
 
 ## 6B. Availability, Feature, And Provider Gating Boundary
 OxFml and OxFunc need a shared way to distinguish function availability states without collapsing them into one generic unknown-function bucket.
@@ -241,6 +287,12 @@ Current stage-oriented reading:
 3. runtime capability view should carry genuinely host- or session-dependent unavailable states,
 4. post-dispatch or runtime execution may still surface provider-failure outcomes that are distinct from both early unknown-name classification and capability denial,
 5. the stage split is only honest if the semantic-plan layer preserves enough identity to explain which catalog surface and which gate/profile produced the observed state.
+
+Current local evidence now includes dedicated deterministic fixtures for:
+1. accepted formula text with unresolved-name classification,
+2. semantic-plan feature-gated classification,
+3. runtime capability denial,
+4. post-dispatch provider-unavailable classification.
 
 Working rule:
 1. do not collapse accepted-but-unresolved formula state into edit rejection,
@@ -350,6 +402,11 @@ The most important open questions at this boundary are:
 7. what is the smallest honest shared library-context snapshot shape,
 8. which callable-value facts must cross the boundary beyond opaque identity plus typed invocation,
 9. which availability and provider states belong in library context versus runtime capability view.
+
+Current next useful narrowing step:
+1. stop relying on note-only catalog narrowing,
+2. consume the current pinned OxFunc catalog export,
+3. use that export to replace narrow local catalog assumptions with broader OxFml-side snapshot-backed tests.
 
 ## 15. Current Round Stabilization Posture
 The current OxFml reading is that this seam round has reached the point of diminishing returns for note-only narrowing.

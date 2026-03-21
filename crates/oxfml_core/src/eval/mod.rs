@@ -1,7 +1,10 @@
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 
 use oxfunc_core::function::ArgPreparationProfile;
-use oxfunc_core::functions::surface_dispatch::eval_surface_value_call;
+use oxfunc_core::functions::adapters::PreparedArgValue;
+use oxfunc_core::functions::callable_helpers::{CallableInvocationError, CallableInvoker};
+use oxfunc_core::functions::surface_dispatch::eval_surface_value_call_with_callable;
 use oxfunc_core::host_info::HostInfoProvider;
 use oxfunc_core::locale_format::LocaleFormatContext;
 use oxfunc_core::resolver::{
@@ -9,7 +12,10 @@ use oxfunc_core::resolver::{
     ResolverCapabilities,
 };
 use oxfunc_core::value::{
-    CallArgValue, EvalValue, ExcelText, ReferenceKind, ReferenceLike, WorksheetErrorCode,
+    CallArgValue, CallableArityShape as OxCallableArityShape,
+    CallableCaptureMode as OxCallableCaptureMode, CallableOriginKind as OxCallableOriginKind,
+    EvalValue, ExcelText, LambdaValue as OxLambdaValue, ReferenceKind, ReferenceLike,
+    WorksheetErrorCode,
 };
 
 use crate::binding::{
@@ -107,6 +113,7 @@ pub struct PreparedResult {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CallableOriginKind {
     HelperLambda,
+    DefinedNameCallable,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -155,6 +162,7 @@ const SPECIAL_LET_FUNCTION_ID: &str = "SPECIAL.LET";
 const SPECIAL_LAMBDA_FUNCTION_ID: &str = "SPECIAL.LAMBDA";
 const SPECIAL_LEGACY_SINGLE_FUNCTION_ID: &str = "SPECIAL.LEGACY_SINGLE";
 const SPECIAL_EXTERNAL_REFERENCE_DEFERRED_FUNCTION_ID: &str = "SPECIAL.EXTERNAL_REFERENCE_DEFERRED";
+const HELPER_LAMBDA_INVOCATION_CONTRACT_REF: &str = "oxfml.helper_lambda.invoke.v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EvaluationBackend {
@@ -189,6 +197,50 @@ enum HelperBinding {
         body: BoundExpr,
         closure: BTreeMap<String, HelperBinding>,
     },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct LambdaBinding {
+    origin_kind: CallableOriginKind,
+    params: Vec<String>,
+    body: BoundExpr,
+    closure: BTreeMap<String, HelperBinding>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct RegisteredCallableBinding {
+    lambda: LambdaBinding,
+}
+
+#[derive(Debug, Default)]
+struct CallableRegistry {
+    next_id: usize,
+    bindings: BTreeMap<String, RegisteredCallableBinding>,
+}
+
+impl CallableRegistry {
+    fn register(&mut self, lambda: LambdaBinding) -> OxLambdaValue {
+        self.next_id += 1;
+        let token = callable_token(self.next_id, &lambda_value_summary_from_binding(&lambda));
+        let oxfunc_value = OxLambdaValue::new(
+            token.clone(),
+            oxfunc_origin_kind_from_local(lambda.origin_kind),
+            OxCallableArityShape::exact(lambda.params.len()),
+            if lambda.closure.is_empty() {
+                OxCallableCaptureMode::NoCapture
+            } else {
+                OxCallableCaptureMode::LexicalCapture
+            },
+            HELPER_LAMBDA_INVOCATION_CONTRACT_REF,
+        );
+        self.bindings
+            .insert(token, RegisteredCallableBinding { lambda });
+        oxfunc_value
+    }
+
+    fn get(&self, token: &str) -> Option<&RegisteredCallableBinding> {
+        self.bindings.get(token)
+    }
 }
 
 pub struct EvaluationContext<'a> {
@@ -229,11 +281,13 @@ pub fn evaluate_formula(
     let mut trace = EvaluationTrace {
         prepared_calls: Vec::new(),
     };
+    let callable_registry = RefCell::new(CallableRegistry::default());
     let mut resolver = LocalReferenceResolver {
         cell_values: &context.cell_values,
         defined_names: &context.defined_names,
         caller_row: context.caller_row,
         caller_col: context.caller_col,
+        callable_registry: &callable_registry,
     };
     let helper_bindings = BTreeMap::new();
 
@@ -242,6 +296,7 @@ pub fn evaluate_formula(
         &context,
         &mut resolver,
         &helper_bindings,
+        &callable_registry,
         &mut trace,
     )?;
 
@@ -257,6 +312,7 @@ fn evaluate_expr_value(
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
     helper_bindings: &BTreeMap<String, HelperBinding>,
+    callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
     match expr {
@@ -281,6 +337,7 @@ fn evaluate_expr_value(
                 context,
                 resolver,
                 helper_bindings,
+                callable_registry,
                 trace,
             )?)?;
             let rhs = coerce_to_number(evaluate_expr_value(
@@ -288,6 +345,7 @@ fn evaluate_expr_value(
                 context,
                 resolver,
                 helper_bindings,
+                callable_registry,
                 trace,
             )?)?;
             Ok(EvalValue::Number(match op {
@@ -304,25 +362,40 @@ fn evaluate_expr_value(
             context,
             resolver,
             helper_bindings,
+            callable_registry,
             trace,
         ),
-        BoundExpr::Invocation { callee, args } => {
-            evaluate_invocation(callee, args, context, resolver, helper_bindings, trace)
-        }
+        BoundExpr::Invocation { callee, args } => evaluate_invocation(
+            callee,
+            args,
+            context,
+            resolver,
+            helper_bindings,
+            callable_registry,
+            trace,
+        ),
         BoundExpr::Reference(reference) => {
             let arg = evaluate_reference_as_call_arg(
                 reference,
                 context,
                 resolver,
                 helper_bindings,
+                callable_registry,
                 false,
                 trace,
             )?;
             materialize_call_arg(arg, resolver)
         }
         BoundExpr::ImplicitIntersection(inner) => {
-            let arg =
-                evaluate_expr_as_call_arg(inner, context, resolver, helper_bindings, true, trace)?;
+            let arg = evaluate_expr_as_call_arg(
+                inner,
+                context,
+                resolver,
+                helper_bindings,
+                callable_registry,
+                true,
+                trace,
+            )?;
             match arg {
                 CallArgValue::Reference(reference) => {
                     let resolved = resolver
@@ -342,13 +415,32 @@ fn evaluate_function_call(
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
     helper_bindings: &BTreeMap<String, HelperBinding>,
+    callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
     match function_name {
-        "LET" => return evaluate_let_call(args, context, resolver, helper_bindings, trace),
-        "LAMBDA" => return evaluate_lambda_call(args, helper_bindings, context, trace),
+        "LET" => {
+            return evaluate_let_call(
+                args,
+                context,
+                resolver,
+                helper_bindings,
+                callable_registry,
+                trace,
+            );
+        }
+        "LAMBDA" => {
+            return evaluate_lambda_call(args, helper_bindings, callable_registry, context, trace);
+        }
         "_XLFN.SINGLE" | "SINGLE" => {
-            return evaluate_legacy_single_call(args, context, resolver, helper_bindings, trace);
+            return evaluate_legacy_single_call(
+                args,
+                context,
+                resolver,
+                helper_bindings,
+                callable_registry,
+                trace,
+            );
         }
         _ => {}
     }
@@ -375,6 +467,7 @@ fn evaluate_function_call(
             context,
             resolver,
             helper_bindings,
+            callable_registry,
             preserve_reference,
             trace,
         )?;
@@ -401,7 +494,12 @@ fn evaluate_function_call(
         host_query_enabled: context.host_info.is_some(),
     });
 
-    eval_surface_value_call(
+    let callable_invoker = OxFmlCallableInvoker {
+        context,
+        callable_registry,
+    };
+
+    eval_surface_value_call_with_callable(
         meta.function_id,
         &call_args,
         resolver,
@@ -409,6 +507,8 @@ fn evaluate_function_call(
         context.random_value,
         context.locale_ctx,
         context.host_info,
+        Some(&callable_invoker),
+        None,
     )
     .map_err(|error| EvaluationError {
         message: format!("OxFunc surface evaluation failed for {function_name}: {error:?}"),
@@ -420,6 +520,7 @@ fn evaluate_expr_as_call_arg(
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
     helper_bindings: &BTreeMap<String, HelperBinding>,
+    callable_registry: &RefCell<CallableRegistry>,
     preserve_reference: bool,
     trace: &mut EvaluationTrace,
 ) -> Result<CallArgValue, EvaluationError> {
@@ -429,11 +530,19 @@ fn evaluate_expr_as_call_arg(
             context,
             resolver,
             helper_bindings,
+            callable_registry,
             preserve_reference,
             trace,
         ),
         BoundExpr::ImplicitIntersection(inner) => {
-            let value = evaluate_expr_value(inner, context, resolver, helper_bindings, trace)?;
+            let value = evaluate_expr_value(
+                inner,
+                context,
+                resolver,
+                helper_bindings,
+                callable_registry,
+                trace,
+            )?;
             Ok(CallArgValue::Eval(scalarize_eval_value(value)?))
         }
         _ => Ok(CallArgValue::Eval(evaluate_expr_value(
@@ -441,6 +550,7 @@ fn evaluate_expr_as_call_arg(
             context,
             resolver,
             helper_bindings,
+            callable_registry,
             trace,
         )?)),
     }
@@ -451,6 +561,7 @@ fn evaluate_reference_as_call_arg(
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
     helper_bindings: &BTreeMap<String, HelperBinding>,
+    callable_registry: &RefCell<CallableRegistry>,
     preserve_reference: bool,
     trace: &mut EvaluationTrace,
 ) -> Result<CallArgValue, EvaluationError> {
@@ -479,9 +590,14 @@ fn evaluate_reference_as_call_arg(
                 resolver,
             )
         }
-        ReferenceExpr::Atom(NormalizedReference::Name(name)) => {
-            call_arg_for_name(name, preserve_reference, context, resolver, helper_bindings)
-        }
+        ReferenceExpr::Atom(NormalizedReference::Name(name)) => call_arg_for_name(
+            name,
+            preserve_reference,
+            context,
+            resolver,
+            helper_bindings,
+            callable_registry,
+        ),
         ReferenceExpr::Atom(NormalizedReference::External(external)) => {
             push_special_prepared_call(
                 trace,
@@ -558,6 +674,7 @@ fn call_arg_for_name(
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
     helper_bindings: &BTreeMap<String, HelperBinding>,
+    callable_registry: &RefCell<CallableRegistry>,
 ) -> Result<CallArgValue, EvaluationError> {
     if let Some(binding) = helper_bindings.get(&name.name) {
         return match binding {
@@ -572,9 +689,18 @@ fn call_arg_for_name(
                 }
             }
             HelperBinding::Arg(other) => Ok(other.clone()),
-            HelperBinding::Lambda { .. } => Err(EvaluationError {
-                message: format!("helper lambda {} requires invocation", name.name),
-            }),
+            HelperBinding::Lambda {
+                params,
+                body,
+                closure,
+            } => Ok(CallArgValue::Eval(EvalValue::Lambda(
+                callable_registry.borrow_mut().register(LambdaBinding {
+                    origin_kind: CallableOriginKind::HelperLambda,
+                    params: params.clone(),
+                    body: body.clone(),
+                    closure: closure.clone(),
+                }),
+            ))),
         };
     }
 
@@ -598,7 +724,9 @@ fn call_arg_for_name(
             }
         }
         DefinedNameBinding::Callable(binding) => Ok(CallArgValue::Eval(EvalValue::Lambda(
-            binding.summary.clone(),
+            callable_registry
+                .borrow_mut()
+                .register(lambda_binding_from_defined_name_binding(binding)),
         ))),
     }
 }
@@ -608,6 +736,7 @@ fn evaluate_let_call(
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
     helper_bindings: &BTreeMap<String, HelperBinding>,
+    callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
     if args.len() < 2 {
@@ -646,6 +775,7 @@ fn evaluate_let_call(
             context,
             resolver,
             &local_bindings,
+            callable_registry,
             true,
             trace,
         )?;
@@ -665,6 +795,7 @@ fn evaluate_let_call(
         context,
         resolver,
         &local_bindings,
+        callable_registry,
         false,
         trace,
     )?;
@@ -689,6 +820,7 @@ fn evaluate_let_call(
 fn evaluate_lambda_call(
     args: &[BoundExpr],
     helper_bindings: &BTreeMap<String, HelperBinding>,
+    callable_registry: &RefCell<CallableRegistry>,
     context: &EvaluationContext<'_>,
     trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
@@ -741,10 +873,14 @@ fn evaluate_lambda_call(
         context,
     );
 
-    Ok(EvalValue::Lambda(lambda_value_summary(
-        &parameter_names,
-        helper_bindings,
-        &args[body_index],
+    let capture_names = helper_capture_names(&args[body_index], &parameter_names, helper_bindings);
+    Ok(EvalValue::Lambda(callable_registry.borrow_mut().register(
+        LambdaBinding {
+            origin_kind: CallableOriginKind::HelperLambda,
+            params: parameter_names,
+            body: args[body_index].clone(),
+            closure: helper_closure_from_names(helper_bindings, &capture_names),
+        },
     )))
 }
 
@@ -753,6 +889,7 @@ fn evaluate_legacy_single_call(
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
     helper_bindings: &BTreeMap<String, HelperBinding>,
+    callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
     let Some(arg) = args.first() else {
@@ -761,7 +898,15 @@ fn evaluate_legacy_single_call(
         });
     };
 
-    let prepared = evaluate_expr_as_call_arg(arg, context, resolver, helper_bindings, true, trace)?;
+    let prepared = evaluate_expr_as_call_arg(
+        arg,
+        context,
+        resolver,
+        helper_bindings,
+        callable_registry,
+        true,
+        trace,
+    )?;
     push_special_prepared_call(
         trace,
         "_XLFN.SINGLE",
@@ -787,6 +932,7 @@ fn evaluate_invocation(
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
     helper_bindings: &BTreeMap<String, HelperBinding>,
+    callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
     let lambda = match lambda_binding_for_callee(callee, helper_bindings) {
@@ -814,8 +960,15 @@ fn evaluate_invocation(
     let mut local_bindings = lambda.closure;
     let mut prepared_arguments = Vec::with_capacity(args.len());
     for (ordinal, (param, arg)) in lambda.params.iter().zip(args.iter()).enumerate() {
-        let prepared =
-            evaluate_expr_as_call_arg(arg, context, resolver, &local_bindings, true, trace)?;
+        let prepared = evaluate_expr_as_call_arg(
+            arg,
+            context,
+            resolver,
+            &local_bindings,
+            callable_registry,
+            true,
+            trace,
+        )?;
         prepared_arguments.push(prepared_argument_for_call_arg(
             ordinal, arg, &prepared, true,
         ));
@@ -829,7 +982,14 @@ fn evaluate_invocation(
         prepared_arguments,
         context,
     );
-    evaluate_expr_value(&lambda.body, context, resolver, &local_bindings, trace)
+    evaluate_expr_value(
+        &lambda.body,
+        context,
+        resolver,
+        &local_bindings,
+        callable_registry,
+        trace,
+    )
 }
 
 fn helper_binding_from_expr(
@@ -861,13 +1021,6 @@ fn helper_binding_from_expr(
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-struct LambdaBinding {
-    params: Vec<String>,
-    body: BoundExpr,
-    closure: BTreeMap<String, HelperBinding>,
-}
-
 fn lambda_binding_for_callee(
     callee: &BoundExpr,
     helper_bindings: &BTreeMap<String, HelperBinding>,
@@ -887,6 +1040,7 @@ fn lambda_binding_for_callee(
                 .collect::<Option<Vec<_>>>()?;
             let capture_names = helper_capture_names(&args[body_index], &params, helper_bindings);
             Some(LambdaBinding {
+                origin_kind: CallableOriginKind::HelperLambda,
                 params,
                 body: args[body_index].clone(),
                 closure: helper_closure_from_names(helper_bindings, &capture_names),
@@ -901,6 +1055,7 @@ fn lambda_binding_for_callee(
                     body,
                     closure,
                 }) => Some(LambdaBinding {
+                    origin_kind: CallableOriginKind::HelperLambda,
                     params: params.clone(),
                     body: body.clone(),
                     closure: closure.clone(),
@@ -919,25 +1074,9 @@ fn lambda_binding_for_defined_name_callee(
     match callee {
         BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Name(name))) => {
             match defined_names.get(&name.name) {
-                Some(DefinedNameBinding::Callable(binding)) => Some(LambdaBinding {
-                    params: binding.params.clone(),
-                    body: binding.body.clone(),
-                    closure: binding
-                        .closure
-                        .iter()
-                        .filter_map(|(name, binding)| match binding {
-                            DefinedNameBinding::Value(value) => Some((
-                                name.clone(),
-                                HelperBinding::Arg(CallArgValue::Eval(value.clone())),
-                            )),
-                            DefinedNameBinding::Reference(reference) => Some((
-                                name.clone(),
-                                HelperBinding::Arg(CallArgValue::Reference(reference.clone())),
-                            )),
-                            DefinedNameBinding::Callable(_) => None,
-                        })
-                        .collect(),
-                }),
+                Some(DefinedNameBinding::Callable(binding)) => {
+                    Some(lambda_binding_from_defined_name_binding(binding))
+                }
                 _ => None,
             }
         }
@@ -945,14 +1084,42 @@ fn lambda_binding_for_defined_name_callee(
     }
 }
 
-fn lambda_value_summary(
+fn lambda_binding_from_defined_name_binding(binding: &CallableDefinedNameBinding) -> LambdaBinding {
+    LambdaBinding {
+        origin_kind: CallableOriginKind::DefinedNameCallable,
+        params: binding.params.clone(),
+        body: binding.body.clone(),
+        closure: binding
+            .closure
+            .iter()
+            .filter_map(|(name, binding)| match binding {
+                DefinedNameBinding::Value(value) => Some((
+                    name.clone(),
+                    HelperBinding::Arg(CallArgValue::Eval(value.clone())),
+                )),
+                DefinedNameBinding::Reference(reference) => Some((
+                    name.clone(),
+                    HelperBinding::Arg(CallArgValue::Reference(reference.clone())),
+                )),
+                DefinedNameBinding::Callable(_) => None,
+            })
+            .collect(),
+    }
+}
+
+fn lambda_value_summary_from_binding(binding: &LambdaBinding) -> String {
+    lambda_value_summary_from_captures(
+        &binding.params,
+        binding.closure.keys().cloned().collect(),
+        &binding.body,
+    )
+}
+
+fn lambda_value_summary_from_captures(
     parameter_names: &[String],
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    mut captures: Vec<String>,
     body: &BoundExpr,
 ) -> String {
-    let mut captures = helper_capture_names(body, parameter_names, helper_bindings)
-        .into_iter()
-        .collect::<Vec<_>>();
     captures.sort();
     let captures = if captures.is_empty() {
         "-".to_string()
@@ -1391,12 +1558,12 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
         EvalValue::Lambda(name) => PreparedResult {
             result_class: PreparedResultClass::Scalar,
             structure_class: PreparedStructureClass::DirectScalar,
-            payload_summary: format!("Lambda({name})"),
+            payload_summary: format!("Lambda({})", lambda_summary(name)),
             blankness_class: PreparedBlanknessClass::NonBlank,
             reference_target: None,
-            callable_carrier: callable_carrier_from_summary(name),
-            callable_profile: Some(name.clone()),
-            callable_profile_detail: callable_profile_detail_from_summary(name),
+            callable_carrier: callable_carrier_from_lambda_value(name),
+            callable_profile: Some(lambda_summary(name).to_string()),
+            callable_profile_detail: callable_profile_detail_from_lambda_value(name),
             deferred_reason: deferred_reason.clone(),
             format_hint,
             publication_hint,
@@ -1472,18 +1639,50 @@ fn callable_profile_detail_from_summary(summary: &str) -> Option<CallableValuePr
     })
 }
 
-fn callable_carrier_from_summary(summary: &str) -> Option<CallableValueCarrier> {
-    let detail = callable_profile_detail_from_summary(summary)?;
+fn callable_profile_detail_from_lambda_value(
+    lambda: &OxLambdaValue,
+) -> Option<CallableValueProfile> {
+    callable_profile_detail_from_summary(lambda_summary(lambda))
+}
+
+fn callable_carrier_from_lambda_value(lambda: &OxLambdaValue) -> Option<CallableValueCarrier> {
     Some(CallableValueCarrier {
-        origin_kind: CallableOriginKind::HelperLambda,
+        origin_kind: callable_origin_kind_from_oxfunc(lambda.origin_kind),
         invocation_model: CallableInvocationModel::TypedInvocationOnly,
-        capture_mode: if detail.capture_names.is_empty() {
-            CallableCaptureMode::NoCapture
-        } else {
-            CallableCaptureMode::LexicalCapture
-        },
-        arity: detail.arity,
+        capture_mode: callable_capture_mode_from_oxfunc(lambda.capture_mode),
+        arity: lambda.arity_shape.min,
     })
+}
+
+fn callable_origin_kind_from_oxfunc(origin_kind: OxCallableOriginKind) -> CallableOriginKind {
+    match origin_kind {
+        OxCallableOriginKind::HelperLambda => CallableOriginKind::HelperLambda,
+        OxCallableOriginKind::DefinedNameCallable => CallableOriginKind::DefinedNameCallable,
+        OxCallableOriginKind::BuiltInCallable
+        | OxCallableOriginKind::ExternalRegisteredCallable => CallableOriginKind::HelperLambda,
+    }
+}
+
+fn callable_capture_mode_from_oxfunc(capture_mode: OxCallableCaptureMode) -> CallableCaptureMode {
+    match capture_mode {
+        OxCallableCaptureMode::NoCapture => CallableCaptureMode::NoCapture,
+        OxCallableCaptureMode::LexicalCapture => CallableCaptureMode::LexicalCapture,
+    }
+}
+
+fn oxfunc_origin_kind_from_local(origin_kind: CallableOriginKind) -> OxCallableOriginKind {
+    match origin_kind {
+        CallableOriginKind::HelperLambda => OxCallableOriginKind::HelperLambda,
+        CallableOriginKind::DefinedNameCallable => OxCallableOriginKind::DefinedNameCallable,
+    }
+}
+
+fn lambda_summary(lambda: &OxLambdaValue) -> &str {
+    lambda
+        .callable_token
+        .split_once("::")
+        .map(|(_, summary)| summary)
+        .unwrap_or(lambda.callable_token.as_str())
 }
 
 fn split_profile_list(value: &str) -> Vec<String> {
@@ -1634,6 +1833,7 @@ struct LocalReferenceResolver<'a> {
     defined_names: &'a BTreeMap<String, DefinedNameBinding>,
     caller_row: usize,
     caller_col: usize,
+    callable_registry: &'a RefCell<CallableRegistry>,
 }
 
 impl ReferenceResolver for LocalReferenceResolver<'_> {
@@ -1655,9 +1855,11 @@ impl ReferenceResolver for LocalReferenceResolver<'_> {
                 DefinedNameBinding::Reference(reference_like) => {
                     self.resolve_reference(reference_like)
                 }
-                DefinedNameBinding::Callable(binding) => {
-                    Ok(EvalValue::Lambda(binding.summary.clone()))
-                }
+                DefinedNameBinding::Callable(binding) => Ok(EvalValue::Lambda(
+                    self.callable_registry
+                        .borrow_mut()
+                        .register(lambda_binding_from_defined_name_binding(binding)),
+                )),
             };
         }
 
@@ -1673,4 +1875,70 @@ impl ReferenceResolver for LocalReferenceResolver<'_> {
             col: self.caller_col,
         })
     }
+}
+
+struct OxFmlCallableInvoker<'a, 'b> {
+    context: &'a EvaluationContext<'b>,
+    callable_registry: &'a RefCell<CallableRegistry>,
+}
+
+impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
+    fn invoke(
+        &self,
+        callable: &OxLambdaValue,
+        args: &[PreparedArgValue],
+    ) -> Result<PreparedArgValue, CallableInvocationError> {
+        let binding = self
+            .callable_registry
+            .borrow()
+            .get(&callable.callable_token)
+            .cloned()
+            .ok_or_else(|| {
+                CallableInvocationError::UnsupportedCallableToken(callable.callable_token.clone())
+            })?;
+        let mut local_bindings = binding.lambda.closure;
+        for (param, arg) in binding.lambda.params.iter().zip(args.iter()) {
+            local_bindings.insert(
+                param.clone(),
+                HelperBinding::Arg(call_arg_from_prepared(arg)),
+            );
+        }
+
+        let mut trace = EvaluationTrace {
+            prepared_calls: Vec::new(),
+        };
+        let mut resolver = LocalReferenceResolver {
+            cell_values: &self.context.cell_values,
+            defined_names: &self.context.defined_names,
+            caller_row: self.context.caller_row,
+            caller_col: self.context.caller_col,
+            callable_registry: self.callable_registry,
+        };
+        let value = evaluate_expr_value(
+            &binding.lambda.body,
+            self.context,
+            &mut resolver,
+            &local_bindings,
+            self.callable_registry,
+            &mut trace,
+        )
+        .map_err(|_| CallableInvocationError::Worksheet(WorksheetErrorCode::Value))?;
+        Ok(prepared_arg_from_eval_value(value))
+    }
+}
+
+fn call_arg_from_prepared(prepared: &PreparedArgValue) -> CallArgValue {
+    match prepared {
+        PreparedArgValue::Eval(value) => CallArgValue::Eval(value.clone()),
+        PreparedArgValue::MissingArg => CallArgValue::MissingArg,
+        PreparedArgValue::EmptyCell => CallArgValue::EmptyCell,
+    }
+}
+
+fn prepared_arg_from_eval_value(value: EvalValue) -> PreparedArgValue {
+    PreparedArgValue::Eval(value)
+}
+
+fn callable_token(id: usize, summary: &str) -> String {
+    format!("oxfml.callable.{id}::{summary}")
 }

@@ -51,9 +51,11 @@ Push the current OxFml-managed async/runtime floor beyond the local contention a
 | 9 | CURRENT_BLOCKERS.md updated (new/resolved)? | |
 
 ## Status
-- execution_state: planned
+- execution_state: in_progress
 - scope_completeness: scope_partial
 - target_completeness: target_partial
 - integration_completeness: partial
-- open_lanes: full coordinator scheduling policy and product-level distributed semantics remain outside this workset scope
+- open_lanes:
+  - the checked local formal floor now includes session-contention, retry-after-release, overlay-cleanup, pinned-epoch overlay, distributed-placement, retry-ordering fairness, and placement-deferral expiry boundary models for busy-locus rejection, publishable execution, session-local overlay release, exact-match retained reuse, unpinned deterministic eviction, local-admission versus remote-deferral placement outcomes, non-overtaking surfaced retries, and deferred placement expiry-without-claim, but richer fairness and placement-policy semantics remain open
+  - full coordinator scheduling policy and product-level distributed semantics remain outside this workset scope
 - claim_confidence: draft

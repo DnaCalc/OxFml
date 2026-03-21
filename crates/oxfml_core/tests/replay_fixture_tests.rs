@@ -921,6 +921,7 @@ fn eval_requirement_name(requirement: &EvaluationRequirement) -> String {
         EvaluationRequirement::SpillReference => "SpillReference",
         EvaluationRequirement::ReferenceExpression => "ReferenceExpression",
         EvaluationRequirement::ExternalReferenceDeferred => "ExternalReferenceDeferred",
+        EvaluationRequirement::NameCarrierDeferred => "NameCarrierDeferred",
         EvaluationRequirement::LegacySingleCompat => "LegacySingleCompat",
         EvaluationRequirement::HelperEnvironment => "HelperEnvironment",
     }
@@ -1260,6 +1261,7 @@ fn reject_code_name(code: oxfml_core::RejectCode) -> String {
 fn callable_origin_kind_name(carrier: &oxfml_core::CallableValueCarrier) -> &'static str {
     match carrier.origin_kind {
         oxfml_core::CallableOriginKind::HelperLambda => "HelperLambda",
+        oxfml_core::CallableOriginKind::DefinedNameCallable => "DefinedNameCallable",
     }
 }
 

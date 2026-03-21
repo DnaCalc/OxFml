@@ -377,6 +377,7 @@ fn split_profile_list(value: &str) -> Vec<String> {
 fn callable_origin_kind_name(carrier: &oxfml_core::CallableValueCarrier) -> &'static str {
     match carrier.origin_kind {
         oxfml_core::CallableOriginKind::HelperLambda => "HelperLambda",
+        oxfml_core::CallableOriginKind::DefinedNameCallable => "DefinedNameCallable",
     }
 }
 

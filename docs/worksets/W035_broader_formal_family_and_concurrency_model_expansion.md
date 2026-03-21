@@ -51,9 +51,11 @@ Broaden the checked local formal floor beyond the current session lifecycle and 
 | 9 | CURRENT_BLOCKERS.md updated (new/resolved)? | |
 
 ## Status
-- execution_state: planned
+- execution_state: in_progress
 - scope_completeness: scope_partial
 - target_completeness: target_partial
 - integration_completeness: partial
-- open_lanes: full clause-family formal closure remains outside this workset scope
+- open_lanes:
+  - the checked local floor now extends beyond the session lifecycle and external capability gate with deferred-name-carrier, failure-stage, and external-name-carrier Lean artifacts plus higher-order callable, session-contention, retry-after-release, overlay-cleanup, pinned-epoch overlay, distributed-placement, retry-ordering fairness, and placement-deferral expiry TLA+ models
+  - broader concurrency and replay-promotion formal families remain outside the current exercised slice
 - claim_confidence: draft

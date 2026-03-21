@@ -4,7 +4,7 @@ mod common;
 
 use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
 use oxfunc_core::locale_format::{LocaleFormatContext, en_us_context};
-use oxfunc_core::value::{EvalValue, ExcelText, ReferenceKind, ReferenceLike};
+use oxfunc_core::value::{ArrayCellValue, EvalValue, ExcelText, ReferenceKind, ReferenceLike};
 
 use oxfml_core::binding::{
     BinaryOp, BoundExpr, NameKind, NameRef, NormalizedReference, ReferenceExpr,
@@ -394,6 +394,15 @@ fn evaluator_preserves_defined_name_callable_as_first_class_value() {
             .callable_carrier
             .as_ref()
             .expect("callable carrier should exist")
+            .origin_kind,
+        oxfml_core::CallableOriginKind::DefinedNameCallable
+    );
+    assert_eq!(
+        value_output
+            .result
+            .callable_carrier
+            .as_ref()
+            .expect("callable carrier should exist")
             .capture_mode,
         oxfml_core::CallableCaptureMode::LexicalCapture
     );
@@ -510,12 +519,156 @@ fn evaluator_runs_index_and_xmatch_catalog_lanes() {
     );
 }
 
+#[test]
+fn evaluator_executes_map_with_local_lambda_callable() {
+    let output = evaluate(
+        "=MAP(SEQUENCE(3),LAMBDA(x,x+1))",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.result.payload_summary, "Array(3x1)");
+    assert_eq!(array_numbers(&output.oxfunc_value), vec![2.0, 3.0, 4.0]);
+    let function_ids = output
+        .trace
+        .prepared_calls
+        .iter()
+        .map(|call| call.function_id)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        function_ids,
+        vec!["FUNC.SEQUENCE", "SPECIAL.LAMBDA", "FUNC.MAP"]
+    );
+}
+
+#[test]
+fn evaluator_executes_reduce_with_local_lambda_callable() {
+    let output = evaluate(
+        "=REDUCE(0,SEQUENCE(3),LAMBDA(a,b,a+b))",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.result.payload_summary, "Number(6)");
+    assert_eq!(output.oxfunc_value, EvalValue::Number(6.0));
+}
+
+#[test]
+fn evaluator_executes_scan_with_local_lambda_callable() {
+    let output = evaluate(
+        "=SCAN(0,SEQUENCE(3),LAMBDA(a,b,a+b))",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.result.payload_summary, "Array(3x1)");
+    assert_eq!(array_numbers(&output.oxfunc_value), vec![1.0, 3.0, 6.0]);
+}
+
+#[test]
+fn evaluator_executes_map_with_helper_bound_lambda_callable() {
+    let output = evaluate(
+        "=LET(f,LAMBDA(x,x+1),MAP(SEQUENCE(3),f))",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.result.payload_summary, "Array(3x1)");
+    assert_eq!(array_numbers(&output.oxfunc_value), vec![2.0, 3.0, 4.0]);
+    let function_ids = output
+        .trace
+        .prepared_calls
+        .iter()
+        .map(|call| call.function_id)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        function_ids,
+        vec!["SPECIAL.LAMBDA", "FUNC.SEQUENCE", "FUNC.MAP", "SPECIAL.LET"]
+    );
+}
+
+#[test]
+fn evaluator_executes_map_with_defined_name_callable() {
+    let mut bindings = BTreeMap::new();
+    bindings.insert(
+        "NamedLambda".to_string(),
+        DefinedNameBinding::Callable(local_callable_binding(
+            "arity=1;params=x;captures=-;body=Binary",
+            vec!["x"],
+            BoundExpr::Binary {
+                op: BinaryOp::Add,
+                left: Box::new(name_ref_expr("x", NameKind::HelperLocal)),
+                right: Box::new(BoundExpr::NumberLiteral("1".to_string())),
+            },
+            BTreeMap::new(),
+        )),
+    );
+
+    let output = evaluate(
+        "=MAP(SEQUENCE(3),NamedLambda)",
+        Some(bindings),
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.result.payload_summary, "Array(3x1)");
+    assert_eq!(array_numbers(&output.oxfunc_value), vec![2.0, 3.0, 4.0]);
+}
+
+#[test]
+fn evaluator_executes_byrow_with_local_lambda_callable() {
+    let output = evaluate(
+        "=BYROW(SEQUENCE(2,2),LAMBDA(r,SUM(r)))",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.result.payload_summary, "Array(2x1)");
+    assert_eq!(array_numbers(&output.oxfunc_value), vec![3.0, 7.0]);
+}
+
+#[test]
+fn evaluator_executes_bycol_with_local_lambda_callable() {
+    let output = evaluate(
+        "=BYCOL(SEQUENCE(2,2),LAMBDA(c,SUM(c)))",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.result.payload_summary, "Array(1x2)");
+    assert_eq!(array_numbers(&output.oxfunc_value), vec![4.0, 6.0]);
+}
+
+#[test]
+fn evaluator_executes_makearray_with_local_lambda_callable() {
+    let output = evaluate(
+        "=MAKEARRAY(2,3,LAMBDA(r,c,r+c))",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.result.payload_summary, "Array(2x3)");
+    assert_eq!(
+        array_numbers(&output.oxfunc_value),
+        vec![2.0, 3.0, 4.0, 3.0, 4.0, 5.0]
+    );
+}
+
 fn evaluate(
     formula: &str,
     defined_names: Option<BTreeMap<String, DefinedNameBinding>>,
     host_info: Option<&dyn HostInfoProvider>,
     locale_ctx: Option<&LocaleFormatContext<'_>>,
 ) -> oxfml_core::EvaluationOutput {
+    evaluate_result(formula, defined_names, host_info, locale_ctx)
+        .expect("evaluation should succeed")
+}
+
+fn evaluate_result(
+    formula: &str,
+    defined_names: Option<BTreeMap<String, DefinedNameBinding>>,
+    host_info: Option<&dyn HostInfoProvider>,
+    locale_ctx: Option<&LocaleFormatContext<'_>>,
+) -> Result<oxfml_core::EvaluationOutput, oxfml_core::eval::EvaluationError> {
     let mut names = BTreeMap::new();
     if let Some(bindings) = &defined_names {
         for (name, binding) in bindings {
@@ -554,7 +707,7 @@ fn evaluate(
     context.now_serial = Some(46000.0);
     context.random_value = Some(0.25);
 
-    evaluate_formula(context).expect("evaluation should succeed")
+    evaluate_formula(context)
 }
 
 fn local_callable_binding(
@@ -618,6 +771,19 @@ fn split_profile_list(value: &str) -> Vec<String> {
     } else {
         value.split(',').map(|item| item.to_string()).collect()
     }
+}
+
+fn array_numbers(value: &EvalValue) -> Vec<f64> {
+    let EvalValue::Array(array) = value else {
+        panic!("expected array result, got {value:?}");
+    };
+    array
+        .iter_row_major()
+        .map(|cell| match cell {
+            ArrayCellValue::Number(number) => *number,
+            other => panic!("expected numeric array cell, got {other:?}"),
+        })
+        .collect()
 }
 
 fn name_ref_expr(name: &str, kind: NameKind) -> BoundExpr {

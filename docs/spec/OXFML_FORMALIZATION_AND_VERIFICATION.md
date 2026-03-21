@@ -11,11 +11,30 @@ The current clause-to-artifact planning register is:
 The current local checked-formal floor is:
 1. `../../formal/lean/OxFmlSessionLifecycle.lean`
 2. `../../formal/lean/OxFmlExternalReferenceDeferred.lean`
-3. `../../formal/tla/FecSessionLifecycle.tla`
-4. `../../formal/tla/FecSessionLifecycle.cfg`
-5. `../../formal/tla/FecExternalCapabilityGate.tla`
-6. `../../formal/tla/FecExternalCapabilityGate.cfg`
-7. `../../formal/run_formal.ps1`
+3. `../../formal/lean/OxFmlNameCarrierDeferred.lean`
+4. `../../formal/lean/OxFmlFailureStageSplit.lean`
+5. `../../formal/lean/OxFmlExternalNameCarrier.lean`
+6. `../../formal/tla/FecSessionLifecycle.tla`
+7. `../../formal/tla/FecSessionLifecycle.cfg`
+8. `../../formal/tla/FecExternalCapabilityGate.tla`
+9. `../../formal/tla/FecExternalCapabilityGate.cfg`
+10. `../../formal/tla/FecHigherOrderCallableBoundary.tla`
+11. `../../formal/tla/FecHigherOrderCallableBoundary.cfg`
+12. `../../formal/tla/FecSessionContentionBoundary.tla`
+13. `../../formal/tla/FecSessionContentionBoundary.cfg`
+14. `../../formal/tla/FecRetryAfterReleaseBoundary.tla`
+15. `../../formal/tla/FecRetryAfterReleaseBoundary.cfg`
+16. `../../formal/tla/FecOverlayCleanupBoundary.tla`
+17. `../../formal/tla/FecOverlayCleanupBoundary.cfg`
+18. `../../formal/tla/FecPinnedEpochOverlayBoundary.tla`
+19. `../../formal/tla/FecPinnedEpochOverlayBoundary.cfg`
+20. `../../formal/tla/FecDistributedPlacementBoundary.tla`
+21. `../../formal/tla/FecDistributedPlacementBoundary.cfg`
+22. `../../formal/tla/FecRetryOrderingBoundary.tla`
+23. `../../formal/tla/FecRetryOrderingBoundary.cfg`
+24. `../../formal/tla/FecPlacementDeferralExpiryBoundary.tla`
+25. `../../formal/tla/FecPlacementDeferralExpiryBoundary.cfg`
+26. `../../formal/run_formal.ps1`
 
 This continues the broader DNA Calc verification posture already present across sibling lanes:
 1. Lean-oriented semantic and type formalization in Foundation and OxFunc,
@@ -121,15 +140,29 @@ The first formal priorities for OxFml are:
 The current checked local floor now covers:
 1. a Lean-checked session lifecycle and no-publish artifact,
 2. a Lean-checked external-reference deferment and capability-admissibility artifact,
-3. a Lean-checked async-capability consequence artifact for the external-provider lane,
-4. a TLC-checked TLA+ session lifecycle and publish-safety model,
-5. a TLC-checked TLA+ external capability gate model including async-consequence invariants,
-6. a canonical local execution path through `formal/run_formal.ps1`.
+3. a Lean-checked deferred-name-carrier classification artifact for formula-bearing name lanes,
+4. a Lean-checked failure-stage split artifact for edit rejection versus accepted-unresolved versus semantic-plan/runtime/provider outcomes,
+5. a Lean-checked external-name carrier artifact for same-external-book restriction plus provider-stage runtime typing,
+6. a Lean-checked async-capability consequence artifact for the external-provider lane,
+7. a TLC-checked TLA+ session lifecycle and publish-safety model,
+8. a TLC-checked TLA+ external capability gate model including async-consequence invariants,
+9. a TLC-checked TLA+ higher-order callable boundary model for catalog admission versus callable-invoker rejection,
+10. a TLC-checked TLA+ session-contention boundary model for busy-locus rejection versus publishable execution,
+11. a TLC-checked TLA+ retry-after-release boundary model for coordinator-visible retry admissibility after busy-locus rejection,
+12. a TLC-checked TLA+ overlay-cleanup boundary model for session-local, epoch-scoped overlays under commit, abort, and expiry,
+13. a TLC-checked TLA+ pinned-epoch overlay boundary model for exact-match retained reuse and unpinned deterministic eviction,
+14. a TLC-checked TLA+ distributed-placement boundary model for local admission versus remote-placement deferral and no-publish until locally admitted commit,
+15. a TLC-checked TLA+ retry-ordering fairness boundary model for non-overtaking among already surfaced retry-admissible sessions,
+16. a TLC-checked TLA+ placement-deferral expiry boundary model for deferred remote placement that expires or rejects without local claim or publication,
+17. a canonical local execution path through `formal/run_formal.ps1`.
 
 ## 8. Open Lanes
 The following formal lanes remain open and must be tracked as such:
 1. the precise Lean boundary between OxFml semantic plans and OxFunc function definitions,
-2. the canonical TLA+ model shape for overlay GC and pinned epochs,
+2. the richer TLA+ model shape for overlay retention beyond the current pinned-epoch reuse and eviction boundary,
 3. proof obligations for fast-path soundness,
 4. proof obligations for deterministic parallel reduction,
-5. the final trace-schema split between subsystem traces and unified engine replay.
+5. successful higher-order callable execution beyond the current checked callable-invoker rejection boundary,
+6. richer overlay reuse and pinned-epoch eviction models beyond the current retained-reuse boundary,
+7. richer fairness and distributed placement models beyond the current retry-ordering, local-admission, and deferred-placement-expiry boundaries,
+8. the final trace-schema split between subsystem traces and unified engine replay.

@@ -263,3 +263,111 @@ Until the open lanes narrow further:
 1. treat OxFml seam docs and replay docs as the source of truth for evaluator/runtime/replay artifact meaning,
 2. treat current local runtime and replay evidence as a stronger floor than before, but still local rather than pack-grade,
 3. file a formal handoff only when a coordinator-facing seam clause changes, not for routine observation exchange.
+
+## 16A. Current Read On OxCalc W026 Topic-Matrix Framing
+OxCalc's newer TreeCalc-facing topic-matrix framing makes sense for the coordinator-facing seam and is the right next shape for the note exchange.
+
+Current OxFml read:
+1. formula and bind artifact identity carriage: `already canonical` for the first TreeCalc subset,
+2. direct and relative reference descriptor carriage: `canonical but narrower`,
+3. unresolved and host-sensitive reference carrier rules: `canonical but narrower`,
+4. dependency fact carriage for additions, removals, and reclassifications: `already canonical` semantically, but still narrower in some retained/reduced witness projections,
+5. candidate-result consequence optionality and correlation guarantees: `already canonical`,
+6. reject-context carrier and diagnostic guarantees: `already canonical` for the current typed families,
+7. runtime-derived effect and execution-restriction transport: `canonical but narrower`,
+8. direct-binding-sensitive witness preservation rules: `already canonical`,
+9. semantic-format versus display-facing consequence boundary: `canonical but narrower`.
+
+The most important caution points for OxCalc are:
+1. do not over-read relative-reference closure as fully locked just because first TreeCalc direct-reference carriage is likely ready sooner,
+2. do not over-read execution-restriction transport as one final frozen single-object carrier,
+3. do not over-read semantic-format versus display-facing consequences as fully settled beyond the current narrower seam-reading floor.
+
+Current cross-lane reading:
+1. this W026 topic-matrix framing still fits the OxFml/OxCalc seam cleanly,
+2. it does not create a new formal handoff trigger by itself,
+3. it remains compatible with the current OxFml/OxFunc refinement because the latest OxFunc pressure is still upstream-semantic rather than coordinator-shaping.
+
+## 16B. Current Reply Shape For OxCalc's Narrower W026 Pass
+OxCalc has now narrowed the W026-focused questions to four remaining topics. Current OxFml response is:
+
+### 16B.1 Topic A: Relative-reference descriptor carriage
+Classification: `canonical but narrower`
+
+Carrier surface OxCalc should consume now:
+1. current normalized reference-expression and bound-reference artifacts,
+2. current bind identity and structure-context identity carried through the formula/bind package,
+3. the current direct absolute and first relative-reference subset only where the bound artifact already preserves the needed contextual dependence honestly.
+
+Explicit non-assumptions:
+1. do not assume the full future relative-reference universe is already closed,
+2. do not assume every relative form is fully frozen just because a first direct subset is consumable,
+3. do not assume all contextual relative meaning has been reduced to one final transport shape.
+
+W026 sufficiency now:
+1. yes for a narrowed first subset,
+2. no for broad relative-reference closure.
+
+Current handoff read:
+1. note-level topic for now,
+2. becomes a narrower handoff only if the first TreeCalc subset exposes a concrete insufficiency in the carried descriptor floor.
+
+### 16B.2 Topic B: Unresolved and host-sensitive reference carriers
+Classification: `canonical but narrower`
+
+Carrier surface OxCalc should consume now:
+1. current accepted-unresolved versus reject distinction,
+2. current typed reject contexts and unresolved/bind diagnostics,
+3. current host-query capability-view and host-sensitive evaluator fact surfaces where resolution depends on concrete host truth.
+
+Explicit non-assumptions:
+1. do not collapse unresolved-at-bind, unresolved-at-evaluate, and host-sensitive-but-resolvable-only-with-concrete-host-truth into one generic resolution failure bucket,
+2. do not assume one final single carrier family already covers every unresolved/reference-sensitive case.
+
+W026 sufficiency now:
+1. yes if the first in-scope unresolved and host-sensitive families remain explicitly named,
+2. broader host/reference closure remains deferred.
+
+Current handoff read:
+1. note-level topic for now.
+
+### 16B.3 Topic C: Runtime-derived effects and execution-restriction transport
+Classification: `canonical but narrower`
+
+Carrier surface OxCalc should consume now:
+1. current candidate-result and commit-bundle surfaced evaluator facts,
+2. current topology/effect fact refs,
+3. current capability-sensitive and execution-restriction observations as surfaced evaluator/runtime facts.
+
+Explicit non-assumptions:
+1. do not assume one final frozen single-object transport carrier yet,
+2. do not collapse execution-restriction observations into scheduler policy,
+3. do not collapse capability-sensitive and execution-restriction-sensitive observations unless OxFml later locks that transport explicitly.
+
+W026 sufficiency now:
+1. yes semantically,
+2. final transport-carrier closure remains narrower and may become a future handoff trigger if live TreeCalc evidence shows insufficiency.
+
+Current handoff read:
+1. still note-level today,
+2. one of the more likely future narrow handoff triggers if pressure increases.
+
+### 16B.4 Topic D: Semantic-format versus display-facing boundary
+Classification: `canonical but narrower`
+
+Carrier surface OxCalc should consume now:
+1. `format_delta` and `display_delta` as distinct canonical categories,
+2. current format-sensitive evaluator facts where semantic correctness or replay truth depends on them.
+
+Explicit non-assumptions:
+1. do not treat broader display-facing closure as already promised,
+2. do not collapse `display_delta` into `format_delta`,
+3. do not assume all display-facing categories are publication-critical in the first TreeCalc subset.
+
+W026 sufficiency now:
+1. yes for a semantics-first first phase,
+2. broader display-facing closure remains deferred.
+
+Current handoff read:
+1. note-level topic for now,
+2. does not yet justify a new formal handoff by itself.
