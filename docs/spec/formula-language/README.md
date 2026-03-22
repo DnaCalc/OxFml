@@ -7,8 +7,9 @@ This directory contains the canonical OxFml formula-language design documents pl
 2. `OXFML_PARSER_AND_BINDER_REALIZATION.md`
 3. `OXFML_NORMALIZED_REFERENCE_ADTS.md`
 4. `OXFML_OXFUNC_SEMANTIC_BOUNDARY.md`
-5. `EXCEL_FORMULA_LANGUAGE_CONCRETE_RULES.md`
-6. `EXCEL_FORMULA_LANGUAGE_CONFORMANCE_MATRIX.csv`
+5. `OXFML_OXFUNC_LIBRARY_CONTEXT_RUNTIME_INTERFACE.md`
+6. `EXCEL_FORMULA_LANGUAGE_CONCRETE_RULES.md`
+7. `EXCEL_FORMULA_LANGUAGE_CONFORMANCE_MATRIX.csv`
 
 ## Canonical documents
 - `OXFML_FORMULA_ENGINE_ARCHITECTURE.md`
@@ -21,6 +22,8 @@ This directory contains the canonical OxFml formula-language design documents pl
   promoted OxFunc-facing semantic boundary requirements.
 - `OXFML_OXFUNC_LET_LAMBDA_PIN_DOWN_PREP.md`
   focused prep note for narrowing the `LET` / `LAMBDA` seam with OxFunc.
+- `OXFML_OXFUNC_LIBRARY_CONTEXT_RUNTIME_INTERFACE.md`
+  preferred normative runtime interface for immutable library-context snapshots and runtime catalog extension.
 - `EXCEL_FORMULA_LANGUAGE_CONCRETE_RULES.md`
   Excel-facing rule corpus and policy wording.
 - `EXCEL_FORMULA_LANGUAGE_CONFORMANCE_MATRIX.csv`

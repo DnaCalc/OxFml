@@ -26,13 +26,14 @@ When starting OxFml design or implementation work, read these documents and igno
 19. `docs/spec/formula-language/OXFML_NORMALIZED_REFERENCE_ADTS.md`
 20. `docs/spec/formula-language/OXFML_OXFUNC_SEMANTIC_BOUNDARY.md`
 21. `docs/spec/formula-language/OXFML_OXFUNC_LET_LAMBDA_PIN_DOWN_PREP.md`
-22. `docs/spec/fec-f3e/FEC_F3E_DESIGN_SPEC.md`
-23. `docs/spec/fec-f3e/FEC_F3E_FORMAL_AND_ASSURANCE_MAP.md`
-24. `docs/spec/fec-f3e/FEC_F3E_TESTING_AND_REPLAY.md`
-25. `docs/spec/fec-f3e/FEC_F3E_SCHEMA_REPLAY_FIXTURE_PLAN.md`
-26. `docs/spec/formula-language/EXCEL_FORMULA_LANGUAGE_CONCRETE_RULES.md`
-27. `docs/spec/formula-language/MS_OE376_FORMULA_AND_FORMATTING_REVIEW.md`
-28. `docs/spec/formatting/EXCEL_FORMATTING_HIERARCHY_AND_VISIBILITY_MODEL.md`
+22. `docs/spec/formula-language/OXFML_OXFUNC_LIBRARY_CONTEXT_RUNTIME_INTERFACE.md`
+23. `docs/spec/fec-f3e/FEC_F3E_DESIGN_SPEC.md`
+24. `docs/spec/fec-f3e/FEC_F3E_FORMAL_AND_ASSURANCE_MAP.md`
+25. `docs/spec/fec-f3e/FEC_F3E_TESTING_AND_REPLAY.md`
+26. `docs/spec/fec-f3e/FEC_F3E_SCHEMA_REPLAY_FIXTURE_PLAN.md`
+27. `docs/spec/formula-language/EXCEL_FORMULA_LANGUAGE_CONCRETE_RULES.md`
+28. `docs/spec/formula-language/MS_OE376_FORMULA_AND_FORMATTING_REVIEW.md`
+29. `docs/spec/formatting/EXCEL_FORMATTING_HIERARCHY_AND_VISIBILITY_MODEL.md`
 
 ## Canonical Document Groups
 ### System and formal posture
@@ -69,6 +70,7 @@ When starting OxFml design or implementation work, read these documents and igno
 - `docs/spec/formula-language/OXFML_NORMALIZED_REFERENCE_ADTS.md`
 - `docs/spec/formula-language/OXFML_OXFUNC_SEMANTIC_BOUNDARY.md`
 - `docs/spec/formula-language/OXFML_OXFUNC_LET_LAMBDA_PIN_DOWN_PREP.md`
+- `docs/spec/formula-language/OXFML_OXFUNC_LIBRARY_CONTEXT_RUNTIME_INTERFACE.md`
 - `docs/spec/formula-language/EXCEL_FORMULA_LANGUAGE_CONCRETE_RULES.md`
 - `docs/spec/formula-language/EXCEL_FORMULA_LANGUAGE_CONFORMANCE_MATRIX.csv`
 - `docs/spec/formula-language/MS_OE376_FORMULA_AND_FORMATTING_REVIEW.md`

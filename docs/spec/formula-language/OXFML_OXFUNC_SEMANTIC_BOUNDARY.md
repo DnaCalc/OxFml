@@ -47,6 +47,7 @@ The current intended split is:
 2. OxFml owns parse, bind, semantic-plan, and evaluation behavior that consumes a versioned library-context snapshot,
 3. the library-context snapshot should remain externally allocated and versioned rather than globally owned by OxFunc.
 4. dynamic registrations from add-in, VBA, user-defined, or later provider-backed sources should be representable as snapshot truth without requiring OxFunc-owned hidden global state.
+5. the preferred normative interface is a runtime-ingested snapshot/provider interface rather than build-time catalog-file ingestion.
 
 Minimum library-context concerns that must remain representable are:
 1. canonical function/operator identity,
@@ -81,6 +82,7 @@ Current integration preference:
    - registration source kind,
    - stage-aware availability fields where already known,
 5. richer profile/detail registries may remain separate as long as the exported snapshot points to them stably.
+6. that export is evidence and a test-pinning artifact, not the preferred final runtime interface.
 
 Current first-pass downstream artifact:
 1. `../OxFunc/docs/function-lane/OXFUNC_LIBRARY_CONTEXT_SNAPSHOT_EXPORT_V1.csv`
@@ -88,15 +90,25 @@ Current first-pass downstream artifact:
 
 Current OxFml reading of that artifact:
 1. the export is useful now for initial consumption and mismatch discovery,
-2. `snapshot_id`, `snapshot_generation`, `source_commit_short`, `source_commit_full`, `source_tree_state`, canonical surface ids, `registration_source_kind`, `special_interface_kind`, `preparation_owner`, `runtime_boundary_kind`, and `interface_contract_ref` are already useful first-pass fields,
+2. `snapshot_id`, `snapshot_generation`, `source_commit_short`, `source_commit_full`, `source_tree_state`, `surface_stable_id`, `entry_kind`, `registration_source_kind`, `canonical_surface_name`, `arg_preparation_profile` when populated, `metadata_status`, `special_interface_kind`, `admission_interface_kind`, `preparation_owner`, `runtime_boundary_kind`, `arity_shape_note`, and `interface_contract_ref` are already useful first-pass fields,
 3. refreshed ordinary extracted rows such as `FUNC.CHOOSECOLS`, `FUNC.FILTER`, `FUNC.UNIQUE`, and `FUNC.VSTACK` are now useful first-pass planning and test-synthesis inputs rather than mere catalog placeholders,
 4. OxFml now consumes selected seam-heavy and ordinary rows from this export directly in local semantic-plan tests,
-5. exact shared field names and fuller dereferenceable profile bundles remain open.
+5. exact shared field names and fuller dereferenceable profile bundles remain open,
+6. current OxFunc guidance is that the callable-minimum semantic facts may remain in contract docs for one more round rather than requiring immediate direct snapshot columns.
 
 Working rule:
 1. preserve the semantic distinction first,
 2. keep the exact transport or runtime ownership shape open until later narrowing,
-3. do not require OxFunc to own hidden mutable registry state just to express catalog truth.
+3. do not require OxFunc to own hidden mutable registry state just to express catalog truth,
+4. prefer an immutable `LibraryContextSnapshot` acquired through a formal runtime provider surface over build-time file ingestion as the normative implementation path.
+
+Current preferred runtime interface direction is specified in:
+1. `OXFML_OXFUNC_LIBRARY_CONTEXT_RUNTIME_INTERFACE.md`
+
+Current first-freeze reading:
+1. committed snapshot/export consumption should proceed now,
+2. runtime provider/snapshot modeling should proceed in parallel,
+3. concrete mismatches between those tracks should drive the next narrower seam change rather than broad note-only debate.
 
 ## 3B. Operator, Literal, And Value-Universe Boundary
 The OxFml/OxFunc seam should keep lexical/grammar ownership distinct from semantic value/operator ownership rather than smoothing the boundary into one generic language layer.
@@ -406,7 +418,10 @@ The most important open questions at this boundary are:
 Current next useful narrowing step:
 1. stop relying on note-only catalog narrowing,
 2. consume the current pinned OxFunc catalog export,
-3. use that export to replace narrow local catalog assumptions with broader OxFml-side snapshot-backed tests.
+3. use that export to replace narrow local catalog assumptions with broader OxFml-side snapshot-backed tests,
+4. freeze the first shared typed context/query bundle for the already-covered seam-heavy rows,
+5. freeze the first shared returned-value and publication-aware split,
+6. model a real OxFml runtime consumer for `LibraryContextProvider` / immutable `LibraryContextSnapshot` with a runtime-only shape plus explicit export mapping layer.
 
 ## 15. Current Round Stabilization Posture
 The current OxFml reading is that this seam round has reached the point of diminishing returns for note-only narrowing.
@@ -422,3 +437,20 @@ Current trigger examples are:
 2. a proving-host or replay artifact forces a narrower carrier,
 3. an implementation-facing handoff needs a more explicit transport decision,
 4. a coordinator-visible consequence emerges from availability, provider-failure, callable publication, or a related lane.
+
+Current first-pass OxFml answers for the successor packets:
+1. the current OxFunc typed context/query names and result partitioning are acceptable as the first freeze candidate so long as the surface stays capability-scoped,
+2. the current returned-value split
+   - ordinary value
+   - `ValueWithPresentation`
+   - typed host/provider outcome projection
+   is acceptable as the first freeze candidate,
+3. the runtime library-context consumer model should prefer a cleaner runtime-only shape plus explicit export mapping layer rather than mirroring the CSV artifact field-for-field.
+
+Current processed OxFunc reading:
+1. OxFunc now also treats the seam as close enough to work toward a first freezable application seam for the already-covered scope,
+2. the remaining work is now primarily consumer/model freeze work under the successor packets rather than another broad callable sufficiency round,
+3. the next honest mismatch triggers are implementation-facing:
+   - typed query/result mismatch,
+   - returned-surface factoring mismatch,
+   - runtime consumer versus export-mapping mismatch.

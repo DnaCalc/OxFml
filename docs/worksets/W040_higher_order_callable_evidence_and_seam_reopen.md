@@ -59,7 +59,7 @@ Collect local OxFml evidence for higher-order callable and helper lanes that are
 - integration_completeness: partial
 - open_lanes:
   - local deterministic evidence now exists for `MAP`, `REDUCE`, `SCAN`, `BYROW`, `BYCOL`, and `MAKEARRAY` at both semantic-plan and runtime level: OxFml consumes their `W044` catalog rows directly, and inline as well as helper-bound local lambdas now execute end-to-end through the typed callable-invoker seam
-  - `ISOMITTED` remains unevidenced locally beyond catalog-row intake, and broader higher-order family closure is still open
+  - `ISOMITTED` is no longer treated as a first-freeze seam blocker after the latest OxFunc/native alignment, but it still lacks the same OxFml-local runtime-evidence depth as the already-exercised higher-order lanes
   - adopted defined-name callable preservation is now stronger and no longer flattened into the helper origin, and higher-order execution through a defined-name callable carrier is now exercised for `MAP`, but broader defined-name callable transport remains open
   - a narrower seam-reopen note to OxFunc is now justified for the minimum callable carrier/provenance split, but not yet for broader higher-order family closure
 - claim_confidence: draft

@@ -124,6 +124,9 @@ Current baseline sequence after `W001`:
 37. `W038` name and external-name formula carriers
 38. `W039` conditional-formatting and data-validation formula sublanguages
 39. `W040` higher-order callable evidence and seam reopen
+40. `W041` typed context and query bundle freeze
+41. `W042` return surface and publication-hint freeze
+42. `W043` runtime library-context provider consumer model
 
 This sequence is the current planning baseline.
 It may be refined, but new worksets should preserve dependency clarity rather than bypass it informally.

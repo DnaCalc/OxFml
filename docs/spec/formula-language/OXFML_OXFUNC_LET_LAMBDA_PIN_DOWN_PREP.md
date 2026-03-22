@@ -147,7 +147,8 @@ Decision needed:
 2. final worksheet publication policy for callable values,
 3. coordinator scheduling or retry policy,
 4. raw AST transfer to OxFunc,
-5. broad non-`LET`/`LAMBDA` higher-order language expansion.
+5. broad non-`LET`/`LAMBDA` higher-order language expansion,
+6. library-context runtime-provider mechanics except where they materially constrain callable carrier shape.
 
 ## Proposed OxFml Negotiation Order
 OxFml should push the next round in this order:
@@ -188,13 +189,27 @@ For the immediate next sync, OxFml wants those answers grounded in the currently
 6. `BYROW`
 7. `BYCOL`
 8. `MAKEARRAY`
-9. `ISOMITTED` only if OxFunc thinks it is already necessary to avoid a misleading carrier lock
+
+Current read after the latest OxFunc note:
+1. `ISOMITTED` no longer needs to be treated as a first-freeze callable seam blocker,
+2. it may remain a later evidence lane unless local runtime mismatches show otherwise.
 
 Current OxFml working question set for that sync:
 1. are `origin kind`, `capture mode`, `arity shape`, and `invocation-contract meaning` all semantically required shared minimums,
 2. can parameter-name, capture-name, and body-kind detail remain provenance-only for this round,
 3. does OxFunc still need an explicit invocation-model field beyond an opaque callable identity plus invocation-contract-style reference,
 4. should adopted defined-name callable origin already count as part of the minimum carrier discussion rather than a later extension.
+
+Current processed OxFunc clarification:
+1. yes, the semantically required minimum currently reads as:
+   - opaque callable identity
+   - origin kind
+   - capture mode
+   - arity shape
+   - invocation-contract meaning
+2. no, OxFunc does not currently see a need for an additional explicit invocation-model field,
+3. yes, parameter-name, capture-name, and body detail may remain provenance-only for this round,
+4. yes, adopted defined-name callable preservation now counts as first-pass seam pressure rather than a late extension.
 
 ## Exit Condition For This Prep Note
 This prep note has served its purpose when either:

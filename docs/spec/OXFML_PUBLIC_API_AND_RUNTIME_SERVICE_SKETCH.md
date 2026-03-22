@@ -135,6 +135,10 @@ The first implementation may also expose optional services such as:
 3. `SemanticPlanRepository`
 4. `EvaluationSessionService`
 5. `TraceCaptureService`
+6. `LibraryContextProvider`
+7. host capability providers such as:
+   - `HostInfoProvider`
+   - `RtdProvider`
 
 Working rule:
 1. these services may own caches, indexes, or runtime handles,
@@ -184,6 +188,68 @@ Working rule:
 3. OxFml also surfaces helper-environment shape where downstream semantic coordination depends on it,
 4. OxFml does not become the scheduler-policy owner.
 
+## 8A. First Shared Typed Context/Query Bundle
+For the current covered OxFunc scope, OxFml should be able to consume a first shared typed context/query bundle without reopening broad seam theory.
+
+Current first-pass families are:
+1. `ReferenceResolver`
+2. `HostInfoProvider`
+   - `query_cell_info(...)`
+   - `query_info(...)`
+   - `query_formula_text(reference)`
+   - `query_sheet_index(CurrentSheet | Reference | SheetNameText)`
+   - `query_sheet_count(Workbook | Reference)`
+   - `query_aggregate_reference_context(reference)`
+   - `query_width_conversion_mode(function)`
+   - `query_translate(request)`
+3. `RtdProvider`
+   - `RtdRequest { prog_id, server_name, topic_strings }`
+   - `RtdProviderResult::{ Value, NoValueYet, CapabilityDenied, ConnectionFailed, ProviderError }`
+4. host-supplied scalar context providers:
+   - `now_serial`
+   - `random_value`
+   - `LocaleFormatContext`
+
+Working rule:
+1. OxFml prefers capability-scoped typed providers over raw host objects,
+2. the current OxFunc query names and result partitioning are acceptable as the first freeze candidate,
+3. exact names may still be merged or split later if a concrete consumer mismatch appears,
+4. any such merge/split must preserve the same semantic families,
+5. the remaining clarification is now implementation-facing rather than semantic: whether actual OxFml consumer modeling exposes a concrete need to merge or split any first-pass family.
+
+## 8B. First Shared Returned Value Surface
+For the current covered scope, the first returned-value split should remain explicit.
+
+Current first-freeze candidate:
+1. ordinary value
+2. `ValueWithPresentation`
+3. typed host/provider outcome projection
+
+Working rule:
+1. OxFml currently accepts that explicit split as the first shared freeze candidate,
+2. richer publication-facing or display-facing factoring should not be invented until a concrete mismatch appears,
+3. publication-aware value hints remain distinct from typed host/provider outcome projection,
+4. the remaining clarification is now implementation-facing rather than semantic: whether actual return-carrier freezing exposes a concrete need to refactor the current first-pass split.
+
+## 8C. First Runtime Library-Context Consumer Model
+For the current covered OxFunc scope, OxFml should also model a real runtime consumer for built-in catalog truth rather than rely only on export-file pinning.
+
+Current first-pass direction:
+1. `LibraryContextProvider`
+   - `current_snapshot()`
+   - `snapshot_by_identity(snapshot_ref)`
+   - `lookup_surface(snapshot_ref, surface_key)`
+2. immutable `LibraryContextSnapshot`
+3. runtime-consumable `LibraryContextEntry`
+4. explicit snapshot identity and generation on parse, bind, and semantic-plan artifacts
+
+Working rule:
+1. OxFml prefers a cleaner runtime-only consumer shape plus an explicit CSV/export mapping layer,
+2. the committed `W044` export remains the immediate pinning and mismatch artifact,
+3. runtime registration or removal must yield explicit new snapshot generations rather than mutate a pinned snapshot in place,
+4. snapshot drift must not be hidden inside evaluation or session execution,
+5. the remaining clarification is now implementation-facing rather than semantic: whether actual OxFml consumer modeling exposes any runtime-only versus export-mapping mismatch that forces a narrower shape.
+
 ## 9. Current Preferred Packaging Shape
 The current preferred packaging shape is:
 1. a stateless canonical-core module set,
@@ -202,6 +268,9 @@ The following remain open:
 5. exact error/result carrier style for language bindings,
 6. the smallest honest library-context snapshot shape beyond the current local minimum field floor,
 7. the final callable-value carrier beyond the current typed minimum plus replay-summary floor.
+8. whether the first typed context/query bundle needs a narrower capability-family merge or split after initial consumer modeling.
+9. whether the runtime `LibraryContextProvider` model should mirror the CSV artifact closely or use a cleaner runtime-only shape plus explicit mapping layer.
+10. exact shared field names for the first frozen typed context/query bundle and returned-value split.
 
 ## 11. Workset Implications
 Current expected primary owners:
@@ -209,6 +278,9 @@ Current expected primary owners:
 2. `W003`: semantic-plan, evaluation, and execution-profile surface narrowing
 3. `W004`: session and commit service surface narrowing
 4. `W008`: single-formula proving-host helper surface narrowing
+5. `W041`: typed context and query bundle freeze
+6. `W042`: return surface and publication-hint freeze
+7. `W043`: runtime library-context provider consumer model
 
 ## 12. Working Rule
 Implementation should treat this document as the current public-surface baseline:
