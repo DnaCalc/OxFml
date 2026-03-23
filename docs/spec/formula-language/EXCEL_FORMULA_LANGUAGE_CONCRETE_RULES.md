@@ -94,6 +94,7 @@ Anchor:
 | BYCOL | `=BYCOL(A1:C3,LAMBDA(c,SUM(c)))` | authoritative_behavioral + empirical | ECS-041;ECS-042;ECS-EB-034 | pass2_accept | Accepted in pass-2 corpus. |
 | SCAN | `=SCAN(0,A1:A3,LAMBDA(a,b,a+b))` | authoritative_behavioral + empirical | ECS-041;ECS-042;ECS-EB-034 | pass2_accept | Accepted in pass-2 corpus. |
 | REDUCE | `=REDUCE(0,A1:A3,LAMBDA(a,b,a+b))` | authoritative_behavioral + empirical | ECS-041;ECS-042;ECS-EB-034 | pass2_accept | Accepted in pass-2 corpus. |
+| ISOMITTED | `=LAMBDA(a,ISOMITTED(a))(3)` | authoritative_behavioral + local_exercised | W040-HO-LOCAL | local_floor | Present lambda arguments are visible as non-omitted; direct under-application remains a distinct arity-mismatch lane in the current OxFml floor. |
 
 Coverage note:
 1. Public formal grammar anchors are incomplete for some modern helper-form details.

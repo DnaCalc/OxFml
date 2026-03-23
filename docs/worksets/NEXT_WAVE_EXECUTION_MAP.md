@@ -50,6 +50,9 @@ Planned follow-on review lane after that wave:
 ## Post-W047 State
 `W047` is now exercised. The immediate first-host-readiness batch has removed the narrow `R1C1`, restricted `CF` / `DV`, and first-host replay-packet blockers from the next local host packet.
 
+## Post-W040 State
+`W040` is now exercised. The first higher-order callable seam-evidence wave is strong enough that the remaining callable work is smaller carrier/provenance freeze work under `W032`, `W041`, `W042`, and `W043`, not another broad higher-order seam-reopen round.
+
 ## Next Critical Path
 1. `W032` OxFunc catalog, callable transport, and provider closure
 2. `W041` typed context and query bundle freeze
@@ -59,7 +62,6 @@ Planned follow-on review lane after that wave:
 6. `W034` distributed runtime and coordinator consequence boundary
 7. `W035` broader formal family and concurrency model expansion
 8. `W038` name and external-name host resolution boundary
-9. `W040` higher-order callable evidence and seam reopen
 
 ## Next Parallelism
 1. `W033` can proceed after `W025`, `W028`, `W029`, `W030`, and the now-exercised `W031` classification floor without waiting for the full `W032 -> W034` chain.
@@ -68,7 +70,6 @@ Planned follow-on review lane after that wave:
 4. `W045` remains the canonical host/runtime contract while those successor packets keep narrowing.
 5. `W038` should follow the host/runtime and provider narrowing and remain scoped to host-managed name/external-name resolution boundary work rather than generic formula-carrier ownership.
 6. `W035` should wait for both the wider replay and runtime floors so the new checked artifacts match exercised local behavior rather than speculative designs.
-7. `W040` should wait until `W032` has narrowed the first callable carrier/provenance split and `W038` has kept callable/name-carrier pressure explicit, so higher-order callable evidence reopens the seam on local proof rather than note pressure.
 
 ## Why This Next Sequence
 1. `W031` has already converted the pending `MS-OE376` rule families into explicit OxFml-owned backlog and semantic classification,
@@ -85,4 +86,4 @@ Planned follow-on review lane after that wave:
 9. `W035` broadens checked local formal coverage only after replay and runtime surfaces are stronger than they are today,
 10. `W036` turns structured references from a provisional rule into a wider local semantic floor,
 11. `W038` is now narrowed to host-managed name/external-name boundary work rather than generic formula-carrier ownership,
-12. `W040` gives the deferred higher-order callable lanes a future evidence path instead of forcing them into the current callable seam exchange prematurely.
+12. the now-exercised `W040` callable-evidence wave means the remaining callable work is narrower carrier/provenance freeze work rather than another broad higher-order evidence push.

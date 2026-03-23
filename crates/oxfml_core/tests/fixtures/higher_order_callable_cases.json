@@ -1,0 +1,93 @@
+[
+  {
+    "case_id": "higher_order_001_map_inline_lambda",
+    "formula": "=MAP(SEQUENCE(3),LAMBDA(x,x+1))",
+    "expected": {
+      "payload_summary": "Array(3x1)",
+      "array_numbers": [2.0, 3.0, 4.0]
+    }
+  },
+  {
+    "case_id": "higher_order_002_map_defined_name_callable",
+    "formula": "=MAP(SEQUENCE(3),NamedLambda)",
+    "callable_name": "NamedLambda",
+    "binding_summary": "arity=1;params=y;captures=x;body=Binary",
+    "callable_body_formula": "=x+y",
+    "callable_params": ["y"],
+    "closure_bindings": {
+      "x": "Number(10)"
+    },
+    "expected": {
+      "payload_summary": "Array(3x1)",
+      "array_numbers": [11.0, 12.0, 13.0]
+    }
+  },
+  {
+    "case_id": "higher_order_003_reduce_inline_lambda",
+    "formula": "=REDUCE(0,SEQUENCE(3),LAMBDA(a,b,a+b))",
+    "expected": {
+      "payload_summary": "Number(6)"
+    }
+  },
+  {
+    "case_id": "higher_order_004_scan_inline_lambda",
+    "formula": "=SCAN(0,SEQUENCE(3),LAMBDA(a,b,a+b))",
+    "expected": {
+      "payload_summary": "Array(3x1)",
+      "array_numbers": [1.0, 3.0, 6.0]
+    }
+  },
+  {
+    "case_id": "higher_order_005_byrow_inline_lambda",
+    "formula": "=BYROW(SEQUENCE(2,2),LAMBDA(r,SUM(r)))",
+    "expected": {
+      "payload_summary": "Array(2x1)",
+      "array_numbers": [3.0, 7.0]
+    }
+  },
+  {
+    "case_id": "higher_order_006_bycol_inline_lambda",
+    "formula": "=BYCOL(SEQUENCE(2,2),LAMBDA(c,SUM(c)))",
+    "expected": {
+      "payload_summary": "Array(1x2)",
+      "array_numbers": [4.0, 6.0]
+    }
+  },
+  {
+    "case_id": "higher_order_007_makearray_inline_lambda",
+    "formula": "=MAKEARRAY(2,3,LAMBDA(r,c,r+c))",
+    "expected": {
+      "payload_summary": "Array(2x3)",
+      "array_numbers": [2.0, 3.0, 4.0, 3.0, 4.0, 5.0]
+    }
+  },
+  {
+    "case_id": "higher_order_008_isomitted_top_level_present_arg",
+    "formula": "=ISOMITTED(1)",
+    "expected": {
+      "payload_summary": "Logical(false)"
+    }
+  },
+  {
+    "case_id": "higher_order_009_isomitted_lambda_present_arg",
+    "formula": "=LAMBDA(a,ISOMITTED(a))(3)",
+    "expected": {
+      "payload_summary": "Logical(false)"
+    }
+  },
+  {
+    "case_id": "higher_order_010_isomitted_underapplication_is_value_error",
+    "formula": "=LAMBDA(a,ISOMITTED(a))()",
+    "expected": {
+      "evaluation_error_contains": "lambda invocation arity mismatch"
+    }
+  },
+  {
+    "case_id": "higher_order_011_map_isomitted_present_args",
+    "formula": "=MAP(SEQUENCE(2),LAMBDA(a,ISOMITTED(a)))",
+    "expected": {
+      "payload_summary": "Array(2x1)",
+      "array_logicals": [false, false]
+    }
+  }
+]

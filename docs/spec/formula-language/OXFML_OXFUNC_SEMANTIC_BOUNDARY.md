@@ -245,7 +245,11 @@ Current narrowing direction:
 3. any opaque callable identity is still too weak if origin, capture mode, arity shape, or invocation contract become unrecoverable,
 4. workbook Defined Name callable preservation should be treated as first-pass seam pressure rather than deferred callable transport cleanup,
 5. higher-order helper evidence from OxFunc is now strong downstream pressure, and OxFml now has matching local evidence for `MAP`, `REDUCE`, `SCAN`, `BYROW`, `BYCOL`, and `MAKEARRAY`: their `W044` catalog rows are consumed directly in local semantic-plan tests and their runtime lanes now execute through a local typed callable invoker,
-6. that newer runtime evidence narrows the open question toward minimum callable carrier and provenance fields rather than whether typed invocation itself is viable.
+6. OxFml also now has local `ISOMITTED` evidence narrow enough to stop treating it as a seam driver:
+   - present arguments are visible as non-omitted,
+   - higher-order present-argument lanes preserve that same non-omitted reading,
+   - direct lambda under-application remains a distinct arity-mismatch failure rather than an omitted-placeholder lane,
+7. that newer runtime evidence narrows the open question toward minimum callable carrier and provenance fields rather than whether typed invocation itself is viable.
 
 Working rule:
 1. publication restrictions on callable values remain separate from the question of whether callable values are semantically admissible,

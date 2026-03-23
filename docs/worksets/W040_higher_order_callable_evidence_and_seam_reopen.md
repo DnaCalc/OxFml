@@ -38,28 +38,34 @@ Collect local OxFml evidence for higher-order callable and helper lanes that are
 - Any effect on callable carrier, provenance split, or invocation boundary is stated explicitly.
 - If no boundary change is forced, the workset closes with an explicit “no seam reopen needed yet” outcome.
 
+## Status
+- execution_state: complete
+- scope_completeness: scope_complete
+- target_completeness: target_complete
+- integration_completeness: integrated
+- open_lanes: none
+- claim_confidence: validated
+
+## Closure Reading
+1. Local deterministic evidence now exists for `MAP`, `REDUCE`, `SCAN`, `BYROW`, `BYCOL`, and `MAKEARRAY` at both semantic-plan and runtime level: OxFml consumes their `W044` catalog rows directly, and inline as well as helper-bound local lambdas execute end-to-end through the typed callable-invoker seam.
+2. Local deterministic evidence now also exists for the currently honest `ISOMITTED` floor:
+   - direct present-argument `ISOMITTED(1) -> FALSE`,
+   - present lambda-parameter `LAMBDA(a,ISOMITTED(a))(3) -> FALSE`,
+   - higher-order present-argument `MAP(SEQUENCE(2),LAMBDA(a,ISOMITTED(a))) -> {FALSE;FALSE}`,
+   - direct lambda under-application remains a distinct arity-mismatch failure rather than an omitted-placeholder lane.
+3. Adopted defined-name callable preservation is stronger and no longer flattened into the helper origin, and higher-order execution through a defined-name callable carrier is exercised for `MAP`.
+4. This wider evidence does not force a broader seam reopen. The remaining callable narrowing is the smaller carrier-versus-provenance freeze already owned by `W032`, `W041`, `W042`, and `W043`.
+
 ## Pre-Closure Verification Checklist
 
 | # | Check | Yes/No |
 |---|-------|--------|
-| 1 | Spec text updated for all in-scope items? | |
-| 2 | Conformance matrix rows updated? | |
-| 3 | At least one deterministic replay artifact exists per in-scope behavior? | |
-| 4 | Cross-repo impact assessed and handoff filed if needed? | |
-| 5 | All required tests pass? | |
-| 6 | No known semantic gaps remain in declared scope? | |
-| 7 | Completion language audit passed (no premature "done"/"complete" per AGENTS.md Section 3)? | |
-| 8 | IN_PROGRESS_FEATURE_WORKLIST.md updated? | |
-| 9 | CURRENT_BLOCKERS.md updated (new/resolved)? | |
-
-## Status
-- execution_state: in_progress
-- scope_completeness: scope_partial
-- target_completeness: target_partial
-- integration_completeness: partial
-- open_lanes:
-  - local deterministic evidence now exists for `MAP`, `REDUCE`, `SCAN`, `BYROW`, `BYCOL`, and `MAKEARRAY` at both semantic-plan and runtime level: OxFml consumes their `W044` catalog rows directly, and inline as well as helper-bound local lambdas now execute end-to-end through the typed callable-invoker seam
-  - `ISOMITTED` is no longer treated as a first-freeze seam blocker after the latest OxFunc/native alignment, but it still lacks the same OxFml-local runtime-evidence depth as the already-exercised higher-order lanes
-  - adopted defined-name callable preservation is now stronger and no longer flattened into the helper origin, and higher-order execution through a defined-name callable carrier is now exercised for `MAP`, but broader defined-name callable transport remains open
-  - a narrower seam-reopen note to OxFunc is now justified for the minimum callable carrier/provenance split, but not yet for broader higher-order family closure
-- claim_confidence: draft
+| 1 | Spec text updated for all in-scope items? | yes |
+| 2 | Conformance matrix rows updated? | yes |
+| 3 | At least one deterministic replay artifact exists per in-scope behavior? | yes |
+| 4 | Cross-repo impact assessed and handoff filed if needed? | yes |
+| 5 | All required tests pass? | yes |
+| 6 | No known semantic gaps remain in declared scope? | yes |
+| 7 | Completion language audit passed (no premature "done"/"complete" per AGENTS.md Section 3)? | yes |
+| 8 | IN_PROGRESS_FEATURE_WORKLIST.md updated? | yes |
+| 9 | CURRENT_BLOCKERS.md updated (new/resolved)? | yes |

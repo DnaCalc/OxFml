@@ -192,7 +192,12 @@ For the immediate next sync, OxFml wants those answers grounded in the currently
 
 Current read after the latest OxFunc note:
 1. `ISOMITTED` no longer needs to be treated as a first-freeze callable seam blocker,
-2. it may remain a later evidence lane unless local runtime mismatches show otherwise.
+2. the current honest OxFml-local floor now also proves:
+   - direct present-argument `ISOMITTED(1) -> FALSE`,
+   - present lambda-parameter `LAMBDA(a,ISOMITTED(a))(3) -> FALSE`,
+   - higher-order present-argument `MAP(SEQUENCE(2),LAMBDA(a,ISOMITTED(a))) -> {FALSE;FALSE}`,
+3. direct lambda under-application remains a distinct arity-mismatch failure rather than an omitted-placeholder lane,
+4. explicit omitted-placeholder preservation such as `LAMBDA(a,b,ISOMITTED(b))(1,)` remains outside the current OxFml worksheet-helper floor and is not required for the first application seam freeze.
 
 Current OxFml working question set for that sync:
 1. are `origin kind`, `capture mode`, `arity shape`, and `invocation-contract meaning` all semantically required shared minimums,

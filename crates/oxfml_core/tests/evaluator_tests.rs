@@ -754,6 +754,46 @@ fn evaluator_executes_makearray_with_local_lambda_callable() {
     );
 }
 
+#[test]
+fn evaluator_runs_isomitted_with_present_arg() {
+    let output = evaluate("=ISOMITTED(1)", None, None, Some(&en_us_context()));
+    assert_eq!(output.result.payload_summary, "Logical(false)");
+    assert_eq!(output.trace.prepared_calls[0].function_id, "FUNC.ISOMITTED");
+}
+
+#[test]
+fn evaluator_distinguishes_lambda_underapplication_from_isomitted() {
+    let present = evaluate(
+        "=LAMBDA(a,ISOMITTED(a))(3)",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(present.result.payload_summary, "Logical(false)");
+
+    let underapplied = evaluate_with_rtd_provider(
+        "=LAMBDA(a,ISOMITTED(a))()",
+        None,
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    let error = underapplied.expect_err("underapplication should fail before ISOMITTED is useful");
+    assert!(error.message.contains("lambda invocation arity mismatch"));
+}
+
+#[test]
+fn evaluator_executes_map_with_isomitted_for_present_args() {
+    let output = evaluate(
+        "=MAP(SEQUENCE(2),LAMBDA(a,ISOMITTED(a)))",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.result.payload_summary, "Array(2x1)");
+    assert_eq!(array_logicals(&output.oxfunc_value), vec![false, false]);
+}
+
 fn evaluate(
     formula: &str,
     defined_names: Option<BTreeMap<String, DefinedNameBinding>>,
@@ -885,6 +925,19 @@ fn array_numbers(value: &EvalValue) -> Vec<f64> {
         .map(|cell| match cell {
             ArrayCellValue::Number(number) => *number,
             other => panic!("expected numeric array cell, got {other:?}"),
+        })
+        .collect()
+}
+
+fn array_logicals(value: &EvalValue) -> Vec<bool> {
+    let EvalValue::Array(array) = value else {
+        panic!("expected array result, got {value:?}");
+    };
+    array
+        .iter_row_major()
+        .map(|cell| match cell {
+            ArrayCellValue::Logical(value) => *value,
+            other => panic!("expected logical array cell, got {other:?}"),
         })
         .collect()
 }

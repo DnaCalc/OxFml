@@ -2,7 +2,7 @@
 
 Status: no active blockers.
 
-Last reviewed: 2026-03-23 after `W047` first-host-readiness batch validation.
+Last reviewed: 2026-03-23 after `W040` higher-order callable validation.
 
 ---
 
