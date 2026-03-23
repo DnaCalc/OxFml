@@ -4,6 +4,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use oxfunc_core::function::ArgPreparationProfile;
 use oxfunc_core::functions::adapters::PreparedArgValue;
 use oxfunc_core::functions::callable_helpers::{CallableInvocationError, CallableInvoker};
+use oxfunc_core::functions::cell::{CellEvalError, eval_cell_surface};
+use oxfunc_core::functions::info_fn::{InfoEvalError, eval_info_surface};
+use oxfunc_core::functions::rtd_fn::RtdProvider;
 use oxfunc_core::functions::surface_dispatch::eval_surface_value_call_with_callable;
 use oxfunc_core::host_info::HostInfoProvider;
 use oxfunc_core::locale_format::LocaleFormatContext;
@@ -14,14 +17,15 @@ use oxfunc_core::resolver::{
 use oxfunc_core::value::{
     CallArgValue, CallableArityShape as OxCallableArityShape,
     CallableCaptureMode as OxCallableCaptureMode, CallableOriginKind as OxCallableOriginKind,
-    EvalValue, ExcelText, LambdaValue as OxLambdaValue, ReferenceKind, ReferenceLike,
-    WorksheetErrorCode,
+    EvalValue, ExcelText, ExtendedValue, LambdaValue as OxLambdaValue, ReferenceKind,
+    ReferenceLike, WorksheetErrorCode,
 };
 
 use crate::binding::{
     AreaRef, BoundExpr, BoundFormula, CellRef, ErrorRef, NameRef, NormalizedReference,
     ReferenceExpr,
 };
+use crate::interface::{ReturnedValueSurface, TypedContextQueryBundle};
 use crate::semantics::{SemanticPlan, lookup_function_meta};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -174,6 +178,7 @@ pub enum EvaluationBackend {
 pub struct EvaluationOutput {
     pub result: PreparedResult,
     pub oxfunc_value: EvalValue,
+    pub returned_value_surface: ReturnedValueSurface,
     pub trace: EvaluationTrace,
 }
 
@@ -253,6 +258,7 @@ pub struct EvaluationContext<'a> {
     pub defined_names: BTreeMap<String, DefinedNameBinding>,
     pub locale_ctx: Option<&'a LocaleFormatContext<'a>>,
     pub host_info: Option<&'a dyn HostInfoProvider>,
+    pub rtd_provider: Option<&'a dyn RtdProvider>,
     pub now_serial: Option<f64>,
     pub random_value: Option<f64>,
 }
@@ -269,9 +275,28 @@ impl<'a> EvaluationContext<'a> {
             defined_names: BTreeMap::new(),
             locale_ctx: None,
             host_info: None,
+            rtd_provider: None,
             now_serial: None,
             random_value: None,
         }
+    }
+
+    pub fn typed_context_query_bundle(&self) -> TypedContextQueryBundle<'a> {
+        TypedContextQueryBundle::new(
+            self.host_info,
+            self.rtd_provider,
+            self.locale_ctx,
+            self.now_serial,
+            self.random_value,
+        )
+    }
+
+    pub fn apply_typed_context_query_bundle(&mut self, bundle: TypedContextQueryBundle<'a>) {
+        self.host_info = bundle.host_info;
+        self.rtd_provider = bundle.rtd_provider;
+        self.locale_ctx = bundle.locale_ctx;
+        self.now_serial = bundle.now_serial;
+        self.random_value = bundle.random_value;
     }
 }
 
@@ -302,9 +327,130 @@ pub fn evaluate_formula(
 
     Ok(EvaluationOutput {
         result: prepared_result_from_eval_value(&value, context.plan),
+        returned_value_surface: returned_value_surface_for_output(
+            &context.bind_formula.root,
+            &value,
+            &context,
+        ),
         oxfunc_value: value,
         trace,
     })
+}
+
+fn returned_value_surface_for_output(
+    root: &BoundExpr,
+    value: &EvalValue,
+    context: &EvaluationContext<'_>,
+) -> ReturnedValueSurface {
+    if let Some(surface) = typed_surface_for_top_level_host_or_provider_call(root, context) {
+        return surface;
+    }
+
+    ReturnedValueSurface::from_extended_value(&ExtendedValue::Core(value.clone()))
+}
+
+fn typed_surface_for_top_level_host_or_provider_call(
+    root: &BoundExpr,
+    context: &EvaluationContext<'_>,
+) -> Option<ReturnedValueSurface> {
+    match root {
+        BoundExpr::FunctionCall {
+            function_name,
+            args,
+        } if function_name == "RTD" && context.rtd_provider.is_some() => {
+            let call_args = build_top_level_call_args(args, context, true).ok()?;
+            let callable_registry = RefCell::new(CallableRegistry::default());
+            let resolver = LocalReferenceResolver {
+                cell_values: &context.cell_values,
+                defined_names: &context.defined_names,
+                caller_row: context.caller_row,
+                caller_col: context.caller_col,
+                callable_registry: &callable_registry,
+            };
+            match oxfunc_core::functions::rtd_fn::eval_rtd_surface(
+                &call_args,
+                &resolver,
+                context.rtd_provider,
+            ) {
+                Ok(value) => Some(ReturnedValueSurface::from_rtd_eval_value(&value)),
+                Err(_) => None,
+            }
+        }
+        BoundExpr::FunctionCall {
+            function_name,
+            args,
+        } if function_name == "INFO" && context.host_info.is_some() => {
+            let call_args = build_top_level_call_args(args, context, true).ok()?;
+            let callable_registry = RefCell::new(CallableRegistry::default());
+            let resolver = LocalReferenceResolver {
+                cell_values: &context.cell_values,
+                defined_names: &context.defined_names,
+                caller_row: context.caller_row,
+                caller_col: context.caller_col,
+                callable_registry: &callable_registry,
+            };
+            match eval_info_surface(&call_args, &resolver, context.host_info) {
+                Err(InfoEvalError::HostInfo(error)) => {
+                    Some(ReturnedValueSurface::from_host_info_error(&error))
+                }
+                _ => None,
+            }
+        }
+        BoundExpr::FunctionCall {
+            function_name,
+            args,
+        } if function_name == "CELL" && context.host_info.is_some() => {
+            let call_args = build_top_level_call_args(args, context, true).ok()?;
+            let callable_registry = RefCell::new(CallableRegistry::default());
+            let resolver = LocalReferenceResolver {
+                cell_values: &context.cell_values,
+                defined_names: &context.defined_names,
+                caller_row: context.caller_row,
+                caller_col: context.caller_col,
+                callable_registry: &callable_registry,
+            };
+            match eval_cell_surface(&call_args, &resolver, context.host_info) {
+                Err(CellEvalError::HostInfo(error)) => {
+                    Some(ReturnedValueSurface::from_host_info_error(&error))
+                }
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+fn build_top_level_call_args(
+    args: &[BoundExpr],
+    context: &EvaluationContext<'_>,
+    preserve_reference: bool,
+) -> Result<Vec<CallArgValue>, EvaluationError> {
+    let callable_registry = RefCell::new(CallableRegistry::default());
+    let mut resolver = LocalReferenceResolver {
+        cell_values: &context.cell_values,
+        defined_names: &context.defined_names,
+        caller_row: context.caller_row,
+        caller_col: context.caller_col,
+        callable_registry: &callable_registry,
+    };
+    let helper_bindings = BTreeMap::new();
+    let mut trace = EvaluationTrace {
+        prepared_calls: Vec::new(),
+    };
+
+    args.iter()
+        .map(|arg| {
+            evaluate_expr_as_call_arg(
+                arg,
+                context,
+                &mut resolver,
+                &helper_bindings,
+                &callable_registry,
+                preserve_reference,
+                &mut trace,
+            )
+        })
+        .collect()
 }
 
 fn evaluate_expr_value(
@@ -508,11 +654,43 @@ fn evaluate_function_call(
         context.locale_ctx,
         context.host_info,
         Some(&callable_invoker),
+        context.rtd_provider,
         None,
     )
+    .or_else(|error| {
+        if allow_host_query_worksheet_error_fallback(
+            function_name,
+            &call_args,
+            resolver,
+            context.host_info,
+        ) {
+            Ok(EvalValue::Error(WorksheetErrorCode::Value))
+        } else {
+            Err(error)
+        }
+    })
     .map_err(|error| EvaluationError {
         message: format!("OxFunc surface evaluation failed for {function_name}: {error:?}"),
     })
+}
+
+fn allow_host_query_worksheet_error_fallback(
+    function_name: &str,
+    call_args: &[CallArgValue],
+    resolver: &impl ReferenceResolver,
+    host_info: Option<&dyn HostInfoProvider>,
+) -> bool {
+    match function_name {
+        "INFO" => matches!(
+            eval_info_surface(call_args, resolver, host_info),
+            Err(InfoEvalError::HostInfo(_))
+        ),
+        "CELL" => matches!(
+            eval_cell_surface(call_args, resolver, host_info),
+            Err(CellEvalError::HostInfo(_))
+        ),
+        _ => false,
+    }
 }
 
 fn evaluate_expr_as_call_arg(

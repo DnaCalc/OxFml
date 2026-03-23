@@ -1,6 +1,8 @@
 pub mod binding;
+pub mod carrier;
 pub mod eval;
 pub mod host;
+pub mod interface;
 pub mod red;
 pub mod scheduler;
 pub mod seam;
@@ -14,6 +16,11 @@ pub use binding::{
     IncrementalBindResult, NormalizedReference, ReferenceExpr, bind_formula,
     bind_formula_incremental,
 };
+pub use carrier::{
+    CarrierRestrictionCode, CarrierValidationDisposition, ConditionalFormattingCarrierSpec,
+    DataValidationCarrierSpec, FormulaCarrierValidation, validate_conditional_formatting_formula,
+    validate_data_validation_formula,
+};
 pub use eval::{
     CallableCaptureMode, CallableDefinedNameBinding, CallableInvocationModel, CallableOriginKind,
     CallableValueCarrier, CallableValueProfile, DefinedNameBinding, EvaluationBackend,
@@ -21,7 +28,16 @@ pub use eval::{
     PreparedBlanknessClass, PreparedCall, PreparedEvaluationMode, PreparedResult,
     PreparedResultClass, PreparedSourceClass, PreparedStructureClass, evaluate_formula,
 };
-pub use host::{ArtifactReuseReport, EmpiricalOracleScenario, HostRecalcOutput, SingleFormulaHost};
+pub use host::{
+    ArtifactReuseReport, EmpiricalOracleScenario, FirstHostReplayCapturePacket, HostRecalcOutput,
+    SingleFormulaHost,
+};
+pub use interface::{
+    HostProviderOutcomeKind, HostProviderOutcomeSurface, InMemoryLibraryContextProvider,
+    LibraryContextFieldClass, LibraryContextProvider, LibraryContextSnapshotRef,
+    ReturnedValueSurface, ReturnedValueSurfaceKind, TypedContextQueryBundle,
+    TypedContextQueryBundleSpec, TypedContextQueryFamily, classify_library_context_field,
+};
 pub use red::{
     IncrementalRedProjectionResult, RedNode, RedProjection, project_red_view,
     project_red_view_incremental,
@@ -52,7 +68,8 @@ pub use session::{
     PreparedSession, SessionPhase, SessionRecord, SessionService,
 };
 pub use source::{
-    FormulaSourceRecord, FormulaStableId, FormulaTextVersion, FormulaToken, StructureContextVersion,
+    FormulaChannelKind, FormulaSourceRecord, FormulaStableId, FormulaTextVersion, FormulaToken,
+    StructureContextVersion,
 };
 pub use syntax::green::{GreenTreeRoot, SyntaxKind};
 pub use syntax::parser::{

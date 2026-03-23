@@ -1,3 +1,4 @@
+use crate::interface::ReturnedValueSurface;
 use crate::semantics::ExecutionProfileSummary;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -174,6 +175,7 @@ pub struct AcceptedCandidateResult {
     pub topology_delta: TopologyDelta,
     pub format_delta: Option<FormatDelta>,
     pub display_delta: Option<DisplayDelta>,
+    pub returned_value_surface: ReturnedValueSurface,
     pub spill_events: Vec<SpillEvent>,
     pub execution_profile: Option<ExecutionProfileSummary>,
     pub trace_correlation_id: String,
@@ -190,6 +192,7 @@ pub struct CommitBundle {
     pub topology_delta: TopologyDelta,
     pub format_delta: Option<FormatDelta>,
     pub display_delta: Option<DisplayDelta>,
+    pub returned_value_surface: ReturnedValueSurface,
     pub spill_events: Vec<SpillEvent>,
     pub execution_profile: Option<ExecutionProfileSummary>,
     pub trace_correlation_id: String,
@@ -363,6 +366,7 @@ pub fn commit_candidate(request: CommitRequest) -> AcceptDecision {
         topology_delta: candidate.topology_delta,
         format_delta: candidate.format_delta,
         display_delta: candidate.display_delta,
+        returned_value_surface: candidate.returned_value_surface,
         spill_events: candidate.spill_events,
         execution_profile: candidate.execution_profile,
         trace_correlation_id: candidate.trace_correlation_id,

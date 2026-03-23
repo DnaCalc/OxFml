@@ -95,8 +95,22 @@ pub fn lex(input: &str) -> Vec<Token> {
             }
             c if is_identifier_start(c) => {
                 index += 1;
-                while index < chars.len() && is_identifier_continue(chars[index]) {
-                    index += 1;
+                while index < chars.len() {
+                    if is_identifier_continue(chars[index]) {
+                        index += 1;
+                        continue;
+                    }
+                    if chars[index] == '[' {
+                        index += 1;
+                        while index < chars.len() && chars[index] != ']' {
+                            index += 1;
+                        }
+                        if index < chars.len() {
+                            index += 1;
+                            continue;
+                        }
+                    }
+                    break;
                 }
                 Token {
                     kind: TokenKind::Identifier,

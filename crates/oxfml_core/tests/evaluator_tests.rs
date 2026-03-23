@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 mod common;
 
+use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult};
 use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
 use oxfunc_core::locale_format::{LocaleFormatContext, en_us_context};
 use oxfunc_core::value::{ArrayCellValue, EvalValue, ExcelText, ReferenceKind, ReferenceLike};
@@ -85,6 +86,106 @@ fn evaluator_runs_info_with_host_info_provider() {
     );
     assert_eq!(output.result.payload_summary, "Text(C:\\Work)");
     assert_eq!(output.trace.prepared_calls[0].function_id, "FUNC.INFO");
+}
+
+#[test]
+fn evaluator_projects_info_unsupported_query_as_typed_host_provider_outcome() {
+    let output = evaluate(
+        "=INFO(\"system\")",
+        None,
+        Some(&MockHostInfoProvider),
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.result.payload_summary, "Error(Value)");
+    assert_eq!(
+        output.returned_value_surface.kind,
+        oxfml_core::ReturnedValueSurfaceKind::TypedHostProviderOutcome
+    );
+    assert_eq!(
+        output
+            .returned_value_surface
+            .host_provider_outcome
+            .as_ref()
+            .expect("typed host/provider outcome should exist")
+            .outcome_kind,
+        oxfml_core::HostProviderOutcomeKind::UnsupportedQuery
+    );
+}
+
+#[test]
+fn evaluator_projects_cell_provider_failure_as_typed_host_provider_outcome() {
+    let output = evaluate(
+        "=CELL(\"filename\",A1)",
+        None,
+        Some(&FailingHostInfoProvider),
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.result.payload_summary, "Error(Value)");
+    assert_eq!(
+        output.returned_value_surface.kind,
+        oxfml_core::ReturnedValueSurfaceKind::TypedHostProviderOutcome
+    );
+    assert_eq!(
+        output
+            .returned_value_surface
+            .host_provider_outcome
+            .as_ref()
+            .expect("typed host/provider outcome should exist")
+            .outcome_kind,
+        oxfml_core::HostProviderOutcomeKind::ProviderFailure
+    );
+}
+
+#[test]
+fn evaluator_projects_rtd_value_as_typed_host_provider_outcome() {
+    let output = evaluate_with_rtd_provider(
+        "=RTD(\"prog\",\"server\",\"topic\")",
+        None,
+        None,
+        Some(&ValueRtdProvider),
+        Some(&en_us_context()),
+    )
+    .expect("evaluation should succeed");
+    assert_eq!(output.result.payload_summary, "Number(7)");
+    assert_eq!(
+        output.returned_value_surface.kind,
+        oxfml_core::ReturnedValueSurfaceKind::TypedHostProviderOutcome
+    );
+    assert_eq!(
+        output
+            .returned_value_surface
+            .host_provider_outcome
+            .as_ref()
+            .expect("typed host/provider outcome should exist")
+            .outcome_kind,
+        oxfml_core::HostProviderOutcomeKind::Value
+    );
+}
+
+#[test]
+fn evaluator_projects_rtd_capability_denied_as_typed_host_provider_outcome() {
+    let output = evaluate_with_rtd_provider(
+        "=RTD(\"prog\",\"server\",\"topic\")",
+        None,
+        None,
+        Some(&CapabilityDeniedRtdProvider),
+        Some(&en_us_context()),
+    )
+    .expect("evaluation should succeed");
+    assert_eq!(output.result.payload_summary, "Error(Blocked)");
+    assert_eq!(
+        output.returned_value_surface.kind,
+        oxfml_core::ReturnedValueSurfaceKind::TypedHostProviderOutcome
+    );
+    assert_eq!(
+        output
+            .returned_value_surface
+            .host_provider_outcome
+            .as_ref()
+            .expect("typed host/provider outcome should exist")
+            .outcome_kind,
+        oxfml_core::HostProviderOutcomeKind::CapabilityDenied
+    );
 }
 
 #[test]
@@ -659,14 +760,15 @@ fn evaluate(
     host_info: Option<&dyn HostInfoProvider>,
     locale_ctx: Option<&LocaleFormatContext<'_>>,
 ) -> oxfml_core::EvaluationOutput {
-    evaluate_result(formula, defined_names, host_info, locale_ctx)
+    evaluate_with_rtd_provider(formula, defined_names, host_info, None, locale_ctx)
         .expect("evaluation should succeed")
 }
 
-fn evaluate_result(
+fn evaluate_with_rtd_provider(
     formula: &str,
     defined_names: Option<BTreeMap<String, DefinedNameBinding>>,
     host_info: Option<&dyn HostInfoProvider>,
+    rtd_provider: Option<&dyn RtdProvider>,
     locale_ctx: Option<&LocaleFormatContext<'_>>,
 ) -> Result<oxfml_core::EvaluationOutput, oxfml_core::eval::EvaluationError> {
     let mut names = BTreeMap::new();
@@ -703,6 +805,7 @@ fn evaluate_result(
         .insert("B2".to_string(), EvalValue::Number(13.0));
     context.defined_names = defined_names.unwrap_or_default();
     context.host_info = host_info;
+    context.rtd_provider = rtd_provider;
     context.locale_ctx = locale_ctx;
     context.now_serial = Some(46000.0);
     context.random_value = Some(0.25);
@@ -819,5 +922,48 @@ impl HostInfoProvider for MockHostInfoProvider {
             ))),
             _ => Err(HostInfoError::UnsupportedInfoQuery(query)),
         }
+    }
+}
+
+struct FailingHostInfoProvider;
+
+impl HostInfoProvider for FailingHostInfoProvider {
+    fn query_cell_info(
+        &self,
+        query: CellInfoQuery,
+        _reference: Option<&ReferenceLike>,
+    ) -> Result<EvalValue, HostInfoError> {
+        match query {
+            CellInfoQuery::Filename => Err(HostInfoError::ProviderFailure {
+                detail: "host offline".to_string(),
+            }),
+            _ => Err(HostInfoError::UnsupportedCellInfoQuery(query)),
+        }
+    }
+
+    fn query_info(&self, query: InfoQuery) -> Result<EvalValue, HostInfoError> {
+        Err(HostInfoError::UnsupportedInfoQuery(query))
+    }
+}
+
+struct ValueRtdProvider;
+
+impl RtdProvider for ValueRtdProvider {
+    fn resolve_rtd(
+        &self,
+        _request: &oxfunc_core::functions::rtd_fn::RtdRequest,
+    ) -> RtdProviderResult {
+        RtdProviderResult::Value(EvalValue::Number(7.0))
+    }
+}
+
+struct CapabilityDeniedRtdProvider;
+
+impl RtdProvider for CapabilityDeniedRtdProvider {
+    fn resolve_rtd(
+        &self,
+        _request: &oxfunc_core::functions::rtd_fn::RtdRequest,
+    ) -> RtdProviderResult {
+        RtdProviderResult::CapabilityDenied
     }
 }

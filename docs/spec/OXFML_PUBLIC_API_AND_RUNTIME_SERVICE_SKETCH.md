@@ -6,6 +6,11 @@ This document defines the first code-facing OxFml public surface sketch.
 It is not a language-level signature freeze.
 It is the current API-shape baseline that implementation work should target unless a later workset narrows it further.
 
+Status rule:
+1. this document remains the detailed code-surface sketch,
+2. `OXFML_HOST_RUNTIME_AND_EXTERNAL_REQUIREMENTS.md` is now the primary host/runtime coordination packet,
+3. this document should be read as a supporting code-shape companion to that host/runtime packet rather than a separate peer host contract.
+
 Read together with:
 1. `OXFML_IMPLEMENTATION_SURFACES_AND_STATE_OPTIONS.md`
 2. `OXFML_IMPLEMENTATION_BASELINE.md`
@@ -13,6 +18,7 @@ Read together with:
 4. `OXFML_TEST_LADDER_AND_PROVING_HOSTS.md`
 5. `formula-language/OXFML_PARSER_AND_BINDER_REALIZATION.md`
 6. `fec-f3e/FEC_F3E_DESIGN_SPEC.md`
+7. `OXFML_HOST_RUNTIME_AND_EXTERNAL_REQUIREMENTS.md`
 
 ## 2. Surface Rule
 The public OxFml surface should separate:
@@ -166,7 +172,8 @@ The current intended operations are:
 2. update defined-name inputs
 3. trigger full recalc
 4. retrieve candidate, commit, reject, and trace outputs
-5. run an empirical-oracle scenario through the same proving-host surface
+5. project a first-host replay-capture packet from the resulting host output
+6. run an empirical-oracle scenario through the same proving-host surface
 
 Working rule:
 1. this surface is a proving host, not a second scheduler,

@@ -1,10 +1,10 @@
-use oxfml_core::ExecutionProfileSummary;
 use oxfml_core::seam::{
     AcceptDecision, AcceptedCandidateResult, CapabilityEffectFact, CommitRequest,
     DynamicReferenceFact, Extent, FenceSnapshot, Locus, RejectCode, RejectContext, ShapeDelta,
     ShapeOutcomeClass, SpillEvent, SpillEventKind, SpillFact, TopologyDelta, ValueDelta,
     ValuePayload, WorksheetValueClass, commit_candidate,
 };
+use oxfml_core::{ExecutionProfileSummary, ReturnedValueSurface};
 
 #[test]
 fn commit_candidate_accepts_matching_fence_and_preserves_candidate_payload() {
@@ -26,6 +26,10 @@ fn commit_candidate_accepts_matching_fence_and_preserves_candidate_payload() {
     assert_eq!(
         bundle.value_delta.published_payload,
         ValuePayload::Number("42".to_string())
+    );
+    assert_eq!(
+        bundle.returned_value_surface,
+        candidate.returned_value_surface
     );
     assert_eq!(
         bundle.shape_delta.shape_outcome_class,
@@ -152,6 +156,9 @@ fn sample_candidate() -> AcceptedCandidateResult {
         },
         format_delta: None,
         display_delta: None,
+        returned_value_surface: ReturnedValueSurface::from_extended_value(
+            &oxfunc_core::value::ExtendedValue::Core(oxfunc_core::value::EvalValue::Number(42.0)),
+        ),
         spill_events: vec![SpillEvent {
             spill_event_kind: SpillEventKind::SpillTakeover,
             formula_stable_id: "formula:001".to_string(),

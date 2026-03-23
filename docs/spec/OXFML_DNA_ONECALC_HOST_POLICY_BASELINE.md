@@ -8,10 +8,16 @@ It exists to separate:
 2. the current single-formula proving-host floor,
 3. later DNA OneCalc host specification work.
 
+Status rule:
+1. this document remains the reduced-profile DNA OneCalc host-policy companion,
+2. `OXFML_HOST_RUNTIME_AND_EXTERNAL_REQUIREMENTS.md` is now the primary host/runtime coordination packet,
+3. this document should be read as a narrower downstream-host policy supplement rather than a full host/runtime contract.
+
 Read together with:
 1. `OXFML_TEST_LADDER_AND_PROVING_HOSTS.md`
 2. `OXFML_EMPIRICAL_PACK_PLANNING.md`
 3. `fec-f3e/FEC_F3E_TESTING_AND_REPLAY.md`
+4. `OXFML_HOST_RUNTIME_AND_EXTERNAL_REQUIREMENTS.md`
 
 ## 2. Authority Boundary
 OxFml remains authoritative for:

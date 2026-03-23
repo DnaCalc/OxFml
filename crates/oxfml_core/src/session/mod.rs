@@ -1099,6 +1099,7 @@ fn build_candidate_result(
         },
         format_delta,
         display_delta,
+        returned_value_surface: evaluation.returned_value_surface.clone(),
         spill_events,
         execution_profile: Some(semantic_plan.execution_profile.clone()),
         trace_correlation_id: format!("trace:{candidate_result_id}"),

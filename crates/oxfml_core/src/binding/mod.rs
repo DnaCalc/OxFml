@@ -10,7 +10,9 @@ pub use reference::{
 };
 
 use crate::red::RedProjection;
-use crate::source::{FormulaSourceRecord, FormulaToken, StructureContextVersion};
+use crate::source::{
+    FormulaChannelKind, FormulaSourceRecord, FormulaToken, StructureContextVersion,
+};
 use crate::syntax::green::{GreenChild, GreenNode, GreenTreeRoot, SyntaxKind};
 use crate::syntax::token::TextSpan;
 
@@ -131,6 +133,7 @@ pub fn bind_formula(request: BindRequest) -> BindResult {
 
     let mut binder = Binder {
         context: request.context,
+        formula_channel_kind: request.source.formula_channel_kind,
         diagnostics: Vec::new(),
         normalized_references: Vec::new(),
         dependency_seeds: Vec::new(),
@@ -205,6 +208,7 @@ pub fn bind_formula_incremental(
 
 struct Binder {
     context: BindContext,
+    formula_channel_kind: FormulaChannelKind,
     diagnostics: Vec<BindDiagnostic>,
     normalized_references: Vec<NormalizedReference>,
     dependency_seeds: Vec<DependencySeed>,
@@ -305,7 +309,12 @@ impl Binder {
 
     fn bind_identifier(&mut self, node: &GreenNode) -> BoundExpr {
         let text = self.first_token_text(node).unwrap_or_default();
-        if let Some(cell_ref) = parse_cell_reference(&text, &self.context.sheet_id, &self.context) {
+        if let Some(cell_ref) = parse_cell_reference(
+            &text,
+            &self.context.sheet_id,
+            &self.context,
+            self.formula_channel_kind,
+        ) {
             let normalized = NormalizedReference::Cell(cell_ref);
             self.push_reference_seed(&normalized);
             BoundExpr::Reference(ReferenceExpr::Atom(normalized))
@@ -392,9 +401,12 @@ impl Binder {
                         .push("external_reference".to_string());
                     self.push_reference_seed(&normalized);
                     BoundExpr::Reference(ReferenceExpr::Atom(normalized))
-                } else if let Some(cell_ref) =
-                    parse_cell_reference(&text, &qualifier.sheet_id, &self.context)
-                {
+                } else if let Some(cell_ref) = parse_cell_reference(
+                    &text,
+                    &qualifier.sheet_id,
+                    &self.context,
+                    self.formula_channel_kind,
+                ) {
                     let normalized = NormalizedReference::Cell(cell_ref);
                     self.push_reference_seed(&normalized);
                     BoundExpr::Reference(ReferenceExpr::Atom(normalized))
@@ -499,8 +511,8 @@ impl Binder {
         }
 
         if let (Some(start_row), Some(end_row)) = (
-            parse_row_reference(&left_simple.target_text),
-            parse_row_reference(&right_simple.target_text),
+            parse_row_reference(&left_simple.target_text, self.formula_channel_kind),
+            parse_row_reference(&right_simple.target_text, self.formula_channel_kind),
         ) {
             let top_row = start_row.min(end_row);
             let bottom_row = start_row.max(end_row);
@@ -514,8 +526,8 @@ impl Binder {
         }
 
         if let (Some(start_col), Some(end_col)) = (
-            parse_column_reference(&left_simple.target_text),
-            parse_column_reference(&right_simple.target_text),
+            parse_column_reference(&left_simple.target_text, self.formula_channel_kind),
+            parse_column_reference(&right_simple.target_text, self.formula_channel_kind),
         ) {
             let left_col = start_col.min(end_col);
             let right_col = start_col.max(end_col);
@@ -775,7 +787,12 @@ impl Binder {
     }
 
     fn bind_identifier_expr_from_name(&mut self, text: &str) -> BoundExpr {
-        if let Some(cell_ref) = parse_cell_reference(text, &self.context.sheet_id, &self.context) {
+        if let Some(cell_ref) = parse_cell_reference(
+            text,
+            &self.context.sheet_id,
+            &self.context,
+            self.formula_channel_kind,
+        ) {
             let normalized = NormalizedReference::Cell(cell_ref);
             self.push_reference_seed(&normalized);
             BoundExpr::Reference(ReferenceExpr::Atom(normalized))
@@ -915,7 +932,16 @@ fn parse_reference_qualifier(text: &str) -> ParsedQualifier {
     }
 }
 
-fn parse_cell_reference(text: &str, sheet_id: &str, context: &BindContext) -> Option<CellRef> {
+fn parse_cell_reference(
+    text: &str,
+    sheet_id: &str,
+    context: &BindContext,
+    formula_channel_kind: FormulaChannelKind,
+) -> Option<CellRef> {
+    if formula_channel_kind == FormulaChannelKind::WorksheetR1C1 {
+        return parse_r1c1_cell_reference(text, sheet_id, context);
+    }
+
     let mut chars = text.chars().peekable();
     let mut col_text = String::new();
     while matches!(chars.peek(), Some(c) if c.is_ascii_alphabetic() || *c == '$') {
@@ -949,18 +975,94 @@ fn parse_cell_reference(text: &str, sheet_id: &str, context: &BindContext) -> Op
     })
 }
 
-fn parse_row_reference(text: &str) -> Option<u32> {
+fn parse_row_reference(text: &str, formula_channel_kind: FormulaChannelKind) -> Option<u32> {
+    if formula_channel_kind == FormulaChannelKind::WorksheetR1C1 {
+        return parse_r1c1_row_reference(text);
+    }
     if text.is_empty() || !text.chars().all(|ch| ch.is_ascii_digit()) {
         return None;
     }
     text.parse::<u32>().ok()
 }
 
-fn parse_column_reference(text: &str) -> Option<u32> {
+fn parse_column_reference(text: &str, formula_channel_kind: FormulaChannelKind) -> Option<u32> {
+    if formula_channel_kind == FormulaChannelKind::WorksheetR1C1 {
+        return parse_r1c1_column_reference(text);
+    }
     if text.is_empty() || text.len() > 3 || !text.chars().all(|ch| ch.is_ascii_alphabetic()) {
         return None;
     }
     column_to_index(text)
+}
+
+fn parse_r1c1_cell_reference(text: &str, sheet_id: &str, context: &BindContext) -> Option<CellRef> {
+    let (row, row_absolute, row_anchor_used, rest) =
+        parse_r1c1_axis(text, 'R', context.caller_row)?;
+    let (col, col_absolute, col_anchor_used, rest) =
+        parse_r1c1_axis(rest, 'C', context.caller_col)?;
+    if !rest.is_empty() {
+        return None;
+    }
+
+    Some(CellRef {
+        workbook_id: context.workbook_id.clone(),
+        sheet_id: sheet_id.to_string(),
+        coord: CellCoord { row, col },
+        address_mode: AddressMode {
+            row_absolute,
+            col_absolute,
+        },
+        caller_anchor_used: row_anchor_used || col_anchor_used,
+    })
+}
+
+fn parse_r1c1_row_reference(text: &str) -> Option<u32> {
+    let remainder = text.strip_prefix('R')?;
+    if remainder.starts_with('[') || remainder.is_empty() {
+        return None;
+    }
+    remainder.parse::<u32>().ok()
+}
+
+fn parse_r1c1_column_reference(text: &str) -> Option<u32> {
+    let remainder = text.strip_prefix('C')?;
+    if remainder.starts_with('[') || remainder.is_empty() {
+        return None;
+    }
+    remainder.parse::<u32>().ok()
+}
+
+fn parse_r1c1_axis<'a>(
+    text: &'a str,
+    axis_kind: char,
+    caller_anchor: u32,
+) -> Option<(u32, bool, bool, &'a str)> {
+    let remainder = text.strip_prefix(axis_kind)?;
+    if let Some(relative) = remainder.strip_prefix('[') {
+        let close_index = relative.find(']')?;
+        let delta = relative[..close_index].parse::<i32>().ok()?;
+        let anchor = i64::from(caller_anchor);
+        let resolved = anchor.checked_add(i64::from(delta))?;
+        if resolved < 1 {
+            return None;
+        }
+        return Some((
+            u32::try_from(resolved).ok()?,
+            false,
+            true,
+            &relative[close_index + 1..],
+        ));
+    }
+
+    let digits_len = remainder
+        .chars()
+        .take_while(|ch| ch.is_ascii_digit())
+        .count();
+    if digits_len == 0 {
+        return None;
+    }
+    let absolute = remainder[..digits_len].parse::<u32>().ok()?;
+    Some((absolute, true, false, &remainder[digits_len..]))
 }
 
 fn column_to_index(text: &str) -> Option<u32> {

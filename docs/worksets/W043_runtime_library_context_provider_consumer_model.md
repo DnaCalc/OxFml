@@ -51,14 +51,19 @@ Turn the converged OxFml/OxFunc runtime library-context direction into a first r
 | 9 | CURRENT_BLOCKERS.md updated (new/resolved)? | |
 
 ## Status
-- execution_state: planned
+- execution_state: in_progress
 - scope_completeness: scope_partial
 - target_completeness: target_partial
 - integration_completeness: partial
 - open_lanes:
-  - OxFml has note-level convergence on the runtime provider/snapshot direction, but not yet a real consumer/model packet
-  - OxFml now prefers a cleaner runtime-only shape plus explicit CSV/export mapping, but that preference is not yet backed by a real consumer/model packet
-  - deterministic local evidence still needs to move beyond pure note agreement
-  - the runtime-truth versus export-only field split is not yet explicit enough for implementation use
+  - OxFml now has a first real local consumer/model packet:
+    - `LibraryContextProvider`
+    - `InMemoryLibraryContextProvider`
+    - `LibraryContextSnapshotRef`
+    - runtime-field classification helpers,
+    and the single-formula host now consumes the provider during semantic-plan compilation, but the runtime interface is not yet fully propagated through broader compile/session execution surfaces
+  - OxFml now prefers a cleaner runtime-only shape plus explicit CSV/export mapping, and that preference is backed by the first local provider model plus host consumption, but not yet by broader multi-surface consumer use
+  - deterministic local evidence now exists for snapshot pinning and surface lookup through the first provider model, but broader generation/update behavior remains unexercised
+  - the runtime-truth versus export-only field split is now explicit in local helper code, but not yet promoted into a wider canonical implementation surface
   - current OxFunc reading is that this is now a freeze-and-consumer packet rather than a broad semantic-open lane, and the final note round leaves local execution as the remaining next step
-- claim_confidence: draft
+- claim_confidence: provisional

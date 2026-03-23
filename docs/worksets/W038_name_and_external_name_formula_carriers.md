@@ -1,19 +1,19 @@
-# W038: Name and External-Name Formula Carriers
+# W038: Name and External-Name Host Resolution Boundary
 
 ## Purpose
-Make defined-name formulas and external-name formulas first-class OxFml carrier lanes, with explicit grammar/bind/runtime consequences, instead of leaving them implied inside generic scoped-name or external-reference handling.
+Clarify the OxFml boundary for host-managed name and external-name formulas, so OxFml does not over-own workbook carrier management while still specifying the exact bind, resolution, runtime, and FEC consequences it must preserve.
 
 ## Position and Dependencies
-- **Depends on**: `W031`, `W032`, `W036`
-- **Blocks**: later stronger external-host and formula-carrier policy work
-- **Cross-repo**: OxFml owns formula-carrier meaning, bind/runtime consequences, and replay artifacts; OxFunc contributes catalog/provider truth where needed; OxCalc consumes resulting seam-significant effects
+- **Depends on**: `W031`, `W032`, `W045`
+- **Blocks**: later stronger host-managed name/external-name integration work
+- **Cross-repo**: host owns name and external-name carrier management; OxFml owns bind/runtime/FEC consequences once those carriers are presented for evaluation; OxFunc contributes catalog/provider truth where needed; OxCalc consumes resulting seam-significant effects
 
 ## Scope
 ### In scope
-1. Define canonical OxFml treatment of name formulas and external-name formulas as formula-bearing carriers.
-2. Narrow grammar and bind treatment for those carriers.
-3. Tighten stage-aware runtime/provider behavior for external-name outcomes.
-4. Add deterministic replay/proving artifacts for the exercised local carrier baseline.
+1. Define the exact OxFml boundary for host-managed name and external-name formulas.
+2. Specify what a host must present to OxFml when evaluation of a name-managed formula is requested.
+3. Narrow bind, unresolved, and runtime/provider behavior for external-name outcomes once presented to OxFml.
+4. Add deterministic replay/proving artifacts for the exercised local boundary and FEC consequences.
 
 ### Out of scope
 1. Full workbook-management semantics for every name-like object.
@@ -21,20 +21,20 @@ Make defined-name formulas and external-name formulas first-class OxFml carrier 
 3. R1C1 and CF/DV sublanguage work.
 
 ## Deliverables
-1. A canonical OxFml carrier model for name formulas and external-name formulas.
-2. A narrower split between name-scope, external-provider, and error/prohibition outcomes.
-3. Deterministic replay evidence for the first exercised carrier families.
+1. A canonical OxFml boundary statement for host-managed name and external-name formulas.
+2. A narrower split between host-owned carrier management, OxFml bind/runtime consequences, and external-provider/error outcomes.
+3. Deterministic replay evidence for the first exercised boundary families.
 
 ## Gate Model
 ### Entry gate
-- `W031` has classified name and external-name formulas as partial/missing carrier lanes.
-- `W032` has narrowed library-context and provider taxonomy enough for honest carrier modeling.
-- `W036` has widened table/reference semantics enough that name-carrier work does not collapse into generic reference handling.
+- `W031` has classified name and external-name formulas as partial/missing lanes.
+- `W032` has narrowed library-context and provider taxonomy enough for honest boundary modeling.
+- `W045` has made the first direct-host versus integrated-host split explicit.
 
 ### Exit gate
-- Name formulas and external-name formulas are canonically modeled as formula-bearing carriers.
+- The host-managed carrier boundary is explicit.
 - External-name provider/failure behavior is narrower than the current generic external-reference posture.
-- Remaining carrier gaps are explicitly listed.
+- Remaining boundary gaps are explicitly listed.
 
 ## Pre-Closure Verification Checklist
 
@@ -56,7 +56,7 @@ Make defined-name formulas and external-name formulas first-class OxFml carrier 
 - target_completeness: target_partial
 - integration_completeness: partial
 - open_lanes:
-  - semantic-plan classification now treats `NameKind::MixedOrDeferred` as an explicit name-formula-carrier lane (`name_formula_carrier` / `NameCarrierDeferred`), a first checked Lean artifact now fixes that distinction formally, and adopted defined-name callable values now preserve a distinct `DefinedNameCallable` origin kind at runtime with first exercised higher-order execution through `MAP`, but executable formula-bearing defined-name storage and wider evaluation are still missing
-  - external-name formulas now have a first checked Lean carrier artifact for same-external-book restriction and provider-stage runtime typing, but they still do not have a first-class executable local carrier artifact
+  - semantic-plan classification now distinguishes mixed/deferred name handling and adopted defined-name callable origin, but the host-managed presentation contract for name/external-name evaluation is still not specified exactly
+  - external-name formulas now have a first checked Lean boundary artifact for same-external-book restriction and provider-stage runtime typing, but the exact host-presented FEC contract is still missing
   - broader workbook/object-management semantics and wider provider-host policy remain outside this workset scope
 - claim_confidence: draft

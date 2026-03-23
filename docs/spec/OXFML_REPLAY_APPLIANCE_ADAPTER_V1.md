@@ -136,6 +136,7 @@ Current import mapping:
 7. `single_formula_host_replay_cases.json`
    - source family: proving-host witness
    - replay role: host-level scenario import
+   - first-host helper note: the direct host may first project `HostRecalcOutput` through `to_first_host_replay_capture_packet()` before wider replay normalization
 8. `empirical_oracle_scenarios.json`
    - source family: empirical-oracle witness
    - replay role: oracle comparison and explain import

@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use oxfunc_core::functions::rtd_fn::RtdProvider;
 use oxfunc_core::host_info::HostInfoProvider;
 use oxfunc_core::locale_format::LocaleFormatContext;
 use oxfunc_core::value::{EvalValue, ExcelText, ReferenceLike};
@@ -8,6 +9,10 @@ use crate::binding::{BindContext, BindRequest, BoundFormula, NameKind, bind_form
 use crate::eval::{
     CallableDefinedNameBinding, DefinedNameBinding, EvaluationBackend, EvaluationContext,
     EvaluationOutput, evaluate_formula,
+};
+use crate::interface::{
+    LibraryContextProvider, LibraryContextSnapshotRef, ReturnedValueSurface,
+    TypedContextQueryBundle, TypedContextQueryBundleSpec,
 };
 use crate::red::{RedProjection, project_red_view_incremental};
 use crate::scheduler::{ExecutionContract, build_execution_contract};
@@ -64,13 +69,54 @@ pub struct SingleFormulaHost {
 #[derive(Debug, Clone, PartialEq)]
 pub struct HostRecalcOutput {
     pub source: FormulaSourceRecord,
+    pub library_context_snapshot_ref: Option<LibraryContextSnapshotRef>,
     pub semantic_plan: SemanticPlan,
     pub execution_contract: ExecutionContract,
+    pub typed_query_bundle_spec: TypedContextQueryBundleSpec,
     pub evaluation: EvaluationOutput,
+    pub returned_value_surface: ReturnedValueSurface,
     pub candidate_result: AcceptedCandidateResult,
     pub commit_decision: AcceptDecision,
     pub trace_events: Vec<TraceEvent>,
     pub artifact_reuse: ArtifactReuseReport,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FirstHostReplayCapturePacket {
+    pub adapter_id: String,
+    pub formula_stable_id: String,
+    pub formula_channel_kind: crate::source::FormulaChannelKind,
+    pub formula_token: String,
+    pub library_context_snapshot_ref: Option<LibraryContextSnapshotRef>,
+    pub typed_query_bundle_spec: TypedContextQueryBundleSpec,
+    pub returned_value_surface: ReturnedValueSurface,
+    pub candidate_result_id: String,
+    pub commit_decision_kind: String,
+    pub trace_event_kinds: Vec<String>,
+}
+
+impl HostRecalcOutput {
+    pub fn to_first_host_replay_capture_packet(&self) -> FirstHostReplayCapturePacket {
+        FirstHostReplayCapturePacket {
+            adapter_id: "oxfml.replay_adapter.v1".to_string(),
+            formula_stable_id: self.source.formula_stable_id.0.clone(),
+            formula_channel_kind: self.source.formula_channel_kind,
+            formula_token: self.source.formula_token().0,
+            library_context_snapshot_ref: self.library_context_snapshot_ref.clone(),
+            typed_query_bundle_spec: self.typed_query_bundle_spec.clone(),
+            returned_value_surface: self.returned_value_surface.clone(),
+            candidate_result_id: self.candidate_result.candidate_result_id.clone(),
+            commit_decision_kind: match &self.commit_decision {
+                AcceptDecision::Accepted(_) => "accepted".to_string(),
+                AcceptDecision::Rejected(_) => "rejected".to_string(),
+            },
+            trace_event_kinds: self
+                .trace_events
+                .iter()
+                .map(|event| format!("{:?}", event.event_kind))
+                .collect(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -149,7 +195,14 @@ impl SingleFormulaHost {
         host_info: Option<&dyn HostInfoProvider>,
         locale_ctx: Option<&LocaleFormatContext<'_>>,
     ) -> Result<HostRecalcOutput, String> {
-        self.recalc_with_backend(EvaluationBackend::OxFuncBacked, host_info, locale_ctx)
+        let query_bundle = TypedContextQueryBundle::new(
+            host_info,
+            None,
+            locale_ctx,
+            self.now_serial,
+            self.random_value,
+        );
+        self.recalc_with_interfaces(EvaluationBackend::OxFuncBacked, query_bundle, None)
     }
 
     pub fn recalc_with_backend(
@@ -158,6 +211,23 @@ impl SingleFormulaHost {
         host_info: Option<&dyn HostInfoProvider>,
         locale_ctx: Option<&LocaleFormatContext<'_>>,
     ) -> Result<HostRecalcOutput, String> {
+        let query_bundle = TypedContextQueryBundle::new(
+            host_info,
+            None,
+            locale_ctx,
+            self.now_serial,
+            self.random_value,
+        );
+        self.recalc_with_interfaces(backend, query_bundle, None)
+    }
+
+    pub fn recalc_with_interfaces(
+        &mut self,
+        backend: EvaluationBackend,
+        query_bundle: TypedContextQueryBundle<'_>,
+        library_context_provider: Option<&dyn LibraryContextProvider>,
+    ) -> Result<HostRecalcOutput, String> {
+        let typed_query_bundle_spec = query_bundle.freeze_candidate_spec();
         let source = FormulaSourceRecord::new(
             self.formula_stable_id.clone(),
             self.formula_text_version,
@@ -208,9 +278,20 @@ impl SingleFormulaHost {
         );
 
         let semantic_plan_catalog_identity = "oxfunc:host".to_string();
-        let locale_profile = locale_ctx.map(|ctx| format!("{:?}", ctx.profile.id));
-        let date_system = locale_ctx.map(|ctx| format!("{:?}", ctx.date_system));
-        let format_profile = locale_ctx.map(|_| "locale-format-context".to_string());
+        let locale_profile = query_bundle
+            .locale_ctx
+            .map(|ctx| format!("{:?}", ctx.profile.id));
+        let date_system = query_bundle
+            .locale_ctx
+            .map(|ctx| format!("{:?}", ctx.date_system));
+        let format_profile = query_bundle
+            .locale_ctx
+            .map(|_| "locale-format-context".to_string());
+        let library_context_snapshot =
+            library_context_provider.map(LibraryContextProvider::current_snapshot);
+        let library_context_snapshot_ref = library_context_snapshot
+            .as_ref()
+            .map(LibraryContextSnapshotRef::from);
         let (semantic_plan, semantic_plan_reused) = if let Some(previous) = cached_artifacts {
             if previous.bound_formula.bind_hash == bind.bound_formula.bind_hash
                 && previous.semantic_plan_catalog_identity == semantic_plan_catalog_identity
@@ -227,7 +308,7 @@ impl SingleFormulaHost {
                         locale_profile: locale_profile.clone(),
                         date_system: date_system.clone(),
                         format_profile: format_profile.clone(),
-                        library_context_snapshot: None,
+                        library_context_snapshot: library_context_snapshot.clone(),
                     })
                     .semantic_plan,
                     false,
@@ -241,7 +322,7 @@ impl SingleFormulaHost {
                     locale_profile: locale_profile.clone(),
                     date_system: date_system.clone(),
                     format_profile: format_profile.clone(),
-                    library_context_snapshot: None,
+                    library_context_snapshot: library_context_snapshot,
                 })
                 .semantic_plan,
                 false,
@@ -272,10 +353,7 @@ impl SingleFormulaHost {
         evaluation_context.caller_col = self.caller_col as usize;
         evaluation_context.cell_values = self.cell_values.clone();
         evaluation_context.defined_names = self.defined_names.clone();
-        evaluation_context.host_info = host_info;
-        evaluation_context.locale_ctx = locale_ctx;
-        evaluation_context.now_serial = self.now_serial;
-        evaluation_context.random_value = self.random_value;
+        evaluation_context.apply_typed_context_query_bundle(query_bundle);
 
         let evaluation = evaluate_formula(evaluation_context).map_err(|err| err.message)?;
 
@@ -301,8 +379,11 @@ impl SingleFormulaHost {
 
         Ok(HostRecalcOutput {
             source,
+            library_context_snapshot_ref,
             semantic_plan,
             execution_contract,
+            typed_query_bundle_spec,
+            returned_value_surface: evaluation.returned_value_surface.clone(),
             evaluation,
             candidate_result,
             commit_decision,
@@ -346,6 +427,27 @@ impl SingleFormulaHost {
             apply_empirical_cell_binding(&mut host, target, summary)?;
         }
         host.recalc(host_info, locale_ctx)
+    }
+
+    pub fn recalc_with_rtd_provider(
+        &mut self,
+        host_info: Option<&dyn HostInfoProvider>,
+        rtd_provider: Option<&dyn RtdProvider>,
+        locale_ctx: Option<&LocaleFormatContext<'_>>,
+        library_context_provider: Option<&dyn LibraryContextProvider>,
+    ) -> Result<HostRecalcOutput, String> {
+        let query_bundle = TypedContextQueryBundle::new(
+            host_info,
+            rtd_provider,
+            locale_ctx,
+            self.now_serial,
+            self.random_value,
+        );
+        self.recalc_with_interfaces(
+            EvaluationBackend::OxFuncBacked,
+            query_bundle,
+            library_context_provider,
+        )
     }
 }
 
@@ -463,6 +565,7 @@ fn build_candidate_result(
         },
         format_delta,
         display_delta,
+        returned_value_surface: evaluation.returned_value_surface.clone(),
         spill_events,
         execution_profile: Some(semantic_plan.execution_profile.clone()),
         trace_correlation_id: format!("trace:{candidate_result_id}"),

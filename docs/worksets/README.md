@@ -121,12 +121,15 @@ Current baseline sequence after `W001`:
 34. `W035` broader formal family and concurrency model expansion
 35. `W036` structured reference and table formula semantics
 36. `W037` R1C1 formula channels and reference translation
-37. `W038` name and external-name formula carriers
+37. `W038` name and external-name host resolution boundary
 38. `W039` conditional-formatting and data-validation formula sublanguages
 39. `W040` higher-order callable evidence and seam reopen
 40. `W041` typed context and query bundle freeze
 41. `W042` return surface and publication-hint freeze
 42. `W043` runtime library-context provider consumer model
+43. `W045` host runtime and external requirements freeze
+44. `W046` first host implementation and replay capture packet
+45. `W047` first host readiness execution batch
 
 This sequence is the current planning baseline.
 It may be refined, but new worksets should preserve dependency clarity rather than bypass it informally.
@@ -135,6 +138,5 @@ Supporting planning artifact:
 1. `docs/worksets/NEXT_WAVE_EXECUTION_MAP.md`
 
 Current user-authorized execution override:
-1. No AutoRun override is currently active.
-2. The repo is back on default checkpoint-at-gates behavior.
-3. A new AutoRun override must be explicitly authorized by the user for a bounded scope.
+1. No temporary AutoRun override is active.
+2. Default checkpoint-at-gates behavior is in effect.

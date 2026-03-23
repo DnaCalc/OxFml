@@ -83,9 +83,8 @@ Rationale: premature completion is exacerbated by speed pressure. Conservative g
 
 ### 4.1 Current User-Authorized Override
 Current explicit user override:
-1. No temporary AutoRun override is currently active.
-2. Default checkpoint-at-gates behavior is in force.
-3. Any future override must be explicitly user-authorized for a bounded scope and exit gate.
+1. No temporary AutoRun override is active.
+2. Default checkpoint-at-gates behavior is in effect.
 
 ## 5. Blocker Handling
 

@@ -17,7 +17,7 @@ use oxfml_core::seam::{
 use oxfml_core::session::{CapabilityViewSpec, PrepareRequest, SessionService};
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
-use oxfml_core::{CompileSemanticPlanRequest, compile_semantic_plan};
+use oxfml_core::{CompileSemanticPlanRequest, ReturnedValueSurface, compile_semantic_plan};
 
 #[derive(Debug, Deserialize)]
 struct AdapterCapabilityManifest {
@@ -901,6 +901,9 @@ fn sample_candidate() -> AcceptedCandidateResult {
         },
         format_delta: None,
         display_delta: None,
+        returned_value_surface: ReturnedValueSurface::from_extended_value(
+            &oxfunc_core::value::ExtendedValue::Core(oxfunc_core::value::EvalValue::Number(42.0)),
+        ),
         spill_events: vec![SpillEvent {
             spill_event_kind: SpillEventKind::SpillTakeover,
             formula_stable_id: "formula:fec".to_string(),

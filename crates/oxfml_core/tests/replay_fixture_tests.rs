@@ -6,7 +6,6 @@ use oxfunc_core::locale_format::en_us_context;
 use oxfunc_core::value::{EvalValue, ExcelText, ReferenceLike};
 use serde::Deserialize;
 
-use oxfml_core::ExecutionProfileSummary;
 use oxfml_core::binding::{BindContext, BindRequest, bind_formula};
 use oxfml_core::eval::{DefinedNameBinding, EvaluationContext, evaluate_formula};
 use oxfml_core::host::SingleFormulaHost;
@@ -24,6 +23,7 @@ use oxfml_core::semantics::{
 };
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
+use oxfml_core::{ExecutionProfileSummary, ReturnedValueSurface};
 
 #[derive(Debug, Deserialize)]
 struct SemanticPlanReplayFixture {
@@ -865,6 +865,9 @@ fn sample_candidate() -> AcceptedCandidateResult {
         },
         format_delta: None,
         display_delta: None,
+        returned_value_surface: ReturnedValueSurface::from_extended_value(
+            &oxfunc_core::value::ExtendedValue::Core(oxfunc_core::value::EvalValue::Number(42.0)),
+        ),
         spill_events: vec![SpillEvent {
             spill_event_kind: SpillEventKind::SpillTakeover,
             formula_stable_id: "formula:001".to_string(),

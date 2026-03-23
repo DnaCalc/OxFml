@@ -47,23 +47,26 @@ Planned follow-on review lane after that wave:
 ## Post-W031 State
 `W031` is now exercised and should be treated as the classification bridge between the earlier `W025 -> W030` wave and the next execution wave.
 
+## Post-W047 State
+`W047` is now exercised. The immediate first-host-readiness batch has removed the narrow `R1C1`, restricted `CF` / `DV`, and first-host replay-packet blockers from the next local host packet.
+
 ## Next Critical Path
 1. `W032` OxFunc catalog, callable transport, and provider closure
 2. `W041` typed context and query bundle freeze
 3. `W042` return surface and publication-hint freeze
 4. `W043` runtime library-context provider consumer model
-5. `W034` distributed runtime and coordinator consequence boundary
-6. `W035` broader formal family and concurrency model expansion
-7. `W038` name and external-name formula carriers
-8. `W039` conditional-formatting and data-validation formula sublanguages
+5. `W045` host runtime and external requirements freeze
+6. `W034` distributed runtime and coordinator consequence boundary
+7. `W035` broader formal family and concurrency model expansion
+8. `W038` name and external-name host resolution boundary
 9. `W040` higher-order callable evidence and seam reopen
 
 ## Next Parallelism
 1. `W033` can proceed after `W025`, `W028`, `W029`, `W030`, and the now-exercised `W031` classification floor without waiting for the full `W032 -> W034` chain.
-2. `W036` and `W037` can proceed after `W031` without waiting for the full runtime/distributed chain.
-3. `W041`, `W042`, and `W043` should follow the now-converged OxFunc note sequence and can proceed as the next bounded seam-hardening packets after `W032`.
-4. `W038` should follow the OxFunc/provider narrowing from `W032`.
-5. `W039` should follow `W030` and `W034` so CF/DV semantics do not outrun current semantic-format and runtime consequence boundaries.
+2. `W036` can proceed after `W031` without waiting for the full runtime/distributed chain.
+3. `W041`, `W042`, and `W043` should continue to narrow in parallel where needed, because the host packet and the remaining OxFunc seam work still depend on them.
+4. `W045` remains the canonical host/runtime contract while those successor packets keep narrowing.
+5. `W038` should follow the host/runtime and provider narrowing and remain scoped to host-managed name/external-name resolution boundary work rather than generic formula-carrier ownership.
 6. `W035` should wait for both the wider replay and runtime floors so the new checked artifacts match exercised local behavior rather than speculative designs.
 7. `W040` should wait until `W032` has narrowed the first callable carrier/provenance split and `W038` has kept callable/name-carrier pressure explicit, so higher-order callable evidence reopens the seam on local proof rather than note pressure.
 
@@ -74,12 +77,12 @@ Planned follow-on review lane after that wave:
    - typed context/query bundle freeze
    - return-surface and publication-hint freeze
    - runtime library-context provider consumer model,
-4. the final OxFunc note in that exchange treats those packets as the remaining first-application work rather than leaving further clarification debt,
-5. `W033` addresses the largest remaining assurance gap by moving beyond promotion-readiness planning toward broader `cap.C4`-adjacent evidence,
-6. `W034` takes the current local async/runtime floor into the next coordinator-visible consequence boundary without collapsing OxCalc policy into OxFml,
-7. `W035` broadens checked local formal coverage only after replay and runtime surfaces are stronger than they are today,
-8. `W036` turns structured references from a provisional rule into a wider local semantic floor,
-9. `W037` adds the missing R1C1 formula channel instead of silently overloading the A1-first parser,
-10. `W038` makes name and external-name formulas first-class carriers rather than generic scoped-name fallout,
-11. `W039` treats conditional-formatting and data-validation formulas as distinct sublanguage lanes instead of assuming worksheet-formula parity,
+4. `W047` has already executed the immediate first-host readiness push, so the next sequence can return to the remaining seam, host-packet, and runtime owners,
+5. `W045` turns the partial `W041` / `W042` / `W043` packet floor into one implementation-facing host/runtime contract for both direct-host and OxCalc-integrated host use,
+6. the final OxFunc note in that exchange treats the host/query, return-surface, and runtime-provider packets as the remaining first-application work rather than leaving further clarification debt,
+7. `W033` addresses the largest remaining assurance gap by moving beyond promotion-readiness planning toward broader `cap.C4`-adjacent evidence,
+8. `W034` takes the current local async/runtime floor into the next coordinator-visible consequence boundary without collapsing OxCalc policy into OxFml,
+9. `W035` broadens checked local formal coverage only after replay and runtime surfaces are stronger than they are today,
+10. `W036` turns structured references from a provisional rule into a wider local semantic floor,
+11. `W038` is now narrowed to host-managed name/external-name boundary work rather than generic formula-carrier ownership,
 12. `W040` gives the deferred higher-order callable lanes a future evidence path instead of forcing them into the current callable seam exchange prematurely.

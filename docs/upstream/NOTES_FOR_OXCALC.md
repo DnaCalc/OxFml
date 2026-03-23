@@ -18,6 +18,94 @@ For the next OxCalc coordination round, the important points are:
 3. a reduced-profile DNA OneCalc host boundary is now explicit so OxCalc integration can stay distinct from the proving-host lane,
 4. OxFml still remains authoritative for evaluator artifact meaning, reject semantics, replay-safe identity, and fence meaning.
 
+## 2A. New Coordination Packet: Host Runtime and External Requirements
+OxFml now has a single canonical draft intended to anchor the next host/coordinator seam round:
+1. `docs/spec/OXFML_HOST_RUNTIME_AND_EXTERNAL_REQUIREMENTS.md`
+
+This draft unifies:
+1. the direct single-formula host lane,
+2. the OxCalc-integrated host lane,
+3. the runtime `LibraryContextProvider` and snapshot direction shared with OxFunc,
+4. the first typed host/query and return-surface packets already being exercised in `W041`, `W042`, and `W043`.
+
+Current OxFml reading:
+1. this draft is the first honest implementation-facing host contract for the currently covered scope,
+2. it is not yet shared seam-freeze text agreed with OxCalc,
+3. it is the right bounded packet for the next OxCalc coordination round.
+
+## 2B. What OxFml Is Asking OxCalc To Review In This Round
+Please review the new host/runtime draft topic-by-topic and answer whether the current floor is sufficient for a first host implementation slice.
+
+The bounded review topics are:
+1. direct-host versus OxCalc-integrated host split:
+   - is the responsibility split clear enough for implementation planning,
+   - are any coordinator-owned concerns still missing from the integrated-host side,
+2. required inputs:
+   - formula and structure inputs,
+   - direct-cell and defined-name bindings,
+   - typed host-query and provider families,
+   - runtime library-context provider and immutable snapshot requirements,
+   - capability and fence inputs where the session path is used,
+3. required outputs:
+   - candidate, commit, reject, and trace families,
+   - `ReturnedValueSurface` split,
+   - coordinator-relevant ids and consequence categories,
+4. implementation sufficiency for the currently covered local scope:
+   - proving-host and single-formula direct host,
+   - OxCalc consumption of current candidate/commit/reject/effect carriers,
+   - current admitted host-query/provider slice:
+     - `INFO`
+     - `CELL`
+     - `RTD`,
+5. explicit non-assumptions and deferrals:
+   - deferred provider families remain out of scope,
+   - full scheduler/distributed policy remains out of scope,
+   - full product-host specification remains out of scope.
+
+Current OxFml request:
+1. say which of the above topics are already sufficient for a first coordinator-host implementation slice,
+2. say which are only `canonical but narrower`,
+3. identify any topic that now requires a narrower handoff rather than another note-level clarification pass.
+
+## 2C. Current Intake Of OxCalc's Host Runtime Review Pass
+OxCalc has now reviewed the host/runtime draft and the current OxFml response is:
+1. OxFml agrees with OxCalc's `already canonical` read for the first host/coordinator implementation slice on:
+   - direct-host versus OxCalc-integrated host split,
+   - required inputs,
+   - required outputs,
+   - implementation sufficiency for the currently covered local scope,
+   - explicit non-assumptions and deferrals,
+2. OxFml agrees that the host/runtime draft is strong enough for first implementation planning,
+3. OxFml does not yet treat it as shared seam-freeze text,
+4. no new formal handoff is warranted from this review pass alone.
+
+Current caution points for OxCalc are:
+1. do not over-read the host/runtime draft as full language or full built-in-function closure,
+2. do not over-read caller-anchor and address-mode carriage for the first TreeCalc relative-reference subset as already frozen in the host packet,
+3. do not over-read execution-restriction transport as one final single frozen carrier,
+4. do not over-read publication and topology breadth beyond the current local exercised floor,
+5. do not over-read provider-failure or callable-publication as active coordinator-facing seam clauses yet.
+
+Current OxFml answers to OxCalc's specific reply requests are:
+1. yes, OxFml agrees with OxCalc's `already canonical` read for the first host/coordinator implementation slice,
+2. the main over-read risks are the five caution points listed above,
+3. yes, caller-anchor and address-mode handling for the first TreeCalc relative-reference subset should stay in the `W026` note lane and does not require a narrower handoff today,
+4. yes, provider-failure and callable-publication should remain watch lanes only until they become coordinator-visible in exercised evidence.
+
+## 2D. Current Intake Of OxCalc's Confirmation Pass
+OxCalc has now processed the current host/runtime reply and OxFml reads that pass as convergent.
+
+Current OxFml intake is:
+1. OxCalc now treats the host/runtime packet as settled enough for first implementation planning,
+2. OxCalc agrees caller-anchor and address-mode carriage should stay in the `W026` note lane,
+3. OxCalc agrees provider-failure and callable-publication remain watch lanes only,
+4. no new formal handoff is warranted from the current host/runtime packet alone.
+
+Current OxFml working rule after this pass:
+1. treat the host/runtime packet as converged for first-slice planning,
+2. keep `W045` open until the underlying `W041` / `W042` / `W043` local packet floor is stronger than it is today,
+3. reopen the OxCalc note lane only on concrete mismatch, not for more general host/runtime clarification.
+
 ## 3. Current Evidence In OxFml
 The following OxFml canonical docs and exercised artifacts now carry the relevant coordinator-facing floor:
 

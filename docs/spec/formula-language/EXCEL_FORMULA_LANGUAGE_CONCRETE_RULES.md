@@ -38,7 +38,27 @@ Working interpretation rule:
 | FML-R-015 | Name formulas and external-name formulas are distinct formula-bearing carriers; external-name formulas are narrower than generic external references and require explicit external-book identity. | XLS-CF-FL-008 | CONF-discovered-ms-oe376-220816-823374c7-0362;CONF-discovered-ms-oe376-220816-823374c7-0363;SPEC-discovered-ms-oe376-88e93023-48443;SPEC-discovered-ms-oe376-88e93023-48448;SPEC-discovered-ms-oe376-88e93023-48451 | provisional |
 | FML-R-016 | Conditional-formatting and data-validation formulas are restricted formula-bearing sublanguages; they are similar but not safely identical, and their rule-host fields remain formula-semantic rather than display-only metadata. | XLS-CF-FL-006 | CONF-discovered-ms-oe376-220816-823374c7-1427;CONF-discovered-ms-oe376-220816-823374c7-1428;CONF-discovered-ms-oe376-220816-823374c7-1429;CONF-discovered-ms-oe376-220816-823374c7-1430;CONF-discovered-ms-oe376-220816-823374c7-1431 | provisional |
 
-## 3. Evidence Posture
+## 3. Current Local Floors For Newer Rule Families
+
+### 3.1 `R1C1`
+The current local `R1C1` floor is:
+1. explicit `WorksheetR1C1` channel identity,
+2. absolute and caller-anchor-relative cell-reference translation,
+3. qualified area ranges built from that cell-reference floor,
+4. preservation of absolute versus relative origin in normalized references.
+
+Current residuals stay explicit in `OXFML_R1C1_FORMULA_CHANNEL.md`.
+
+### 3.2 `CF` and `DV`
+The current local `CF` / `DV` floor is:
+1. distinct carrier kinds,
+2. distinct restriction profiles,
+3. explicit host-field facts for target ranges and rule/formula slots,
+4. rejection of union, intersection, spill, and external-reference families for the admitted restricted floor.
+
+Current residuals stay explicit in `OXFML_CF_DV_RESTRICTED_SUBLANGUAGES.md`.
+
+## 4. Evidence Posture
 Rule wording in this document is canonical only at the policy level. Wave-specific runs, matrices, and dated execution summaries are archive material.
 
 Working rule:
@@ -49,7 +69,7 @@ Working rule:
 Canonical archive pointer:
 1. `archive/EXCEL_FORMULA_LANGUAGE_EMPIRICAL_BASELINES.md`
 
-## 4. Operator Precedence Baseline (Worksheet Formula Context)
+## 5. Operator Precedence Baseline (Worksheet Formula Context)
 Current precedence baseline for parser/evaluator alignment:
 1. Reference operators (`:`, `,`, space intersection)
 2. Unary `+`, unary `-`
@@ -63,7 +83,7 @@ Current precedence baseline for parser/evaluator alignment:
 Anchor:
 - `ECS-003` plus formal grammar cross-check via `ECS-008`.
 
-## 5. Helper-Form Coverage Baseline (Draft)
+## 6. Helper-Form Coverage Baseline (Draft)
 | construct | sample_shape | source_class | evidence_ids | observed_state | notes |
 |---|---|---|---|---|---|
 | LET | `=LET(x,1,x+2)` | authoritative_behavioral + empirical | ECS-041;ECS-008 | wave1_accept | Baseline LET parse acceptance confirmed in wave1. |
@@ -79,7 +99,7 @@ Coverage note:
 1. Public formal grammar anchors are incomplete for some modern helper-form details.
 2. Helper-form completeness therefore depends on mixed formal + behavioral + empirical evidence.
 
-### 5.1 Compile-Time Reducibility Boundary (Planning Note)
+### 6.1 Compile-Time Reducibility Boundary (Planning Note)
 Formula-language and function metadata together should be sufficient to classify whether an expression may be reduced before runtime evaluation.
 
 Working rule:
@@ -96,7 +116,7 @@ Illustrative examples:
 Cross-lane dependency:
 1. Final policy depends on function-definition metadata in `../../../../../OxFunc/docs/function-lane/EXCEL_FUNCTION_DEFINITION_PRELIM_SPEC.md` (not parser grammar alone).
 
-### 5.2 OxFunc Boundary Relevance
+### 6.2 OxFunc Boundary Relevance
 Several formula-language rules have direct OxFunc-boundary consequences:
 1. `FML-R-003`, `FML-R-004`, and `FML-R-005` affect how `@`, `#`, and spill-linked results survive into prepared evaluation structures,
 2. `FML-R-008` and `FML-R-009` affect bind outputs and reference identity,
@@ -104,7 +124,7 @@ Several formula-language rules have direct OxFunc-boundary consequences:
 
 These cross-lane effects must remain explicit during future tightening passes.
 
-### 5.3 Function-Call Admission vs Runtime Error Boundary (Planning Note)
+### 6.3 Function-Call Admission vs Runtime Error Boundary (Planning Note)
 This lane captures a missing-but-critical distinction:
 1. parse-time formula rejection (`cannot enter formula` class), versus
 2. accepted formula with runtime error result (`#VALUE!`, `#NUM!`, etc.).
@@ -119,7 +139,7 @@ Evidence posture:
 1. Current public sources provide only thin direct guidance for this lane.
 2. Therefore this rule remains provisional until dedicated empirical matrices are promoted.
 
-## 6. Open Items for Next Tightening Pass
+## 7. Open Items For Next Tightening Pass
 1. Replicate scoped-name and precedence lanes across target channels/builds to verify current provisional policy wording.
 2. Expand external/workbook reference lane to cover additional link-update policy variants and workbook-open/closed permutations across builds/channels (same-build baseline captured in `EMP-0011`).
 3. Establish a true linked-data fixture path for `P2-FML-002` so dot-field semantics can be split by linked vs non-linked contexts.
@@ -127,7 +147,7 @@ Evidence posture:
 5. Replicate argument-gap and normalization lanes across additional target builds/channels for status promotion to validated.
 6. Execute `P2-FML-011` function-admission/coercion edge matrix (`SIN`/`ASIN` seeds), then split stable sub-rules from remaining provisional rows.
 
-## 7. Conformance Matrix and Archive Evidence
+## 8. Conformance Matrix And Archive Evidence
 This rule set is operationalized by:
 1. `EXCEL_FORMULA_LANGUAGE_CONFORMANCE_MATRIX.csv` (rule status, evidence strength, probe bindings, promotion criteria).
 2. `archive/EXCEL_FORMULA_LANGUAGE_EMPIRICAL_BASELINES.md` (wave summaries and dated baseline observations).
@@ -141,4 +161,4 @@ Primary unresolved closures currently depend on:
 4. `P2-FML-008` spill-blocking/update expansion for `FML-R-005`,
 5. cross-build replay of `P2-FML-003`, `P2-FML-005`, `P2-FML-009`, and `P2-FML-010`.
 6. `P2-FML-011` required-argument omission vs runtime error mapping (`FML-R-012`).
-7. `W036`, `W037`, `W038`, and `W039` for the `MS-OE376`-reviewed carrier and sublanguage families (`FML-R-013` through `FML-R-016`).
+7. `W036` and `W038` for the remaining `MS-OE376`-reviewed carrier families not yet at the same local floor as `FML-R-014` and `FML-R-016`.
