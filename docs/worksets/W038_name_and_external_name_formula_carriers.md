@@ -56,7 +56,8 @@ Clarify the OxFml boundary for host-managed name and external-name formulas, so 
 - target_completeness: target_partial
 - integration_completeness: partial
 - open_lanes:
-  - semantic-plan classification now distinguishes mixed/deferred name handling and adopted defined-name callable origin, but the host-managed presentation contract for name/external-name evaluation is still not specified exactly
-  - external-name formulas now have a first checked Lean boundary artifact for same-external-book restriction and provider-stage runtime typing, but the exact host-presented FEC contract is still missing
+  - a first implementation-facing boundary draft now exists in `docs/spec/formula-language/OXFML_HOST_MANAGED_NAME_AND_EXTERNAL_NAME_BOUNDARY.md`, but the request packet and field names are not yet canonically frozen
+  - semantic-plan classification now distinguishes mixed/deferred name handling and adopted defined-name callable origin, but the host-managed presentation contract still lacks exercised local evidence
+  - external-name formulas now have a first checked Lean boundary artifact for same-external-book restriction and provider-stage runtime typing, but the exact host-presented FEC contract is still not tested
   - broader workbook/object-management semantics and wider provider-host policy remain outside this workset scope
-- claim_confidence: draft
+- claim_confidence: provisional
