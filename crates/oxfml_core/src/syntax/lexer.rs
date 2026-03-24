@@ -40,13 +40,7 @@ pub fn lex(input: &str) -> Vec<Token> {
                 }
             }
             '[' => {
-                index += 1;
-                while index < chars.len() && chars[index] != ']' {
-                    index += 1;
-                }
-                if index < chars.len() {
-                    index += 1;
-                }
+                consume_balanced_bracket_group(&chars, &mut index);
                 while index < chars.len() && is_identifier_continue(chars[index]) {
                     index += 1;
                 }
@@ -101,14 +95,8 @@ pub fn lex(input: &str) -> Vec<Token> {
                         continue;
                     }
                     if chars[index] == '[' {
-                        index += 1;
-                        while index < chars.len() && chars[index] != ']' {
-                            index += 1;
-                        }
-                        if index < chars.len() {
-                            index += 1;
-                            continue;
-                        }
+                        consume_balanced_bracket_group(&chars, &mut index);
+                        continue;
                     }
                     break;
                 }
@@ -150,4 +138,29 @@ fn is_identifier_start(ch: char) -> bool {
 
 fn is_identifier_continue(ch: char) -> bool {
     ch.is_ascii_alphanumeric() || matches!(ch, '_' | '.' | '$')
+}
+
+fn consume_balanced_bracket_group(chars: &[char], index: &mut usize) {
+    if *index >= chars.len() || chars[*index] != '[' {
+        return;
+    }
+
+    let mut depth = 0usize;
+    while *index < chars.len() {
+        match chars[*index] {
+            '[' => {
+                depth += 1;
+            }
+            ']' => {
+                depth = depth.saturating_sub(1);
+                *index += 1;
+                if depth == 0 {
+                    break;
+                }
+                continue;
+            }
+            _ => {}
+        }
+        *index += 1;
+    }
 }

@@ -11,8 +11,9 @@ This directory contains the canonical OxFml formula-language design documents pl
 6. `OXFML_R1C1_FORMULA_CHANNEL.md`
 7. `OXFML_CF_DV_RESTRICTED_SUBLANGUAGES.md`
 8. `OXFML_HOST_MANAGED_NAME_AND_EXTERNAL_NAME_BOUNDARY.md`
-9. `EXCEL_FORMULA_LANGUAGE_CONCRETE_RULES.md`
-10. `EXCEL_FORMULA_LANGUAGE_CONFORMANCE_MATRIX.csv`
+9. `OXFML_STRUCTURED_REFERENCE_AND_TABLE_BOUNDARY.md`
+10. `EXCEL_FORMULA_LANGUAGE_CONCRETE_RULES.md`
+11. `EXCEL_FORMULA_LANGUAGE_CONFORMANCE_MATRIX.csv`
 
 ## Canonical documents
 - `OXFML_FORMULA_ENGINE_ARCHITECTURE.md`
@@ -33,6 +34,8 @@ This directory contains the canonical OxFml formula-language design documents pl
   current first local conditional-formatting and data-validation restricted-carrier floor.
 - `OXFML_HOST_MANAGED_NAME_AND_EXTERNAL_NAME_BOUNDARY.md`
   draft implementation-facing seam for host-managed defined-name and external-name evaluation.
+- `OXFML_STRUCTURED_REFERENCE_AND_TABLE_BOUNDARY.md`
+  draft implementation-facing seam for host-owned table metadata and OxFml-managed structured-reference semantics.
 - `EXCEL_FORMULA_LANGUAGE_CONCRETE_RULES.md`
   Excel-facing rule corpus and policy wording.
 - `EXCEL_FORMULA_LANGUAGE_CONFORMANCE_MATRIX.csv`

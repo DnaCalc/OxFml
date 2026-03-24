@@ -629,6 +629,43 @@ Current OxFml reading of scope:
 2. `W041`, `W042`, and `W043` are now the primary bounded packets for OxFml/OxFunc interface clarification,
 3. `W040` remains the deferred owner only for later higher-order callable pressure not already covered by the exercised local floor.
 
+## 24. Structured-Reference And Table Ownership Planning Read
+OxFml is now tightening the intended ownership split for structured table references under `W036`.
+
+Current OxFml planning read:
+1. structured-reference grammar, omitted-table-name interpretation, `#This Row` handling, and table-aware bind belong in OxFml,
+2. table objects and table metadata belong with the host/coordinator side rather than with OxFunc,
+3. the intended OxFunc-facing seam is narrow:
+   - OxFunc should receive normalized reference consequences or dereferenced prepared-argument values,
+   - not a workbook-table object model,
+4. if a structured reference remains visible downstream, it should be through ordinary OxFml prepared-reference lanes or a stable normalized-reference intent, not a table reconstruction contract.
+
+Current OxFml request to future OxFunc review:
+1. confirm that the current prepared-argument/reference-preservation modes are sufficient for first structured-reference support,
+2. identify only concrete function-semantic mismatches that would require a richer downstream carrier,
+3. otherwise keep structured-reference resolution as an upstream OxFml/host concern.
+
+## 24A. Structured-Reference Refinement For The Next Planning Pass
+OxFml has now compared the current `W036` plan again against the extracted `MS-OE376` structure-reference requirements.
+
+Current refined OxFml read:
+1. omitted-table-name forms are not optional sugar; they require explicit enclosing-table truth from the host side,
+2. `#This Row` is a real selector family and must not be combined with `#Headers`, `#Total Row`, `#Data`, or `#All`,
+3. table-name versus defined-name disambiguation belongs in OxFml bind over host-supplied table packet truth,
+4. OxFunc still should not need workbook table-object awareness for first support.
+
+Current OxFml request to OxFunc:
+1. confirm that current preserved-reference and dereferenced prepared-argument lanes remain sufficient for first structured-reference consumers such as aggregate functions,
+2. identify only concrete function-semantic cases where preserved reference identity would still be too weak,
+3. otherwise keep the downstream seam narrow and opaque:
+   - no table catalog ingestion,
+   - no current-row reconstruction in OxFunc,
+   - no workbook table object model.
+
+Current OxFml suggested wording:
+1. structured references should reach OxFunc only as already-normalized OxFml reference/value lanes,
+2. any later richer downstream carrier should still be an opaque normalized-reference intent, not a table-object contract.
+
 ## 22. Current Processed Response To The Newest OxFunc Note
 OxFml reads the newest OxFunc note as confirming rather than redirecting the current seam plan.
 

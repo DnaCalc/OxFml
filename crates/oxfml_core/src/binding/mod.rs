@@ -6,9 +6,13 @@ use std::hash::{Hash, Hasher};
 
 pub use reference::{
     AddressMode, AreaRef, CellCoord, CellRef, ErrorRef, ExternalRef, NameKind, NameRef,
-    NormalizedReference, ReferenceExpr, WholeColumnRef, WholeRowRef,
+    NormalizedReference, ReferenceExpr, StructuredRef, StructuredResolvedRef,
+    StructuredSectionKind, StructuredSelectorKind, WholeColumnRef, WholeRowRef,
 };
 
+use crate::interface::{
+    TableCallerRegion, TableColumnDescriptor, TableDescriptor, TableRef, TableRegionKind,
+};
 use crate::red::RedProjection;
 use crate::source::{
     FormulaChannelKind, FormulaSourceRecord, FormulaToken, StructureContextVersion,
@@ -85,6 +89,9 @@ pub struct BindContext {
     pub formula_token: FormulaToken,
     pub structure_context_version: StructureContextVersion,
     pub names: BTreeMap<String, NameKind>,
+    pub table_catalog: Vec<TableDescriptor>,
+    pub enclosing_table_ref: Option<TableRef>,
+    pub caller_table_region: Option<TableCallerRegion>,
 }
 
 impl Default for BindContext {
@@ -97,6 +104,9 @@ impl Default for BindContext {
             formula_token: FormulaToken("fixture".to_string()),
             structure_context_version: StructureContextVersion("struct:v1".to_string()),
             names: BTreeMap::new(),
+            table_catalog: Vec::new(),
+            enclosing_table_ref: None,
+            caller_table_region: None,
         }
     }
 }
@@ -129,6 +139,9 @@ pub fn bind_formula(request: BindRequest) -> BindResult {
         request.context.formula_token.0.clone(),
         request.context.structure_context_version.0.clone(),
         request.context.names.clone(),
+        request.context.table_catalog.clone(),
+        request.context.enclosing_table_ref.clone(),
+        request.context.caller_table_region.clone(),
     ));
 
     let mut binder = Binder {
@@ -185,6 +198,9 @@ pub fn bind_formula_incremental(
         request.context.formula_token.0.clone(),
         request.context.structure_context_version.0.clone(),
         request.context.names.clone(),
+        request.context.table_catalog.clone(),
+        request.context.enclosing_table_ref.clone(),
+        request.context.caller_table_region.clone(),
     ));
 
     if let Some(previous_bound_formula) = previous_bound_formula {
@@ -309,7 +325,17 @@ impl Binder {
 
     fn bind_identifier(&mut self, node: &GreenNode) -> BoundExpr {
         let text = self.first_token_text(node).unwrap_or_default();
-        if let Some(cell_ref) = parse_cell_reference(
+        if let Some(structured) = bind_structured_reference_text(
+            &text,
+            &self.context,
+            node.span,
+            self.formula_channel_kind,
+            &mut self.diagnostics,
+            &mut self.unresolved_references,
+        ) {
+            self.push_reference_seed(&structured);
+            BoundExpr::Reference(ReferenceExpr::Atom(structured))
+        } else if let Some(cell_ref) = parse_cell_reference(
             &text,
             &self.context.sheet_id,
             &self.context,
@@ -401,6 +427,17 @@ impl Binder {
                         .push("external_reference".to_string());
                     self.push_reference_seed(&normalized);
                     BoundExpr::Reference(ReferenceExpr::Atom(normalized))
+                } else if let Some(structured) = bind_structured_reference_text_with_sheet(
+                    &text,
+                    &qualifier.sheet_id,
+                    &self.context,
+                    node.span,
+                    self.formula_channel_kind,
+                    &mut self.diagnostics,
+                    &mut self.unresolved_references,
+                ) {
+                    self.push_reference_seed(&structured);
+                    BoundExpr::Reference(ReferenceExpr::Atom(structured))
                 } else if let Some(cell_ref) = parse_cell_reference(
                     &text,
                     &qualifier.sheet_id,
@@ -787,7 +824,17 @@ impl Binder {
     }
 
     fn bind_identifier_expr_from_name(&mut self, text: &str) -> BoundExpr {
-        if let Some(cell_ref) = parse_cell_reference(
+        if let Some(structured) = bind_structured_reference_text(
+            text,
+            &self.context,
+            TextSpan::new(0, 0),
+            self.formula_channel_kind,
+            &mut self.diagnostics,
+            &mut self.unresolved_references,
+        ) {
+            self.push_reference_seed(&structured);
+            BoundExpr::Reference(ReferenceExpr::Atom(structured))
+        } else if let Some(cell_ref) = parse_cell_reference(
             text,
             &self.context.sheet_id,
             &self.context,
@@ -845,6 +892,712 @@ struct ParsedQualifier {
 struct SimpleReferenceFragment {
     qualifier: ParsedQualifier,
     target_text: String,
+}
+
+#[derive(Debug, Clone)]
+struct ParsedStructuredReference {
+    table_name: Option<String>,
+    section_qualifiers: Vec<StructuredSectionKind>,
+    column_names: Vec<String>,
+    caller_row_sensitive: bool,
+}
+
+fn bind_structured_reference_text(
+    text: &str,
+    context: &BindContext,
+    span: TextSpan,
+    formula_channel_kind: FormulaChannelKind,
+    diagnostics: &mut Vec<BindDiagnostic>,
+    unresolved_references: &mut Vec<UnresolvedReferenceRecord>,
+) -> Option<NormalizedReference> {
+    bind_structured_reference_text_with_sheet(
+        text,
+        &context.sheet_id,
+        context,
+        span,
+        formula_channel_kind,
+        diagnostics,
+        unresolved_references,
+    )
+}
+
+fn bind_structured_reference_text_with_sheet(
+    text: &str,
+    effective_sheet_id: &str,
+    context: &BindContext,
+    span: TextSpan,
+    formula_channel_kind: FormulaChannelKind,
+    diagnostics: &mut Vec<BindDiagnostic>,
+    unresolved_references: &mut Vec<UnresolvedReferenceRecord>,
+) -> Option<NormalizedReference> {
+    let parsed = parse_structured_reference_text(text)?;
+    let table = match resolve_structured_table(&parsed, effective_sheet_id, context) {
+        Ok(table) => table,
+        Err(message) => {
+            unresolved_references.push(UnresolvedReferenceRecord {
+                source_text: text.to_string(),
+                reason: message.clone(),
+            });
+            diagnostics.push(BindDiagnostic { message, span });
+            return Some(NormalizedReference::Error(ErrorRef {
+                error_class: "#REF!".to_string(),
+                source_text: text.to_string(),
+            }));
+        }
+    };
+
+    let structured = match build_structured_reference(&parsed, table, context, formula_channel_kind)
+    {
+        Ok(structured) => structured,
+        Err(message) => {
+            unresolved_references.push(UnresolvedReferenceRecord {
+                source_text: text.to_string(),
+                reason: message.clone(),
+            });
+            diagnostics.push(BindDiagnostic { message, span });
+            return Some(NormalizedReference::Error(ErrorRef {
+                error_class: "#REF!".to_string(),
+                source_text: text.to_string(),
+            }));
+        }
+    };
+
+    Some(NormalizedReference::Structured(structured))
+}
+
+fn parse_structured_reference_text(text: &str) -> Option<ParsedStructuredReference> {
+    let (table_name, selector_text) = if text.starts_with('[') {
+        (None, text)
+    } else {
+        let bracket_index = text.find('[')?;
+        (
+            Some(text[..bracket_index].to_string()),
+            &text[bracket_index..],
+        )
+    };
+
+    if !selector_text.starts_with('[')
+        || !selector_text.ends_with(']')
+        || matching_outer_bracket_end(selector_text)? != selector_text.len() - 1
+    {
+        return None;
+    }
+
+    let inner = &selector_text[1..selector_text.len() - 1];
+    if inner.is_empty() {
+        return None;
+    }
+
+    let mut section_qualifiers = Vec::new();
+    let mut column_names = Vec::new();
+    let mut caller_row_sensitive = false;
+
+    if inner.starts_with('[') {
+        for segment in split_top_level_segments(inner, ',') {
+            if let Some(qualifier) = parse_section_qualifier(strip_structured_brackets(segment)?) {
+                if qualifier == StructuredSectionKind::ThisRow {
+                    caller_row_sensitive = true;
+                }
+                section_qualifiers.push(qualifier);
+                continue;
+            }
+
+            let columns = parse_structured_column_segment(segment)?;
+            if columns.is_empty() {
+                return None;
+            }
+            column_names.extend(columns);
+        }
+    } else if let Some(rest) = inner.strip_prefix('@') {
+        caller_row_sensitive = true;
+        section_qualifiers.push(StructuredSectionKind::ThisRow);
+        column_names.push(rest.to_string());
+    } else if let Some(qualifier) = parse_section_qualifier(inner) {
+        if qualifier == StructuredSectionKind::ThisRow {
+            caller_row_sensitive = true;
+        }
+        section_qualifiers.push(qualifier);
+    } else {
+        column_names.push(inner.to_string());
+    }
+
+    Some(ParsedStructuredReference {
+        table_name,
+        section_qualifiers,
+        column_names,
+        caller_row_sensitive,
+    })
+}
+
+fn resolve_structured_table<'a>(
+    parsed: &ParsedStructuredReference,
+    effective_sheet_id: &str,
+    context: &'a BindContext,
+) -> Result<&'a TableDescriptor, String> {
+    if let Some(table_name) = &parsed.table_name {
+        context
+            .table_catalog
+            .iter()
+            .find(|table| {
+                table.sheet_scope_ref == effective_sheet_id
+                    && table.table_name.eq_ignore_ascii_case(table_name)
+            })
+            .ok_or_else(|| format!("unknown structured-reference table '{table_name}'"))
+    } else {
+        let enclosing = context
+            .enclosing_table_ref
+            .as_ref()
+            .ok_or_else(|| "structured reference requires enclosing table context".to_string())?;
+        context
+            .table_catalog
+            .iter()
+            .find(|table| table.table_id == enclosing.table_id)
+            .ok_or_else(|| {
+                format!(
+                    "enclosing structured-reference table '{}' is not present in table_catalog",
+                    enclosing.table_id
+                )
+            })
+    }
+}
+
+fn build_structured_reference(
+    parsed: &ParsedStructuredReference,
+    table: &TableDescriptor,
+    context: &BindContext,
+    formula_channel_kind: FormulaChannelKind,
+) -> Result<StructuredRef, String> {
+    if parsed
+        .section_qualifiers
+        .contains(&StructuredSectionKind::ThisRow)
+        && parsed.section_qualifiers.iter().any(|qualifier| {
+            matches!(
+                qualifier,
+                StructuredSectionKind::Headers
+                    | StructuredSectionKind::Totals
+                    | StructuredSectionKind::Data
+                    | StructuredSectionKind::All
+            )
+        })
+    {
+        return Err(
+            "#This Row must not be combined with #Headers, #Total Row, #Data, or #All".to_string(),
+        );
+    }
+
+    if parsed.column_names.is_empty()
+        && parsed
+            .section_qualifiers
+            .contains(&StructuredSectionKind::ThisRow)
+    {
+        return Err("standalone #This Row structured references are not yet supported".to_string());
+    }
+
+    if parsed.section_qualifiers.len() > 1
+        && !parsed
+            .section_qualifiers
+            .contains(&StructuredSectionKind::ThisRow)
+    {
+        return Err(
+            "structured reference section unions beyond the first local floor are not yet supported"
+                .to_string(),
+        );
+    }
+
+    let selected_columns = if parsed.column_names.is_empty() {
+        table.columns.clone()
+    } else {
+        let first_column = find_table_column(table, &parsed.column_names[0])?;
+        let last_column = find_table_column(
+            table,
+            parsed
+                .column_names
+                .last()
+                .expect("column_names should be non-empty"),
+        )?;
+        let (start_ordinal, end_ordinal) = if first_column.ordinal <= last_column.ordinal {
+            (first_column.ordinal, last_column.ordinal)
+        } else {
+            (last_column.ordinal, first_column.ordinal)
+        };
+        table
+            .columns
+            .iter()
+            .filter(|column| column.ordinal >= start_ordinal && column.ordinal <= end_ordinal)
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    if selected_columns.is_empty() {
+        return Err("structured reference did not resolve any table columns".to_string());
+    }
+
+    let selected_column_ids = selected_columns
+        .iter()
+        .map(|column| column.column_id.clone())
+        .collect::<Vec<_>>();
+    let section = effective_structured_section(parsed);
+    let resolved_reference = resolve_structured_reference_target(
+        table,
+        &selected_columns,
+        section,
+        parsed.caller_row_sensitive,
+        context,
+        formula_channel_kind,
+    )?;
+
+    Ok(StructuredRef {
+        table_id: table.table_id.clone(),
+        table_name: table.table_name.clone(),
+        selector_kind: if parsed.caller_row_sensitive {
+            StructuredSelectorKind::ThisRowColumn
+        } else if parsed.column_names.is_empty() {
+            StructuredSelectorKind::Section
+        } else if parsed.section_qualifiers.is_empty() {
+            StructuredSelectorKind::Column
+        } else {
+            StructuredSelectorKind::SectionColumn
+        },
+        section_qualifiers: if parsed.section_qualifiers.is_empty() && !parsed.caller_row_sensitive
+        {
+            vec![StructuredSectionKind::Data]
+        } else {
+            parsed.section_qualifiers.clone()
+        },
+        selected_column_ids,
+        caller_row_sensitive: parsed.caller_row_sensitive,
+        workbook_scope_ref: table.workbook_scope_ref.clone(),
+        sheet_scope_ref: table.sheet_scope_ref.clone(),
+        resolved_reference,
+    })
+}
+
+fn effective_structured_section(parsed: &ParsedStructuredReference) -> StructuredSectionKind {
+    if parsed.caller_row_sensitive {
+        StructuredSectionKind::ThisRow
+    } else {
+        parsed
+            .section_qualifiers
+            .first()
+            .copied()
+            .unwrap_or(StructuredSectionKind::Data)
+    }
+}
+
+fn resolve_structured_reference_target(
+    table: &TableDescriptor,
+    selected_columns: &[TableColumnDescriptor],
+    section: StructuredSectionKind,
+    caller_row_sensitive: bool,
+    context: &BindContext,
+    formula_channel_kind: FormulaChannelKind,
+) -> Result<StructuredResolvedRef, String> {
+    if caller_row_sensitive {
+        let region = context.caller_table_region.as_ref().ok_or_else(|| {
+            "structured reference requires caller_table_region for current-row-sensitive binding"
+                .to_string()
+        })?;
+        if region.table_id != table.table_id {
+            return Err(
+                "caller_table_region table_id does not match enclosing structured-reference table"
+                    .to_string(),
+            );
+        }
+        if region.region_kind != TableRegionKind::Data {
+            return Err(
+                "current-row structured reference requires a data-region caller_table_region"
+                    .to_string(),
+            );
+        }
+        let row_offset = region.data_row_offset.ok_or_else(|| {
+            "current-row structured reference requires data_row_offset".to_string()
+        })?;
+        return resolve_structured_data_row_target(
+            table,
+            selected_columns,
+            row_offset,
+            context,
+            formula_channel_kind,
+        );
+    }
+
+    match section {
+        StructuredSectionKind::Data => resolve_structured_data_area_target(
+            table,
+            selected_columns,
+            context,
+            formula_channel_kind,
+        ),
+        StructuredSectionKind::All => {
+            let table_area = parse_area_target(
+                &table.table_range_ref,
+                &table.workbook_scope_ref,
+                &table.sheet_scope_ref,
+                context,
+                formula_channel_kind,
+            )
+            .ok_or_else(|| {
+                format!(
+                    "unable to parse table_range_ref '{}' for structured reference",
+                    table.table_range_ref
+                )
+            })?;
+            let first = parse_area_target(
+                &selected_columns[0].column_range_ref,
+                &table.workbook_scope_ref,
+                &table.sheet_scope_ref,
+                context,
+                formula_channel_kind,
+            )
+            .ok_or_else(|| "unable to parse first structured column_range_ref".to_string())?;
+            let last = parse_area_target(
+                &selected_columns[selected_columns.len() - 1].column_range_ref,
+                &table.workbook_scope_ref,
+                &table.sheet_scope_ref,
+                context,
+                formula_channel_kind,
+            )
+            .ok_or_else(|| "unable to parse last structured column_range_ref".to_string())?;
+            Ok(area_or_cell_from_bounds(
+                &table.workbook_scope_ref,
+                &table.sheet_scope_ref,
+                table_area.top_left.row,
+                first.top_left.col.min(last.top_left.col),
+                table_area.top_left.row + table_area.height - 1,
+                first.top_left.col.max(last.top_left.col),
+            ))
+        }
+        StructuredSectionKind::Headers => {
+            if !table.header_row_present {
+                return Err(
+                    "structured reference requested #Headers for a table without a header row"
+                        .to_string(),
+                );
+            }
+            resolve_structured_section_row_target(
+                table,
+                selected_columns,
+                0,
+                context,
+                formula_channel_kind,
+            )
+        }
+        StructuredSectionKind::Totals => {
+            if !table.totals_row_present {
+                return Err(
+                    "structured reference requested #Total Row for a table without a totals row"
+                        .to_string(),
+                );
+            }
+            let table_area = parse_area_target(
+                &table.table_range_ref,
+                &table.workbook_scope_ref,
+                &table.sheet_scope_ref,
+                context,
+                formula_channel_kind,
+            )
+            .ok_or_else(|| {
+                format!(
+                    "unable to parse table_range_ref '{}' for structured reference",
+                    table.table_range_ref
+                )
+            })?;
+            resolve_structured_section_row_target(
+                table,
+                selected_columns,
+                table_area.height - 1,
+                context,
+                formula_channel_kind,
+            )
+        }
+        StructuredSectionKind::ThisRow => Err(
+            "#This Row structured references require caller_table_region and are not standalone"
+                .to_string(),
+        ),
+    }
+}
+
+fn resolve_structured_data_row_target(
+    table: &TableDescriptor,
+    selected_columns: &[TableColumnDescriptor],
+    row_offset: u32,
+    context: &BindContext,
+    formula_channel_kind: FormulaChannelKind,
+) -> Result<StructuredResolvedRef, String> {
+    let first = parse_area_target(
+        &selected_columns[0].column_range_ref,
+        &table.workbook_scope_ref,
+        &table.sheet_scope_ref,
+        context,
+        formula_channel_kind,
+    )
+    .ok_or_else(|| "unable to parse first structured column_range_ref".to_string())?;
+    let last = parse_area_target(
+        &selected_columns[selected_columns.len() - 1].column_range_ref,
+        &table.workbook_scope_ref,
+        &table.sheet_scope_ref,
+        context,
+        formula_channel_kind,
+    )
+    .ok_or_else(|| "unable to parse last structured column_range_ref".to_string())?;
+    if row_offset >= first.height {
+        return Err("structured reference row offset is outside the table data body".to_string());
+    }
+    let row = first.top_left.row + row_offset;
+    Ok(area_or_cell_from_bounds(
+        &table.workbook_scope_ref,
+        &table.sheet_scope_ref,
+        row,
+        first.top_left.col.min(last.top_left.col),
+        row,
+        first.top_left.col.max(last.top_left.col),
+    ))
+}
+
+fn resolve_structured_data_area_target(
+    table: &TableDescriptor,
+    selected_columns: &[TableColumnDescriptor],
+    context: &BindContext,
+    formula_channel_kind: FormulaChannelKind,
+) -> Result<StructuredResolvedRef, String> {
+    let first = parse_area_target(
+        &selected_columns[0].column_range_ref,
+        &table.workbook_scope_ref,
+        &table.sheet_scope_ref,
+        context,
+        formula_channel_kind,
+    )
+    .ok_or_else(|| "unable to parse first structured column_range_ref".to_string())?;
+    let last = parse_area_target(
+        &selected_columns[selected_columns.len() - 1].column_range_ref,
+        &table.workbook_scope_ref,
+        &table.sheet_scope_ref,
+        context,
+        formula_channel_kind,
+    )
+    .ok_or_else(|| "unable to parse last structured column_range_ref".to_string())?;
+    Ok(area_or_cell_from_bounds(
+        &first.workbook_id,
+        &first.sheet_id,
+        first.top_left.row.min(last.top_left.row),
+        first.top_left.col.min(last.top_left.col),
+        (first.top_left.row + first.height - 1).max(last.top_left.row + last.height - 1),
+        first.top_left.col.max(last.top_left.col),
+    ))
+}
+
+fn resolve_structured_section_row_target(
+    table: &TableDescriptor,
+    selected_columns: &[TableColumnDescriptor],
+    table_row_offset: u32,
+    context: &BindContext,
+    formula_channel_kind: FormulaChannelKind,
+) -> Result<StructuredResolvedRef, String> {
+    let table_area = parse_area_target(
+        &table.table_range_ref,
+        &table.workbook_scope_ref,
+        &table.sheet_scope_ref,
+        context,
+        formula_channel_kind,
+    )
+    .ok_or_else(|| {
+        format!(
+            "unable to parse table_range_ref '{}' for structured reference",
+            table.table_range_ref
+        )
+    })?;
+    let first = parse_area_target(
+        &selected_columns[0].column_range_ref,
+        &table.workbook_scope_ref,
+        &table.sheet_scope_ref,
+        context,
+        formula_channel_kind,
+    )
+    .ok_or_else(|| "unable to parse first structured column_range_ref".to_string())?;
+    let last = parse_area_target(
+        &selected_columns[selected_columns.len() - 1].column_range_ref,
+        &table.workbook_scope_ref,
+        &table.sheet_scope_ref,
+        context,
+        formula_channel_kind,
+    )
+    .ok_or_else(|| "unable to parse last structured column_range_ref".to_string())?;
+    let row = table_area.top_left.row + table_row_offset;
+    Ok(area_or_cell_from_bounds(
+        &table.workbook_scope_ref,
+        &table.sheet_scope_ref,
+        row,
+        first.top_left.col.min(last.top_left.col),
+        row,
+        first.top_left.col.max(last.top_left.col),
+    ))
+}
+
+fn area_or_cell_from_bounds(
+    workbook_id: &str,
+    sheet_id: &str,
+    top_row: u32,
+    left_col: u32,
+    bottom_row: u32,
+    right_col: u32,
+) -> StructuredResolvedRef {
+    if top_row == bottom_row && left_col == right_col {
+        StructuredResolvedRef::Cell(CellRef {
+            workbook_id: workbook_id.to_string(),
+            sheet_id: sheet_id.to_string(),
+            coord: CellCoord {
+                row: top_row,
+                col: left_col,
+            },
+            address_mode: AddressMode::default(),
+            caller_anchor_used: false,
+        })
+    } else {
+        StructuredResolvedRef::Area(AreaRef {
+            workbook_id: workbook_id.to_string(),
+            sheet_id: sheet_id.to_string(),
+            top_left: CellCoord {
+                row: top_row,
+                col: left_col,
+            },
+            height: bottom_row - top_row + 1,
+            width: right_col - left_col + 1,
+            address_mode: AddressMode::default(),
+            caller_anchor_used: false,
+        })
+    }
+}
+
+fn find_table_column<'a>(
+    table: &'a TableDescriptor,
+    column_name: &str,
+) -> Result<&'a TableColumnDescriptor, String> {
+    table
+        .columns
+        .iter()
+        .find(|column| column.column_name.eq_ignore_ascii_case(column_name))
+        .ok_or_else(|| format!("unknown structured-reference column '{column_name}'"))
+}
+
+fn parse_structured_column_segment(segment: &str) -> Option<Vec<String>> {
+    if let Some((left, right)) = split_top_level_once(segment, ':') {
+        return Some(vec![
+            strip_structured_brackets(left)?.to_string(),
+            strip_structured_brackets(right)?.to_string(),
+        ]);
+    }
+
+    Some(vec![strip_structured_brackets(segment)?.to_string()])
+}
+
+fn split_top_level_segments(text: &str, delimiter: char) -> Vec<&str> {
+    let mut result = Vec::new();
+    let mut depth = 0usize;
+    let mut start = 0usize;
+    for (index, ch) in text.char_indices() {
+        match ch {
+            '[' => depth += 1,
+            ']' => depth = depth.saturating_sub(1),
+            _ if ch == delimiter && depth == 0 => {
+                result.push(text[start..index].trim());
+                start = index + ch.len_utf8();
+            }
+            _ => {}
+        }
+    }
+    result.push(text[start..].trim());
+    result
+}
+
+fn split_top_level_once(text: &str, delimiter: char) -> Option<(&str, &str)> {
+    let mut depth = 0usize;
+    for (index, ch) in text.char_indices() {
+        match ch {
+            '[' => depth += 1,
+            ']' => depth = depth.saturating_sub(1),
+            _ if ch == delimiter && depth == 0 => {
+                let delimiter_len = ch.len_utf8();
+                return Some((text[..index].trim(), text[index + delimiter_len..].trim()));
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn strip_structured_brackets(text: &str) -> Option<&str> {
+    if text.starts_with('[') && text.ends_with(']') && text.len() >= 2 {
+        Some(&text[1..text.len() - 1])
+    } else if !text.is_empty() {
+        Some(text)
+    } else {
+        None
+    }
+}
+
+fn matching_outer_bracket_end(text: &str) -> Option<usize> {
+    let mut depth = 0usize;
+    for (index, ch) in text.char_indices() {
+        match ch {
+            '[' => depth += 1,
+            ']' => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    return Some(index);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn parse_section_qualifier(text: &str) -> Option<StructuredSectionKind> {
+    match text.to_ascii_uppercase().replace(' ', "").as_str() {
+        "#ALL" => Some(StructuredSectionKind::All),
+        "#DATA" => Some(StructuredSectionKind::Data),
+        "#HEADERS" => Some(StructuredSectionKind::Headers),
+        "#TOTALS" | "#TOTALROW" => Some(StructuredSectionKind::Totals),
+        "#THISROW" => Some(StructuredSectionKind::ThisRow),
+        _ => None,
+    }
+}
+
+fn parse_area_target(
+    text: &str,
+    workbook_id: &str,
+    default_sheet_id: &str,
+    context: &BindContext,
+    formula_channel_kind: FormulaChannelKind,
+) -> Option<AreaRef> {
+    let (sheet_id, target) = split_sheet_qualified_target(text, default_sheet_id);
+    let (start_text, end_text) = target.split_once(':')?;
+    let start = parse_cell_reference(start_text, &sheet_id, context, formula_channel_kind)?;
+    let end = parse_cell_reference(end_text, &sheet_id, context, formula_channel_kind)?;
+    let top_row = start.coord.row.min(end.coord.row);
+    let left_col = start.coord.col.min(end.coord.col);
+    let bottom_row = start.coord.row.max(end.coord.row);
+    let right_col = start.coord.col.max(end.coord.col);
+    Some(AreaRef {
+        workbook_id: workbook_id.to_string(),
+        sheet_id,
+        top_left: CellCoord {
+            row: top_row,
+            col: left_col,
+        },
+        height: bottom_row - top_row + 1,
+        width: right_col - left_col + 1,
+        address_mode: AddressMode::default(),
+        caller_anchor_used: false,
+    })
+}
+
+fn split_sheet_qualified_target<'a>(text: &'a str, default_sheet_id: &str) -> (String, &'a str) {
+    if let Some((qualifier_text, target)) = text.rsplit_once('!') {
+        let qualifier = parse_reference_qualifier(qualifier_text);
+        (qualifier.sheet_id, target)
+    } else {
+        (default_sheet_id.to_string(), text)
+    }
 }
 
 fn token_text<'a>(node: &'a GreenNode, expected: &str) -> Option<&'a str> {

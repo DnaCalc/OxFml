@@ -25,6 +25,7 @@ Read together with:
 7. `formula-language/OXFML_OXFUNC_LIBRARY_CONTEXT_RUNTIME_INTERFACE.md`
 8. `formula-language/OXFML_R1C1_FORMULA_CHANNEL.md`
 9. `formula-language/OXFML_CF_DV_RESTRICTED_SUBLANGUAGES.md`
+10. `formula-language/OXFML_STRUCTURED_REFERENCE_AND_TABLE_BOUNDARY.md`
 
 ## 2. Authority Boundary
 OxFml remains authoritative for:
@@ -87,6 +88,24 @@ Every conforming host must supply the following explicitly for the currently cov
 4. caller anchor and address-mode context where relative or host-sensitive meaning depends on it
 5. direct cell bindings where semantic truth depends on concrete resolution
 6. defined-name bindings
+
+### 4.1A Host-Owned Table Context Inputs
+When a formula channel permits structured references, the host must also supply explicit table context rather than expecting OxFml to recover it from workbook globals.
+
+Required first semantic packet:
+1. `table_catalog`
+2. `enclosing_table_ref`
+3. `caller_table_region`
+
+Required first packet meaning:
+1. `table_catalog` carries stable table identity, range, column map, and header/totals presence,
+2. `enclosing_table_ref` identifies the effective table for omitted-table-name forms such as `[@Amount]`,
+3. `caller_table_region` carries row/region-sensitive meaning needed for `#This Row`, header, data, or totals-sensitive bind.
+
+Working rule:
+1. direct hosts and OxCalc-integrated hosts should supply the same semantic packet even if their surrounding transport differs,
+2. host ownership of tables matches the broader rule that workbook objects remain host/coordinator-owned,
+3. OxFml owns grammar, bind, and evaluator consequences once the packet is supplied.
 
 ### 4.2 Runtime Catalog Inputs
 1. `LibraryContextProvider`

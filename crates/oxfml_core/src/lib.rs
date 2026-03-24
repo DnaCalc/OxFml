@@ -35,7 +35,8 @@ pub use host::{
 pub use interface::{
     HostProviderOutcomeKind, HostProviderOutcomeSurface, InMemoryLibraryContextProvider,
     LibraryContextFieldClass, LibraryContextProvider, LibraryContextSnapshotRef,
-    ReturnedValueSurface, ReturnedValueSurfaceKind, TypedContextQueryBundle,
+    ReturnedValueSurface, ReturnedValueSurfaceKind, TableCallerRegion, TableColumnDescriptor,
+    TableDescriptor, TableRef, TableRegionKind, TypedContextQueryBundle,
     TypedContextQueryBundleSpec, TypedContextQueryFamily, classify_library_context_field,
 };
 pub use red::{

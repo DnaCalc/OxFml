@@ -23,7 +23,7 @@ use oxfunc_core::value::{
 
 use crate::binding::{
     AreaRef, BoundExpr, BoundFormula, CellRef, ErrorRef, NameRef, NormalizedReference,
-    ReferenceExpr,
+    ReferenceExpr, StructuredResolvedRef,
 };
 use crate::interface::{ReturnedValueSurface, TypedContextQueryBundle};
 use crate::semantics::{SemanticPlan, lookup_function_meta};
@@ -776,6 +776,13 @@ fn evaluate_reference_as_call_arg(
             helper_bindings,
             callable_registry,
         ),
+        ReferenceExpr::Atom(NormalizedReference::Structured(structured)) => {
+            call_arg_for_reference_like(
+                reference_like_for_structured(structured),
+                preserve_reference,
+                resolver,
+            )
+        }
         ReferenceExpr::Atom(NormalizedReference::External(external)) => {
             push_special_prepared_call(
                 trace,
@@ -1584,6 +1591,12 @@ fn prepared_source_class(expr: &BoundExpr) -> PreparedSourceClass {
                 PreparedSourceClass::WholeColumnReference
             }
             ReferenceExpr::Atom(NormalizedReference::Name(_)) => PreparedSourceClass::NameReference,
+            ReferenceExpr::Atom(NormalizedReference::Structured(structured)) => {
+                match structured.resolved_reference {
+                    StructuredResolvedRef::Cell(_) => PreparedSourceClass::CellReference,
+                    StructuredResolvedRef::Area(_) => PreparedSourceClass::AreaReference,
+                }
+            }
             ReferenceExpr::Atom(NormalizedReference::External(_)) => {
                 PreparedSourceClass::ExternalReference
             }
@@ -1935,6 +1948,11 @@ fn reference_target_string(reference: &ReferenceExpr) -> Result<String, Evaluati
             Ok(whole_column_target(columns))
         }
         ReferenceExpr::Atom(NormalizedReference::Name(name)) => Ok(name.name.clone()),
+        ReferenceExpr::Atom(NormalizedReference::Structured(structured)) => Ok(format!(
+            "structured:{}:{}",
+            structured.table_id,
+            structured.selected_column_ids.join("|")
+        )),
         ReferenceExpr::Atom(NormalizedReference::External(external)) => Err(EvaluationError {
             message: format!(
                 "cannot create executable reference target for {}",
@@ -1993,6 +2011,13 @@ fn reference_like_for_area(area: &AreaRef) -> ReferenceLike {
     ReferenceLike {
         kind: ReferenceKind::Area,
         target: a1_for_area(area),
+    }
+}
+
+fn reference_like_for_structured(structured: &crate::binding::StructuredRef) -> ReferenceLike {
+    match &structured.resolved_reference {
+        StructuredResolvedRef::Cell(cell) => reference_like_for_cell(cell),
+        StructuredResolvedRef::Area(area) => reference_like_for_area(area),
     }
 }
 

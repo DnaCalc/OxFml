@@ -61,6 +61,16 @@ Current residuals stay explicit in `OXFML_CF_DV_RESTRICTED_SUBLANGUAGES.md`.
 ## 4. Evidence Posture
 Rule wording in this document is canonical only at the policy level. Wave-specific runs, matrices, and dated execution summaries are archive material.
 
+### 3.3 Structured References
+The current local structured-reference floor is:
+1. explicit table-column selectors such as `Table1[Amount]`,
+2. omitted-table-name current-row selectors such as `[@Amount]` with required enclosing-table context,
+3. section-only selectors such as `Table1[#Headers]` and `Table1[#Totals]`,
+4. first section-qualified multi-column selectors such as `Table1[[#All],[Amount]:[Tax]]` and `Table1[[#Data],[Amount]:[Tax]]`,
+5. explicit bind rejection for illegal `#This Row` combinations and missing enclosing-table context.
+
+Current structured-reference residuals stay explicit in `OXFML_STRUCTURED_REFERENCE_AND_TABLE_BOUNDARY.md` and `W036_structured_reference_and_table_formula_semantics.md`.
+
 Working rule:
 1. implementation and design bootstrap should start from the rule statements in Section 2 plus the architecture documents,
 2. rule status promotion and evidence review should use the conformance matrix together with archived empirical baselines,

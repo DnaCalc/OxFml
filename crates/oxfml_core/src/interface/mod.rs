@@ -29,6 +29,45 @@ pub struct TypedContextQueryBundleSpec {
     pub families: Vec<TypedContextQueryFamily>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TableRef {
+    pub table_id: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum TableRegionKind {
+    Headers,
+    Data,
+    Totals,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TableCallerRegion {
+    pub table_id: String,
+    pub region_kind: TableRegionKind,
+    pub data_row_offset: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TableColumnDescriptor {
+    pub column_id: String,
+    pub column_name: String,
+    pub ordinal: u32,
+    pub column_range_ref: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TableDescriptor {
+    pub table_id: String,
+    pub table_name: String,
+    pub workbook_scope_ref: String,
+    pub sheet_scope_ref: String,
+    pub table_range_ref: String,
+    pub header_row_present: bool,
+    pub totals_row_present: bool,
+    pub columns: Vec<TableColumnDescriptor>,
+}
+
 #[derive(Clone, Copy)]
 pub struct TypedContextQueryBundle<'a> {
     pub host_info: Option<&'a dyn HostInfoProvider>,

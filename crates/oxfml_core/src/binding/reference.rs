@@ -82,6 +82,42 @@ pub struct ExternalRef {
     pub target_summary: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StructuredSectionKind {
+    All,
+    Data,
+    Headers,
+    Totals,
+    ThisRow,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StructuredSelectorKind {
+    Section,
+    Column,
+    ThisRowColumn,
+    SectionColumn,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StructuredResolvedRef {
+    Cell(CellRef),
+    Area(AreaRef),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StructuredRef {
+    pub table_id: String,
+    pub table_name: String,
+    pub selector_kind: StructuredSelectorKind,
+    pub section_qualifiers: Vec<StructuredSectionKind>,
+    pub selected_column_ids: Vec<String>,
+    pub caller_row_sensitive: bool,
+    pub workbook_scope_ref: String,
+    pub sheet_scope_ref: String,
+    pub resolved_reference: StructuredResolvedRef,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NormalizedReference {
     Cell(CellRef),
@@ -90,6 +126,7 @@ pub enum NormalizedReference {
     WholeColumn(WholeColumnRef),
     Name(NameRef),
     External(ExternalRef),
+    Structured(StructuredRef),
     Error(ErrorRef),
 }
 
@@ -144,6 +181,18 @@ impl fmt::Display for NormalizedReference {
             ),
             Self::Name(name) => write!(f, "name:{}", name.name),
             Self::External(external) => write!(f, "external:{}", external.target_summary),
+            Self::Structured(structured) => write!(
+                f,
+                "structured:{}:{}:{}",
+                structured.table_id,
+                match structured.selector_kind {
+                    StructuredSelectorKind::Section => "Section",
+                    StructuredSelectorKind::Column => "Column",
+                    StructuredSelectorKind::ThisRowColumn => "ThisRowColumn",
+                    StructuredSelectorKind::SectionColumn => "SectionColumn",
+                },
+                structured.selected_column_ids.join("|")
+            ),
             Self::Error(error) => write!(f, "error:{}", error.error_class),
         }
     }

@@ -11,8 +11,8 @@ use crate::eval::{
     EvaluationOutput, evaluate_formula,
 };
 use crate::interface::{
-    LibraryContextProvider, LibraryContextSnapshotRef, ReturnedValueSurface,
-    TypedContextQueryBundle, TypedContextQueryBundleSpec,
+    LibraryContextProvider, LibraryContextSnapshotRef, ReturnedValueSurface, TableCallerRegion,
+    TableDescriptor, TableRef, TypedContextQueryBundle, TypedContextQueryBundleSpec,
 };
 use crate::red::{RedProjection, project_red_view_incremental};
 use crate::scheduler::{ExecutionContract, build_execution_contract};
@@ -59,6 +59,9 @@ pub struct SingleFormulaHost {
     pub primary_locus: Locus,
     pub defined_names: BTreeMap<String, DefinedNameBinding>,
     pub cell_values: BTreeMap<String, EvalValue>,
+    pub table_catalog: Vec<TableDescriptor>,
+    pub enclosing_table_ref: Option<TableRef>,
+    pub caller_table_region: Option<TableCallerRegion>,
     pub now_serial: Option<f64>,
     pub random_value: Option<f64>,
     next_session_id: u64,
@@ -149,6 +152,9 @@ impl SingleFormulaHost {
             },
             defined_names: BTreeMap::new(),
             cell_values: BTreeMap::new(),
+            table_catalog: Vec::new(),
+            enclosing_table_ref: None,
+            caller_table_region: None,
             now_serial: Some(46000.0),
             random_value: Some(0.25),
             next_session_id: 1,
@@ -188,6 +194,21 @@ impl SingleFormulaHost {
 
     pub fn set_cell_value(&mut self, target: impl Into<String>, value: EvalValue) {
         self.cell_values.insert(target.into(), value);
+    }
+
+    pub fn set_table_catalog(&mut self, table_catalog: Vec<TableDescriptor>) {
+        self.table_catalog = table_catalog;
+        self.cached_artifacts = None;
+    }
+
+    pub fn set_enclosing_table_ref(&mut self, table_ref: Option<TableRef>) {
+        self.enclosing_table_ref = table_ref;
+        self.cached_artifacts = None;
+    }
+
+    pub fn set_caller_table_region(&mut self, caller_table_region: Option<TableCallerRegion>) {
+        self.caller_table_region = caller_table_region;
+        self.cached_artifacts = None;
     }
 
     pub fn recalc(
@@ -271,6 +292,9 @@ impl SingleFormulaHost {
                             )
                         })
                         .collect(),
+                    table_catalog: self.table_catalog.clone(),
+                    enclosing_table_ref: self.enclosing_table_ref.clone(),
+                    caller_table_region: self.caller_table_region.clone(),
                     ..BindContext::default()
                 },
             },

@@ -106,6 +106,58 @@ Current OxFml working rule after this pass:
 2. keep `W045` open until the underlying `W041` / `W042` / `W043` local packet floor is stronger than it is today,
 3. reopen the OxCalc note lane only on concrete mismatch, not for more general host/runtime clarification.
 
+## 2E. Structured-Reference And Table Ownership Planning Read
+OxFml is now tightening the intended ownership split for structured table references under `W036`.
+
+Current OxFml planning read:
+1. tables should be owned on the host/coordinator side in the same broad sense that defined names are host-owned,
+2. the host or coordinator should present table context explicitly:
+   - table identity,
+   - table range,
+   - column catalog,
+   - header/totals presence,
+   - enclosing-table and caller-row context where omitted-table-name or `#This Row` forms depend on it,
+3. OxFml should own structured-reference grammar, disambiguation against defined names, omitted-table-name interpretation, table-aware bind, and evaluator/FEC consequences once that context is supplied,
+4. OxCalc should not expect OxFunc to own workbook table objects or table-context reconstruction.
+
+Current intended first packet direction:
+1. `table_catalog`
+2. `enclosing_table_ref`
+3. `caller_table_region`
+
+Current planning question for future OxCalc review:
+1. is that the right first host/coordinator packet for the TreeCalc/direct-host split,
+2. or does OxCalc need a narrower or differently factored table-context carrier for first implementation use?
+
+## 2F. Structured-Reference Packet Refinement
+OxFml has now compared the `W036` plan again against the current Foundation-backed `MS-OE376` extraction and wants the next OxCalc read on a slightly sharper packet.
+
+Current refined minimum requirements:
+1. if a structured reference omits `table-name`, the formula must belong to an enclosing table and that table identity must be supplied by the host/coordinator,
+2. `table-name` must denote a real table rather than being silently treated as a defined name,
+3. `#This Row` is a true caller-row-sensitive selector lane,
+4. `#This Row` must not be combined with `#Headers`, `#Total Row`, `#Data`, or `#All`.
+
+Current refined first packet direction:
+1. `table_catalog`
+2. `enclosing_table_ref`
+3. `caller_table_region`
+
+Current refined packet meaning:
+1. `table_catalog` should carry stable table identity, range, columns, and header/totals presence,
+2. `enclosing_table_ref` should make omitted-table-name forms honest for direct host and TreeCalc-integrated use,
+3. `caller_table_region` should carry the first row/region-sensitive facts needed for `#This Row`, header/data/totals distinctions, and bind-time admissibility.
+
+Current OxFml planning read:
+1. table ownership remains with host/OxCalc like other workbook objects,
+2. OxFml should own grammar, disambiguation against defined names, bind normalization, and evaluator/FEC consequences once the packet is supplied,
+3. OxFunc should stay out of table-object ownership and consume only normalized reference/value consequences downstream.
+
+Current OxFml question back to OxCalc:
+1. is `table_catalog + enclosing_table_ref + caller_table_region` the right first semantic packet for the direct-host and TreeCalc split,
+2. does OxCalc need any narrower anchor or region facts in that first packet before `W036` execution starts,
+3. should totals/header/data region identity remain explicit in the packet even if the first executed table floor is smaller than the full workbook table model.
+
 ## 3. Current Evidence In OxFml
 The following OxFml canonical docs and exercised artifacts now carry the relevant coordinator-facing floor:
 
