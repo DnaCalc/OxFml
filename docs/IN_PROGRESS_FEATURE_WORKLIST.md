@@ -3,7 +3,7 @@
 Canonical repo-level register of feature areas that are in-progress under workset completion doctrine.
 
 Status: active.
-Last updated: 2026-03-23.
+Last updated: 2026-03-24.
 
 ## Status Vocabulary
 
@@ -87,3 +87,11 @@ Last updated: 2026-03-23.
 - **Remaining gaps**: the supporting `W041` / `W042` / `W043` packet work remains partial at repo scope; broader full-Excel and broad built-in closure remain out of scope for the first-host packet.
 - **Why still open**: the immediate batch blockers are no longer implicit, but broader host readiness still depends on follow-on language and seam work outside the executed batch.
 - **Canonical owner**: executed batch owner `W047`; active follow-on owners remain `W041`, `W042`, `W043`, and `W045`.
+
+### IP-12: Editor Language Service And Immutable Formula Host Integration
+
+- **Status**: in-progress
+- **Current floor**: OxFml now has a first local language-service packet layer in `crates/oxfml_core/src/language_service/mod.rs`, including canonical syntax-tree tokens with owned leading/trailing trivia, editor syntax snapshots built from those owned tokens, immutable formula-edit request/result packets with explicit text-change ranges plus incremental parse/red/bind reuse and optional semantic-plan follow-on, unified live diagnostics spanning syntax/bind/semantic-plan stages, deterministic completion packets over visible functions/names/tables/structured selectors plus first `R1C1` syntax assists, completion-candidate validation and proposal application that re-enter the normal parse/bind pipeline, cursor-sensitive signature-help context, deterministic function-help lookup-request construction keyed to the current library-context snapshot, and intelligent-completion context packets for external non-canonical completion. Deterministic local evidence exists in `crates/oxfml_core/tests/language_service_tests.rs` and `crates/oxfml_core/tests/language_service_fixture_tests.rs`.
+- **Remaining gaps**: no OxFunc-backed help/signature payload retrieval exists yet; no shared host/OxCalc immutable formula-edit packet is frozen yet; no shared host-facing packet for validated intelligent-completion results is frozen yet; editor packet evidence is deterministic local evidence rather than replay-appliance projection.
+- **Why still open**: the real internal OxFml mechanics are now materially stronger, but the broader editor-grade host integration surface still depends on OxFunc help-metadata freezing, OxCalc/host immutable-edit packet freezing, and later evidence projection beyond the current local deterministic fixture floor.
+- **Canonical owner**: active owner `W048`.

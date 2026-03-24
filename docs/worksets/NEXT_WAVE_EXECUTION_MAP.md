@@ -62,6 +62,7 @@ Planned follow-on review lane after that wave:
 6. `W034` distributed runtime and coordinator consequence boundary
 7. `W035` broader formal family and concurrency model expansion
 8. `W038` name and external-name host resolution boundary
+9. `W048` editor language service and immutable formula host plan
 
 ## Next Parallelism
 1. `W033` can proceed after `W025`, `W028`, `W029`, `W030`, and the now-exercised `W031` classification floor without waiting for the full `W032 -> W034` chain.
@@ -70,6 +71,7 @@ Planned follow-on review lane after that wave:
 4. `W045` remains the canonical host/runtime contract while those successor packets keep narrowing.
 5. `W038` should follow the host/runtime and provider narrowing and remain scoped to host-managed name/external-name resolution boundary work rather than generic formula-carrier ownership.
 6. `W035` should wait for both the wider replay and runtime floors so the new checked artifacts match exercised local behavior rather than speculative designs.
+7. `W048` should follow the current host/runtime and parser/binder packet strengthening rather than racing ahead of `W041`, `W043`, and `W045`.
 
 ## Why This Next Sequence
 1. `W031` has already converted the pending `MS-OE376` rule families into explicit OxFml-owned backlog and semantic classification,
@@ -87,3 +89,4 @@ Planned follow-on review lane after that wave:
 10. `W036` turns structured references from a provisional rule into a wider local semantic floor,
 11. `W038` is now narrowed to host-managed name/external-name boundary work rather than generic formula-carrier ownership,
 12. the now-exercised `W040` callable-evidence wave means the remaining callable work is narrower carrier/provenance freeze work rather than another broad higher-order evidence push.
+13. editor-grade green-tree trivia, live language services, and immutable formula-host updates are a real next-wave extension, but they should build on the current parser/binder and host packet floor rather than inventing a separate architecture.

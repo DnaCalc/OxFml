@@ -1,7 +1,9 @@
 use crate::source::FormulaSourceRecord;
 use crate::syntax::green::{GreenChild, GreenNode, GreenTreeRoot, SyntaxKind};
 use crate::syntax::lexer::lex;
-use crate::syntax::token::{SyntaxDiagnostic, Token, TokenKind};
+use crate::syntax::token::{
+    SyntaxDiagnostic, SyntaxTrivia, SyntaxTriviaKind, TextSpan, Token, TokenKind,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseRequest {
@@ -22,7 +24,7 @@ pub struct IncrementalParseResult {
 pub fn parse_formula(request: ParseRequest) -> ParseResult {
     let full_tokens = lex(&request.source.entered_formula_text);
     let mut parser = Parser::new(full_tokens.clone());
-    let root = parser.parse_formula_root();
+    let root = attach_trivia_to_green_tree(parser.parse_formula_root(), &full_tokens);
     ParseResult {
         green_tree: GreenTreeRoot::from_parts(root, full_tokens, parser.diagnostics),
     }
@@ -356,11 +358,115 @@ impl Parser {
                 message: message.to_string(),
                 span: token.span,
             });
-            Token {
-                kind,
-                text: String::new(),
-                span: token.span,
-            }
+            Token::new(kind, String::new(), token.span)
         }
+    }
+}
+
+fn attach_trivia_to_green_tree(root: GreenNode, full_tokens: &[Token]) -> GreenNode {
+    let significant_whitespace_spans = collect_significant_whitespace_spans(&root);
+    let mut attached_tokens: Vec<Token> = Vec::new();
+    let mut pending_trivia = Vec::new();
+    let mut previous_nontrivia_index: Option<usize> = None;
+
+    for token in full_tokens
+        .iter()
+        .filter(|token| token.kind != TokenKind::Eof)
+    {
+        if token.kind.is_trivia() {
+            if significant_whitespace_spans.contains(&token.span) {
+                continue;
+            }
+            pending_trivia.push(SyntaxTrivia {
+                kind: syntax_trivia_kind(token.kind),
+                text: token.text.clone(),
+                span: token.span,
+            });
+            continue;
+        }
+
+        if let Some(previous_nontrivia_index) = previous_nontrivia_index {
+            attached_tokens[previous_nontrivia_index]
+                .trailing_trivia
+                .extend(pending_trivia.iter().cloned());
+        }
+
+        let leading_trivia = std::mem::take(&mut pending_trivia);
+        attached_tokens.push(token.clone().with_trivia(leading_trivia, Vec::new()));
+        previous_nontrivia_index = Some(attached_tokens.len() - 1);
+    }
+
+    if let Some(previous_nontrivia_index) = previous_nontrivia_index {
+        attached_tokens[previous_nontrivia_index]
+            .trailing_trivia
+            .extend(pending_trivia);
+    }
+
+    let mut next_attached_index = 0usize;
+    rehydrate_green_node_tokens(root, &attached_tokens, &mut next_attached_index)
+}
+
+fn collect_significant_whitespace_spans(node: &GreenNode) -> Vec<TextSpan> {
+    let mut spans = Vec::new();
+    collect_significant_whitespace_spans_recursive(node, &mut spans);
+    spans
+}
+
+fn collect_significant_whitespace_spans_recursive(node: &GreenNode, spans: &mut Vec<TextSpan>) {
+    for child in &node.children {
+        match child {
+            GreenChild::Node(child_node) => {
+                collect_significant_whitespace_spans_recursive(child_node, spans);
+            }
+            GreenChild::Token(token) if token.kind.is_trivia() => spans.push(token.span),
+            GreenChild::Token(_) => {}
+        }
+    }
+}
+
+fn rehydrate_green_node_tokens(
+    node: GreenNode,
+    attached_tokens: &[Token],
+    next_attached_index: &mut usize,
+) -> GreenNode {
+    let children = node
+        .children
+        .into_iter()
+        .map(|child| match child {
+            GreenChild::Node(child_node) => GreenChild::Node(Box::new(
+                rehydrate_green_node_tokens(*child_node, attached_tokens, next_attached_index),
+            )),
+            GreenChild::Token(token) => {
+                let updated_token = if token.kind.is_trivia() || token.kind == TokenKind::Eof {
+                    token
+                } else if let Some(attached_token) = attached_tokens.get(*next_attached_index) {
+                    if attached_token.kind == token.kind
+                        && attached_token.text == token.text
+                        && attached_token.span == token.span
+                    {
+                        *next_attached_index += 1;
+                        attached_token.clone()
+                    } else {
+                        token
+                    }
+                } else {
+                    token
+                };
+                GreenChild::Token(updated_token)
+            }
+        })
+        .collect();
+
+    GreenNode {
+        kind: node.kind,
+        span: node.span,
+        children,
+    }
+}
+
+fn syntax_trivia_kind(token_kind: TokenKind) -> SyntaxTriviaKind {
+    match token_kind {
+        TokenKind::Whitespace => SyntaxTriviaKind::Whitespace,
+        _ => SyntaxTriviaKind::Unknown,
     }
 }

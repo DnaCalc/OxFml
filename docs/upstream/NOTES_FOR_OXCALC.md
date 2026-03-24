@@ -511,3 +511,66 @@ W026 sufficiency now:
 Current handoff read:
 1. note-level topic for now,
 2. does not yet justify a new formal handoff by itself.
+
+## 17. New Bounded Round Proposal: Immutable Edit And Validated Completion Packet
+OxFml now has a first local editor/language-service floor under `W048`.
+
+Current OxFml-local capabilities:
+1. immutable formula-edit request/result handling,
+2. explicit smallest text-change-range reporting,
+3. subtree-reuse summaries over incremental parse/red/bind,
+4. unified diagnostics snapshots,
+5. deterministic completion proposals,
+6. validation and application of completion proposals through the ordinary parse/bind path.
+
+Current OxFml reading:
+1. the remaining host/editor lane is now mainly a packet-freeze question, not a formula-semantics uncertainty,
+2. OxFml should not own the containing immutable workbook/document tree,
+3. OxFml should return replacement-ready immutable formula artifacts and diagnostics,
+4. direct host and OxCalc-integrated host should ideally consume the same packet family.
+
+Current OxFml best-effort proposal:
+1. split the first shared editor packet into:
+   - immutable edit request,
+   - immutable edit result,
+   - validated completion application result,
+2. keep larger document-spine replacement explicitly host/coordinator-owned.
+
+Proposed immutable edit request:
+1. `formula_stable_id`
+2. `previous_formula_token`
+3. `previous_green_tree_key`
+4. `new_formula_text`
+5. optional `text_change_range`
+6. `formula_channel_kind`
+7. `structure_context_version`
+8. explicit bind-visible context summary:
+   - visible names
+   - visible tables
+   - caller anchor when already part of the formula slot
+9. requested follow-on stage
+
+Proposed immutable edit result:
+1. `new_formula_token`
+2. `green_tree_key`
+3. `text_change_range`
+4. subtree reuse summary
+5. diagnostics snapshot
+6. optional `bind_hash`
+7. optional `semantic_plan_key`
+
+Proposed validated completion application result:
+1. `proposal_id`
+2. applied replacement span
+3. updated immutable edit result
+4. explicit rule that host/coordinator still owns acceptance plus containing-spine replacement
+
+Current OxFml ask for the next bounded OxCalc round:
+1. is this the right first shared packet for direct host and OxCalc-integrated host,
+2. should validated completion application remain host-local or become coordinator-visible,
+3. are any additional identity or acknowledgment fields needed before the packet is useful in TreeCalc-facing implementation work,
+4. does OxCalc want the same packet reused for cell formulas, host-managed defined-name formulas, and later other formula-bearing slots.
+
+Current OxFml working rule:
+1. this lane should reopen only as a bounded immutable-edit packet round,
+2. it should not reopen broader host/runtime clarification that is already converged for the first implementation slice.

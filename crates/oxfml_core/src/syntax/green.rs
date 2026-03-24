@@ -69,6 +69,18 @@ impl GreenTreeRoot {
             token.text.hash(&mut hasher);
             token.span.start.hash(&mut hasher);
             token.span.len.hash(&mut hasher);
+            for trivia in &token.leading_trivia {
+                trivia.kind.hash(&mut hasher);
+                trivia.text.hash(&mut hasher);
+                trivia.span.start.hash(&mut hasher);
+                trivia.span.len.hash(&mut hasher);
+            }
+            for trivia in &token.trailing_trivia {
+                trivia.kind.hash(&mut hasher);
+                trivia.text.hash(&mut hasher);
+                trivia.span.start.hash(&mut hasher);
+                trivia.span.len.hash(&mut hasher);
+            }
         }
         root.kind.hash(&mut hasher);
         let fingerprint = hasher.finish();

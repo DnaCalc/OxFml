@@ -3,6 +3,7 @@ pub mod carrier;
 pub mod eval;
 pub mod host;
 pub mod interface;
+pub mod language_service;
 pub mod red;
 pub mod scheduler;
 pub mod seam;
@@ -38,6 +39,18 @@ pub use interface::{
     ReturnedValueSurface, ReturnedValueSurfaceKind, TableCallerRegion, TableColumnDescriptor,
     TableDescriptor, TableRef, TableRegionKind, TypedContextQueryBundle,
     TypedContextQueryBundleSpec, TypedContextQueryFamily, classify_library_context_field,
+};
+pub use language_service::{
+    CompletionProposal, CompletionProposalKind, CompletionRequest, CompletionResult,
+    CompletionValidationRequest, CompletionValidationResult, EditFollowOnStage,
+    EditorSyntaxSnapshot, EditorToken, EditorTrivia, EditorTriviaKind, FormulaEditRequest,
+    FormulaEditResult, FormulaEditReuseSummary, FormulaTextChangeRange, FunctionHelpLookupRequest,
+    FunctionHelpPacket, FunctionHelpSignatureForm, IntelligentCompletionContext, LiveDiagnostic,
+    LiveDiagnosticSeverity, LiveDiagnosticSnapshot, LiveDiagnosticStage, SemanticPlanEditOptions,
+    SignatureHelpContext, apply_completion_proposal, apply_formula_edit,
+    build_editor_syntax_snapshot, build_function_help_lookup_request,
+    build_intelligent_completion_context, build_live_diagnostics, collect_completion_proposals,
+    signature_help_context_at_cursor, validate_completion_candidate,
 };
 pub use red::{
     IncrementalRedProjectionResult, RedNode, RedProjection, project_red_view,

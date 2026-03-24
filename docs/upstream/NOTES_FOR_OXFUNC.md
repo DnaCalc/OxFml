@@ -719,3 +719,49 @@ Working rule after this exchange:
 1. do not reopen OxFml -> OxFunc note rounds on callable-row sufficiency or the first-freeze working rule,
 2. reopen only on concrete implementation-facing mismatches from `W041`, `W042`, or `W043`,
 3. otherwise treat this note exchange as converged and shift effort into local execution and evidence.
+
+## 24. New Bounded Round Proposal: Editor Help And Signature Packet
+OxFml now has a first local editor/language-service floor under `W048`.
+
+Current OxFml-local capabilities:
+1. detect whether the cursor is inside a call,
+2. compute `callee_text`,
+3. compute active argument index,
+4. construct a deterministic `FunctionHelpLookupRequest`,
+5. keep intelligent completion and diagnostics on the normal parse/bind path.
+
+Current OxFml reading:
+1. the remaining editor/help lane is now mainly a seam-freeze packet problem, not a formula-semantics discovery problem,
+2. OxFml does not need OxFunc to tell it cursor location, argument index, or parse ambiguity,
+3. OxFml does need OxFunc to supply stable help/signature payloads keyed to the same runtime snapshot identity already used for semantic planning.
+
+Current OxFml best-effort proposal:
+1. keep semantic planning on the existing runtime `LibraryContextSnapshot`,
+2. expose help/signature metadata through a sibling help provider keyed by the same snapshot identity rather than overloading the hot-path semantic snapshot,
+3. let OxFml compute call-site context locally and ask OxFunc only for help payloads.
+
+Proposed request:
+1. `lookup_key`
+2. `library_context_snapshot_ref`
+
+Proposed response:
+1. `stable_function_id`
+2. `display_name`
+3. `signature_forms`
+   - parameter display labels
+   - minimum arity
+   - maximum arity or open-ended marker
+4. `short_description`
+5. `availability_summary`
+6. `deferred_or_profile_limited`
+7. optional `documentation_ref`
+
+Current OxFml ask for the next bounded OxFunc round:
+1. confirm whether help/signature retrieval should ride the runtime library-context provider or a sibling help provider,
+2. confirm whether the response shape above is sufficient for first editor/signature-help use,
+3. identify any field that OxFunc considers semantic truth versus presentation-only prose,
+4. state how runtime-registered extension functions should appear under snapshot identity in that packet.
+
+Current OxFml working rule:
+1. this lane should reopen only as a bounded editor/help packet round,
+2. it should not reopen broader callable/carrier debates already deferred elsewhere.

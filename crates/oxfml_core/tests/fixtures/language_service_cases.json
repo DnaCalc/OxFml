@@ -1,0 +1,39 @@
+[
+  {
+    "case_kind": "trivia_snapshot",
+    "case_id": "fixture-trivia",
+    "formula": "=SUM( A1 ) ",
+    "expected_token_text": "A1",
+    "expected_leading_trivia": " ",
+    "expected_trailing_trivia": " "
+  },
+  {
+    "case_kind": "completion_proposal",
+    "case_id": "fixture-sum-completion",
+    "formula": "=SU",
+    "formula_channel_kind": "WorksheetA1",
+    "cursor_offset": 3,
+    "expected_kind": "Function",
+    "expected_display_text": "SUM"
+  },
+  {
+    "case_kind": "completion_proposal",
+    "case_id": "fixture-r1c1-assist",
+    "formula": "=R",
+    "formula_channel_kind": "WorksheetR1C1",
+    "cursor_offset": 2,
+    "expected_kind": "SyntaxAssist",
+    "expected_display_text": "RC"
+  },
+  {
+    "case_kind": "completion_application",
+    "case_id": "fixture-completion-apply",
+    "formula": "=SU",
+    "cursor_offset": 3,
+    "proposal_id": "function:SUM",
+    "expected_updated_formula": "=SUM",
+    "expected_change_start": 3,
+    "expected_change_old_len": 0,
+    "expected_change_new_len": 1
+  }
+]

@@ -33,22 +33,22 @@ pub fn lex(input: &str) -> Vec<Token> {
                     }
                     index += 1;
                 }
-                Token {
-                    kind: TokenKind::QuotedIdentifier,
-                    text: chars[start..index].iter().collect(),
-                    span: TextSpan::new(start, index - start),
-                }
+                Token::new(
+                    TokenKind::QuotedIdentifier,
+                    chars[start..index].iter().collect::<String>(),
+                    TextSpan::new(start, index - start),
+                )
             }
             '[' => {
                 consume_balanced_bracket_group(&chars, &mut index);
                 while index < chars.len() && is_identifier_continue(chars[index]) {
                     index += 1;
                 }
-                Token {
-                    kind: TokenKind::BracketedQualifier,
-                    text: chars[start..index].iter().collect(),
-                    span: TextSpan::new(start, index - start),
-                }
+                Token::new(
+                    TokenKind::BracketedQualifier,
+                    chars[start..index].iter().collect::<String>(),
+                    TextSpan::new(start, index - start),
+                )
             }
             '"' => {
                 index += 1;
@@ -58,22 +58,22 @@ pub fn lex(input: &str) -> Vec<Token> {
                 if index < chars.len() {
                     index += 1;
                 }
-                Token {
-                    kind: TokenKind::StringLiteral,
-                    text: chars[start..index].iter().collect(),
-                    span: TextSpan::new(start, index - start),
-                }
+                Token::new(
+                    TokenKind::StringLiteral,
+                    chars[start..index].iter().collect::<String>(),
+                    TextSpan::new(start, index - start),
+                )
             }
             c if c.is_ascii_whitespace() => {
                 index += 1;
                 while index < chars.len() && chars[index].is_ascii_whitespace() {
                     index += 1;
                 }
-                Token {
-                    kind: TokenKind::Whitespace,
-                    text: chars[start..index].iter().collect(),
-                    span: TextSpan::new(start, index - start),
-                }
+                Token::new(
+                    TokenKind::Whitespace,
+                    chars[start..index].iter().collect::<String>(),
+                    TextSpan::new(start, index - start),
+                )
             }
             c if c.is_ascii_digit() => {
                 index += 1;
@@ -81,11 +81,11 @@ pub fn lex(input: &str) -> Vec<Token> {
                 {
                     index += 1;
                 }
-                Token {
-                    kind: TokenKind::Number,
-                    text: chars[start..index].iter().collect(),
-                    span: TextSpan::new(start, index - start),
-                }
+                Token::new(
+                    TokenKind::Number,
+                    chars[start..index].iter().collect::<String>(),
+                    TextSpan::new(start, index - start),
+                )
             }
             c if is_identifier_start(c) => {
                 index += 1;
@@ -100,11 +100,11 @@ pub fn lex(input: &str) -> Vec<Token> {
                     }
                     break;
                 }
-                Token {
-                    kind: TokenKind::Identifier,
-                    text: chars[start..index].iter().collect(),
-                    span: TextSpan::new(start, index - start),
-                }
+                Token::new(
+                    TokenKind::Identifier,
+                    chars[start..index].iter().collect::<String>(),
+                    TextSpan::new(start, index - start),
+                )
             }
             _ => simple(TokenKind::Unknown, ch, start),
         };
@@ -116,20 +116,16 @@ pub fn lex(input: &str) -> Vec<Token> {
         tokens.push(token);
     }
 
-    tokens.push(Token {
-        kind: TokenKind::Eof,
-        text: String::new(),
-        span: TextSpan::new(input.len(), 0),
-    });
+    tokens.push(Token::new(
+        TokenKind::Eof,
+        String::new(),
+        TextSpan::new(input.len(), 0),
+    ));
     tokens
 }
 
 fn simple(kind: TokenKind, ch: char, start: usize) -> Token {
-    Token {
-        kind,
-        text: ch.to_string(),
-        span: TextSpan::new(start, 1),
-    }
+    Token::new(kind, ch.to_string(), TextSpan::new(start, 1))
 }
 
 fn is_identifier_start(ch: char) -> bool {

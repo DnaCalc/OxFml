@@ -130,6 +130,7 @@ Current baseline sequence after `W001`:
 43. `W045` host runtime and external requirements freeze
 44. `W046` first host implementation and replay capture packet
 45. `W047` first host readiness execution batch
+46. `W048` editor language service and immutable formula host plan
 
 This sequence is the current planning baseline.
 It may be refined, but new worksets should preserve dependency clarity rather than bypass it informally.

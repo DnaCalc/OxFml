@@ -19,6 +19,12 @@ impl TextSpan {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SyntaxTriviaKind {
+    Whitespace,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TokenKind {
     Equals,
     Number,
@@ -47,10 +53,55 @@ impl TokenKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SyntaxTrivia {
+    pub kind: SyntaxTriviaKind,
+    pub text: String,
+    pub span: TextSpan,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Token {
     pub kind: TokenKind,
     pub text: String,
     pub span: TextSpan,
+    pub leading_trivia: Vec<SyntaxTrivia>,
+    pub trailing_trivia: Vec<SyntaxTrivia>,
+}
+
+impl Token {
+    pub fn new(kind: TokenKind, text: impl Into<String>, span: TextSpan) -> Self {
+        Self {
+            kind,
+            text: text.into(),
+            span,
+            leading_trivia: Vec::new(),
+            trailing_trivia: Vec::new(),
+        }
+    }
+
+    pub fn with_trivia(
+        mut self,
+        leading_trivia: Vec<SyntaxTrivia>,
+        trailing_trivia: Vec<SyntaxTrivia>,
+    ) -> Self {
+        self.leading_trivia = leading_trivia;
+        self.trailing_trivia = trailing_trivia;
+        self
+    }
+
+    pub fn full_span(&self) -> TextSpan {
+        let start = self
+            .leading_trivia
+            .first()
+            .map(|trivia| trivia.span.start)
+            .unwrap_or(self.span.start);
+        let end = self
+            .trailing_trivia
+            .last()
+            .map(|trivia| trivia.span.end())
+            .unwrap_or(self.span.end());
+        TextSpan::new(start, end.saturating_sub(start))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
