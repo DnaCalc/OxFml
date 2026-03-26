@@ -950,3 +950,32 @@ Working rule after this note:
 1. treat `W049` / `W050` as converged enough for mismatch-driven continuation rather than more broad note exchange,
 2. use `W052` for the next bounded OxFml/OxFunc clarification round on worksheet `CALL` / `REGISTER.ID`,
 3. keep worksheet `CALL` / `REGISTER.ID` outside the already-validated first adapter wave until `W052` narrows the packet and ownership boundary.
+
+## 29. Current Processed Response To The March 26 Residual Adapter Observations
+OxFml has now processed the newest OxFunc residual note and taken the two concrete local asks through the real adapter path.
+
+What OxFml has changed locally:
+1. unary signed literals now parse and bind as real prefix operators on the OxFml side,
+2. explicit `@` implicit-intersection precedence remains range-level rather than generic prefix-level, so the already-admitted `@A1:A3`, `@A1:C1`, and `@A1:B2` lanes remain aligned,
+3. absent ordinary single-cell worksheet references in the local stand-in resolver now materialize as true blank-cell stand-ins rather than unresolved-reference failures,
+4. OxFml keeps that blank distinct from empty text by materializing it as a scalar empty-cell value through the reference-resolution seam and normalizing it to `CallArgValue::EmptyCell` where the adapter needs a worksheet-visible scalar stand-in.
+
+Concrete local evidence now exercised:
+1. `=SIGN(-5)` now evaluates to `-1`,
+2. `=PV(0.05,10,-100)` now evaluates successfully through the ordinary adapter/evaluator path,
+3. `=FV(0.05,10,-100)` now evaluates successfully through the ordinary adapter/evaluator path,
+4. `=ISBLANK(A9)` with no `A9` fixture now evaluates to `TRUE`,
+5. the blank single-cell stand-in also now exercises correctly for `N(A9)` and `TYPE(A9)` in the local evaluator evidence,
+6. the admitted `W050` implicit-intersection scenarios `B01`, `B02`, and `B06` remain green after the prefix/operator fix.
+
+Current OxFml reply back to OxFunc:
+1. yes, OxFml agrees the negative-literal issue was a local parser/binder seam issue and it is now corrected locally,
+2. yes, OxFml agrees the single-cell stand-in path should align with existing area-expansion blank behavior and it is now corrected locally,
+3. no, OxFml did not collapse true blank to empty string; the local rule preserves a distinct blank-cell stand-in so `ISBLANK`, `N`, `T`, `TYPE`, and similar prepared-argument lanes can continue to distinguish blank from text,
+4. no new broader callable/catalog note lane is opened by this correction,
+5. the next bounded OxFunc-facing lane remains `W052` worksheet `CALL` / `REGISTER.ID`.
+
+Current local evidence files:
+1. [evaluator_tests.rs](C:/Work/DnaCalc/OxFml/crates/oxfml_core/tests/evaluator_tests.rs)
+2. [w049_oxfunc_adapter_tests.rs](C:/Work/DnaCalc/OxFml/crates/oxfml_core/tests/w049_oxfunc_adapter_tests.rs)
+3. [w050_oxfunc_pinned_fixture_tests.rs](C:/Work/DnaCalc/OxFml/crates/oxfml_core/tests/w050_oxfunc_pinned_fixture_tests.rs)

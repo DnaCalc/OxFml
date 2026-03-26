@@ -207,6 +207,36 @@ fn evaluator_runs_row_and_column_with_caller_context() {
 }
 
 #[test]
+fn evaluator_runs_unary_negative_literal_through_function_calls() {
+    let sign_output = evaluate("=SIGN(-5)", None, None, Some(&en_us_context()));
+    assert_eq!(sign_output.oxfunc_value, EvalValue::Number(-1.0));
+
+    let pv_output = evaluate("=PV(0.05,10,-100)", None, None, Some(&en_us_context()));
+    match pv_output.oxfunc_value {
+        EvalValue::Number(value) => assert!((value - 772.1734929184818).abs() < 1e-9),
+        other => panic!("expected numeric PV result, got {other:?}"),
+    }
+
+    let fv_output = evaluate("=FV(0.05,10,-100)", None, None, Some(&en_us_context()));
+    match fv_output.oxfunc_value {
+        EvalValue::Number(value) => assert!((value - 1257.789253554884).abs() < 1e-9),
+        other => panic!("expected numeric FV result, got {other:?}"),
+    }
+}
+
+#[test]
+fn evaluator_treats_absent_single_cell_reference_as_true_blank() {
+    let isblank_output = evaluate("=ISBLANK(A9)", None, None, Some(&en_us_context()));
+    assert_eq!(isblank_output.oxfunc_value, EvalValue::Logical(true));
+
+    let n_output = evaluate("=N(A9)", None, None, Some(&en_us_context()));
+    assert_eq!(n_output.oxfunc_value, EvalValue::Number(0.0));
+
+    let type_output = evaluate("=TYPE(A9)", None, None, Some(&en_us_context()));
+    assert_eq!(type_output.oxfunc_value, EvalValue::Number(1.0));
+}
+
+#[test]
 fn evaluator_runs_indirect_offset_and_iferror() {
     let indirect_output = evaluate("=INDIRECT(\"A1\")", None, None, Some(&en_us_context()));
     assert_eq!(

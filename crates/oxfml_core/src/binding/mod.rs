@@ -262,7 +262,23 @@ impl Binder {
                 let child = self
                     .first_child_node(node)
                     .expect("prefix should have child");
-                BoundExpr::ImplicitIntersection(Box::new(self.bind_expr(child)))
+                let bound_child = self.bind_expr(child);
+                match token_text(node, "@") {
+                    Some(_) => BoundExpr::ImplicitIntersection(Box::new(bound_child)),
+                    None if token_text(node, "-").is_some() => BoundExpr::Binary {
+                        op: BinaryOp::Subtract,
+                        left: Box::new(BoundExpr::NumberLiteral("0".to_string())),
+                        right: Box::new(bound_child),
+                    },
+                    None if token_text(node, "+").is_some() => bound_child,
+                    None => {
+                        self.diagnostics.push(BindDiagnostic {
+                            message: "unsupported prefix operator".to_string(),
+                            span: node.span,
+                        });
+                        bound_child
+                    }
+                }
             }
             SyntaxKind::PostfixExpr => {
                 let child = self

@@ -230,7 +230,16 @@ impl Parser {
 
     fn parse_prefix(&mut self) -> GreenNode {
         self.skip_whitespace();
-        self.parse_postfix()
+        if self.at(TokenKind::Plus) || self.at(TokenKind::Minus) {
+            let op = self.bump();
+            let expr = self.parse_range();
+            GreenNode::new(
+                SyntaxKind::PrefixExpr,
+                vec![GreenChild::Token(op), GreenChild::Node(Box::new(expr))],
+            )
+        } else {
+            self.parse_postfix()
+        }
     }
 
     fn parse_primary(&mut self) -> GreenNode {

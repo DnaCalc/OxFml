@@ -84,6 +84,40 @@ fn adapter_projects_direct_scalar_and_array_like_preparation_artifacts() {
 }
 
 #[test]
+fn adapter_handles_unary_negative_literals_in_ordinary_calls() {
+    let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
+        "sign-negative-literal",
+        "formula:sign-negative-literal",
+        "=SIGN(-5)",
+        locus(1, 1),
+        TypedContextQueryBundle::default(),
+    ))
+    .expect("sign adapter run");
+
+    assert_eq!(
+        run.evaluation_artifact.worksheet_value,
+        EvalValue::Number(-1.0)
+    );
+}
+
+#[test]
+fn adapter_treats_absent_single_cell_reference_as_blank_stand_in() {
+    let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
+        "blank-single-cell-standin",
+        "formula:blank-single-cell-standin",
+        "=ISBLANK(A9)",
+        locus(1, 1),
+        TypedContextQueryBundle::default(),
+    ))
+    .expect("blank stand-in adapter run");
+
+    assert_eq!(
+        run.evaluation_artifact.worksheet_value,
+        EvalValue::Logical(true)
+    );
+}
+
+#[test]
 fn adapter_respects_requested_snapshot_and_caller_anchor() {
     let current_snapshot = test_snapshot("snapshot:current", "v1", "SUM");
     let selected_snapshot = test_snapshot("snapshot:selected", "v2", "ROW");

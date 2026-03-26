@@ -886,7 +886,7 @@ fn call_arg_for_reference_like(
     } else {
         resolver
             .resolve_reference(&reference)
-            .map(CallArgValue::Eval)
+            .map(call_arg_from_resolved_reference_value)
             .map_err(map_resolution_error)
     }
 }
@@ -943,7 +943,7 @@ fn call_arg_for_name(
                 } else {
                     resolver
                         .resolve_reference(reference)
-                        .map(CallArgValue::Eval)
+                        .map(call_arg_from_resolved_reference_value)
                         .map_err(map_resolution_error)
                 }
             }
@@ -2138,6 +2138,10 @@ impl ReferenceResolver for LocalReferenceResolver<'_> {
             };
         }
 
+        if is_absent_single_cell_reference(reference) {
+            return Ok(blank_single_cell_eval_value());
+        }
+
         Err(RefResolutionError::UnresolvedReference {
             target: reference.target.clone(),
         })
@@ -2261,6 +2265,31 @@ fn array_cell_value_from_eval_value(value: Option<EvalValue>) -> ArrayCellValue 
         }
         None => ArrayCellValue::EmptyCell,
     }
+}
+
+fn call_arg_from_resolved_reference_value(value: EvalValue) -> CallArgValue {
+    if is_scalar_empty_cell_array(&value) {
+        CallArgValue::EmptyCell
+    } else {
+        CallArgValue::Eval(value)
+    }
+}
+
+fn is_scalar_empty_cell_array(value: &EvalValue) -> bool {
+    match value {
+        EvalValue::Array(array) if array.shape().rows == 1 && array.shape().cols == 1 => {
+            matches!(array.get(0, 0), Some(ArrayCellValue::EmptyCell))
+        }
+        _ => false,
+    }
+}
+
+fn blank_single_cell_eval_value() -> EvalValue {
+    EvalValue::Array(EvalArray::from_scalar(ArrayCellValue::EmptyCell))
+}
+
+fn is_absent_single_cell_reference(reference: &ReferenceLike) -> bool {
+    matches!(reference.kind, ReferenceKind::A1) && parse_a1_target(&reference.target).is_some()
 }
 
 fn parse_a1_target(text: &str) -> Option<(Option<String>, u32, u32)> {
