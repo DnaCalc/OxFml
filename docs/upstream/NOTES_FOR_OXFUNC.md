@@ -2,26 +2,27 @@
 
 Status: `active`
 Owner lane: `OxFml`
-Relationship: outbound observation and seam-status note from OxFml for the next integration round with OxFunc
+Relationship: current outbound seam-context note from OxFml to OxFunc
 
 ## 1. Purpose
-Record the current OxFml-side semantic, runtime, and replay floor that OxFunc should use for the next upstream/downstream integration round.
 
-This note is not a generic status dump.
-It only records the distinctions and exercised behaviors that matter at the OxFml/OxFunc boundary.
+Provide the current OxFml-side seam floor that OxFunc should assume now.
+
+This is a current-state message, not a historical ledger.
+It keeps only the distinctions, exercised behaviors, and open topics that still matter at the OxFml/OxFunc boundary.
 
 ## 2. Core Message
-OxFml has materially widened the local semantic and proving-host floor since the earlier seam acknowledgment.
 
-For the next OxFunc coordination round, the main points are:
-1. helper-form lanes now have an exercised local baseline, not only preserved syntax,
-2. callable helper values now have lexical-capture-sensitive behavior in the OxFml local floor,
-3. caller-context, scalarization, host-query, formatting, and capability-sensitive lanes are all now represented in replayable local artifacts,
-4. OxFml still preserves semantic distinctions and avoids freezing prematurely on a final transport shape,
-5. the next stabilization move should be a formal runtime library-context interface, not long-term reliance on build-time catalog-file ingestion.
+OxFml currently treats the first adapter wave as real and usable.
+
+The main current points for OxFunc are:
+1. helper-form and callable-value lanes now have an exercised local floor rather than note-only preservation,
+2. caller-context, scalarization, host-query, and formatting-sensitive lanes are represented in replayable local artifacts,
+3. prepared arguments and prepared results preserve semantic distinctions that OxFunc should continue to treat as real seam facts,
+4. the current OxFml direction is still toward a runtime library-context interface rather than long-term build-time catalog ingestion,
+5. the March 26 unary-negative-literal and blank single-cell issues are no longer open OxFml seam defects.
 
 ## 3. Current Evidence In OxFml
-The following OxFml canonical docs and exercised local artifacts now carry the active seam floor:
 
 ### 3.1 Canonical seam docs
 1. `docs/spec/formula-language/OXFML_OXFUNC_SEMANTIC_BOUNDARY.md`
@@ -40,993 +41,319 @@ The following OxFml canonical docs and exercised local artifacts now carry the a
 6. `crates/oxfml_core/tests/fixtures/prepared_call_replay_cases.json`
 7. `crates/oxfml_core/tests/fixtures/single_formula_host_replay_cases.json`
 8. `crates/oxfml_core/tests/fixtures/empirical_oracle_scenarios.json`
+9. `crates/oxfml_core/tests/fixtures/w050_oxfunc_pinned_fixture_corpus.json`
 
-## 4. Observations That Matter To OxFunc
-The following observations are now mature enough to surface explicitly.
+## 4. Current Seam Floor
 
-### 4.1 Helper forms are no longer only a preservation concern
-OxFml now has an exercised local floor for:
+### 4.1 Helper forms and callable values
+OxFml has an exercised local floor for:
 1. `LET` sequential helper binding,
 2. helper-name shadowing,
 3. `LAMBDA` literal formation,
 4. immediate invocation,
-5. helper-bound invocation.
+5. helper-bound invocation,
+6. lexical capture-sensitive callable summaries.
 
-This remains a local baseline rather than a finished cross-repo callable-value contract.
+Current OxFml reading:
+1. helper lambdas must preserve lexical capture rather than dynamic name re-read,
+2. callable values are semantically real even where worksheet publication remains narrower,
+3. the final downstream shared callable-value carrier is still open.
 
-### 4.2 Lexical capture matters
-OxFml local execution showed that helper lambdas must preserve lexical capture rather than re-reading helper names dynamically once shadowing is possible.
-
-Working implication:
-1. helper-profile and callable-value lanes should assume lexical, not dynamic, meaning,
-2. any later OxFunc transport for callable helper values must not silently erase capture-sensitive meaning.
-3. OxFml now also uses exact free-helper capture for callable summaries/carriers rather than reporting every helper merely visible in scope.
-
-### 4.3 Callable-value carriers are still provisional
-OxFml currently exposes helper-produced callable values through a replayable summary surface rather than a richer downstream-shared carrier.
-
-That means:
-1. the existence of callable helper values is now explicit,
-2. the current local carrier is enough for replay, planning, and diagnostics,
-3. the local carrier now distinguishes exact lexical capture from no-capture even under unused helper bindings and parameter shadowing,
-4. the final OxFml/OxFunc callable-value carrier remains intentionally open.
-5. OxFml now also has a local registry-backed typed invocation bridge, so callable meaning no longer stops at formation time for the first higher-order helper lanes.
-
-### 4.4 Scalarization and caller-context lanes are exercised locally
-The local floor now includes exercised coverage for:
+### 4.2 Scalarization and caller context
+OxFml currently exercises:
 1. explicit `@`,
 2. `_xlfn.SINGLE` / `SINGLE`,
 3. caller-context-sensitive evaluation lanes,
 4. direct-cell-binding proving-host cases where defined names are insufficient.
 
-OxFunc should assume these distinctions are now part of the exercised OxFml seam floor, not only draft spec text.
+OxFunc should continue treating these as real seam distinctions, not draft-only topics.
 
-### 4.5 Host-query and formatting lanes are no longer only planning lanes
-The local floor now includes exercised host-query and formatting-sensitive cases including:
+### 4.3 Host-query and formatting-sensitive lanes
+OxFml currently exercises:
 1. `TEXT`,
 2. `INFO`,
 3. `CELL("filename", ...)`,
 4. reference-sensitive host/query proving-host cases.
 
-Active-selection-sensitive omitted-reference `CELL(...)` pressure from `HO-FN-002` remains acknowledged in principle, but the broader host-query carrier shape is still open.
+OxFml still treats typed host-query views as the right direction rather than object-handle surfaces.
 
-## 5. Interface Implications
-For the next integration round, OxFunc can rely on the following OxFml-side direction:
-1. prepared arguments preserve source, structure, reference, blankness, and caller-context distinctions explicitly,
-2. prepared results preserve result class, reference identity, and publication/format-oriented metadata explicitly,
-3. semantic plans now carry helper-environment profile information, not only function-trait and execution-profile information,
-4. semantic plans and compile surfaces now explicitly leave room for a versioned external library-context snapshot rather than hidden global registry state,
-5. host-query lanes remain capability-scoped and typed rather than object-handle based,
-6. proving-host and replay artifacts now preserve direct cell bindings where semantic truth depends on concrete cell resolution,
-7. execution-profile and host/query sensitivity are visible in formula-level artifacts so downstream scheduler or host policy does not need to invent them.
+### 4.4 Prepared argument and result distinctions
+Prepared arguments and results currently preserve:
+1. source,
+2. structure,
+3. reference identity,
+4. blankness,
+5. caller-context distinctions,
+6. publication- and formatting-oriented result metadata.
 
-## 6. Minimum Invariants
-The following invariants remain mandatory on the OxFml side:
+The mandatory OxFml-side invariants remain:
 1. direct scalar input is not interchangeable with array-like input,
 2. omitted argument, blank cell, empty string, and error remain distinct,
 3. reference-returning meaning is not collapsed into unconditional eager dereference,
 4. caller-context-dependent scalarization remains explicit and replayable,
 5. typed host-query views remain capability-scoped,
-6. helper-form shape facts remain modelable in semantic plans,
-7. helper-name shadowing must not change the meaning of an already-created helper lambda,
-8. direct cell bindings must be preserved in proving-host or retained-witness artifacts whenever semantic truth depends on them.
+6. helper-name shadowing must not change the meaning of an already-created helper lambda,
+7. direct cell bindings must be preserved whenever semantic truth depends on concrete cell resolution.
 
-## 7. Open OxFml-Side Gaps Still Relevant To OxFunc
-The following lanes remain intentionally open:
+## 5. Current Library-Context Position
+
+OxFml still treats a versioned external library-context snapshot as the right current integration shape.
+
+Current downstream artifact in use:
+1. `../OxFunc/docs/function-lane/OXFUNC_LIBRARY_CONTEXT_SNAPSHOT_EXPORT_V1.csv`
+2. `../OxFunc/docs/function-lane/OXFUNC_LIBRARY_CONTEXT_SNAPSHOT_EXPORT_V1_README.md`
+
+Current OxFml reading:
+1. the export is useful now for bounded consumption and test pinning,
+2. it is not yet the final runtime ABI,
+3. OxFml can already consume canonical ids, registration/source shape, and first-pass interface/profile fields from it,
+4. long-term convergence should move toward a formal runtime provider/consumer model rather than continued note-based coordination.
+
+## 6. Current Ownership Split
+
+### 6.1 Not open as OxFml seam defects
+OxFml does not currently treat the following as open local seam issues:
+1. unary signed literals,
+2. blank single-cell stand-in resolution for ordinary worksheet references,
+3. the former `PV` / `FV` adapter-evaluation failure caused by unary negative literal handling.
+
+Current local exercised consequences:
+1. `=SIGN(-5)` evaluates through the ordinary evaluator path,
+2. `=PV(0.05,10,-100)` evaluates through the ordinary evaluator path,
+3. `=FV(0.05,10,-100)` evaluates through the ordinary evaluator path,
+4. `=ISBLANK(A9)` with no fixture cell evaluates as `TRUE`,
+5. blank single-cell stand-ins remain distinct from empty text.
+
+### 6.2 Current OxFunc-local area
+OxFml currently understands that the recent low-order residuals in:
+1. `ASINH`,
+2. `PV`,
+3. `FV`,
+4. `PMT`
+
+were not open OxFml seam defects.
+
+Current OxFml reading is:
+1. OxFunc has taken those rows through local `W053`,
+2. the repaired explanation is OxFunc-local integer-`POWER` publication alignment rather than a new OxFml-side ask,
+3. OxFml does not currently hold an open action on those rows.
+
+## 7. Current Open Topics Relevant To OxFunc
+
+The topics OxFml still considers open and worth active coordination are:
 1. the smallest final provenance vocabulary for `PreparedArgument` and `PreparedResult`,
 2. the final placement of explicit `@` semantics in the execution pipeline,
 3. the final compatibility and round-trip treatment of `_xlfn.SINGLE(...)`,
 4. the first locked execution-profile vocabulary for downstream scheduler consumption,
 5. the exact typed carrier shape for broader host-query return families,
 6. the final shared carrier for callable helper values beyond the current replayable summary surface,
-7. the smallest honest shared library-context snapshot shape,
+7. the smallest honest shared runtime library-context shape,
 8. the split between library-context availability truth and runtime capability/provider-failure truth,
-9. broader OxFunc catalog breadth beyond the current exercised local floor,
-10. broader higher-order helper coverage beyond the now-exercised `MAP` / `REDUCE` / `SCAN` / `BYROW` / `BYCOL` / `MAKEARRAY` lanes.
-
-## 8. Requests For The Next OxFunc Round
-The next useful OxFunc-side feedback would be:
-1. which callable-value facts OxFunc would need beyond the current helper summary carrier,
-2. whether any currently expected function traits are still missing from the OxFml semantic-plan profile,
-3. whether the current host-query capability split is sufficient for the next `CELL` / `INFO` tightening pass,
-4. whether OxFunc wants to converge first on provenance vocabulary or callable-value carrier shape.
-
-The next useful OxFunc-side integration artifact was more valuable than another broad note pass, and that artifact now exists in downstream `W044`.
-
-The next useful OxFunc-side integration move is now:
-1. keep the current pinned machine-readable catalog snapshot export stable enough for bounded OxFml-side consumption,
-2. refine the export only where concrete OxFml consumption mismatches show that the first pass is not self-describing enough.
-
-Minimum suitability for OxFml-side continued development:
-1. stable snapshot id/version,
-2. source commit/tag identity,
-3. canonical function/operator surface ids,
-4. alias/localized-name mapping truth or stable refs to it,
-5. semantic trait/profile refs,
-6. gating profile refs,
-7. registration source kind,
-8. stage-aware availability fields where already known,
-9. a shape OxFml can consume in tests and semantic-plan compilation without manual note transcription.
-
-Preferred use on the OxFml side:
-1. pin OxFml semantic-plan tests to that snapshot,
-2. synthesize broader catalog-consumption fixtures from it,
-3. reserve later `NOTES_FOR...` cycles for concrete mismatches found through that integration path.
-
-## 9. New OxFunc Intake Processed On The OxFml Side
-The current upstream note at `../OxFunc/docs/upstream/NOTES_FOR_OXFML.md` materially aligns with the current OxFml direction, but it sharpens three areas that were previously too implicit on the OxFml side.
-
-The most important intake points now processed are:
-1. the shared seam should preserve semantic requirements first and keep transport/mechanism open until later narrowing,
-2. OxFunc wants a versioned external library-context snapshot rather than hidden global registry ownership,
-3. callable helper values should be treated as first-class semantic values even if publication restrictions remain separate,
-4. availability and provider states need a cleaner split between library-context truth and runtime capability/runtime-failure truth,
-5. OxFunc remains aligned with the current OxFml position that `#` normally resolves upstream and does not require a default spill-provenance flag once fully resolved,
-6. the operator/literal/value-universe tension should stay explicit rather than being hidden behind a falsely clean ownership split,
-7. the new narrowed OxFunc stage focus is now external library-context snapshot, callable-value minimum carrier, and availability/provider taxonomy,
-8. the latest OxFunc narrowing asks for a more concrete minimum library-context field set and a stage-aware mapping of availability states before callable transport is narrowed further.
-
-The resulting OxFml-side refinements are now reflected in the canonical boundary docs as:
-1. explicit library-context snapshot wording,
-2. explicit callable-value boundary wording,
-3. explicit availability/profile/provider gating wording,
-4. explicit operator/literal/value-universe ownership wording,
-5. explicit stage-aware reading for availability and provider-failure states.
-
-Current OxFml reading of what still remains open after that intake:
-1. the final shared callable-value carrier still remains open,
-2. the smallest honest shared library-context snapshot still remains open,
-3. the split between early formula rejection, runtime `#NAME?`, typed capability denial, and provider-failure outcomes is now narrower locally but still not final,
-4. the exact catalog-backed boundary for operator admission versus pure grammar ownership still needs narrower exercised closure.
-
-## 9A. Current W044 Snapshot Export Intake
-OxFml has now processed the current downstream `W044` snapshot-export attempt as the right next-step artifact for this seam.
-
-Current downstream artifact:
-1. `../OxFunc/docs/function-lane/OXFUNC_LIBRARY_CONTEXT_SNAPSHOT_EXPORT_V1.csv`
-2. `../OxFunc/docs/function-lane/OXFUNC_LIBRARY_CONTEXT_SNAPSHOT_EXPORT_V1_README.md`
-
-Current OxFml reading:
-1. this is the right kind of artifact to move the exchange forward,
-2. it is useful immediately as a first-pass downstream stabilization artifact,
-3. it is not yet a final shared snapshot ABI or final cross-repo field lock,
-4. OxFml now has direct local consumption tests for selected seam-heavy and ordinary rows from this export rather than relying only on synthetic local snapshots.
-
-Current pinned first-pass downstream snapshot for the next bounded integration round:
-1. `snapshot_id = oxfunc-libctx-v1`
-2. `snapshot_generation = 2026-03-21`
-3. `source_commit_short = 717831e`
-4. `source_commit_full = 717831ed354bcf713c0defe718c5910016b07d3a`
-5. `source_tree_state = dirty`
-
-Fields OxFml can already use as-is in the current first pass:
-1. `snapshot_id`
-2. `snapshot_generation`
-3. `source_commit_short`
-4. `source_commit_full`
-5. `source_tree_state`
-6. canonical function/operator surface ids
-7. `registration_source_kind`
-8. `special_interface_kind`
-9. `preparation_owner`
-10. `runtime_boundary_kind`
-11. `interface_contract_ref`
-
-Additional first-pass rows OxFml now reads as directly useful:
-1. seam-heavy rows:
-   - `FUNC.LET`
-   - `FUNC.LAMBDA`
-   - `FUNC.RTD`
-   - `FUNC.OP_IMPLICIT_INTERSECTION`
-2. ordinary-but-useful extracted rows:
-   - `FUNC.CHOOSECOLS`
-   - `FUNC.FILTER`
-   - `FUNC.UNIQUE`
-   - `FUNC.VSTACK`
-
-Current OxFml reading of those ordinary extracted rows:
-1. they are already useful planning and test-synthesis inputs,
-2. they reduce the need for an immediate special-case side channel for dynamic-array reshaping families,
-3. they are a good first check for whether broader ordinary catalog consumption can replace narrow local metadata sooner than expected,
-4. OxFml now consumes those rows directly in local semantic-plan tests rather than only acknowledging them in note form.
-
-Fields OxFml reads as useful but still candidate rather than locked:
-1. `admission_interface_kind`
-2. `arity_shape_note`
-3. OxFunc-local semantic/gating reference fields where the current export points to them indirectly rather than via stable normalized bundles
-
-Current OxFml-side alternatives or refinements:
-1. `interface_contract_ref` is a useful first-pass bridge only if it denotes stable semantic contract material rather than ephemeral implementation notes,
-2. the provenance triple `source_commit_short` + `source_commit_full` + `source_tree_state` is now usable for immediate test pinning and mismatch reports,
-3. a stable ref/tag field would still be welcome later, but it is no longer a near-term blocker for bounded OxFml-side consumption,
-4. `arity_shape_note` is useful as explanatory metadata, but it does not yet read as a stable hot-path seam field,
-5. `admission_interface_kind`, `special_interface_kind`, `preparation_owner`, and `runtime_boundary_kind` are useful first-pass split fields, but OxFml does not yet treat those exact names as locked shared vocabulary.
-6. OxFml does not want the CSV export itself to become the normative runtime interface; it should remain an export, pinning, and mismatch-discovery artifact.
-
-## 10. OxFml Topic Split For The Next Round
-The current OxFml-side working split is:
-
-### 10.1 Library-context snapshot
-This is where OxFml currently expects to carry:
-1. canonical function/operator ids,
-2. aliases and localized names,
-3. semantic trait/profile references,
-4. feature and compatibility gates,
-5. add-in/provider-presence and related registration truth that affects early formula admission or later execution planning,
-6. registration source kind where it materially affects admission, diagnostics, or replay,
-7. snapshot identity/versioning strong enough for parse, bind, semantic planning, and replay correlation.
-
-Current narrower local floor:
-1. `surface_stable_id`,
-2. `name_resolution_table_ref`,
-3. `semantic_trait_profile_ref`,
-4. `gating_profile_ref`.
-
-Current OxFml-side next ask:
-1. the first-pass export now exists and should be treated as the current integration artifact,
-2. continue providing stable reading guidance where exported fields are not yet self-describing,
-3. keep the provenance triple (`source_commit_short`, `source_commit_full`, `source_tree_state`) preserved in downstream mismatch reports so a bounded dirty-tree export is not confused with a clean release snapshot,
-4. a stable ref/tag field would still be useful when convenient, but it is now optional improvement rather than a standing export-shape gap,
-5. keep pushing toward dereferenceable semantic/gating profile bundles without blocking first-pass consumption now.
-
-### 10.2 Prepared arguments and prepared results
-This is where OxFml currently expects to carry:
-1. source and structure class,
-2. reference identity,
-3. blankness class,
-4. evaluation mode,
-5. caller-context-sensitive scalarization facts,
-6. a typed minimum callable carrier for origin kind, invocation model, capture mode, and arity,
-7. helper-result callable summary/detail facts until a richer carrier is agreed,
-8. the same minimum callable carrier and summary/detail floor when a callable value is preserved through adopted defined-name context in the current local proving floor,
-9. a typed invocation path over opaque callable identity that is now exercised locally for `MAP`, `REDUCE`, `SCAN`, `BYROW`, `BYCOL`, and `MAKEARRAY`, plus a first defined-name callable higher-order lane through `MAP(...,NamedLambda)`.
-
-### 10.3 Host capability view
-This is where OxFml currently expects to carry:
-1. active-selection-sensitive host-query inputs,
-2. workbook, environment, and referenced-cell fact access,
-3. runtime availability/denial states that are genuinely host- or session-dependent,
-4. provider/service availability when it is a runtime capability issue rather than a catalog truth issue.
-
-### 10.3A Stage-oriented availability reading
-Current OxFml-side stage split is:
-1. parse/bind: catalog-known, alias/localization, feature-gated, and compatibility-gated states where early admission depends on them,
-2. semantic-plan: preserved availability/gating summary for later execution and replay classification,
-3. runtime capability: genuinely host- or session-dependent unavailable states,
-4. post-dispatch/runtime: provider-failure outcomes that remain distinct from both early unknown-name classification and capability denial.
-
-Current exercised local reading:
-1. semantic-plan fixtures now preserve post-dispatch provider-unavailable separately from runtime add-in-absent and host-profile-unavailable states,
-2. managed-session fixtures still keep runtime capability denial distinct from later external-provider consequence surfacing.
-3. OxFml canonical docs now also say explicitly that edit rejection before artifact adoption is a different lane from accepted formula text that later produces unresolved-name classification and OxFunc-owned `#NAME?` value results.
-4. OxFml now also has a dedicated deterministic fixture family covering accepted-unresolved-name, semantic-plan gated, runtime capability denied, and post-dispatch provider-unavailable classification as distinct lanes.
-
-### 10.4 Transport intentionally left open
-OxFml still wants to keep these transport details open for now:
-1. the final callable-value carrier,
-2. the smallest honest shared library-context snapshot shape,
-3. the final split between runtime capability denial and provider-failure reporting in replay-facing surfaces.
-
-## 11. OxFml Current Stabilization Order
-If the next round needs a narrowed working set, OxFml currently agrees with this stabilization order:
-1. external library-context snapshot,
-2. availability / feature-gate / provider-failure taxonomy,
-3. callable-value minimum carrier.
-
-Reason for this order:
-1. library-context truth affects parse, bind, semantic planning, and early rejection broadly,
-2. availability/provider taxonomy affects both admission and replay classification,
-3. callable-value carrier narrowing is important, but it is safer once the surrounding catalog and availability surfaces are less ambiguous.
-
-Current alignment note:
-1. OxFml and OxFunc now appear aligned on the same three next-round topics,
-2. the remaining mismatch is mainly preferred ordering, not topic selection,
-3. OxFml is still prioritizing availability/provider taxonomy slightly earlier than OxFunc, but that is now a sequencing preference rather than a scope conflict,
-4. the latest OxFunc narrowing also suggests callable transport should remain intentionally looser for one more round while library-context and stage-aware availability surfaces become more concrete.
-
-## 12. Current OxFml Reply For The Next Seam Sync
-The main new OxFml-side facts for the next sync are:
-1. typed invocation over opaque callable identity is now locally exercised, not hypothetical,
-2. inline and helper-bound local lambdas now run end-to-end through `MAP`, `REDUCE`, `SCAN`, `BYROW`, `BYCOL`, and `MAKEARRAY`,
-3. adopted defined-name callable values now preserve a distinct `DefinedNameCallable` runtime origin instead of being flattened into the helper lane, and `MAP(...,NamedLambda)` is now exercised locally,
-4. the remaining callable seam question is now primarily the minimum carrier/provenance field split, not whether the invocation boundary works.
-
-The bounded next-round OxFunc ask is:
-1. react to the exercised typed-invocation floor rather than the older boundary-only reading,
-2. narrow the minimum shared callable carrier field set,
-3. say which callable fields may stay structured provenance only,
-4. keep broader higher-order family expansion as deferred evidence-driven lanes unless concrete runtime evidence forces a smaller carrier decision; `ISOMITTED` no longer needs to be treated as a first-freeze blocker.
-
-## 11A. Current Round Closure Reading
-OxFml now reads the latest OxFunc note as a round-closure signal rather than as a request for indefinite further note-only narrowing.
-
-Current OxFml reading:
-1. the current OxFml canonical seam docs are strong enough to act as the active upstream baseline for ongoing OxFunc work,
-2. the current three-topic stabilization order remains useful, but it should now be reopened only when a concrete trigger appears,
-3. this is enough alignment to proceed with function work without pretending the final carrier or transport details are already locked,
-4. this does not mean the seam is finalized,
-5. OxFml now has a narrower local callable floor where callable values can survive helper scope adoption into defined-name context without losing typed invocation or lexical-capture meaning.
-
-Current trigger examples for the next narrower round are:
-1. OxFunc needs a concrete minimum library-context field set locked,
-2. OxFunc needs a smaller callable-value carrier because a proving-host or implementation slice can no longer stay transport-open,
-3. availability/provider-failure handling starts forcing narrower exercised closure in replay, diagnostics, or runtime outcome typing,
-4. any of the above begins changing coordinator-visible consequences and therefore risks an OxCalc-facing seam packet.
-
-## 11B. Focused Next Round For `LET` / `LAMBDA`
-OxFml is now prepared to pin down the `LET` / `LAMBDA` seam more directly.
-
-Current OxFml prep posture:
-1. lexical, not dynamic, helper meaning should now be treated as fixed,
-2. exact free-helper capture should now be treated as fixed where OxFml can know it,
-3. callable values are semantically first-class even when publication policy remains narrower,
-4. the current local floor now also preserves callable meaning through adopted defined-name context,
-5. the next round should narrow carrier and invocation shape, not reopen helper-scope meaning.
-
-The exact next-round questions OxFml now wants to settle are:
-1. the smallest honest shared callable carrier,
-2. the split between callable carrier fields and provenance/replay detail,
-3. the callable invocation boundary,
-4. callable-specific interaction with stage-aware availability/provider states.
-
-OxFml has written a focused local prep note for this at:
-1. `docs/spec/formula-language/OXFML_OXFUNC_LET_LAMBDA_PIN_DOWN_PREP.md`
-
-Current OxFml preferred order for this narrower round is:
-1. fix lexical/capture truths,
-2. fix minimum callable carrier,
-3. fix carrier vs provenance split,
-4. fix invocation boundary,
-5. only then narrow callable-specific stage interaction where still needed.
-
-Current processed OxFunc reply:
-1. lexical meaning, exact capture truth, and callable-first-class status are now aligned enough to treat as fixed for the next round,
-2. OxFunc prefers a smaller minimum callable carrier centered on opaque callable identity plus semantic minimums,
-3. OxFunc currently wants parameter-name, capture-name, and body-kind detail to remain provenance/replay detail rather than minimum carrier fields,
-4. OxFunc prefers typed invocation over a narrower callable carrier rather than richer direct inspection.
-
-Current OxFml response:
-1. incorporated: richer callable detail may move out of the minimum carrier and remain structured provenance/replay detail,
-2. incorporated: typed invocation over a narrower callable carrier is the right direction,
-3. proposed alternative: opaque callable identity is acceptable only if origin kind, capture mode, arity shape, and invocation-contract meaning remain recoverable as typed semantic fields,
-4. proposed alternative: `invocation_contract_ref` should denote stable semantic invocation meaning, not an implementation-specific callback/ABI handle,
-5. still intentionally open: full defined-name/UDF callable transport, final callable publication policy, and broader callable/provider interaction.
-
-Current additional intake from the latest OxFunc note:
-1. OxFunc now explicitly prefers to keep callable-specific availability/provider typing inside the generic staged availability model unless concrete callable cases prove that insufficient,
-2. OxFunc now explicitly prefers not to promote parameter-name, capture-name, and body-kind detail into the shared hot-path carrier by default,
-3. OxFunc now frames `callable_token`, `arity_shape`, and `invocation_contract_ref` as the likely next narrower callable carrier vocabulary,
-4. OxFunc is using broader local helper-function evidence, including higher-order lanes, to justify that narrower callable direction.
-
-Current OxFml response to that additional intake:
-1. incorporated: do not invent a special callable-only availability taxonomy before evidence requires it; the generic staged availability model remains the right default,
-2. incorporated: keep richer callable detail out of the minimum hot-path carrier by default as long as structured provenance/replay detail preserves it,
-3. proposed alternative: OxFml does not yet adopt `callable_token`, `arity_shape`, or `invocation_contract_ref` as canonical names; those are acceptable candidate labels, not yet locked OxFml-local vocabulary,
-4. incorporated with narrower scope: `MAP`, `REDUCE`, `SCAN`, `BYROW`, `BYCOL`, and `MAKEARRAY` are now exercised locally and are valid seam-pressure evidence for the invocation boundary and minimum carrier discussion; `ISOMITTED` is no longer treated as a first-freeze blocker, though it still remains a lighter-evidence lane on the OxFml side,
-5. still intentionally open: whether the eventual minimum callable carrier needs an explicit invocation-model field in addition to any future `callable_token`/`invocation_contract_ref` pair.
-
-## 12. What This Note Does Not Authorize
-This note should not be read as authorizing:
-1. a final shared callable-value carrier,
-2. a final locked provenance vocabulary,
-3. full OxFunc catalog closure on the OxFml side,
-4. replacement of typed host-query capability views with raw workbook or host objects,
-5. approximation of lexical helper capture by dynamic helper-name lookup.
-
-## 13. Current OxFml Position On Follow-Up
-No OxCalc-facing handoff is being filed from this intake alone.
-
-Current OxFml reading:
-1. the new OxFunc note tightens semantic-boundary planning and canonical wording,
-2. it does not by itself change coordinator-facing FEC/F3E clauses,
-3. if later callable-value publication, availability gating, or provider-failure handling starts changing coordinator-visible consequences, that would be the right point to open an OxCalc-facing seam packet.
-
-## 14. Working Rule
-Until the open lanes narrow further:
-1. treat OxFml canonical seam docs as the active semantic baseline,
-2. treat the current local helper/callable floor as exercised but still provisional,
-3. treat missing exact transport type names as open design detail, not as missing semantic acknowledgment,
-4. do not keep reopening the note exchange without a concrete trigger such as a catalog-export mismatch, field-set lock, proving-host pressure, implementation-facing handoff need, or coordinator-visible consequence,
-5. a few bounded back-and-forth rounds are acceptable when they are tied to concrete artifacts or concrete mismatches rather than abstract naming debate.
-
-## 15. Current OxFml Message For The Next Integration Rounds
-OxFml now treats this note as the current outbound baseline for the next bounded integration rounds rather than as a reason to reopen the whole seam.
-
-What OxFml is incorporating as the settled reading for this round:
-1. semantic requirements stay primary and transport remains provisional,
-2. library-context truth stays above runtime capability/provider truth,
-3. callable values remain first-class semantic values,
-4. the generic staged availability model remains the default for callable lanes,
-5. richer callable detail stays out of the minimum hot-path carrier by default if structured provenance/replay detail preserves it,
-6. typed invocation over a narrower callable carrier is the current preferred direction,
-7. workbook Defined Name callable preservation should now be treated as first-pass seam pressure rather than as a late extension,
-8. `RTD`-like host/provider seams should be modeled as prepared request plus typed host/provider outcome surface, not as ordinary provider-fetch kernels.
-9. the current `W044` export is good enough for bounded consumption, but the preferred long-term implementation interface should be a runtime `LibraryContextProvider` / immutable `LibraryContextSnapshot` model.
-
-What OxFml is explicitly not locking in this round:
-1. final canonical field names such as `callable_token`, `arity_shape`, or `invocation_contract_ref`,
-2. final minimum callable carrier field set,
-3. final callable carrier versus provenance split,
-4. final placement of callable/provider interaction beyond the generic staged availability model,
-5. final direct `LET` / `LAMBDA` formation artifact shape,
-6. exact `RTD` edge-case matrix or broader generalized provider/subscription contract,
-7. higher-order callable seam pressure inferred only from OxFunc-local evidence.
-
-Deferred until further OxFml-local evidence and future worksets:
-1. minimum callable carrier closure beyond the current narrowed candidate remains deferred within `W032`,
-2. broader higher-order callable lanes beyond the now-exercised `MAP`, `REDUCE`, `SCAN`, `BYROW`, `BYCOL`, and `MAKEARRAY` floor remain deferred to `W040`,
-3. fuller defined-name/UDF/interoperable callable transport remains deferred until later evidence after `W032` and `W038`,
-4. any callable/provider-stage refinement beyond the generic staged availability model remains deferred until local evidence proves the generic model insufficient.
-
-Working rule for the next bounded integration rounds:
-1. do not use these rounds merely to debate names or speculative transport shapes,
-2. use the next round first to consume the current pinned machine-readable OxFunc catalog snapshot export and identify concrete field or interpretation mismatches,
-3. in parallel, narrow the normative implementation direction toward a runtime-ingested immutable snapshot/provider interface so OxFml is not coupled to build-time catalog-file ingestion,
-4. then use follow-on rounds only for narrower locks exposed by snapshot consumption, proving-host/runtime artifacts, Defined Name callable transport pressure, or typed host/provider seams such as `RTD`,
-5. if those triggers do not appear, keep the remaining issues deferred to future worksets rather than continuing note churn.
-
-## 16. Current Convergence Check
-OxFml has reprocessed the latest `../OxFunc/docs/upstream/NOTES_FOR_OXFML.md` and reads it as convergent with the current OxFml status for this stage of the exchange.
-
-Converged reading:
-1. semantic requirements remain primary while transport stays provisional,
-2. external library-context truth remains above runtime capability/provider truth,
-3. callable values remain first-class semantic values,
-4. the generic staged availability model remains the default for callable lanes,
-5. richer callable detail remains outside the minimum hot-path carrier by default if structured provenance/replay preserves it,
-6. typed invocation over a narrower callable carrier remains the preferred direction,
-7. candidate field labels such as `callable_token`, `arity_shape`, and `invocation_contract_ref` are still only candidate labels rather than locked shared OxFml vocabulary,
-8. OxFunc-local higher-order callable evidence is useful pressure but not yet upstream seam-lock evidence on the OxFml side,
-9. workbook Defined Name callable preservation is now strong first-pass seam pressure even though fuller interoperable callable transport remains deferred,
-10. `RTD` currently reads as a prepared request plus typed host/provider outcome seam rather than a reason to reopen the callable boundary broadly.
-
-Deferred-work mapping:
-1. OxFunc now records its deferred callable follow-up under `W042`,
-2. OxFml records the matching upstream-side deferred callable evidence and seam-reopen lane under `W040`,
-3. these should be read as corresponding future-work owners rather than as a fresh disagreement.
-
-Current integration reading:
-1. there is no active semantic disagreement left in the current note exchange,
-2. the remaining callable/library-context/provider questions are now concrete artifact, field-set, transport-shape, and evidence-maturity questions,
-3. OxFml is prepared for a few bounded integration rounds driven first by concrete snapshot-consumption mismatches in `W044`, then by narrower proving-host/runtime pressure where needed,
-4. the refreshed ordinary dynamic-array rows in `W044` are now a useful early check for whether broader ordinary catalog consumption can proceed without a special-case side channel,
-5. OxFml now also consumes the higher-order helper rows (`MAP`, `REDUCE`, `SCAN`, `BYROW`, `BYCOL`, `MAKEARRAY`) from `W044` directly in local semantic-plan tests and now executes them locally through a typed callable invoker for inline and helper-bound lambdas, which narrows the remaining mismatch toward minimum carrier/provenance fields rather than invocation viability,
-6. OxFml now also has a first higher-order defined-name callable lane (`MAP(...,NamedLambda)`), so adopted defined-name callable origin is no longer only a note-level concern,
-7. absent those triggers, the remaining questions remain intentionally deferred until later OxFml-local evidence or a narrower implementation-facing trigger appears.
-
-## 18. Current Processed Response To The Latest OxFunc Note
-OxFml has now processed the latest OxFunc note as materially convergent and implementation-oriented.
-
-What OxFml incorporates directly:
-1. yes, the current `W044` callable-row split is sufficient for first-pass OxFml semantic planning now,
-2. yes, the preferred long-term normative direction is:
-   - runtime `LibraryContextProvider`
-   - immutable `LibraryContextSnapshot`
-   - registration/removal producing explicit new snapshot generations,
-3. yes, the recommended first-freeze working rule is acceptable:
-   - consume the committed snapshot now,
-   - model runtime provider/snapshot in parallel,
-   - use concrete mismatches as the trigger for further seam narrowing,
-4. yes, built-in `xlf*` metadata is currently sufficient as first-pass compatibility metadata for built-in routing as long as `surface_stable_id` remains the primary semantic identity,
-5. yes, `ISOMITTED` no longer needs to be treated as a first-freeze callable seam blocker.
-
-What OxFml keeps as a narrower current position rather than freezing further today:
-1. callable-minimum semantic facts do not need to be promoted into direct snapshot columns in this round; contract docs and current seam-heavy row fields are sufficient for one more round,
-2. the existing `W044` seam-heavy split
-   - `admission_interface_kind`
-   - `preparation_owner`
-   - `runtime_boundary_kind`
-   - `interface_contract_ref`
-   is sufficient for first-pass semantic planning, but still not treated as locked shared canonical vocabulary,
-3. the minimum callable carrier remains semantically narrowed but not field-name frozen.
-
-## 19. Current OxFml Reply Back To OxFunc
-Current direct answers to OxFunc's latest questions are:
-1. the current `W044` callable-row split is already sufficient for OxFml semantic planning on the first covered callable rows,
-2. OxFml does not need direct snapshot columns for callable-minimum semantic facts in this round and is content to keep them in contract docs for one more round,
-3. OxFml agrees with the recommended first-freeze working rule:
-   - consume the committed snapshot now,
-   - model runtime provider/snapshot in parallel,
-   - use concrete mismatches as the only trigger for further seam narrowing.
-
-Current next-lock lanes after this convergence are:
-1. the typed context/query bundle for the already-covered seam-heavy rows,
-2. the returned publication-aware value surface split:
-   - ordinary value
-   - value with presentation hint
-   - typed host/provider outcome projection,
-3. a real OxFml consumer/modeling pass for the runtime provider/snapshot interface beyond note-level agreement.
-
-## 17. Current Successor-Packet Agenda
-OxFml now reads the latest OxFunc note as moving beyond the earlier callable-row sufficiency round.
-
-The next OxFunc sync should therefore stay bounded and artifact-driven around the three successor packets OxFunc has now named.
-
-### 17.1 What OxFml Will Treat As Settled Going In
-1. lexical rather than dynamic helper meaning,
-2. exact free-helper capture where OxFml can know it,
-3. callable values as semantically first-class,
-4. typed invocation over opaque callable identity as viable for the currently exercised higher-order lanes,
-5. the generic staged availability model as the default callable/provider model unless evidence forces something narrower,
-6. the current `W044` callable-row split is sufficient for first-pass semantic planning,
-7. `ISOMITTED` is no longer a first-freeze seam blocker.
-
-### 17.2 What OxFml Wants To Review In The Next Sync
-1. the first shared typed context/query bundle for the already-covered seam-heavy rows:
-   - `CELL`
-   - `INFO`
-   - `ISFORMULA`
-   - `FORMULATEXT`
-   - `SHEET`
-   - `SHEETS`
-   - `SUBTOTAL`
-   - `AGGREGATE`
-   - `ASC`
-   - `DBCS`
-   - `JIS`
-   - `NUMBERVALUE`
-   - `TRANSLATE`
-   - `RTD`
-2. the first shared returned-value split:
-   - ordinary value
-   - `ValueWithPresentation`
-   - typed host/provider outcome projection
-3. the first runtime `LibraryContextProvider` / immutable `LibraryContextSnapshot` consumer/model shape, including whether OxFml should prefer:
-   - a runtime shape that mirrors the CSV closely,
-   - or a cleaner runtime-only shape plus a separate CSV mapping layer.
-
-### 17.3 What OxFml Is Explicitly Not Asking To Reopen
-1. lexical versus dynamic helper semantics,
-2. whether typed invocation can work at all,
-3. whether the current `W044` callable-row split is already sufficient for first-pass semantic planning,
-4. full defined-name/UDF/interoperable callable transport,
-5. final worksheet publication policy for callable values,
-6. generalized provider/subscription contracts inferred only from `RTD`.
-
-### 17.4 Preferred Output Of The Next Sync
-1. a direct OxFunc-side statement on whether the current typed context/query names and result partitions are already suitable for a first shared freeze or should be merged/split before promotion,
-2. a direct OxFunc-side statement on whether the current return-surface split is already suitable for a first shared freeze,
-3. any concrete mismatch OxFunc sees between:
-   - a runtime-only provider/snapshot consumer model,
-   - and the current CSV/export shape,
-4. any concrete artifact mismatches that should become the first blockers for `W041`, `W042`, or `W043`.
-
-## 20. Current OxFml Response To The Latest OxFunc Note
-OxFml reads the latest OxFunc note as substantially convergent and as shifting the next seam work onto the named successor packets.
-
-Current direct OxFml responses:
-1. for the typed context/query bundle, OxFml is willing to start from the current OxFunc query names and result-type partitioning as the first freeze candidate, but still prefers to keep the surface capability-scoped and allows a later merge/split only if a concrete consumer mismatch appears,
-2. for the return surface, OxFml accepts the explicit first-freeze split:
-   - ordinary value
-   - `ValueWithPresentation`
-   - typed host/provider outcome projection,
-3. for the runtime provider/snapshot model, OxFml prefers a cleaner runtime-only shape plus a separate CSV mapping layer rather than requiring the runtime consumer model to mirror the CSV field-for-field,
-4. the next honest triggers for additional callable/catalog narrowing are now concrete mismatches coming out of those three packets, not more broad note-level callable debate.
-
-## 21. Current OxFml Reply For The Successor-Packet Round
-OxFml has now processed the current OxFunc note as the start of the successor-packet round rather than another broad callable-lane debate.
-
-Current direct replies:
-1. for the typed context/query bundle, OxFml is prepared to treat the current OxFunc query names and result partitioning as the first freeze candidate for `W041`,
-2. OxFml still prefers the bundle to stay capability-scoped rather than collapse into raw workbook or host-object carriers,
-3. OxFml does not currently require a pre-freeze merge or split of the named query families unless concrete consumer modeling exposes one,
-4. for the returned surface, OxFml is prepared to treat
-   - ordinary value
-   - `ValueWithPresentation`
-   - typed host/provider outcome projection
-   as the first freeze candidate for `W042`,
-5. OxFml does not currently see a reason to refactor that returned split further before implementation-facing evidence exists,
-6. for the runtime library-context interface, OxFml prefers a cleaner runtime-only consumer/model shape with an explicit CSV/export mapping layer for `W043`,
-7. OxFml does not want the runtime object model to mirror the current export column-for-column unless concrete implementation pressure proves that necessary,
-8. the current useful next note rounds should therefore be driven by:
-   - concrete query/result mismatches found while modeling `W041`,
-   - concrete return-carrier mismatches found while freezing `W042`,
-   - concrete runtime/provider field mismatches found while modeling `W043`,
-   not by reopening already-converged callable sufficiency questions.
-
-Current OxFml reading of scope:
-1. `W032` remains active because the broader catalog/provider seam is not yet fully consumed here,
-2. `W041`, `W042`, and `W043` are now the primary bounded packets for OxFml/OxFunc interface clarification,
-3. `W040` remains the deferred owner only for later higher-order callable pressure not already covered by the exercised local floor.
-
-## 24. Structured-Reference And Table Ownership Planning Read
-OxFml is now tightening the intended ownership split for structured table references under `W036`.
-
-Current OxFml planning read:
-1. structured-reference grammar, omitted-table-name interpretation, `#This Row` handling, and table-aware bind belong in OxFml,
-2. table objects and table metadata belong with the host/coordinator side rather than with OxFunc,
-3. the intended OxFunc-facing seam is narrow:
-   - OxFunc should receive normalized reference consequences or dereferenced prepared-argument values,
-   - not a workbook-table object model,
-4. if a structured reference remains visible downstream, it should be through ordinary OxFml prepared-reference lanes or a stable normalized-reference intent, not a table reconstruction contract.
-
-Current OxFml request to future OxFunc review:
-1. confirm that the current prepared-argument/reference-preservation modes are sufficient for first structured-reference support,
-2. identify only concrete function-semantic mismatches that would require a richer downstream carrier,
-3. otherwise keep structured-reference resolution as an upstream OxFml/host concern.
-
-## 24A. Structured-Reference Refinement For The Next Planning Pass
-OxFml has now compared the current `W036` plan again against the extracted `MS-OE376` structure-reference requirements.
-
-Current refined OxFml read:
-1. omitted-table-name forms are not optional sugar; they require explicit enclosing-table truth from the host side,
-2. `#This Row` is a real selector family and must not be combined with `#Headers`, `#Total Row`, `#Data`, or `#All`,
-3. table-name versus defined-name disambiguation belongs in OxFml bind over host-supplied table packet truth,
-4. OxFunc still should not need workbook table-object awareness for first support.
-
-Current OxFml request to OxFunc:
-1. confirm that current preserved-reference and dereferenced prepared-argument lanes remain sufficient for first structured-reference consumers such as aggregate functions,
-2. identify only concrete function-semantic cases where preserved reference identity would still be too weak,
-3. otherwise keep the downstream seam narrow and opaque:
-   - no table catalog ingestion,
-   - no current-row reconstruction in OxFunc,
-   - no workbook table object model.
-
-Current OxFml suggested wording:
-1. structured references should reach OxFunc only as already-normalized OxFml reference/value lanes,
-2. any later richer downstream carrier should still be an opaque normalized-reference intent, not a table-object contract.
-
-## 22. Current Processed Response To The Newest OxFunc Note
-OxFml reads the newest OxFunc note as confirming rather than redirecting the current seam plan.
-
-What OxFml incorporates directly:
-1. OxFunc now explicitly reads the seam as close enough to work toward a first freezable application seam for the already-covered scope,
-2. OxFunc now explicitly treats the remaining work as primarily:
-   - `W041` typed context/query bundle freeze,
-   - `W042` return-surface and publication-hint freeze,
-   - `W043` runtime provider/snapshot consumer modeling,
-   rather than more callable-row sufficiency debate,
-3. OxFunc still confirms that the current `W044` callable-row field split is good enough for first-pass OxFml semantic planning,
-4. OxFunc still confirms that callable-minimum semantic facts may remain in contract/interface docs for now rather than direct snapshot columns,
-5. OxFunc still confirms the two-track working rule:
-   - consume committed `W044` now,
-   - model runtime provider/snapshot in parallel,
-   - use only concrete mismatches as triggers for further seam narrowing.
-
-What OxFml keeps as its current narrower position:
-1. the first shared typed context/query bundle should remain capability-scoped and typed rather than being collapsed into raw host-object carriers,
-2. the first returned-value split should remain:
-   - ordinary value
-   - `ValueWithPresentation`
-   - typed host/provider outcome projection
-   unless concrete implementation evidence forces a narrower factorization,
-3. the runtime consumer/model shape should still prefer a cleaner runtime-only object model plus explicit export mapping layer rather than runtime mirroring of the CSV artifact.
-
-Current reply back to OxFunc:
-1. yes, OxFml agrees the next useful rounds should be the successor packets rather than more broad callable debate,
-2. yes, OxFml treats the current `W044` callable-row split as sufficient for first-pass semantic planning,
-3. yes, OxFml is still content to keep callable-minimum semantic facts in contract/interface docs for this round,
-4. yes, OxFml still agrees with the first-freeze working rule of committed snapshot consumption plus parallel runtime-provider modeling,
-5. the next useful OxFunc-facing trigger should be only a concrete mismatch found while:
-   - modeling `W041`,
-   - freezing `W042`,
-   - or modeling `W043`.
-
-## 23. Final Round Closure Reading
-OxFml now reads the final OxFunc note in this exchange as a round-closure confirmation.
-
-Closure reading:
-1. no further note-only clarification is needed for the first covered application seam,
-2. the first application seam is now provisionally freezable for the already-covered scope,
-3. the active execution owners from the OxFml side are:
-   - `W041` typed context/query bundle freeze,
-   - `W042` return-surface and publication-hint freeze,
-   - `W043` runtime library-context provider consumer model,
-4. `W032` remains active only as the broader catalog/provider seam owner until those packets are exercised locally,
-5. `W040` remains deferred for later higher-order callable pressure rather than as current note debt.
-
-Working rule after this exchange:
-1. do not reopen OxFml -> OxFunc note rounds on callable-row sufficiency or the first-freeze working rule,
-2. reopen only on concrete implementation-facing mismatches from `W041`, `W042`, or `W043`,
-3. otherwise treat this note exchange as converged and shift effort into local execution and evidence.
-
-## 24. New Bounded Round Proposal: Editor Help And Signature Packet
-OxFml now has a first local editor/language-service floor under `W048`.
-
-Current OxFml-local capabilities:
-1. detect whether the cursor is inside a call,
-2. compute `callee_text`,
-3. compute active argument index,
-4. construct a deterministic `FunctionHelpLookupRequest`,
-5. keep intelligent completion and diagnostics on the normal parse/bind path.
-
-Current OxFml reading:
-1. the remaining editor/help lane is now mainly a seam-freeze packet problem, not a formula-semantics discovery problem,
-2. OxFml does not need OxFunc to tell it cursor location, argument index, or parse ambiguity,
-3. OxFml does need OxFunc to supply stable help/signature payloads keyed to the same runtime snapshot identity already used for semantic planning.
-
-Current OxFml best-effort proposal:
-1. keep semantic planning on the existing runtime `LibraryContextSnapshot`,
-2. expose help/signature metadata through a sibling help provider keyed by the same snapshot identity rather than overloading the hot-path semantic snapshot,
-3. let OxFml compute call-site context locally and ask OxFunc only for help payloads.
-
-Proposed request:
-1. `lookup_key`
-2. `library_context_snapshot_ref`
-
-Proposed response:
-1. `stable_function_id`
-2. `display_name`
-3. `signature_forms`
-   - parameter display labels
-   - minimum arity
-   - maximum arity or open-ended marker
-4. `short_description`
-5. `availability_summary`
-6. `deferred_or_profile_limited`
-7. optional `documentation_ref`
-
-Current OxFml ask for the next bounded OxFunc round:
-1. confirm whether help/signature retrieval should ride the runtime library-context provider or a sibling help provider,
-2. confirm whether the response shape above is sufficient for first editor/signature-help use,
-3. identify any field that OxFunc considers semantic truth versus presentation-only prose,
-4. state how runtime-registered extension functions should appear under snapshot identity in that packet.
-
-Current OxFml working rule:
-1. this lane should reopen only as a bounded editor/help packet round,
-2. it should not reopen broader callable/carrier debates already deferred elsewhere.
-
-## 25. Current Processed Response To The OxFunc Seam-Test Artifact Request
-OxFml has now processed the newest OxFunc note as materially convergent on the remaining seam-freeze packets and as introducing one concrete new integration ask: a real OxFml-backed preparation/evaluation adapter artifact.
-
-What OxFml incorporates directly:
-1. the current `W041`, `W042`, and `W043` packets are still the right bounded freeze lanes,
-2. the current `W044` export remains the right pinned downstream snapshot artifact for first adapter and fixture pinning,
-3. the newest useful next step is not another broad callable/catalog note round,
-4. the newest useful next step is an OxFml-backed adapter and pinned seam-fixture family that can drive OxFunc against the real OxFml preparation path.
-
-Current OxFml best-effort proposal:
-1. OxFml will treat the first adapter artifact as a bounded test/integration packet rather than as the normative production host API,
-2. the first adapter request should accept at minimum:
-   - `formula_text`
-   - `formula_channel`
-   - `caller_anchor`
-   - optional `active_selection_anchor`
-   - a deterministic `cell_fixture`
-   - optional defined-name bindings
-   - optional table packet inputs
-   - optional typed context/query bundle
-   - optional pinned `library_context_snapshot_ref`,
-3. the first adapter output should preserve three artifact families:
-   - preparation artifact
-   - end-to-end evaluation artifact
-   - mismatch report artifact,
-4. OxFml wants fixture families organized by seam pressure rather than only by function name:
-   - prepared-argument/reference lanes
-   - callable lanes
-   - host/provider lanes
-   - snapshot/catalog lanes,
-5. worksheet `CALL` / `REGISTER.ID`, richer publication families, and broader interoperable callable transport should remain explicitly deferred from the first adapter wave.
-
-Current OxFml reply back to OxFunc:
-1. yes, OxFml agrees the concrete adapter artifact is the right next closure step,
-2. yes, OxFml will treat it as downstream of the already-converged freeze candidates under `W041`, `W042`, and `W043`,
-3. yes, OxFml prefers to use the committed `W044` snapshot/export as the first pinning artifact while continuing to model the runtime provider/snapshot seam in parallel,
-4. no, OxFml does not want the adapter artifact to become the normative production host interface,
-5. no, OxFml does not want the first fixture wave to silently pull in deferred packets such as worksheet `CALL` / `REGISTER.ID`.
-
-Current next OxFml owners:
-1. `W049` OxFunc preparation adapter and consumer harness
-2. `W050` OxFunc snapshot-pinned seam fixture families
-
-Working rule for the next bounded rounds:
-1. use `W049` and `W050` to surface concrete packet or field mismatches,
-2. report only those concrete mismatches back to OxFunc,
-3. do not reopen already-converged callable sufficiency or first-freeze working-rule questions unless the adapter or fixture corpus exposes a real contradiction.
-
-## 26. Current Processed Response To OxFunc's Adapter-Acceptance Round
-OxFml has now processed the newest OxFunc note as a convergence pass on the adapter artifact rather than as a new seam redirection.
-
-What OxFml incorporates directly:
-1. OxFunc accepts the bounded-adapter posture and does not treat the adapter as the normative production host API,
-2. OxFunc accepts the richer OxFml request shape, but narrows the first exercised wave:
-   - `formula_channel` is acceptable but not first-wave significant,
-   - `active_selection_anchor` remains optional and unevidenced in the current first 38 scenarios,
-   - defined-name and table packet inputs may remain empty in the first wave unless OxFml chooses to exercise those lanes,
-   - the typed capability bundle is acceptable, but the first wave only materially needs `LocaleFormatContext`,
-3. OxFunc wants the adapter implementation itself to answer the remaining practical questions around:
-   - prepared-operand vocabulary,
-   - `@` behavior,
-   - callable carriers,
-   - callable invocation,
-   rather than another abstract note round,
-4. OxFunc has now published concrete first-freeze artifacts for its side of:
-   - typed context/query bundle (`W047`),
-   - return surface (`W048`),
-   - runtime provider/snapshot model (`W049`),
-5. OxFunc also accepts the bounded editor/help packet direction as non-blocking and lower-priority than the adapter work.
-
-Current OxFml reply back to OxFunc:
-1. yes, OxFml accepts the narrower first-wave reading for the adapter,
-2. yes, OxFml will treat the current pinned first-wave scenario table as the canonical first integration slice; older note-only “38-scenario” wording should be read against the currently published consolidated table, which now enumerates 45 ids,
-3. yes, OxFml will treat the currently published OxFunc `W047`, `W048`, and `W049` artifact sets as the pinned downstream freeze candidates for the first adapter wave,
-4. no, OxFml does not currently have a concrete mismatch against those three OxFunc packet artifacts at note level,
-5. the next honest reply from OxFml should therefore be implementation-facing and mismatch-driven through `W049` and `W050`.
-
-Current next OxFml owners:
-1. `W049` now owns the real OxFml-backed adapter implementation against the current OxFunc `W047` / `W048` / `W049` packet artifacts,
-2. `W050` now owns the first pinned seam-fixture corpus using the current published first-wave scenario table and the committed `W044` snapshot/export,
-3. `W048` editor/help seam work remains a separate lower-priority bounded lane and should not block the adapter wave.
-
-## 27. Current W050 First-Wave Fixture Readback
-OxFml has now exercised the first machine-readable `W050` wave over the real `W049` adapter rather than leaving the first-wave mapping as prose.
-
-What OxFml has now established locally:
-1. the first OxFml-owned pinned fixture corpus exists in machine-readable form,
-2. the admitted local floor is now all 45 scenarios across the current published first-wave table,
-3. the explicit deferred register is now empty,
-4. the local widening that got OxFml here included:
-   - parser correction for inline-array element separation
-   - trailing omitted-argument trimming at the call boundary
-   - wider local semantic metadata (`ROWS`, `COLUMNS`, `PI`, `CONCAT`, `RANDBETWEEN`, `VALUETOTEXT`, `VLOOKUP`)
-   - explicit `@` precedence and scalarization alignment through the OxFunc implicit-intersection operator surface
-   - lambda over-application surfacing as worksheet `#VALUE!` rather than adapter failure
-   - top-level callable publication mapping to worksheet `#CALC!` while preserving internal callable formation
-   - duplicate `LET` binding names surfacing as a stable OxFml bind-time `BindMismatch` rejection
-
-Concrete findings from the first admitted/deferred sweep:
-1. `C12` (`=LAMBDA(x, x+1)`) is now handled as a publication-boundary rule in OxFml: the internal callable value remains honest in evaluation artifacts, while worksheet publication maps the bare top-level callable to `#CALC!`,
-2. `C14` (`=LET(x, 1, x, 2, x)`) is now handled as a bind-time OxFml rule: duplicate `LET` binding names produce a stable bind diagnostic and adapter-visible `BindMismatch` rejection,
-3. no current note-level contradiction has appeared in the pinned OxFunc packet artifacts themselves; the earlier callable publication/reject residuals are now narrowed into explicit local OxFml rules rather than standing seam gaps,
-4. OxFml now reads the published downstream first-wave table as authoritatively 45 ids rather than retaining the older ambiguous “38” wording.
-
-Current OxFml reply back to OxFunc:
-1. the first pinned corpus is now real and deterministic rather than aspirational,
-2. the current local floor should now be read as full OxFml-side coverage of the currently published 45-id first-wave table,
-3. the callable publication and duplicate-`LET` reject tweaks are now explicit OxFml rules rather than note-only interpretation,
-4. the next useful OxFunc-facing discussion should now move off `W049` / `W050` and onto the separate worksheet `CALL` / `REGISTER.ID` boundary under `W052`.
-
-## 28. Current Processed Response To OxFunc's W050 Validation And W046 Narrowing
-OxFml reads the newest OxFunc note as a convergence pass on the admitted `W049` / `W050` adapter wave plus a bounded new ask on worksheet `CALL` / `REGISTER.ID`.
-
-What OxFml incorporates directly:
-1. OxFunc now explicitly confirms that the authoritative pinned first-wave table enumerates 45 scenario ids, not the older note-only 38-scenario planning count,
-2. OxFunc now explicitly accepts the current local `W050` floor as strong integration evidence rather than as a standing seam objection,
-3. OxFunc's earlier residual classification for `C12` and `C14` lined up with the rules OxFml has now implemented locally,
-4. OxFunc does not request another note round for the adapter wave; future mismatch handling should remain artifact-driven through the pinned corpus,
-5. OxFunc does, however, ask for a bounded next clarification round on worksheet `CALL` / `REGISTER.ID` runtime ownership and packet shape.
-
-Current OxFml reply back to OxFunc on the validated `W049` / `W050` lane:
-1. yes, OxFml will now treat the published 45-id table as the authoritative pinned first-wave fixture catalog,
-2. no, `C12` and `C14` are no longer explicit residuals on the OxFml side because the local publication and bind-reject rules are now exercised and pinned in the corpus,
-3. yes, OxFml agrees the next useful adapter/fixed-fixture work should be mismatch-driven rather than note-driven,
-4. no, OxFml does not currently read the validated adapter wave as requiring another broad callable, `@`, or prepared-argument note round.
-
-Current concrete adapter details now exercised locally:
-1. the request packet now carries:
-   - `fixture_case_id`
-   - `formula_stable_id`
-   - `formula_text`
-   - `formula_channel_kind`
-   - `caller_anchor`
-   - optional `active_selection_anchor`
-   - `structure_context_version`
-   - `cell_fixture`
-   - `defined_name_bindings`
-   - `table_catalog`
-   - optional `enclosing_table_ref`
-   - optional `caller_table_region`
-   - `typed_context_query_bundle`
-   - optional `library_context_provider`
-   - optional `library_context_snapshot_ref`
-   - optional `host_query_capability_profile`
-2. the preparation artifact now emits:
-   - frozen query-bundle spec
-   - pinned snapshot ref
-   - syntax diagnostics
-   - bind diagnostics
-   - semantic diagnostics
-   - semantic plan key and bind hash
-   - execution profile and capability requirements
-   - availability summaries
-   - prepared-call frames
-3. the evaluation artifact now emits:
-   - internal `PreparedResult`
-   - published worksheet value
-   - published `ReturnedValueSurface`
-   - candidate result id
-   - commit decision kind
-   - optional reject code
-   - trace event kinds
-4. OxFml now intentionally distinguishes internal callable truth from worksheet publication:
-   - internal bare `LAMBDA(...)` remains a callable value in the evaluation artifact
-   - published worksheet value for the same top-level lane is `#CALC!`
-5. OxFml now intentionally distinguishes bind validation from normal evaluation for duplicate `LET` names:
-   - bind diagnostics record the duplicate binding name
-   - the adapter emits a stable `BindMismatch` rejection rather than treating the case as an ordinary accepted evaluation
-
-Current OxFml best-effort position on the new worksheet `CALL` / `REGISTER.ID` questions:
-1. `RegisteredExternalProvider` should remain separate from `HostInfoProvider`,
-2. the first bounded consumer model should carry `RegisterIdRequest`, `RegisteredExternalDescriptor`, and `RegisteredExternalCallRequest` as direct typed runtime packet lanes rather than only as library-context snapshot rows,
-3. OxFml now reads worksheet `CALL` as following the same broad consumer-owned rule already used for built-ins: OxFml preserves reference-visible versus dereferenced prepared-argument lanes, while OxFunc-owned function semantics decide whether a reference is consumed as a reference, dereferenced first, or further coerced,
-4. that means `RegisteredExternalDescriptor` or equivalent direct-call metadata should be available to OxFunc so it can decide dereference and general type-conversion policy per registration,
-5. OxFml does not currently see a mismatch with the reading that worksheet `CALL` runtime stays above OxFunc except for request normalization, descriptor-driven argument handling, and worksheet-visible result projection,
-6. the library-context snapshot/runtime-provider lane may still carry capability or registration-profile truth, but not the per-request runtime registration and invocation packet in place of those direct typed lanes.
-
-Current next OxFml owner for that new bounded lane:
-1. `W052` worksheet `CALL` / `REGISTER.ID` provider and packet boundary
-
-Working rule after this note:
-1. treat `W049` / `W050` as converged enough for mismatch-driven continuation rather than more broad note exchange,
-2. use `W052` for the next bounded OxFml/OxFunc clarification round on worksheet `CALL` / `REGISTER.ID`,
-3. keep worksheet `CALL` / `REGISTER.ID` outside the already-validated first adapter wave until `W052` narrows the packet and ownership boundary.
-
-## 29. Current Processed Response To The March 26 Residual Adapter Observations
-OxFml has now processed the newest OxFunc residual note and taken the two concrete local asks through the real adapter path.
-
-What OxFml has changed locally:
-1. unary signed literals now parse and bind as real prefix operators on the OxFml side,
-2. explicit `@` implicit-intersection precedence remains range-level rather than generic prefix-level, so the already-admitted `@A1:A3`, `@A1:C1`, and `@A1:B2` lanes remain aligned,
-3. absent ordinary single-cell worksheet references in the local stand-in resolver now materialize as true blank-cell stand-ins rather than unresolved-reference failures,
-4. OxFml keeps that blank distinct from empty text by materializing it as a scalar empty-cell value through the reference-resolution seam and normalizing it to `CallArgValue::EmptyCell` where the adapter needs a worksheet-visible scalar stand-in.
-
-Concrete local evidence now exercised:
-1. `=SIGN(-5)` now evaluates to `-1`,
-2. `=PV(0.05,10,-100)` now evaluates successfully through the ordinary adapter/evaluator path,
-3. `=FV(0.05,10,-100)` now evaluates successfully through the ordinary adapter/evaluator path,
-4. `=ISBLANK(A9)` with no `A9` fixture now evaluates to `TRUE`,
-5. the blank single-cell stand-in also now exercises correctly for `N(A9)` and `TYPE(A9)` in the local evaluator evidence,
-6. the admitted `W050` implicit-intersection scenarios `B01`, `B02`, and `B06` remain green after the prefix/operator fix.
-
-Current OxFml reply back to OxFunc:
-1. yes, OxFml agrees the negative-literal issue was a local parser/binder seam issue and it is now corrected locally,
-2. yes, OxFml agrees the single-cell stand-in path should align with existing area-expansion blank behavior and it is now corrected locally,
-3. no, OxFml did not collapse true blank to empty string; the local rule preserves a distinct blank-cell stand-in so `ISBLANK`, `N`, `T`, `TYPE`, and similar prepared-argument lanes can continue to distinguish blank from text,
-4. no new broader callable/catalog note lane is opened by this correction,
-5. the next bounded OxFunc-facing lane remains `W052` worksheet `CALL` / `REGISTER.ID`.
-
-Current local evidence files:
-1. [evaluator_tests.rs](C:/Work/DnaCalc/OxFml/crates/oxfml_core/tests/evaluator_tests.rs)
-2. [w049_oxfunc_adapter_tests.rs](C:/Work/DnaCalc/OxFml/crates/oxfml_core/tests/w049_oxfunc_adapter_tests.rs)
-3. [w050_oxfunc_pinned_fixture_tests.rs](C:/Work/DnaCalc/OxFml/crates/oxfml_core/tests/w050_oxfunc_pinned_fixture_tests.rs)
-
-## 30. Current W052 Registered-External Runtime Packet Read
-OxFml has now taken the worksheet `CALL` / `REGISTER.ID` lane through a first local exercised packet rather than leaving it at note-draft level.
-
-Current local packet and evidence floor:
-1. typed context/query bundle now carries optional `RegisteredExternalProvider`,
-2. evaluation now passes that provider into OxFunc's real `CALL` / `REGISTER.ID` dispatch path,
-3. first local host-facing support now exists through:
-   - `SingleFormulaHost::recalc_with_registered_external_provider(...)`
-   - `SingleFormulaHost::apply_registered_external_catalog_mutation(...)`,
-4. deterministic local evidence now exists for:
-   - worksheet `REGISTER.ID`,
-   - worksheet `CALL`,
-   - reference-visible `CALL` arguments,
-   - host API registration,
-   - VBA shim registration,
-   - unregister packet carriage.
-
-Current sharpened OxFml ownership read:
+9. broader higher-order helper coverage beyond the currently exercised `MAP` / `REDUCE` / `SCAN` / `BYROW` / `BYCOL` / `MAKEARRAY` lanes.
+
+## 8. Current Requests To OxFunc
+
+The next useful OxFunc-side outputs for OxFml are:
+1. keep the current library-context export stable enough for bounded OxFml-side consumption until the runtime interface replaces it,
+2. identify which callable-value facts OxFunc would need beyond the current helper summary carrier,
+3. identify whether any currently expected function traits are still missing from the semantic-plan profile,
+4. identify whether the present host-query capability split is already enough for the next `CELL` / `INFO` tightening pass,
+5. align the runtime/provider-consumer library-context model before widening note traffic further.
+
+## 9. Current Summary
+
+Current OxFml position to OxFunc:
+1. the first adapter wave is real and exercised,
+2. semantic distinctions around helper forms, callable values, scalarization, blankness, and host-query sensitivity remain intentional and should be preserved,
+3. the March 26 unary-negative-literal and blank single-cell issues are closed locally on the OxFml side,
+4. the recent `ASINH` / `PV` / `FV` / `PMT` cleanup is understood as OxFunc-local and repaired there,
+5. the main remaining joint topic is no longer historical residual cleanup; it is convergence on the runtime library-context and the still-open callable/provenance/profile vocabularies.
+
+## 10. Current W052 Plan After OxFunc's Latest Note
+
+OxFml reads the latest OxFunc note as:
+1. confirming that `W049` / `W050` should remain mismatch-driven rather than reopening broad seam debate,
+2. confirming that the March 26 unary-negative and blank single-cell residuals are closed on the OxFml side,
+3. narrowing the live open packet back to worksheet `CALL` / `REGISTER.ID` runtime ownership under `W052`.
+
+### 10.1 Current direct answers to OxFunc's bounded questions
+Current OxFml read of OxFunc's three bounded questions is:
+1. yes, `RegisteredExternalProvider` should remain separate from `HostInfoProvider`,
+2. yes, the first bounded runtime packet should carry direct typed runtime packets rather than only snapshot rows,
+3. yes, OxFml still sees worksheet `CALL` runtime as staying above OxFunc except for request normalization, descriptor-driven argument handling, runtime registration truth, and worksheet-visible result projection.
+
+### 10.2 Current ownership split
+Current sharpened OxFml ownership split is:
 1. built-in function and operator catalog truth remains OxFunc-owned,
 2. runtime registered-external catalog truth also remains OxFunc-owned,
 3. OxFml should not maintain a competing host-local function catalog,
-4. host-side registration channels should instead be normalized into OxFunc-owned mutation packets,
-5. the initiating channel still matters and should remain explicit on the OxFml side:
-   - `WorksheetRegisterId`
-   - `HostApiRegistration`
-   - `VbaProjectShimRegistration`.
+4. OxFml owns formula parsing, bind classification, typed request normalization, and worksheet-visible consequence classification,
+5. OxCalc or a direct host owns higher-level external-library policy, security policy, and source-specific registration initiation,
+6. worksheet `REGISTER.ID`, host API registration, and VBA shim registration are distinct initiating channels that should converge on the same OxFunc-owned catalog mutation seam,
+7. unregister should use that same bounded seam rather than a host-local side path.
 
-Current bounded packet read:
-1. worksheet runtime packet:
-   - `RegisterIdRequest`
-   - `RegisteredExternalDescriptor`
-   - `RegisteredExternalCallRequest`
-   - `RegisteredExternalProvider`,
-2. host mutation packet:
-   - `RegisteredExternalCatalogMutationRequest::{ Register, Unregister }`
-   - `RegisteredExternalCatalogMutationResult::{ RegisterApplied, UnregisterApplied }`
-   - `RegisteredExternalCatalogController`,
-3. OxFml now treats those mutation packets as host-facing funnel surfaces into OxFunc-owned catalog mutation logic rather than as evidence that OxFml owns the catalog.
+### 10.3 Current registration-channel plan
+Current OxFml plan is that registered external functions may enter or leave the OxFunc-owned runtime catalog through three registration channels plus one symmetric removal lane:
+1. worksheet `REGISTER.ID`
+   - initiated from formula evaluation,
+   - normalized by OxFml into a `RegisterIdRequest`,
+   - resolved through `RegisteredExternalProvider::resolve_register_id(...)`,
+   - yields descriptor truth later used by worksheet `CALL`,
+2. host API registration
+   - initiated by a host-side API call,
+   - normalized by OxFml into `RegisteredExternalCatalogMutationRequest::Register(...)`,
+   - may preserve richer host hints such as display/help text or execution profile,
+3. VBA shim registration
+   - initiated after host-owned VBA project loading,
+   - normalized through the same `Register(...)` mutation packet,
+   - preserves source-project, source-module, and source-procedure provenance,
+4. unregister
+   - normalized by OxFml into `RegisteredExternalCatalogMutationRequest::Unregister(...)`,
+   - preserves initiating channel plus stable registration identity,
+   - leaves resulting catalog truth and any snapshot-generation effects OxFunc-owned.
 
-Current descriptor-driven rule:
-1. OxFml preserves reference-visible versus dereferenced prepared-argument lanes,
-2. OxFunc-side descriptor or direct-call metadata should decide dereference and general worksheet-to-external type conversion,
-3. OxFml should not pre-flatten those rules into one eager value lane at the worksheet boundary.
+### 10.4 Current first bounded typed packet
+Current OxFml proposal is that the first bounded runtime packet should carry these direct typed lanes:
+1. `RegisterIdRequest`
+2. `RegisteredExternalDescriptor`
+3. `RegisteredExternalCallRequest`
+4. `RegisteredExternalProvider`
+5. `RegisteredExternalCatalogMutationRequest`
+6. `RegisteredExternalCatalogMutationResult`
+7. `RegisteredExternalCatalogController`
 
-Current OxFml reply back to OxFunc:
-1. yes, the local packet now matches the earlier descriptor-driven registration reading,
-2. yes, OxFml now treats host API registration and VBA shim registration as first-class initiating channels that still converge on OxFunc-owned catalog truth,
-3. yes, unregister should use the same bounded mutation seam rather than a host-local side path,
-4. no, OxFml still does not read this as permission to make the runtime library-context snapshot the sole carrier of live register/unregister and invocation packets,
-5. the next useful OxFunc response should be only concrete packet-field or ownership mismatches inside this narrower `W052` surface.
+Current OxFml reading of those packet families is:
+1. they are runtime request/result packets, not merely library-context snapshot metadata,
+2. they should cross the seam directly wherever the host/runtime path needs them,
+3. the runtime library-context snapshot may still carry admission/profile truth about whether worksheet `CALL` / `REGISTER.ID` is admitted or gated in a given environment,
+4. the snapshot/provider layer should not be the only place where per-request registration, invocation, and unregister packets can be observed.
+
+### 10.5 Current packet-shape proposal
+Current best-effort OxFml packet split is:
+
+#### `RegisterIdRequest`
+1. `library_name`
+2. `procedure_name`
+3. optional `type_text`
+4. `caller_anchor`
+5. optional `host_execution_profile`
+
+#### `RegisteredExternalDescriptor`
+1. `register_id`
+2. `library_name`
+3. `procedure_name`
+4. optional `type_text`
+5. `descriptor_state`
+6. any registration facts required by OxFunc to decide reference-dereference and general worksheet-to-external type coercion
+
+#### `RegisteredExternalCallRequest`
+1. `target_kind`
+   - `RegisterId`
+   - `DirectLibraryProcedure`
+2. optional `register_id`
+3. optional `library_name`
+4. optional `procedure_name`
+5. optional `type_text`
+6. `normalized_arguments`
+7. `caller_anchor`
+8. optional `host_execution_profile`
+9. optional `descriptor_ref`
+
+#### `RegisteredExternalProvider`
+1. `resolve_register_id`
+2. `describe_registration`
+3. `invoke_registered`
+4. `invoke_direct`
+
+#### `RegisteredExternalCatalogMutationRequest`
+1. `Register`
+   - `registration_channel`
+   - `register_id_request`
+   - optional `stable_registration_id_hint`
+   - optional `display_name_hint`
+   - optional `help_text_hint`
+   - optional VBA source provenance
+   - optional `host_execution_profile`
+2. `Unregister`
+   - `registration_channel`
+   - `stable_registration_id`
+   - optional `host_execution_profile`
+
+#### `RegisteredExternalCatalogMutationResult`
+1. `RegisterApplied`
+   - `descriptor`
+   - optional `host_execution_profile`
+2. `UnregisterApplied`
+   - `stable_registration_id`
+   - optional `host_execution_profile`
+
+#### `RegisteredExternalCatalogController`
+1. host-facing OxFml funnel surface that applies a typed mutation packet into OxFunc-owned catalog mutation logic,
+2. not a claim that OxFml owns catalog mutation semantics,
+3. intended to preserve the initiating channel while OxFunc remains the owner of resulting catalog truth.
+
+### 10.6 Current reference and conversion plan
+Current OxFml plan is that worksheet `CALL` should follow the same broad principle already used for built-ins:
+1. OxFml should not globally dereference references before call dispatch,
+2. OxFml should preserve reference-visible prepared arguments where runtime descriptor truth may require them,
+3. OxFunc should be able to consult registration metadata or direct-call metadata to decide:
+   - whether a reference must remain reference-visible,
+   - whether a reference should be dereferenced before native invocation,
+   - which general worksheet-to-external type coercions apply,
+4. worksheet `CALL` should therefore not get a special OxFml-only eager-dereference rule.
+
+Current implication:
+1. `RegisteredExternalDescriptor` must be rich enough for OxFunc to see argument-policy-relevant registration facts,
+2. the bounded runtime packet must let OxFunc obtain that descriptor for register-id targets and direct-call targets,
+3. descriptor-driven dereference and general type conversion should stay OxFunc-owned rather than being pre-flattened in OxFml.
+
+### 10.7 Current invalidation and snapshot-generation plan
+Current OxFml reading is that not every registration is the same class of change.
+
+The current split is:
+1. bind-visible function registration or unregister
+   - should be treated like structural change,
+   - should produce a new `LibraryContextSnapshot`,
+   - should invalidate formulas pinned to the earlier bind-visible function world where affected,
+2. defined-name add/remove/rename/reclassification
+   - should be treated the same broad way for invalidation,
+   - remains structure-context-owned rather than OxFunc-owned,
+3. registered-external descriptor mutation used only through worksheet `CALL` / `REGISTER.ID`
+   - should normally be a narrower reevaluation lane,
+   - should not force broad rebinding unless it also changes the bind-visible function-name world.
+
+Current recommended indexing consequences are:
+1. keep explicit usage indexes for function surface names, canonical ids, and unresolved function identifiers,
+2. keep explicit usage indexes for defined-name identifiers and unresolved name identifiers,
+3. keep explicit usage indexes for worksheet `CALL`, worksheet `REGISTER.ID`, stable registration ids, and direct `{ library, procedure, type_text }` triples,
+4. let invalidation follow the world that actually changed rather than collapsing all runtime registration into one universal rebuild rule.
+
+### 10.8 Current local exercised floor
+Current local evidence for this narrower lane exists in:
+1. `crates/oxfml_core/tests/w052_registered_external_interface_tests.rs`
+2. `docs/spec/formula-language/OXFML_REGISTERED_EXTERNAL_PROVIDER_AND_CALL_REGISTER_ID_BOUNDARY.md`
+3. `docs/spec/formula-language/OXFML_NAME_WORLD_AND_RUNTIME_REGISTRATION_INVALIDATION.md`
+
+The currently exercised local packet floor includes:
+1. worksheet `REGISTER.ID`,
+2. worksheet `CALL`,
+3. reference-visible `CALL` arguments,
+4. host API registration,
+5. VBA shim registration,
+6. unregister packet carriage.
+
+### 10.9 Current specific requests back to OxFunc
+The next useful OxFunc replies for `W052` are:
+1. confirm whether the packet split above is the right first shared runtime packet,
+2. identify any descriptor fields OxFunc needs beyond the current best-effort `RegisteredExternalDescriptor` sketch to decide dereference and general type coercion,
+3. identify whether `RegisterIdRequest` needs any additional normalized fields beyond `{ library_name, procedure_name, type_text, caller_anchor, host_execution_profile }`,
+4. state whether OxFunc wants registration-channel provenance preserved exactly as `WorksheetRegisterId`, `HostApiRegistration`, and `VbaProjectShimRegistration` or under a narrower shared vocabulary,
+5. state the minimum OxFunc-visible consequences of register/unregister on `LibraryContextSnapshot` generation,
+6. identify any exact field names OxFunc wants frozen now rather than left as best-effort placeholders.
+
+### 10.10 Current remaining note-level open topics
+Current remaining `W052` note-level open topics are:
+1. exact shared field naming,
+2. the smallest final shared `RegisteredExternalDescriptor` field set,
+3. minimum snapshot-generation consequences of register/unregister,
+4. any later coordinator-visible consequences if OxCalc needs the same packet sharpened further.
