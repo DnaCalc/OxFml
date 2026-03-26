@@ -458,3 +458,42 @@ Current processed OxFunc reading:
    - typed query/result mismatch,
    - returned-surface factoring mismatch,
    - runtime consumer versus export-mapping mismatch.
+
+## 16. Artifact-Driven Closure Lane
+The next bounded OxFml/OxFunc closure round should now be driven by a real OxFml-backed evaluation adapter and pinned seam-fixture families rather than more broad seam theory.
+
+Current OxFml proposal:
+1. the adapter should drive the real OxFml parse -> bind -> semantic-plan -> prepare path,
+2. the adapter should preserve the current freeze-candidate packets under `W041`, `W042`, and `W043`,
+3. the committed `W044` export should be the first pinning artifact for adapter fixtures and mismatch reports,
+4. the adapter should emit structured mismatch artifacts rather than relying on prose-only discrepancy reports.
+
+Current working rule:
+1. use the adapter and fixture corpus to expose concrete packet or field mismatches,
+2. treat those mismatches as the only honest trigger for further seam narrowing,
+3. keep deferred runtime packets such as worksheet `CALL` / `REGISTER.ID` outside the first adapter floor unless their owning lanes narrow first.
+
+Current first local owners:
+1. `W049` OxFunc preparation adapter and consumer harness
+2. `W050` OxFunc snapshot-pinned seam fixture families
+
+## 17. Registered External Runtime Boundary
+Worksheet `CALL` / `REGISTER.ID` should remain a separate bounded runtime lane rather than being silently folded into host-info or catalog packets.
+
+Current OxFml best-effort reading:
+1. `RegisteredExternalProvider` should remain separate from `HostInfoProvider`,
+2. `RegisterIdRequest`, `RegisteredExternalDescriptor`, and `RegisteredExternalCallRequest` should cross the runtime boundary directly where needed,
+3. the runtime library-context snapshot/provider lane may still carry admission or profile truth for worksheet `CALL` / `REGISTER.ID`, but it should not replace those direct per-request runtime packets,
+4. worksheet `CALL` runtime should stay above OxFunc except for request normalization and worksheet-visible result projection unless later concrete evidence forces a narrower split.
+
+Current owner:
+1. `W052` registered external provider and worksheet `CALL` / `REGISTER.ID` boundary
+
+## 18. Callable Publication And Duplicate-LET Validation Tweaks
+The earlier first-wave residuals `C12` and `C14` are now narrowed as explicit OxFml-side boundary rules rather than standing seam ambiguity.
+
+Current stabilized reading:
+1. internal callable formation remains honest across the OxFml/OxFunc seam, including bare `LAMBDA(...)` values,
+2. worksheet publication of a top-level callable value in the ordinary cell lane maps to worksheet `#CALC!` on the OxFml host/publication side rather than forcing OxFunc to pretend the callable never formed,
+3. duplicate `LET` binding names are rejected by OxFml at bind time and surface as a stable `BindMismatch` rejection artifact rather than falling through to normal evaluation,
+4. these two rules close the first-wave callable publication/reject residuals without reopening the narrower callable-carrier and invocation questions that remain under the other seam packets.

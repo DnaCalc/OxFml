@@ -97,8 +97,25 @@ impl Parser {
     }
 
     fn parse_additive(&mut self, allow_union_comma: bool) -> GreenNode {
-        let mut left = self.parse_union(allow_union_comma);
+        let mut left = self.parse_multiplicative(allow_union_comma);
         while self.at(TokenKind::Plus) || self.at(TokenKind::Minus) {
+            let op = self.bump();
+            let right = self.parse_multiplicative(allow_union_comma);
+            left = GreenNode::new(
+                SyntaxKind::BinaryExpr,
+                vec![
+                    GreenChild::Node(Box::new(left)),
+                    GreenChild::Token(op),
+                    GreenChild::Node(Box::new(right)),
+                ],
+            );
+        }
+        left
+    }
+
+    fn parse_multiplicative(&mut self, allow_union_comma: bool) -> GreenNode {
+        let mut left = self.parse_union(allow_union_comma);
+        while self.at(TokenKind::Star) || self.at(TokenKind::Slash) {
             let op = self.bump();
             let right = self.parse_union(allow_union_comma);
             left = GreenNode::new(
@@ -156,6 +173,16 @@ impl Parser {
     }
 
     fn parse_range(&mut self) -> GreenNode {
+        self.skip_whitespace();
+        if self.at(TokenKind::At) {
+            let at = self.bump();
+            let expr = self.parse_range();
+            return GreenNode::new(
+                SyntaxKind::PrefixExpr,
+                vec![GreenChild::Token(at), GreenChild::Node(Box::new(expr))],
+            );
+        }
+
         let mut left = self.parse_prefix();
         loop {
             if self.at(TokenKind::Colon) {
@@ -203,16 +230,7 @@ impl Parser {
 
     fn parse_prefix(&mut self) -> GreenNode {
         self.skip_whitespace();
-        if self.at(TokenKind::At) {
-            let at = self.bump();
-            let expr = self.parse_prefix();
-            GreenNode::new(
-                SyntaxKind::PrefixExpr,
-                vec![GreenChild::Token(at), GreenChild::Node(Box::new(expr))],
-            )
-        } else {
-            self.parse_postfix()
-        }
+        self.parse_postfix()
     }
 
     fn parse_primary(&mut self) -> GreenNode {
@@ -264,6 +282,7 @@ impl Parser {
                     ],
                 )
             }
+            TokenKind::LBrace => self.parse_array_literal(),
             _ => {
                 let token = self.current().clone();
                 self.diagnostics.push(SyntaxDiagnostic {
@@ -292,11 +311,20 @@ impl Parser {
         self.skip_whitespace();
         if !self.at(TokenKind::RParen) {
             while !self.at(TokenKind::RParen) && !self.at(TokenKind::Eof) {
-                args_children.push(GreenChild::Node(Box::new(self.parse_expression(false))));
+                if self.at(TokenKind::Comma) {
+                    args_children.push(GreenChild::Node(Box::new(self.omitted_argument_node())));
+                } else {
+                    args_children.push(GreenChild::Node(Box::new(self.parse_expression(false))));
+                }
                 self.skip_whitespace();
                 if self.at(TokenKind::Comma) {
                     args_children.push(GreenChild::Token(self.bump()));
                     self.skip_whitespace();
+                    if self.at(TokenKind::RParen) {
+                        args_children
+                            .push(GreenChild::Node(Box::new(self.omitted_argument_node())));
+                        break;
+                    }
                 } else {
                     break;
                 }
@@ -305,6 +333,31 @@ impl Parser {
         let close = self.expect(TokenKind::RParen, "expected ')'");
         args_children.push(GreenChild::Token(close));
         GreenNode::new(SyntaxKind::ArgumentList, args_children)
+    }
+
+    fn parse_array_literal(&mut self) -> GreenNode {
+        let open = self.expect(TokenKind::LBrace, "expected '{'");
+        let mut children = vec![GreenChild::Token(open)];
+        self.skip_whitespace();
+        while !self.at(TokenKind::RBrace) && !self.at(TokenKind::Eof) {
+            // Inside array literals, comma and semicolon are element/row separators, not union
+            // operators, so parse each element with union-comma disabled.
+            children.push(GreenChild::Node(Box::new(self.parse_expression(false))));
+            self.skip_whitespace();
+            if self.at(TokenKind::Comma) || self.at(TokenKind::Semicolon) {
+                children.push(GreenChild::Token(self.bump()));
+                self.skip_whitespace();
+            } else {
+                break;
+            }
+        }
+        let close = self.expect(TokenKind::RBrace, "expected '}'");
+        children.push(GreenChild::Token(close));
+        GreenNode::new(SyntaxKind::ArrayLiteralExpr, children)
+    }
+
+    fn omitted_argument_node(&self) -> GreenNode {
+        GreenNode::new(SyntaxKind::OmittedArgExpr, Vec::new())
     }
 
     fn at(&self, kind: TokenKind) -> bool {
@@ -334,6 +387,7 @@ impl Parser {
                 | TokenKind::Number
                 | TokenKind::At
                 | TokenKind::LParen
+                | TokenKind::LBrace
         )
     }
 

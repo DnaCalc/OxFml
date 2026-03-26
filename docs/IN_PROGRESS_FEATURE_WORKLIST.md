@@ -3,7 +3,7 @@
 Canonical repo-level register of feature areas that are in-progress under workset completion doctrine.
 
 Status: active.
-Last updated: 2026-03-24.
+Last updated: 2026-03-25.
 
 ## Status Vocabulary
 
@@ -95,3 +95,27 @@ Last updated: 2026-03-24.
 - **Remaining gaps**: no OxFunc-backed help/signature payload retrieval exists yet; no shared host/OxCalc immutable formula-edit packet is frozen yet; no shared host-facing packet for validated intelligent-completion results is frozen yet; editor packet evidence is deterministic local evidence rather than replay-appliance projection.
 - **Why still open**: the real internal OxFml mechanics are now materially stronger, but the broader editor-grade host integration surface still depends on OxFunc help-metadata freezing, OxCalc/host immutable-edit packet freezing, and later evidence projection beyond the current local deterministic fixture floor.
 - **Canonical owner**: active owner `W048`.
+
+### IP-13: OxFunc Seam Integration Adapter And Fixture Artifacts
+
+- **Status**: in-progress
+- **Current floor**: the OxFml/OxFunc seam is converged enough at note level around `W041`, `W042`, `W043`, and the committed `W044` snapshot/export that OxFunc now wants a real OxFml-backed preparation/evaluation adapter and pinned seam-fixture corpus rather than continued mock-only confidence. A first local adapter floor now exists in `crates/oxfml_core/src/oxfunc_adapter/mod.rs`, projecting canonical preparation, evaluation, and mismatch artifacts over the real `SingleFormulaHost` path while preserving `TypedContextQueryBundle`, `ReturnedValueSurface`, and runtime library-context snapshot refs. Deterministic local evidence exists in `crates/oxfml_core/tests/w049_oxfunc_adapter_tests.rs` for direct-scalar vs array-like preparation, caller-anchor carriage, pinned snapshot selection, typed `RTD` provider outcomes, and structured mismatch packets. A first local pinned `W050` fixture corpus now exists in `crates/oxfml_core/tests/fixtures/w050_oxfunc_admitted_fixture_cases.json` plus `crates/oxfml_core/tests/fixtures/w050_oxfunc_deferred_fixture_register.json`, exercised by `crates/oxfml_core/tests/w050_oxfunc_pinned_fixture_tests.rs`.
+- **Remaining gaps**: the authoritative published first-wave table is now confirmed by OxFunc to be 45 scenario ids and the local machine-readable corpus now admits all 45 of those ids; mismatch reporting against downstream packet artifacts is still narrow; worksheet `CALL` / `REGISTER.ID` remains outside the first adapter floor and now has a separate bounded owner.
+- **Why still open**: `W049` now has a real local adapter artifact and `W050` now covers the whole current pinned scenario table with explicit OxFml-side publication and bind-reject rules for the former `C12`/`C14` residuals, but broader packet-diff scaling and the next runtime lane under `W052` still remain.
+- **Canonical owner**: active owners `W049`, `W050`, and `W052`.
+
+### IP-15: Worksheet CALL And REGISTER.ID Runtime Boundary
+
+- **Status**: planned
+- **Current floor**: the latest OxFunc note isolates worksheet `CALL` / `REGISTER.ID` as the next bounded OxFml/OxFunc runtime lane and asks three concrete questions about provider separation, packet carriage, and runtime ownership. OxFml now has a first best-effort boundary draft in `docs/spec/formula-language/OXFML_REGISTERED_EXTERNAL_PROVIDER_AND_CALL_REGISTER_ID_BOUNDARY.md`.
+- **Remaining gaps**: no local harness or fixture evidence exists yet; OxCalc has not yet been asked to react to the same bounded packet; the exact field set and runtime/provider split are not yet frozen.
+- **Why still open**: this lane was intentionally kept outside the validated `W049` / `W050` first adapter wave and now needs its own bounded owner rather than floating note debt.
+- **Canonical owner**: planned owner `W052`.
+
+### IP-14: Fixture Host And Coordinator Stand-In Packet
+
+- **Status**: planned
+- **Current floor**: the current OxFml/OxCalc host/runtime packet is converged enough for first-slice implementation planning, and the new OxFunc-facing adapter/fixture work makes it explicit that some deterministic test inputs are really stand-ins for host/coordinator-owned truths rather than pure evaluator-owned scaffolding.
+- **Remaining gaps**: no canonical stand-in host/coordinator packet exists yet; no OxCalc review pass has been executed against that packet; the boundary between fixture-host reuse and coordinator API freeze is still implicit.
+- **Why still open**: the next useful work is a bounded OxCalc seam round on the stand-in packet, now owned by `W051`.
+- **Canonical owner**: planned owner `W051`.

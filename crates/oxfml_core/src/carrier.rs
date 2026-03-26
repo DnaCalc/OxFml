@@ -138,6 +138,9 @@ fn collect_expr_restrictions(expr: &BoundExpr, restrictions: &mut Vec<CarrierRes
         BoundExpr::ImplicitIntersection(inner) => collect_expr_restrictions(inner, restrictions),
         BoundExpr::NumberLiteral(_)
         | BoundExpr::StringLiteral(_)
+        | BoundExpr::LogicalLiteral(_)
+        | BoundExpr::ArrayLiteral(_)
+        | BoundExpr::OmittedArgument
         | BoundExpr::HelperParameterName(_) => {}
     }
 }

@@ -17,9 +17,14 @@ pub fn lex(input: &str) -> Vec<Token> {
             ':' => simple(TokenKind::Colon, ch, start),
             '+' => simple(TokenKind::Plus, ch, start),
             '-' => simple(TokenKind::Minus, ch, start),
+            '*' => simple(TokenKind::Star, ch, start),
+            '/' => simple(TokenKind::Slash, ch, start),
             '@' => simple(TokenKind::At, ch, start),
             '#' => simple(TokenKind::Hash, ch, start),
             '!' => simple(TokenKind::Bang, ch, start),
+            '{' => simple(TokenKind::LBrace, ch, start),
+            '}' => simple(TokenKind::RBrace, ch, start),
+            ';' => simple(TokenKind::Semicolon, ch, start),
             '\'' => {
                 index += 1;
                 while index < chars.len() {

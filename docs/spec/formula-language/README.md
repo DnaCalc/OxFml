@@ -13,8 +13,10 @@ This directory contains the canonical OxFml formula-language design documents pl
 8. `OXFML_HOST_MANAGED_NAME_AND_EXTERNAL_NAME_BOUNDARY.md`
 9. `OXFML_STRUCTURED_REFERENCE_AND_TABLE_BOUNDARY.md`
 10. `OXFML_EDITOR_LANGUAGE_SERVICE_AND_HOST_INTEGRATION_PLAN.md`
-11. `EXCEL_FORMULA_LANGUAGE_CONCRETE_RULES.md`
-12. `EXCEL_FORMULA_LANGUAGE_CONFORMANCE_MATRIX.csv`
+11. `OXFML_OXFUNC_EVALUATION_ADAPTER_AND_TEST_ARTIFACTS.md`
+12. `OXFML_REGISTERED_EXTERNAL_PROVIDER_AND_CALL_REGISTER_ID_BOUNDARY.md`
+13. `EXCEL_FORMULA_LANGUAGE_CONCRETE_RULES.md`
+14. `EXCEL_FORMULA_LANGUAGE_CONFORMANCE_MATRIX.csv`
 
 ## Canonical documents
 - `OXFML_FORMULA_ENGINE_ARCHITECTURE.md`
@@ -39,6 +41,10 @@ This directory contains the canonical OxFml formula-language design documents pl
   draft implementation-facing seam for host-owned table metadata and OxFml-managed structured-reference semantics.
 - `OXFML_EDITOR_LANGUAGE_SERVICE_AND_HOST_INTEGRATION_PLAN.md`
   extended-scope plan for editor-grade green trees, live diagnostics, function help, completion, and immutable host integration.
+- `OXFML_OXFUNC_EVALUATION_ADAPTER_AND_TEST_ARTIFACTS.md`
+  first OxFml-side proposal for the real preparation adapter and pinned seam-fixture artifacts OxFunc can consume.
+- `OXFML_REGISTERED_EXTERNAL_PROVIDER_AND_CALL_REGISTER_ID_BOUNDARY.md`
+  first bounded OxFml-side worksheet `CALL` / `REGISTER.ID` runtime packet and provider-separation proposal.
 - `EXCEL_FORMULA_LANGUAGE_CONCRETE_RULES.md`
   Excel-facing rule corpus and policy wording.
 - `EXCEL_FORMULA_LANGUAGE_CONFORMANCE_MATRIX.csv`

@@ -8,6 +8,7 @@ pub enum SyntaxKind {
     FormulaRoot,
     NumberLiteralExpr,
     StringLiteralExpr,
+    ArrayLiteralExpr,
     IdentifierExpr,
     QuotedIdentifierExpr,
     QualifiedReferenceExpr,
@@ -21,6 +22,7 @@ pub enum SyntaxKind {
     RangeExpr,
     IntersectionExpr,
     UnionExpr,
+    OmittedArgExpr,
     MissingExpr,
 }
 

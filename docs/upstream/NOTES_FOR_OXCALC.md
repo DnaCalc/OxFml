@@ -574,3 +574,81 @@ Current OxFml ask for the next bounded OxCalc round:
 Current OxFml working rule:
 1. this lane should reopen only as a bounded immutable-edit packet round,
 2. it should not reopen broader host/runtime clarification that is already converged for the first implementation slice.
+
+## 18. New Bounded Round Proposal: Fixture Host And Coordinator Stand-In Packet
+OxFml now has two new OxFunc-facing work lanes:
+1. `W049` OxFunc preparation adapter and consumer harness
+2. `W050` OxFunc snapshot-pinned seam fixture families
+
+Those lanes are nominally OxFunc-facing, but some of their required fixture inputs are actually stand-ins for host/coordinator-owned truths.
+
+Current OxFml read is:
+1. this does not reopen the already-converged first-slice host/runtime packet,
+2. it does create a narrower OxCalc-facing question:
+   - what is the right first deterministic stand-in host/coordinator packet for integration artifacts,
+   - without pretending we have frozen the production OxCalc coordinator API.
+
+Current OxFml best-effort proposal is now documented in:
+1. `docs/spec/OXFML_FIXTURE_HOST_AND_COORDINATOR_STANDIN_PACKET.md`
+
+Current proposed first packet families are:
+1. formula slot facts:
+   - `formula_text`
+   - `formula_channel`
+   - `caller_anchor`
+   - optional `active_selection_anchor`
+   - structure-context identity,
+2. binding-world facts:
+   - `cell_fixture`
+   - optional defined-name bindings
+   - optional table packet inputs,
+3. typed host/query facts:
+   - optional `ReferenceResolver`
+   - optional `HostInfoProvider`
+   - optional `RtdProvider`
+   - optional `RegisteredExternalProvider`
+   - `LocaleFormatContext`
+   - scalar context such as `now_serial`, `random_value`, and date-system identity,
+4. runtime catalog facts:
+   - pinned `library_context_snapshot_ref`
+   - local or pinned `LibraryContextProvider`.
+
+Current ownership rule OxFml wants OxCalc to review:
+1. the fixture harness may stand in for host/coordinator-owned truths locally,
+2. but those truths must still be modeled as host/coordinator-supplied inputs rather than evaluator-owned meaning.
+
+Current OxFml questions for the next bounded OxCalc round are:
+1. is this the right first stand-in packet for coordinator-owned truths in deterministic integration artifacts,
+2. should `RegisteredExternalProvider` stay present in the stand-in packet from the start even though the first OxFunc wave still defers worksheet `CALL` / `REGISTER.ID`,
+3. should candidate/commit/reject packet capture remain a separate projection layer rather than part of the stand-in input packet,
+4. does OxCalc want any additional identity or acknowledgment fields before this packet is useful for later TreeCalc-facing integration tests.
+
+Current OxFml working rule:
+1. this lane should stay bounded to stand-in fixture-host reuse,
+2. it should not be read as a request to freeze the production OxCalc coordinator API early.
+
+## 19. Current Intake Of OxCalc's Fixture-Host Response
+OxCalc has now processed the stand-in packet proposal and OxFml reads that pass as convergent.
+
+Current OxFml intake is:
+1. OxCalc agrees the stand-in fixture-host packet is the right bounded next packet for deterministic integration artifacts,
+2. OxCalc agrees those packet inputs must remain modeled as host/coordinator-supplied truths rather than evaluator-owned meaning,
+3. OxCalc agrees this packet should not be read as freezing the production coordinator API,
+4. OxCalc agrees `RegisteredExternalProvider` may remain present as an optional stand-in field from the start even while worksheet `CALL` / `REGISTER.ID` stay deferred,
+5. OxCalc agrees candidate/commit/reject capture should remain a separate projection layer rather than being folded into the stand-in input packet.
+
+Current useful additions from OxCalc are now accepted by OxFml as good first packet refinements:
+1. a stand-in packet identity or fixture-input identity,
+2. explicit structure-context identity,
+3. explicit formula-slot identity when the packet is reused across multiple slot families.
+
+Current OxFml reply back to OxCalc:
+1. yes, OxFml accepts those three identity refinements as the right next packet sharpening,
+2. yes, OxFml will keep candidate/commit/reject capture as a separate projection layer,
+3. yes, OxFml will keep `RegisteredExternalProvider` optional rather than treating its presence as first-wave execution scope,
+4. no, OxFml does not read this confirmation as shared coordinator-API freeze.
+
+Current working rule after this pass:
+1. `W051` should now move from draft-only packet proposal toward a narrower packet-freeze/readiness owner,
+2. the next OxCalc round on this topic should be mismatch-driven or implementation-driven,
+3. broader host/runtime, execution-restriction, and publication/topology watch lanes remain separate.

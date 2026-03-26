@@ -6,6 +6,9 @@ use oxfunc_core::functions::adapters::PreparedArgValue;
 use oxfunc_core::functions::callable_helpers::{CallableInvocationError, CallableInvoker};
 use oxfunc_core::functions::cell::{CellEvalError, eval_cell_surface};
 use oxfunc_core::functions::info_fn::{InfoEvalError, eval_info_surface};
+use oxfunc_core::functions::op_implicit_intersection::{
+    eval_op_implicit_intersection_surface, map_op_implicit_intersection_error_to_ws,
+};
 use oxfunc_core::functions::rtd_fn::RtdProvider;
 use oxfunc_core::functions::surface_dispatch::eval_surface_value_call_with_callable;
 use oxfunc_core::host_info::HostInfoProvider;
@@ -15,9 +18,9 @@ use oxfunc_core::resolver::{
     ResolverCapabilities,
 };
 use oxfunc_core::value::{
-    CallArgValue, CallableArityShape as OxCallableArityShape,
+    ArrayCellValue, CallArgValue, CallableArityShape as OxCallableArityShape,
     CallableCaptureMode as OxCallableCaptureMode, CallableOriginKind as OxCallableOriginKind,
-    EvalValue, ExcelText, ExtendedValue, LambdaValue as OxLambdaValue, ReferenceKind,
+    EvalArray, EvalValue, ExcelText, ExtendedValue, LambdaValue as OxLambdaValue, ReferenceKind,
     ReferenceLike, WorksheetErrorCode,
 };
 
@@ -469,9 +472,19 @@ fn evaluate_expr_value(
                     message: format!("failed to parse numeric literal {text}"),
                 })
         }
+        BoundExpr::LogicalLiteral(value) => Ok(EvalValue::Logical(*value)),
         BoundExpr::StringLiteral(text) => Ok(EvalValue::Text(ExcelText::from_utf16_code_units(
             decode_string_literal(text).encode_utf16().collect(),
         ))),
+        BoundExpr::ArrayLiteral(rows) => evaluate_array_literal(
+            rows,
+            context,
+            resolver,
+            helper_bindings,
+            callable_registry,
+            trace,
+        ),
+        BoundExpr::OmittedArgument => Ok(EvalValue::Error(WorksheetErrorCode::Value)),
         BoundExpr::HelperParameterName(name) => Err(EvaluationError {
             message: format!(
                 "helper parameter {name} cannot be evaluated without helper-form environment support"
@@ -497,6 +510,13 @@ fn evaluate_expr_value(
             Ok(EvalValue::Number(match op {
                 crate::binding::BinaryOp::Add => lhs + rhs,
                 crate::binding::BinaryOp::Subtract => lhs - rhs,
+                crate::binding::BinaryOp::Multiply => lhs * rhs,
+                crate::binding::BinaryOp::Divide => {
+                    if rhs == 0.0 {
+                        return Ok(EvalValue::Error(WorksheetErrorCode::Div0));
+                    }
+                    lhs / rhs
+                }
             }))
         }
         BoundExpr::FunctionCall {
@@ -542,15 +562,11 @@ fn evaluate_expr_value(
                 true,
                 trace,
             )?;
-            match arg {
-                CallArgValue::Reference(reference) => {
-                    let resolved = resolver
-                        .resolve_reference(&reference)
-                        .map_err(map_resolution_error)?;
-                    scalarize_eval_value(resolved)
-                }
-                other => scalarize_eval_value(materialize_call_arg(other, resolver)?),
-            }
+            Ok(
+                eval_op_implicit_intersection_surface(&[arg], resolver).unwrap_or_else(|error| {
+                    EvalValue::Error(map_op_implicit_intersection_error_to_ws(&error))
+                }),
+            )
         }
     }
 }
@@ -624,6 +640,22 @@ fn evaluate_function_call(
             preserve_reference,
         ));
         call_args.push(call_arg);
+    }
+
+    // Excel trailing omitted arguments behave like absent optional arguments at the
+    // function-surface boundary. Preserve interior omissions as `MissingArg`, but do not
+    // force trailing omitted placeholders into OxFunc's optional-argument lanes.
+    let trailing_omitted_count = args
+        .iter()
+        .rev()
+        .take_while(|arg| matches!(arg, BoundExpr::OmittedArgument))
+        .count();
+    for _ in 0..trailing_omitted_count {
+        if !matches!(call_args.last(), Some(CallArgValue::MissingArg)) {
+            break;
+        }
+        prepared_arguments.pop();
+        call_args.pop();
     }
 
     trace.prepared_calls.push(PreparedCall {
@@ -703,6 +735,7 @@ fn evaluate_expr_as_call_arg(
     trace: &mut EvaluationTrace,
 ) -> Result<CallArgValue, EvaluationError> {
     match expr {
+        BoundExpr::OmittedArgument => Ok(CallArgValue::MissingArg),
         BoundExpr::Reference(reference) => evaluate_reference_as_call_arg(
             reference,
             context,
@@ -713,15 +746,20 @@ fn evaluate_expr_as_call_arg(
             trace,
         ),
         BoundExpr::ImplicitIntersection(inner) => {
-            let value = evaluate_expr_value(
+            let arg = evaluate_expr_as_call_arg(
                 inner,
                 context,
                 resolver,
                 helper_bindings,
                 callable_registry,
+                true,
                 trace,
             )?;
-            Ok(CallArgValue::Eval(scalarize_eval_value(value)?))
+            Ok(CallArgValue::Eval(
+                eval_op_implicit_intersection_surface(&[arg], resolver).unwrap_or_else(|error| {
+                    EvalValue::Error(map_op_implicit_intersection_error_to_ws(&error))
+                }),
+            ))
         }
         _ => Ok(CallArgValue::Eval(evaluate_expr_value(
             expr,
@@ -851,6 +889,42 @@ fn call_arg_for_reference_like(
             .map(CallArgValue::Eval)
             .map_err(map_resolution_error)
     }
+}
+
+fn evaluate_array_literal(
+    rows: &[Vec<BoundExpr>],
+    context: &EvaluationContext<'_>,
+    resolver: &mut LocalReferenceResolver<'_>,
+    helper_bindings: &BTreeMap<String, HelperBinding>,
+    callable_registry: &RefCell<CallableRegistry>,
+    trace: &mut EvaluationTrace,
+) -> Result<EvalValue, EvaluationError> {
+    let height = rows.len();
+    let width = rows.iter().map(|row| row.len()).max().unwrap_or(0);
+    let mut array_rows = Vec::with_capacity(height);
+    for row in rows {
+        let mut array_row = Vec::with_capacity(width);
+        for expr in row {
+            let value = evaluate_expr_value(
+                expr,
+                context,
+                resolver,
+                helper_bindings,
+                callable_registry,
+                trace,
+            )?;
+            array_row.push(array_cell_value_from_eval_value(Some(value)));
+        }
+        while array_row.len() < width {
+            array_row.push(ArrayCellValue::EmptyCell);
+        }
+        array_rows.push(array_row);
+    }
+    EvalArray::from_rows(array_rows)
+        .map(EvalValue::Array)
+        .ok_or_else(|| EvaluationError {
+            message: "array literal produced an invalid rectangular shape".to_string(),
+        })
 }
 
 fn call_arg_for_name(
@@ -1100,15 +1174,8 @@ fn evaluate_legacy_single_call(
         vec![prepared_argument_for_call_arg(0, arg, &prepared, true)],
         context,
     );
-    match prepared {
-        CallArgValue::Reference(reference) => {
-            let resolved = resolver
-                .resolve_reference(&reference)
-                .map_err(map_resolution_error)?;
-            scalarize_eval_value(resolved)
-        }
-        other => scalarize_eval_value(materialize_call_arg(other, resolver)?),
-    }
+    Ok(eval_op_implicit_intersection_surface(&[prepared], resolver)
+        .unwrap_or_else(|error| EvalValue::Error(map_op_implicit_intersection_error_to_ws(&error))))
 }
 
 fn evaluate_invocation(
@@ -1133,6 +1200,9 @@ fn evaluate_invocation(
         },
     };
     if lambda.params.len() != args.len() {
+        if args.len() > lambda.params.len() {
+            return Ok(EvalValue::Error(WorksheetErrorCode::Value));
+        }
         return Err(EvaluationError {
             message: format!(
                 "lambda invocation arity mismatch: expected {}, got {}",
@@ -1324,6 +1394,9 @@ fn lambda_body_kind(body: &BoundExpr) -> &'static str {
     match body {
         BoundExpr::NumberLiteral(_) => "NumberLiteral",
         BoundExpr::StringLiteral(_) => "StringLiteral",
+        BoundExpr::LogicalLiteral(_) => "LogicalLiteral",
+        BoundExpr::ArrayLiteral(_) => "ArrayLiteral",
+        BoundExpr::OmittedArgument => "OmittedArgument",
         BoundExpr::HelperParameterName(_) => "HelperParameter",
         BoundExpr::Binary { .. } => "Binary",
         BoundExpr::FunctionCall { .. } => "FunctionCall",
@@ -1350,6 +1423,9 @@ fn helper_free_names_in_expr(
     match expr {
         BoundExpr::NumberLiteral(_)
         | BoundExpr::StringLiteral(_)
+        | BoundExpr::LogicalLiteral(_)
+        | BoundExpr::ArrayLiteral(_)
+        | BoundExpr::OmittedArgument
         | BoundExpr::HelperParameterName(_) => BTreeSet::new(),
         BoundExpr::Binary { left, right, .. } => {
             let mut names = helper_free_names_in_expr(left, bound_names, helper_bindings);
@@ -1574,7 +1650,11 @@ fn prepared_argument_for_call_arg(
 
 fn prepared_source_class(expr: &BoundExpr) -> PreparedSourceClass {
     match expr {
-        BoundExpr::NumberLiteral(_) | BoundExpr::StringLiteral(_) => PreparedSourceClass::Literal,
+        BoundExpr::NumberLiteral(_)
+        | BoundExpr::StringLiteral(_)
+        | BoundExpr::LogicalLiteral(_)
+        | BoundExpr::ArrayLiteral(_)
+        | BoundExpr::OmittedArgument => PreparedSourceClass::Literal,
         BoundExpr::HelperParameterName(_) => PreparedSourceClass::HelperParameter,
         BoundExpr::FunctionCall { .. } | BoundExpr::Invocation { .. } => {
             PreparedSourceClass::FunctionCall
@@ -1911,18 +1991,6 @@ fn coerce_to_number(value: EvalValue) -> Result<f64, EvaluationError> {
     }
 }
 
-fn scalarize_eval_value(value: EvalValue) -> Result<EvalValue, EvaluationError> {
-    match value {
-        EvalValue::Array(array) => array
-            .get(0, 0)
-            .and_then(|cell| cell.to_eval_value())
-            .ok_or_else(|| EvaluationError {
-                message: "array could not be scalarized".to_string(),
-            }),
-        other => Ok(other),
-    }
-}
-
 fn map_resolution_error(error: RefResolutionError) -> EvaluationError {
     EvaluationError {
         message: format!("reference resolution failed: {error:?}"),
@@ -2052,6 +2120,10 @@ impl ReferenceResolver for LocalReferenceResolver<'_> {
             return Ok(value.clone());
         }
 
+        if let Some(array) = resolve_local_area_reference(self.cell_values, reference) {
+            return Ok(EvalValue::Array(array));
+        }
+
         if let Some(binding) = self.defined_names.get(&reference.target) {
             return match binding {
                 DefinedNameBinding::Value(value) => Ok(value.clone()),
@@ -2140,6 +2212,87 @@ fn call_arg_from_prepared(prepared: &PreparedArgValue) -> CallArgValue {
 
 fn prepared_arg_from_eval_value(value: EvalValue) -> PreparedArgValue {
     PreparedArgValue::Eval(value)
+}
+
+fn resolve_local_area_reference(
+    cell_values: &BTreeMap<String, EvalValue>,
+    reference: &ReferenceLike,
+) -> Option<EvalArray> {
+    if !matches!(reference.kind, ReferenceKind::Area) {
+        return None;
+    }
+
+    let (start, end) = reference.target.split_once(':')?;
+    let (start_sheet, start_row, start_col) = parse_a1_target(start)?;
+    let (end_sheet, end_row, end_col) = parse_a1_target(end)?;
+    if start_sheet != end_sheet {
+        return None;
+    }
+
+    let top = start_row.min(end_row);
+    let bottom = start_row.max(end_row);
+    let left = start_col.min(end_col);
+    let right = start_col.max(end_col);
+    let prefix = start_sheet.as_deref();
+
+    let rows = (top..=bottom)
+        .map(|row| {
+            (left..=right)
+                .map(|col| {
+                    let a1 = format!("{}{}", column_letters(col), row);
+                    let target = prefix.map(|sheet| format!("{sheet}!{a1}")).unwrap_or(a1);
+                    array_cell_value_from_eval_value(cell_values.get(&target).cloned())
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+
+    EvalArray::from_rows(rows)
+}
+
+fn array_cell_value_from_eval_value(value: Option<EvalValue>) -> ArrayCellValue {
+    match value {
+        Some(EvalValue::Number(number)) => ArrayCellValue::Number(number),
+        Some(EvalValue::Text(text)) => ArrayCellValue::Text(text),
+        Some(EvalValue::Logical(value)) => ArrayCellValue::Logical(value),
+        Some(EvalValue::Error(code)) => ArrayCellValue::Error(code),
+        Some(EvalValue::Array(_)) | Some(EvalValue::Reference(_)) | Some(EvalValue::Lambda(_)) => {
+            ArrayCellValue::Error(WorksheetErrorCode::Value)
+        }
+        None => ArrayCellValue::EmptyCell,
+    }
+}
+
+fn parse_a1_target(text: &str) -> Option<(Option<String>, u32, u32)> {
+    let (sheet, address) = match text.rsplit_once('!') {
+        Some((sheet, address)) => (Some(sheet.to_string()), address),
+        None => (None, text),
+    };
+
+    let col_len = address
+        .chars()
+        .take_while(|ch| ch.is_ascii_alphabetic())
+        .count();
+    if col_len == 0 || col_len == address.len() {
+        return None;
+    }
+
+    let (col_text, row_text) = address.split_at(col_len);
+    let row = row_text.parse::<u32>().ok()?;
+    let col = column_number(col_text)?;
+    Some((sheet, row, col))
+}
+
+fn column_number(text: &str) -> Option<u32> {
+    let mut value = 0u32;
+    for ch in text.chars() {
+        if !ch.is_ascii_alphabetic() {
+            return None;
+        }
+        value = value.checked_mul(26)?;
+        value = value.checked_add((ch.to_ascii_uppercase() as u32) - ('A' as u32) + 1)?;
+    }
+    Some(value)
 }
 
 fn callable_token(id: usize, summary: &str) -> String {

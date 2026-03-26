@@ -765,3 +765,145 @@ Current OxFml ask for the next bounded OxFunc round:
 Current OxFml working rule:
 1. this lane should reopen only as a bounded editor/help packet round,
 2. it should not reopen broader callable/carrier debates already deferred elsewhere.
+
+## 25. Current Processed Response To The OxFunc Seam-Test Artifact Request
+OxFml has now processed the newest OxFunc note as materially convergent on the remaining seam-freeze packets and as introducing one concrete new integration ask: a real OxFml-backed preparation/evaluation adapter artifact.
+
+What OxFml incorporates directly:
+1. the current `W041`, `W042`, and `W043` packets are still the right bounded freeze lanes,
+2. the current `W044` export remains the right pinned downstream snapshot artifact for first adapter and fixture pinning,
+3. the newest useful next step is not another broad callable/catalog note round,
+4. the newest useful next step is an OxFml-backed adapter and pinned seam-fixture family that can drive OxFunc against the real OxFml preparation path.
+
+Current OxFml best-effort proposal:
+1. OxFml will treat the first adapter artifact as a bounded test/integration packet rather than as the normative production host API,
+2. the first adapter request should accept at minimum:
+   - `formula_text`
+   - `formula_channel`
+   - `caller_anchor`
+   - optional `active_selection_anchor`
+   - a deterministic `cell_fixture`
+   - optional defined-name bindings
+   - optional table packet inputs
+   - optional typed context/query bundle
+   - optional pinned `library_context_snapshot_ref`,
+3. the first adapter output should preserve three artifact families:
+   - preparation artifact
+   - end-to-end evaluation artifact
+   - mismatch report artifact,
+4. OxFml wants fixture families organized by seam pressure rather than only by function name:
+   - prepared-argument/reference lanes
+   - callable lanes
+   - host/provider lanes
+   - snapshot/catalog lanes,
+5. worksheet `CALL` / `REGISTER.ID`, richer publication families, and broader interoperable callable transport should remain explicitly deferred from the first adapter wave.
+
+Current OxFml reply back to OxFunc:
+1. yes, OxFml agrees the concrete adapter artifact is the right next closure step,
+2. yes, OxFml will treat it as downstream of the already-converged freeze candidates under `W041`, `W042`, and `W043`,
+3. yes, OxFml prefers to use the committed `W044` snapshot/export as the first pinning artifact while continuing to model the runtime provider/snapshot seam in parallel,
+4. no, OxFml does not want the adapter artifact to become the normative production host interface,
+5. no, OxFml does not want the first fixture wave to silently pull in deferred packets such as worksheet `CALL` / `REGISTER.ID`.
+
+Current next OxFml owners:
+1. `W049` OxFunc preparation adapter and consumer harness
+2. `W050` OxFunc snapshot-pinned seam fixture families
+
+Working rule for the next bounded rounds:
+1. use `W049` and `W050` to surface concrete packet or field mismatches,
+2. report only those concrete mismatches back to OxFunc,
+3. do not reopen already-converged callable sufficiency or first-freeze working-rule questions unless the adapter or fixture corpus exposes a real contradiction.
+
+## 26. Current Processed Response To OxFunc's Adapter-Acceptance Round
+OxFml has now processed the newest OxFunc note as a convergence pass on the adapter artifact rather than as a new seam redirection.
+
+What OxFml incorporates directly:
+1. OxFunc accepts the bounded-adapter posture and does not treat the adapter as the normative production host API,
+2. OxFunc accepts the richer OxFml request shape, but narrows the first exercised wave:
+   - `formula_channel` is acceptable but not first-wave significant,
+   - `active_selection_anchor` remains optional and unevidenced in the current first 38 scenarios,
+   - defined-name and table packet inputs may remain empty in the first wave unless OxFml chooses to exercise those lanes,
+   - the typed capability bundle is acceptable, but the first wave only materially needs `LocaleFormatContext`,
+3. OxFunc wants the adapter implementation itself to answer the remaining practical questions around:
+   - prepared-operand vocabulary,
+   - `@` behavior,
+   - callable carriers,
+   - callable invocation,
+   rather than another abstract note round,
+4. OxFunc has now published concrete first-freeze artifacts for its side of:
+   - typed context/query bundle (`W047`),
+   - return surface (`W048`),
+   - runtime provider/snapshot model (`W049`),
+5. OxFunc also accepts the bounded editor/help packet direction as non-blocking and lower-priority than the adapter work.
+
+Current OxFml reply back to OxFunc:
+1. yes, OxFml accepts the narrower first-wave reading for the adapter,
+2. yes, OxFml will treat the current pinned first-wave scenario table as the canonical first integration slice; older note-only “38-scenario” wording should be read against the currently published consolidated table, which now enumerates 45 ids,
+3. yes, OxFml will treat the currently published OxFunc `W047`, `W048`, and `W049` artifact sets as the pinned downstream freeze candidates for the first adapter wave,
+4. no, OxFml does not currently have a concrete mismatch against those three OxFunc packet artifacts at note level,
+5. the next honest reply from OxFml should therefore be implementation-facing and mismatch-driven through `W049` and `W050`.
+
+Current next OxFml owners:
+1. `W049` now owns the real OxFml-backed adapter implementation against the current OxFunc `W047` / `W048` / `W049` packet artifacts,
+2. `W050` now owns the first pinned seam-fixture corpus using the current published first-wave scenario table and the committed `W044` snapshot/export,
+3. `W048` editor/help seam work remains a separate lower-priority bounded lane and should not block the adapter wave.
+
+## 27. Current W050 First-Wave Fixture Readback
+OxFml has now exercised the first machine-readable `W050` wave over the real `W049` adapter rather than leaving the first-wave mapping as prose.
+
+What OxFml has now established locally:
+1. the first OxFml-owned pinned fixture corpus exists in machine-readable form,
+2. the admitted local floor is now all 45 scenarios across the current published first-wave table,
+3. the explicit deferred register is now empty,
+4. the local widening that got OxFml here included:
+   - parser correction for inline-array element separation
+   - trailing omitted-argument trimming at the call boundary
+   - wider local semantic metadata (`ROWS`, `COLUMNS`, `PI`, `CONCAT`, `RANDBETWEEN`, `VALUETOTEXT`, `VLOOKUP`)
+   - explicit `@` precedence and scalarization alignment through the OxFunc implicit-intersection operator surface
+   - lambda over-application surfacing as worksheet `#VALUE!` rather than adapter failure
+   - top-level callable publication mapping to worksheet `#CALC!` while preserving internal callable formation
+   - duplicate `LET` binding names surfacing as a stable OxFml bind-time `BindMismatch` rejection
+
+Concrete findings from the first admitted/deferred sweep:
+1. `C12` (`=LAMBDA(x, x+1)`) is now handled as a publication-boundary rule in OxFml: the internal callable value remains honest in evaluation artifacts, while worksheet publication maps the bare top-level callable to `#CALC!`,
+2. `C14` (`=LET(x, 1, x, 2, x)`) is now handled as a bind-time OxFml rule: duplicate `LET` binding names produce a stable bind diagnostic and adapter-visible `BindMismatch` rejection,
+3. no current note-level contradiction has appeared in the pinned OxFunc packet artifacts themselves; the earlier callable publication/reject residuals are now narrowed into explicit local OxFml rules rather than standing seam gaps,
+4. OxFml now reads the published downstream first-wave table as authoritatively 45 ids rather than retaining the older ambiguous “38” wording.
+
+Current OxFml reply back to OxFunc:
+1. the first pinned corpus is now real and deterministic rather than aspirational,
+2. the current local floor should now be read as full OxFml-side coverage of the currently published 45-id first-wave table,
+3. the callable publication and duplicate-`LET` reject tweaks are now explicit OxFml rules rather than note-only interpretation,
+4. the next useful OxFunc-facing discussion should now move off `W049` / `W050` and onto the separate worksheet `CALL` / `REGISTER.ID` boundary under `W052`.
+
+## 28. Current Processed Response To OxFunc's W050 Validation And W046 Narrowing
+OxFml reads the newest OxFunc note as a convergence pass on the admitted `W049` / `W050` adapter wave plus a bounded new ask on worksheet `CALL` / `REGISTER.ID`.
+
+What OxFml incorporates directly:
+1. OxFunc now explicitly confirms that the authoritative pinned first-wave table enumerates 45 scenario ids, not the older note-only 38-scenario planning count,
+2. OxFunc now explicitly accepts the current local `W050` floor as strong integration evidence rather than as a standing seam objection,
+3. OxFunc's earlier residual classification for `C12` and `C14` lined up with the rules OxFml has now implemented locally,
+4. OxFunc does not request another note round for the adapter wave; future mismatch handling should remain artifact-driven through the pinned corpus,
+5. OxFunc does, however, ask for a bounded next clarification round on worksheet `CALL` / `REGISTER.ID` runtime ownership and packet shape.
+
+Current OxFml reply back to OxFunc on the validated `W049` / `W050` lane:
+1. yes, OxFml will now treat the published 45-id table as the authoritative pinned first-wave fixture catalog,
+2. no, `C12` and `C14` are no longer explicit residuals on the OxFml side because the local publication and bind-reject rules are now exercised and pinned in the corpus,
+3. yes, OxFml agrees the next useful adapter/fixed-fixture work should be mismatch-driven rather than note-driven,
+4. no, OxFml does not currently read the validated adapter wave as requiring another broad callable, `@`, or prepared-argument note round.
+
+Current OxFml best-effort position on the new worksheet `CALL` / `REGISTER.ID` questions:
+1. `RegisteredExternalProvider` should remain separate from `HostInfoProvider`,
+2. the first bounded consumer model should carry `RegisterIdRequest`, `RegisteredExternalDescriptor`, and `RegisteredExternalCallRequest` as direct typed runtime packet lanes rather than only as library-context snapshot rows,
+3. OxFml now reads worksheet `CALL` as following the same broad consumer-owned rule already used for built-ins: OxFml preserves reference-visible versus dereferenced prepared-argument lanes, while OxFunc-owned function semantics decide whether a reference is consumed as a reference, dereferenced first, or further coerced,
+4. that means `RegisteredExternalDescriptor` or equivalent direct-call metadata should be available to OxFunc so it can decide dereference and general type-conversion policy per registration,
+5. OxFml does not currently see a mismatch with the reading that worksheet `CALL` runtime stays above OxFunc except for request normalization, descriptor-driven argument handling, and worksheet-visible result projection,
+6. the library-context snapshot/runtime-provider lane may still carry capability or registration-profile truth, but not the per-request runtime registration and invocation packet in place of those direct typed lanes.
+
+Current next OxFml owner for that new bounded lane:
+1. `W052` worksheet `CALL` / `REGISTER.ID` provider and packet boundary
+
+Working rule after this note:
+1. treat `W049` / `W050` as converged enough for mismatch-driven continuation rather than more broad note exchange,
+2. use `W052` for the next bounded OxFml/OxFunc clarification round on worksheet `CALL` / `REGISTER.ID`,
+3. keep worksheet `CALL` / `REGISTER.ID` outside the already-validated first adapter wave until `W052` narrows the packet and ownership boundary.

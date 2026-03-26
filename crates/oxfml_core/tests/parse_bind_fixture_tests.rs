@@ -290,6 +290,7 @@ fn syntax_kind_name(kind: SyntaxKind) -> &'static str {
         SyntaxKind::FormulaRoot => "FormulaRoot",
         SyntaxKind::NumberLiteralExpr => "NumberLiteralExpr",
         SyntaxKind::StringLiteralExpr => "StringLiteralExpr",
+        SyntaxKind::ArrayLiteralExpr => "ArrayLiteralExpr",
         SyntaxKind::IdentifierExpr => "IdentifierExpr",
         SyntaxKind::QuotedIdentifierExpr => "QuotedIdentifierExpr",
         SyntaxKind::QualifiedReferenceExpr => "QualifiedReferenceExpr",
@@ -303,6 +304,7 @@ fn syntax_kind_name(kind: SyntaxKind) -> &'static str {
         SyntaxKind::RangeExpr => "RangeExpr",
         SyntaxKind::IntersectionExpr => "IntersectionExpr",
         SyntaxKind::UnionExpr => "UnionExpr",
+        SyntaxKind::OmittedArgExpr => "OmittedArgExpr",
         SyntaxKind::MissingExpr => "MissingExpr",
     }
 }
@@ -311,6 +313,9 @@ fn bound_expr_name(expr: &BoundExpr) -> &'static str {
     match expr {
         BoundExpr::NumberLiteral(_) => "NumberLiteral",
         BoundExpr::StringLiteral(_) => "StringLiteral",
+        BoundExpr::LogicalLiteral(_) => "LogicalLiteral",
+        BoundExpr::ArrayLiteral(_) => "ArrayLiteral",
+        BoundExpr::OmittedArgument => "OmittedArgument",
         BoundExpr::HelperParameterName(_) => "HelperParameterName",
         BoundExpr::Binary { .. } => "Binary",
         BoundExpr::FunctionCall { .. } => "FunctionCall",

@@ -176,6 +176,18 @@ OxFml now reads the latest OxFunc note as convergent on a two-track working rule
 
 Current OxFml reading is that these are compatible rather than competing paths.
 
+## Current Relationship To Adapter-Test Artifacts
+The first OxFml-backed OxFunc integration adapter should consume the same runtime library-context direction described here.
+
+Working rule:
+1. use the committed export for fixture pinning and mismatch reports,
+2. allow the adapter request to name a pinned `library_context_snapshot_ref`,
+3. keep the runtime-only provider/snapshot model and the CSV/export mapping split visible in the adapter rather than letting the export shape silently become the runtime API.
+
+Current next local owners:
+1. `W049` OxFunc preparation adapter and consumer harness
+2. `W050` OxFunc snapshot-pinned seam fixture families
+
 ## Current Coverage Goal
 The target for this seam-hardening round is:
 1. the full Excel cell-formula language as scoped in OxFml,

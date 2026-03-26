@@ -15,6 +15,8 @@ use oxfunc_core::functions::{
     },
     cell::CELL_META,
     column_fn::COLUMN_META,
+    columns_fn::COLUMNS_META,
+    concat_family::CONCAT_META,
     count::COUNT_META,
     counta::COUNTA_META,
     dollar_fn::DOLLAR_META,
@@ -29,8 +31,11 @@ use oxfunc_core::functions::{
     n_fn::N_META,
     now_fn::NOW_META,
     offset::OFFSET_META,
+    pi::PI_META,
     rand_fn::RAND_META,
+    randbetween_fn::RANDBETWEEN_META,
     row_fn::ROW_META,
+    rows_fn::ROWS_META,
     rtd_fn::RTD_META,
     sequence::SEQUENCE_META,
     sum::SUM_META,
@@ -39,6 +44,8 @@ use oxfunc_core::functions::{
     today_fn::TODAY_META,
     type_fn::TYPE_META,
     value_fn::VALUE_META,
+    valuetotext_fn::VALUETOTEXT_META,
+    vhlookup_family::VLOOKUP_META,
     xlookup::XLOOKUP_META,
     xmatch::XMATCH_META,
 };
@@ -356,6 +363,9 @@ impl SemanticCompiler {
         match expr {
             BoundExpr::NumberLiteral(_)
             | BoundExpr::StringLiteral(_)
+            | BoundExpr::LogicalLiteral(_)
+            | BoundExpr::ArrayLiteral(_)
+            | BoundExpr::OmittedArgument
             | BoundExpr::HelperParameterName(_) => {}
             BoundExpr::Binary { left, right, .. } => {
                 self.visit_expr(left);
@@ -843,7 +853,9 @@ pub fn lookup_function_meta(function_name: &str) -> Option<FunctionMeta> {
         "BYCOL" => Some(BYCOL_META),
         "BYROW" => Some(BYROW_META),
         "CELL" => Some(CELL_META),
+        "COLUMNS" => Some(COLUMNS_META),
         "COLUMN" => Some(COLUMN_META),
+        "CONCAT" => Some(CONCAT_META),
         "COUNT" => Some(COUNT_META),
         "COUNTA" => Some(COUNTA_META),
         "DOLLAR" => Some(DOLLAR_META),
@@ -861,9 +873,12 @@ pub fn lookup_function_meta(function_name: &str) -> Option<FunctionMeta> {
         "N" => Some(N_META),
         "NOW" => Some(NOW_META),
         "OFFSET" => Some(OFFSET_META),
+        "PI" => Some(PI_META),
         "RAND" => Some(RAND_META),
+        "RANDBETWEEN" => Some(RANDBETWEEN_META),
         "REDUCE" => Some(REDUCE_META),
         "ROW" => Some(ROW_META),
+        "ROWS" => Some(ROWS_META),
         "RTD" => Some(RTD_META),
         "SCAN" => Some(SCAN_META),
         "SEQUENCE" => Some(SEQUENCE_META),
@@ -872,7 +887,9 @@ pub fn lookup_function_meta(function_name: &str) -> Option<FunctionMeta> {
         "TEXT" => Some(TEXT_META),
         "TODAY" => Some(TODAY_META),
         "TYPE" => Some(TYPE_META),
+        "VALUETOTEXT" => Some(VALUETOTEXT_META),
         "VALUE" => Some(VALUE_META),
+        "VLOOKUP" => Some(VLOOKUP_META),
         "XLOOKUP" => Some(XLOOKUP_META),
         "XMATCH" => Some(XMATCH_META),
         _ => None,
@@ -910,6 +927,9 @@ fn collect_helper_capture_names<'a>(
     match expr {
         BoundExpr::NumberLiteral(_)
         | BoundExpr::StringLiteral(_)
+        | BoundExpr::LogicalLiteral(_)
+        | BoundExpr::ArrayLiteral(_)
+        | BoundExpr::OmittedArgument
         | BoundExpr::HelperParameterName(_) => {}
         BoundExpr::Binary { left, right, .. } => {
             collect_helper_capture_names(left, params, captures);

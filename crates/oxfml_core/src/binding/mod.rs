@@ -1,6 +1,7 @@
 mod reference;
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
@@ -30,6 +31,9 @@ pub struct BindDiagnostic {
 pub enum BoundExpr {
     NumberLiteral(String),
     StringLiteral(String),
+    LogicalLiteral(bool),
+    ArrayLiteral(Vec<Vec<BoundExpr>>),
+    OmittedArgument,
     HelperParameterName(String),
     Binary {
         op: BinaryOp,
@@ -52,6 +56,8 @@ pub enum BoundExpr {
 pub enum BinaryOp {
     Add,
     Subtract,
+    Multiply,
+    Divide,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -243,6 +249,8 @@ impl Binder {
             SyntaxKind::StringLiteralExpr => {
                 BoundExpr::StringLiteral(self.first_token_text(node).unwrap_or_default())
             }
+            SyntaxKind::ArrayLiteralExpr => self.bind_array_literal(node),
+            SyntaxKind::OmittedArgExpr => BoundExpr::OmittedArgument,
             SyntaxKind::IdentifierExpr | SyntaxKind::QuotedIdentifierExpr => {
                 self.bind_identifier(node)
             }
@@ -282,8 +290,12 @@ impl Binder {
                 let right = child_nodes.next().expect("binary right");
                 let op = if token_text(node, "+").is_some() {
                     BinaryOp::Add
-                } else {
+                } else if token_text(node, "-").is_some() {
                     BinaryOp::Subtract
+                } else if token_text(node, "*").is_some() {
+                    BinaryOp::Multiply
+                } else {
+                    BinaryOp::Divide
                 };
                 BoundExpr::Binary {
                     op,
@@ -325,6 +337,12 @@ impl Binder {
 
     fn bind_identifier(&mut self, node: &GreenNode) -> BoundExpr {
         let text = self.first_token_text(node).unwrap_or_default();
+        if text.eq_ignore_ascii_case("TRUE") {
+            return BoundExpr::LogicalLiteral(true);
+        }
+        if text.eq_ignore_ascii_case("FALSE") {
+            return BoundExpr::LogicalLiteral(false);
+        }
         if let Some(structured) = bind_structured_reference_text(
             &text,
             &self.context,
@@ -378,6 +396,25 @@ impl Binder {
                 source_text: text,
             })))
         }
+    }
+
+    fn bind_array_literal(&mut self, node: &GreenNode) -> BoundExpr {
+        let mut rows: Vec<Vec<BoundExpr>> = vec![Vec::new()];
+        for child in &node.children {
+            match child {
+                GreenChild::Node(expr) => rows
+                    .last_mut()
+                    .expect("array literal should have current row")
+                    .push(self.bind_expr(expr)),
+                GreenChild::Token(token)
+                    if token.kind == crate::syntax::token::TokenKind::Semicolon =>
+                {
+                    rows.push(Vec::new());
+                }
+                GreenChild::Token(_) => {}
+            }
+        }
+        BoundExpr::ArrayLiteral(rows)
     }
 
     fn bind_qualified_reference(&mut self, node: &GreenNode) -> BoundExpr {
@@ -758,13 +795,22 @@ impl Binder {
         let mut bound_args = Vec::with_capacity(arg_nodes.len());
         let mut pushed_names = 0usize;
         let last_index = arg_nodes.len().saturating_sub(1);
+        let mut seen_binding_names = BTreeSet::new();
 
         for (index, arg_node) in arg_nodes.iter().enumerate() {
             let is_binding_name_position = index < last_index && index % 2 == 0;
             if is_binding_name_position {
                 if let Some(name) = self.try_helper_parameter_name(arg_node) {
-                    self.helper_local_names.push(name.clone());
-                    pushed_names += 1;
+                    let normalized_name = name.to_ascii_uppercase();
+                    if seen_binding_names.insert(normalized_name) {
+                        self.helper_local_names.push(name.clone());
+                        pushed_names += 1;
+                    } else {
+                        self.diagnostics.push(BindDiagnostic {
+                            message: format!("duplicate LET binding name '{name}'"),
+                            span: arg_node.span,
+                        });
+                    }
                     bound_args.push(BoundExpr::HelperParameterName(name));
                 } else {
                     self.diagnostics.push(BindDiagnostic {

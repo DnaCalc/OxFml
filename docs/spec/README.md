@@ -15,31 +15,34 @@ When starting OxFml design or implementation work, read these documents and igno
 8. `docs/spec/OXFML_HIGH_RISK_AND_EARLY_ATTENTION_AREAS.md`
 9. `docs/spec/OXFML_PUBLIC_API_AND_RUNTIME_SERVICE_SKETCH.md`
 10. `docs/spec/OXFML_HOST_RUNTIME_AND_EXTERNAL_REQUIREMENTS.md`
-11. `docs/spec/OXFML_TEST_LADDER_AND_PROVING_HOSTS.md`
-12. `docs/spec/OXFML_DNA_ONECALC_HOST_POLICY_BASELINE.md`
-13. `docs/spec/OXFML_EMPIRICAL_PACK_PLANNING.md`
-14. `docs/spec/OXFML_FORMALIZATION_AND_VERIFICATION.md`
-15. `docs/spec/OXFML_FORMAL_ARTIFACT_REGISTER.md`
-16. `docs/spec/OXFML_REPLAY_APPLIANCE_ADAPTER_V1.md`
-17. `docs/spec/OXFML_REPLAY_ADAPTER_CAPABILITY_MANIFEST_V1.json`
-18. `docs/spec/formula-language/OXFML_FORMULA_ENGINE_ARCHITECTURE.md`
-19. `docs/spec/formula-language/OXFML_PARSER_AND_BINDER_REALIZATION.md`
-20. `docs/spec/formula-language/OXFML_NORMALIZED_REFERENCE_ADTS.md`
-21. `docs/spec/formula-language/OXFML_OXFUNC_SEMANTIC_BOUNDARY.md`
-22. `docs/spec/formula-language/OXFML_OXFUNC_LET_LAMBDA_PIN_DOWN_PREP.md`
-23. `docs/spec/formula-language/OXFML_OXFUNC_LIBRARY_CONTEXT_RUNTIME_INTERFACE.md`
-24. `docs/spec/formula-language/OXFML_R1C1_FORMULA_CHANNEL.md`
-25. `docs/spec/formula-language/OXFML_CF_DV_RESTRICTED_SUBLANGUAGES.md`
-26. `docs/spec/formula-language/OXFML_HOST_MANAGED_NAME_AND_EXTERNAL_NAME_BOUNDARY.md`
-27. `docs/spec/formula-language/OXFML_STRUCTURED_REFERENCE_AND_TABLE_BOUNDARY.md`
-28. `docs/spec/formula-language/OXFML_EDITOR_LANGUAGE_SERVICE_AND_HOST_INTEGRATION_PLAN.md`
-29. `docs/spec/fec-f3e/FEC_F3E_DESIGN_SPEC.md`
-30. `docs/spec/fec-f3e/FEC_F3E_FORMAL_AND_ASSURANCE_MAP.md`
-31. `docs/spec/fec-f3e/FEC_F3E_TESTING_AND_REPLAY.md`
-32. `docs/spec/fec-f3e/FEC_F3E_SCHEMA_REPLAY_FIXTURE_PLAN.md`
-33. `docs/spec/formula-language/EXCEL_FORMULA_LANGUAGE_CONCRETE_RULES.md`
-34. `docs/spec/formula-language/MS_OE376_FORMULA_AND_FORMATTING_REVIEW.md`
-35. `docs/spec/formatting/EXCEL_FORMATTING_HIERARCHY_AND_VISIBILITY_MODEL.md`
+11. `docs/spec/OXFML_FIXTURE_HOST_AND_COORDINATOR_STANDIN_PACKET.md`
+12. `docs/spec/OXFML_TEST_LADDER_AND_PROVING_HOSTS.md`
+13. `docs/spec/OXFML_DNA_ONECALC_HOST_POLICY_BASELINE.md`
+14. `docs/spec/OXFML_EMPIRICAL_PACK_PLANNING.md`
+15. `docs/spec/OXFML_FORMALIZATION_AND_VERIFICATION.md`
+16. `docs/spec/OXFML_FORMAL_ARTIFACT_REGISTER.md`
+17. `docs/spec/OXFML_REPLAY_APPLIANCE_ADAPTER_V1.md`
+18. `docs/spec/OXFML_REPLAY_ADAPTER_CAPABILITY_MANIFEST_V1.json`
+19. `docs/spec/formula-language/OXFML_FORMULA_ENGINE_ARCHITECTURE.md`
+20. `docs/spec/formula-language/OXFML_PARSER_AND_BINDER_REALIZATION.md`
+21. `docs/spec/formula-language/OXFML_NORMALIZED_REFERENCE_ADTS.md`
+22. `docs/spec/formula-language/OXFML_OXFUNC_SEMANTIC_BOUNDARY.md`
+23. `docs/spec/formula-language/OXFML_OXFUNC_LET_LAMBDA_PIN_DOWN_PREP.md`
+24. `docs/spec/formula-language/OXFML_OXFUNC_LIBRARY_CONTEXT_RUNTIME_INTERFACE.md`
+25. `docs/spec/formula-language/OXFML_R1C1_FORMULA_CHANNEL.md`
+26. `docs/spec/formula-language/OXFML_CF_DV_RESTRICTED_SUBLANGUAGES.md`
+27. `docs/spec/formula-language/OXFML_HOST_MANAGED_NAME_AND_EXTERNAL_NAME_BOUNDARY.md`
+28. `docs/spec/formula-language/OXFML_STRUCTURED_REFERENCE_AND_TABLE_BOUNDARY.md`
+29. `docs/spec/formula-language/OXFML_EDITOR_LANGUAGE_SERVICE_AND_HOST_INTEGRATION_PLAN.md`
+30. `docs/spec/formula-language/OXFML_OXFUNC_EVALUATION_ADAPTER_AND_TEST_ARTIFACTS.md`
+31. `docs/spec/formula-language/OXFML_REGISTERED_EXTERNAL_PROVIDER_AND_CALL_REGISTER_ID_BOUNDARY.md`
+32. `docs/spec/fec-f3e/FEC_F3E_DESIGN_SPEC.md`
+33. `docs/spec/fec-f3e/FEC_F3E_FORMAL_AND_ASSURANCE_MAP.md`
+34. `docs/spec/fec-f3e/FEC_F3E_TESTING_AND_REPLAY.md`
+35. `docs/spec/fec-f3e/FEC_F3E_SCHEMA_REPLAY_FIXTURE_PLAN.md`
+36. `docs/spec/formula-language/EXCEL_FORMULA_LANGUAGE_CONCRETE_RULES.md`
+37. `docs/spec/formula-language/MS_OE376_FORMULA_AND_FORMATTING_REVIEW.md`
+38. `docs/spec/formatting/EXCEL_FORMATTING_HIERARCHY_AND_VISIBILITY_MODEL.md`
 
 ## Canonical Document Groups
 ### System and formal posture
@@ -72,6 +75,7 @@ When starting OxFml design or implementation work, read these documents and igno
 
 ### Host and runtime contract
 - `docs/spec/OXFML_HOST_RUNTIME_AND_EXTERNAL_REQUIREMENTS.md`
+- `docs/spec/OXFML_FIXTURE_HOST_AND_COORDINATOR_STANDIN_PACKET.md`
 - `docs/spec/OXFML_PUBLIC_API_AND_RUNTIME_SERVICE_SKETCH.md`
 - `docs/spec/OXFML_TEST_LADDER_AND_PROVING_HOSTS.md`
 - `docs/spec/OXFML_DNA_ONECALC_HOST_POLICY_BASELINE.md`
@@ -89,6 +93,8 @@ When starting OxFml design or implementation work, read these documents and igno
 - `docs/spec/formula-language/OXFML_HOST_MANAGED_NAME_AND_EXTERNAL_NAME_BOUNDARY.md`
 - `docs/spec/formula-language/OXFML_STRUCTURED_REFERENCE_AND_TABLE_BOUNDARY.md`
 - `docs/spec/formula-language/OXFML_EDITOR_LANGUAGE_SERVICE_AND_HOST_INTEGRATION_PLAN.md`
+- `docs/spec/formula-language/OXFML_OXFUNC_EVALUATION_ADAPTER_AND_TEST_ARTIFACTS.md`
+- `docs/spec/formula-language/OXFML_REGISTERED_EXTERNAL_PROVIDER_AND_CALL_REGISTER_ID_BOUNDARY.md`
 - `docs/spec/formula-language/EXCEL_FORMULA_LANGUAGE_CONCRETE_RULES.md`
 - `docs/spec/formula-language/EXCEL_FORMULA_LANGUAGE_CONFORMANCE_MATRIX.csv`
 - `docs/spec/formula-language/MS_OE376_FORMULA_AND_FORMATTING_REVIEW.md`

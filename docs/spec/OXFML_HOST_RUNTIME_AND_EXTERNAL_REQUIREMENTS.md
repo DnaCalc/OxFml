@@ -417,3 +417,19 @@ Current limitation:
 1. the helper packet is a first-host capture projection, not a pack-grade replay bundle builder,
 2. hosts still need to map that packet into the wider replay appliance import families,
 3. replay evidence remains local-witness-tier rather than pack-grade.
+
+## 17. Relationship To Fixture Hosts And Stand-In Coordinator Packets
+The current host/runtime contract is also the source packet family for deterministic fixture hosts used in integration artifacts such as the OxFunc adapter wave.
+
+Working rule:
+1. fixture hosts may stand in for host/coordinator-owned truths locally,
+2. they should still reuse the same semantic packet families described in this document,
+3. that reuse must not be over-read as production OxCalc coordinator API freeze.
+
+Current first stand-in packet direction is tracked in:
+1. `docs/spec/OXFML_FIXTURE_HOST_AND_COORDINATOR_STANDIN_PACKET.md`
+
+Current intended reuse:
+1. OxFunc-facing adapter fixtures under `W049` and `W050`,
+2. later direct-host integration tests,
+3. later OxCalc-integrated test packets where the coordinator wraps or reuses the same semantic host inputs.

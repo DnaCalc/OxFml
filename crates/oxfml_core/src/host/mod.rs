@@ -3,9 +3,11 @@ use std::collections::BTreeMap;
 use oxfunc_core::functions::rtd_fn::RtdProvider;
 use oxfunc_core::host_info::HostInfoProvider;
 use oxfunc_core::locale_format::LocaleFormatContext;
-use oxfunc_core::value::{EvalValue, ExcelText, ReferenceLike};
+use oxfunc_core::value::{EvalValue, ExcelText, ExtendedValue, ReferenceLike, WorksheetErrorCode};
 
-use crate::binding::{BindContext, BindRequest, BoundFormula, NameKind, bind_formula_incremental};
+use crate::binding::{
+    BindContext, BindDiagnostic, BindRequest, BoundFormula, NameKind, bind_formula_incremental,
+};
 use crate::eval::{
     CallableDefinedNameBinding, DefinedNameBinding, EvaluationBackend, EvaluationContext,
     EvaluationOutput, evaluate_formula,
@@ -27,6 +29,7 @@ use crate::semantics::{CompileSemanticPlanRequest, SemanticPlan, compile_semanti
 use crate::source::{FormulaSourceRecord, StructureContextVersion};
 use crate::syntax::green::GreenTreeRoot;
 use crate::syntax::parser::{ParseRequest, parse_formula_incremental};
+use crate::syntax::token::SyntaxDiagnostic;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ArtifactReuseReport {
@@ -52,6 +55,7 @@ struct CachedHostArtifacts {
 pub struct SingleFormulaHost {
     pub formula_stable_id: String,
     pub formula_text: String,
+    pub formula_channel_kind: crate::source::FormulaChannelKind,
     pub formula_text_version: u64,
     pub structure_context_version: String,
     pub caller_row: u32,
@@ -72,11 +76,14 @@ pub struct SingleFormulaHost {
 #[derive(Debug, Clone, PartialEq)]
 pub struct HostRecalcOutput {
     pub source: FormulaSourceRecord,
+    pub syntax_diagnostics: Vec<SyntaxDiagnostic>,
+    pub bind_diagnostics: Vec<BindDiagnostic>,
     pub library_context_snapshot_ref: Option<LibraryContextSnapshotRef>,
     pub semantic_plan: SemanticPlan,
     pub execution_contract: ExecutionContract,
     pub typed_query_bundle_spec: TypedContextQueryBundleSpec,
     pub evaluation: EvaluationOutput,
+    pub published_worksheet_value: EvalValue,
     pub returned_value_surface: ReturnedValueSurface,
     pub candidate_result: AcceptedCandidateResult,
     pub commit_decision: AcceptDecision,
@@ -141,6 +148,7 @@ impl SingleFormulaHost {
         Self {
             formula_stable_id: formula_stable_id.into(),
             formula_text: formula_text.into(),
+            formula_channel_kind: crate::source::FormulaChannelKind::WorksheetA1,
             formula_text_version: 1,
             structure_context_version: "host-struct-v1".to_string(),
             caller_row: 1,
@@ -166,6 +174,14 @@ impl SingleFormulaHost {
     pub fn set_formula_text(&mut self, formula_text: impl Into<String>) {
         self.formula_text = formula_text.into();
         self.formula_text_version += 1;
+        self.cached_artifacts = None;
+    }
+
+    pub fn set_formula_channel_kind(
+        &mut self,
+        formula_channel_kind: crate::source::FormulaChannelKind,
+    ) {
+        self.formula_channel_kind = formula_channel_kind;
         self.cached_artifacts = None;
     }
 
@@ -253,7 +269,8 @@ impl SingleFormulaHost {
             self.formula_stable_id.clone(),
             self.formula_text_version,
             self.formula_text.clone(),
-        );
+        )
+        .with_formula_channel_kind(self.formula_channel_kind);
         let cached_artifacts = self.cached_artifacts.as_ref();
         let parse = parse_formula_incremental(
             ParseRequest {
@@ -266,6 +283,7 @@ impl SingleFormulaHost {
             &parse.green_tree,
             cached_artifacts.map(|artifacts| &artifacts.red_projection),
         );
+        let syntax_diagnostics = parse.green_tree.diagnostics.clone();
         let bind = bind_formula_incremental(
             BindRequest {
                 source: source.clone(),
@@ -379,7 +397,15 @@ impl SingleFormulaHost {
         evaluation_context.defined_names = self.defined_names.clone();
         evaluation_context.apply_typed_context_query_bundle(query_bundle);
 
-        let evaluation = evaluate_formula(evaluation_context).map_err(|err| err.message)?;
+        let bind_mismatch_detail = bind_mismatch_detail(&bind.bound_formula.diagnostics);
+        let evaluation = if let Some(detail) = bind_mismatch_detail.as_deref() {
+            synthetic_bind_mismatch_evaluation(&semantic_plan, detail)
+        } else {
+            evaluate_formula(evaluation_context).map_err(|err| err.message)?
+        };
+        let published_worksheet_value = published_worksheet_value(&evaluation.oxfunc_value);
+        let returned_value_surface =
+            published_returned_value_surface(&evaluation, &published_worksheet_value);
 
         let session_id = format!("session:{:04}", self.next_session_id);
         self.next_session_id += 1;
@@ -390,24 +416,33 @@ impl SingleFormulaHost {
             &source,
             &semantic_plan,
             &evaluation,
+            &published_worksheet_value,
+            &returned_value_surface,
             &self.primary_locus,
             &session_id,
         );
-        let commit_decision = commit_candidate(CommitRequest {
-            candidate_result: candidate_result.clone(),
-            commit_attempt_id: commit_attempt_id.clone(),
-            observed_fence: candidate_result.fence_snapshot.clone(),
-        });
+        let commit_decision = if let Some(detail) = bind_mismatch_detail.as_deref() {
+            bind_mismatch_reject(&candidate_result, &session_id, &commit_attempt_id, detail)
+        } else {
+            commit_candidate(CommitRequest {
+                candidate_result: candidate_result.clone(),
+                commit_attempt_id: commit_attempt_id.clone(),
+                observed_fence: candidate_result.fence_snapshot.clone(),
+            })
+        };
         let trace_events =
             build_trace_events(&candidate_result, &commit_decision, &commit_attempt_id);
 
         Ok(HostRecalcOutput {
             source,
+            syntax_diagnostics,
+            bind_diagnostics: bind.bound_formula.diagnostics.clone(),
             library_context_snapshot_ref,
             semantic_plan,
             execution_contract,
             typed_query_bundle_spec,
-            returned_value_surface: evaluation.returned_value_surface.clone(),
+            published_worksheet_value,
+            returned_value_surface,
             evaluation,
             candidate_result,
             commit_decision,
@@ -479,12 +514,14 @@ fn build_candidate_result(
     source: &FormulaSourceRecord,
     semantic_plan: &SemanticPlan,
     evaluation: &EvaluationOutput,
+    published_worksheet_value: &EvalValue,
+    returned_value_surface: &ReturnedValueSurface,
     primary_locus: &Locus,
     session_id: &str,
 ) -> AcceptedCandidateResult {
     let candidate_result_id = format!("candidate:{}", source.formula_text_version.0);
     let (worksheet_value_class, value_payload, extent) =
-        value_payload_for_eval_value(&evaluation.oxfunc_value);
+        value_payload_for_eval_value(published_worksheet_value);
     let spill_events = if let Some(extent) = &extent {
         if extent.rows > 1 || extent.cols > 1 {
             vec![SpillEvent {
@@ -589,7 +626,7 @@ fn build_candidate_result(
         },
         format_delta,
         display_delta,
-        returned_value_surface: evaluation.returned_value_surface.clone(),
+        returned_value_surface: returned_value_surface.clone(),
         spill_events,
         execution_profile: Some(semantic_plan.execution_profile.clone()),
         trace_correlation_id: format!("trace:{candidate_result_id}"),
@@ -767,6 +804,94 @@ fn parse_empirical_eval_value(summary: &str) -> Result<EvalValue, String> {
     }
 
     Err(format!("unsupported empirical binding summary: {summary}"))
+}
+
+fn bind_mismatch_detail(diagnostics: &[BindDiagnostic]) -> Option<String> {
+    diagnostics
+        .iter()
+        .find(|diagnostic| {
+            diagnostic
+                .message
+                .starts_with("duplicate LET binding name ")
+        })
+        .map(|diagnostic| diagnostic.message.clone())
+}
+
+fn synthetic_bind_mismatch_evaluation(
+    semantic_plan: &SemanticPlan,
+    detail: &str,
+) -> EvaluationOutput {
+    EvaluationOutput {
+        result: crate::eval::PreparedResult {
+            result_class: crate::eval::PreparedResultClass::Error,
+            structure_class: crate::eval::PreparedStructureClass::DirectScalar,
+            payload_summary: "Error(Value)".to_string(),
+            blankness_class: crate::eval::PreparedBlanknessClass::NonBlank,
+            reference_target: None,
+            callable_carrier: None,
+            callable_profile: None,
+            callable_profile_detail: None,
+            deferred_reason: Some(detail.to_string()),
+            format_hint: if semantic_plan.execution_profile.requires_locale {
+                Some("locale_format_semantics".to_string())
+            } else {
+                None
+            },
+            publication_hint: if semantic_plan.execution_profile.requires_host_query {
+                Some("host_query_surface".to_string())
+            } else {
+                None
+            },
+            capability_dependencies: semantic_plan.capability_requirements.clone(),
+        },
+        oxfunc_value: EvalValue::Error(WorksheetErrorCode::Value),
+        returned_value_surface: ReturnedValueSurface::from_extended_value(&ExtendedValue::Core(
+            EvalValue::Error(WorksheetErrorCode::Value),
+        )),
+        trace: crate::eval::EvaluationTrace {
+            prepared_calls: Vec::new(),
+        },
+    }
+}
+
+fn published_worksheet_value(value: &EvalValue) -> EvalValue {
+    match value {
+        EvalValue::Lambda(_) => EvalValue::Error(WorksheetErrorCode::Calc),
+        _ => value.clone(),
+    }
+}
+
+fn published_returned_value_surface(
+    evaluation: &EvaluationOutput,
+    published_value: &EvalValue,
+) -> ReturnedValueSurface {
+    if published_value == &evaluation.oxfunc_value {
+        evaluation.returned_value_surface.clone()
+    } else {
+        ReturnedValueSurface::from_extended_value(&ExtendedValue::Core(published_value.clone()))
+    }
+}
+
+fn bind_mismatch_reject(
+    candidate_result: &AcceptedCandidateResult,
+    session_id: &str,
+    commit_attempt_id: &str,
+    detail: &str,
+) -> AcceptDecision {
+    AcceptDecision::Rejected(crate::seam::RejectRecord {
+        formula_stable_id: candidate_result.formula_stable_id.clone(),
+        session_id: Some(session_id.to_string()),
+        commit_attempt_id: Some(commit_attempt_id.to_string()),
+        reject_code: crate::seam::RejectCode::BindMismatch,
+        context: crate::seam::RejectContext::ResourceInvariant(
+            crate::seam::ResourceInvariantContext {
+                failure_family: "bind_validation".to_string(),
+                machine_detail_code: detail.to_string(),
+                resource_class: Some("bind_formula".to_string()),
+            },
+        ),
+        trace_correlation_id: candidate_result.trace_correlation_id.clone(),
+    })
 }
 
 fn build_trace_events(
