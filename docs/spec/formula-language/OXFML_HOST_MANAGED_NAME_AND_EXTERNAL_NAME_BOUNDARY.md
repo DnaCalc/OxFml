@@ -7,6 +7,10 @@ This document keeps workbook object ownership in the host while making the OxFml
 
 It is a draft boundary packet, not a final workbook-management specification.
 
+Read together with:
+1. `OXFML_NAME_WORLD_AND_RUNTIME_REGISTRATION_INVALIDATION.md`
+2. `OXFML_REGISTERED_EXTERNAL_PROVIDER_AND_CALL_REGISTER_ID_BOUNDARY.md`
+
 ## Core Rule
 1. the host owns name objects, external-name objects, scope, storage, add/remove/rename, and workbook-link policy,
 2. OxFml does not own workbook name-carrier management,
@@ -26,6 +30,11 @@ It is a draft boundary packet, not a final workbook-management specification.
    - provider-backed,
    - provider-failed,
 5. broader workbook-management semantics outside the presented evaluation request.
+
+Current invalidation rule:
+1. host-owned defined-name add/remove/rename/reclassification should be treated as a bind-visible name-world change,
+2. for invalidation purposes that is the same broad class as a bind-visible function-name world change,
+3. hosts should therefore change `structure_context_version` and rebind affected formulas rather than treating such changes as narrow reevaluation-only mutations.
 
 ### OxFml-owned
 1. parse, bind, and semantic-plan meaning once the managed formula request is presented,

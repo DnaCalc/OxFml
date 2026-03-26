@@ -134,6 +134,13 @@ This allows:
 2. runtime add/remove semantics without build-time regeneration dependence,
 3. deterministic replay pinning to a specific snapshot generation.
 
+Current invalidation reading:
+1. if runtime registration/removal creates or removes an ordinary formula-callable surface by name, that is a bind-visible function-catalog change,
+2. OxFunc should therefore publish a new immutable snapshot generation,
+3. hosts and OxFml should treat affected formulas pinned to the older snapshot as stale for bind/semantic-plan purposes,
+4. this is the function-catalog analogue of host-owned defined-name structural change,
+5. narrower registered-external descriptor mutation used only through worksheet `CALL` / `REGISTER.ID` does not automatically imply broad bind invalidation unless a bind-visible function-name world also changed.
+
 ## Invariants
 The runtime interface should preserve these invariants:
 1. snapshots are immutable once published,

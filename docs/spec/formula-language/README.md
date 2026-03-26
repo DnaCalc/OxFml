@@ -11,12 +11,13 @@ This directory contains the canonical OxFml formula-language design documents pl
 6. `OXFML_R1C1_FORMULA_CHANNEL.md`
 7. `OXFML_CF_DV_RESTRICTED_SUBLANGUAGES.md`
 8. `OXFML_HOST_MANAGED_NAME_AND_EXTERNAL_NAME_BOUNDARY.md`
-9. `OXFML_STRUCTURED_REFERENCE_AND_TABLE_BOUNDARY.md`
-10. `OXFML_EDITOR_LANGUAGE_SERVICE_AND_HOST_INTEGRATION_PLAN.md`
-11. `OXFML_OXFUNC_EVALUATION_ADAPTER_AND_TEST_ARTIFACTS.md`
-12. `OXFML_REGISTERED_EXTERNAL_PROVIDER_AND_CALL_REGISTER_ID_BOUNDARY.md`
-13. `EXCEL_FORMULA_LANGUAGE_CONCRETE_RULES.md`
-14. `EXCEL_FORMULA_LANGUAGE_CONFORMANCE_MATRIX.csv`
+9. `OXFML_NAME_WORLD_AND_RUNTIME_REGISTRATION_INVALIDATION.md`
+10. `OXFML_STRUCTURED_REFERENCE_AND_TABLE_BOUNDARY.md`
+11. `OXFML_EDITOR_LANGUAGE_SERVICE_AND_HOST_INTEGRATION_PLAN.md`
+12. `OXFML_OXFUNC_EVALUATION_ADAPTER_AND_TEST_ARTIFACTS.md`
+13. `OXFML_REGISTERED_EXTERNAL_PROVIDER_AND_CALL_REGISTER_ID_BOUNDARY.md`
+14. `EXCEL_FORMULA_LANGUAGE_CONCRETE_RULES.md`
+15. `EXCEL_FORMULA_LANGUAGE_CONFORMANCE_MATRIX.csv`
 
 ## Canonical documents
 - `OXFML_FORMULA_ENGINE_ARCHITECTURE.md`
@@ -37,6 +38,8 @@ This directory contains the canonical OxFml formula-language design documents pl
   current first local conditional-formatting and data-validation restricted-carrier floor.
 - `OXFML_HOST_MANAGED_NAME_AND_EXTERNAL_NAME_BOUNDARY.md`
   draft implementation-facing seam for host-managed defined-name and external-name evaluation.
+- `OXFML_NAME_WORLD_AND_RUNTIME_REGISTRATION_INVALIDATION.md`
+  invalidation model for bind-visible function-name worlds, defined-name worlds, and narrower registered-external runtime descriptor changes.
 - `OXFML_STRUCTURED_REFERENCE_AND_TABLE_BOUNDARY.md`
   draft implementation-facing seam for host-owned table metadata and OxFml-managed structured-reference semantics.
 - `OXFML_EDITOR_LANGUAGE_SERVICE_AND_HOST_INTEGRATION_PLAN.md`

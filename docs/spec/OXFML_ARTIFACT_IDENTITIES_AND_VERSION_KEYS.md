@@ -103,6 +103,7 @@ Examples of contributors:
 3. table metadata,
 4. caller anchor movement,
 5. profile-gated grammar or feature enablement where binding is affected.
+6. defined-name world changes that affect visible name resolution.
 
 ### 6.2 `bind_input_key`
 `bind_input_key` is the conceptual key of one bind attempt.
@@ -154,6 +155,11 @@ Working meaning:
 1. it changes when publish-relevant workbook state changes,
 2. it is a fence input for evaluator sessions,
 3. it is coordinator-facing in integrated mode.
+
+Related rule:
+1. `snapshot_epoch` is not the same thing as function-catalog snapshot generation,
+2. function-catalog changes that alter bind-visible function-name resolution should instead be expressed through the pinned runtime `LibraryContextSnapshotRef`,
+3. hosts/coordinators should keep workbook-structure versioning and function-catalog versioning distinct even when a single implementation update causes both to change.
 
 ### 8.2 `profile_version`
 `profile_version` is the declared version key for enabled semantics/features/profile rules relevant to parsing, binding, or evaluation.

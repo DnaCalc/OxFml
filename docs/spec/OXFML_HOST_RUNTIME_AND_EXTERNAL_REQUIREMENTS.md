@@ -26,6 +26,7 @@ Read together with:
 8. `formula-language/OXFML_R1C1_FORMULA_CHANNEL.md`
 9. `formula-language/OXFML_CF_DV_RESTRICTED_SUBLANGUAGES.md`
 10. `formula-language/OXFML_STRUCTURED_REFERENCE_AND_TABLE_BOUNDARY.md`
+11. `formula-language/OXFML_NAME_WORLD_AND_RUNTIME_REGISTRATION_INVALIDATION.md`
 
 ## 2. Authority Boundary
 OxFml remains authoritative for:
@@ -120,6 +121,11 @@ Working rule:
 3. a host must not mutate a pinned snapshot in place and still claim stable replay or bind truth,
 4. built-in catalog population remains OxFunc-owned from the start,
 5. runtime registration and unregister of external functions should be funneled through OxFml packet normalization into OxFunc-owned catalog mutation rather than implemented as host-local side tables.
+
+Current invalidation rule:
+1. if runtime registration/removal creates or removes an ordinary formula-callable surface by name, treat that as a bind-visible name-world change,
+2. if host-owned defined names are added, removed, renamed, or reclassified, treat that as the same broad invalidation class,
+3. if a change only affects worksheet `CALL` / `REGISTER.ID` descriptor/runtime truth, treat it as a narrower reevaluation lane unless it also changes a bind-visible function-name world.
 
 ### 4.3 Typed Context and Query Inputs
 For the currently covered local scope, a host must be able to supply the first typed context/query bundle families:
