@@ -112,11 +112,14 @@ Working rule:
 2. immutable `LibraryContextSnapshot`
 3. explicit snapshot identity and generation
 4. runtime lookup over that pinned snapshot during bind or semantic-plan work
+5. for runtime catalog mutation lanes, a host-facing OxFunc-owned registered-external mutation/controller surface rather than host-local catalog mutation
 
 Working rule:
 1. runtime catalog truth is a runtime interface, not a build-time-only ingestion step,
 2. registration or removal must yield a new snapshot generation,
-3. a host must not mutate a pinned snapshot in place and still claim stable replay or bind truth.
+3. a host must not mutate a pinned snapshot in place and still claim stable replay or bind truth,
+4. built-in catalog population remains OxFunc-owned from the start,
+5. runtime registration and unregister of external functions should be funneled through OxFml packet normalization into OxFunc-owned catalog mutation rather than implemented as host-local side tables.
 
 ### 4.3 Typed Context and Query Inputs
 For the currently covered local scope, a host must be able to supply the first typed context/query bundle families:
@@ -132,7 +135,14 @@ For the currently covered local scope, a host must be able to supply the first t
 3. `RtdProvider`
    - `RtdRequest { prog_id, server_name, topic_strings }`
    - `RtdProviderResult::{ Value, NoValueYet, CapabilityDenied, ConnectionFailed, ProviderError }`
-4. scalar context inputs:
+4. `RegisteredExternalProvider`
+   - `resolve_register_id(RegisterIdRequest)`
+   - `lookup_registered_external(register_id)`
+   - `invoke_registered_external(descriptor, args)`
+5. for host-initiated runtime registration and unregister:
+   - `RegisteredExternalCatalogMutationRequest`
+   - `RegisteredExternalCatalogController`
+6. scalar context inputs:
    - `now_serial`
    - `random_value`
    - `LocaleFormatContext`
@@ -140,7 +150,8 @@ For the currently covered local scope, a host must be able to supply the first t
 
 Deferred-provider rule:
 1. provider families explicitly deferred in OxFml or OxFunc remain outside this host contract,
-2. hosts must not infer support for a deferred provider family from the existence of a generic typed-provider slot.
+2. hosts must not infer support for a deferred provider family from the existence of a generic typed-provider slot,
+3. worksheet `CALL` / `REGISTER.ID` and host/VBA registration channels should share the same OxFunc-owned registered-external catalog truth rather than independent side channels.
 
 ### 4.4 Capability and Fence Inputs
 Where the session path is used, a host must also supply:

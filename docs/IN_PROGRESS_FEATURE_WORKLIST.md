@@ -106,11 +106,11 @@ Last updated: 2026-03-25.
 
 ### IP-15: Worksheet CALL And REGISTER.ID Runtime Boundary
 
-- **Status**: planned
-- **Current floor**: the latest OxFunc note isolates worksheet `CALL` / `REGISTER.ID` as the next bounded OxFml/OxFunc runtime lane and asks three concrete questions about provider separation, packet carriage, and runtime ownership. OxFml now has a first best-effort boundary draft in `docs/spec/formula-language/OXFML_REGISTERED_EXTERNAL_PROVIDER_AND_CALL_REGISTER_ID_BOUNDARY.md`.
-- **Remaining gaps**: no local harness or fixture evidence exists yet; OxCalc has not yet been asked to react to the same bounded packet; the exact field set and runtime/provider split are not yet frozen.
-- **Why still open**: this lane was intentionally kept outside the validated `W049` / `W050` first adapter wave and now needs its own bounded owner rather than floating note debt.
-- **Canonical owner**: planned owner `W052`.
+- **Status**: in-progress
+- **Current floor**: OxFml now has a first exercised `W052` packet floor for worksheet `REGISTER.ID`, worksheet `CALL`, reference-visible `CALL` arguments, host API registration, VBA shim registration, and unregister packet carriage. The local packet now includes `RegisteredExternalProvider`, `RegisterIdRequest`, `RegisteredExternalDescriptor`, `RegisteredExternalCatalogMutationRequest`, `RegisteredExternalCatalogMutationResult`, and `RegisteredExternalCatalogController`, with host-facing support through `SingleFormulaHost::recalc_with_registered_external_provider(...)` and `SingleFormulaHost::apply_registered_external_catalog_mutation(...)`. Built-in catalog truth and runtime register/unregister semantics are now explicitly treated as OxFunc-owned, while OxFml preserves channel-specific host/VBA provenance and worksheet-visible consequence typing.
+- **Remaining gaps**: OxFunc and OxCalc have not yet both acknowledged the sharpened packet wording; descriptor-driven dereference/coercion ownership is not yet frozen as shared seam text; later snapshot-generation consequences from register/unregister remain narrower than final closure.
+- **Why still open**: the local packet and evidence now exist, but the shared seam still needs the next bounded note round and any resulting field-level freeze.
+- **Canonical owner**: active owner `W052`.
 
 ### IP-14: Fixture Host And Coordinator Stand-In Packet
 

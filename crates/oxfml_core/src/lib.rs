@@ -37,6 +37,9 @@ pub use host::{
 pub use interface::{
     HostProviderOutcomeKind, HostProviderOutcomeSurface, InMemoryLibraryContextProvider,
     LibraryContextFieldClass, LibraryContextProvider, LibraryContextSnapshotRef,
+    RegisteredExternalCatalogController, RegisteredExternalCatalogMutationRequest,
+    RegisteredExternalCatalogMutationResult, RegisteredExternalHostRegistrationRequest,
+    RegisteredExternalRegistrationChannel, RegisteredExternalUnregisterRequest,
     ReturnedValueSurface, ReturnedValueSurfaceKind, TableCallerRegion, TableColumnDescriptor,
     TableDescriptor, TableRef, TableRegionKind, TypedContextQueryBundle,
     TypedContextQueryBundleSpec, TypedContextQueryFamily, classify_library_context_field,

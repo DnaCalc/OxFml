@@ -979,3 +979,54 @@ Current local evidence files:
 1. [evaluator_tests.rs](C:/Work/DnaCalc/OxFml/crates/oxfml_core/tests/evaluator_tests.rs)
 2. [w049_oxfunc_adapter_tests.rs](C:/Work/DnaCalc/OxFml/crates/oxfml_core/tests/w049_oxfunc_adapter_tests.rs)
 3. [w050_oxfunc_pinned_fixture_tests.rs](C:/Work/DnaCalc/OxFml/crates/oxfml_core/tests/w050_oxfunc_pinned_fixture_tests.rs)
+
+## 30. Current W052 Registered-External Runtime Packet Read
+OxFml has now taken the worksheet `CALL` / `REGISTER.ID` lane through a first local exercised packet rather than leaving it at note-draft level.
+
+Current local packet and evidence floor:
+1. typed context/query bundle now carries optional `RegisteredExternalProvider`,
+2. evaluation now passes that provider into OxFunc's real `CALL` / `REGISTER.ID` dispatch path,
+3. first local host-facing support now exists through:
+   - `SingleFormulaHost::recalc_with_registered_external_provider(...)`
+   - `SingleFormulaHost::apply_registered_external_catalog_mutation(...)`,
+4. deterministic local evidence now exists for:
+   - worksheet `REGISTER.ID`,
+   - worksheet `CALL`,
+   - reference-visible `CALL` arguments,
+   - host API registration,
+   - VBA shim registration,
+   - unregister packet carriage.
+
+Current sharpened OxFml ownership read:
+1. built-in function and operator catalog truth remains OxFunc-owned,
+2. runtime registered-external catalog truth also remains OxFunc-owned,
+3. OxFml should not maintain a competing host-local function catalog,
+4. host-side registration channels should instead be normalized into OxFunc-owned mutation packets,
+5. the initiating channel still matters and should remain explicit on the OxFml side:
+   - `WorksheetRegisterId`
+   - `HostApiRegistration`
+   - `VbaProjectShimRegistration`.
+
+Current bounded packet read:
+1. worksheet runtime packet:
+   - `RegisterIdRequest`
+   - `RegisteredExternalDescriptor`
+   - `RegisteredExternalCallRequest`
+   - `RegisteredExternalProvider`,
+2. host mutation packet:
+   - `RegisteredExternalCatalogMutationRequest::{ Register, Unregister }`
+   - `RegisteredExternalCatalogMutationResult::{ RegisterApplied, UnregisterApplied }`
+   - `RegisteredExternalCatalogController`,
+3. OxFml now treats those mutation packets as host-facing funnel surfaces into OxFunc-owned catalog mutation logic rather than as evidence that OxFml owns the catalog.
+
+Current descriptor-driven rule:
+1. OxFml preserves reference-visible versus dereferenced prepared-argument lanes,
+2. OxFunc-side descriptor or direct-call metadata should decide dereference and general worksheet-to-external type conversion,
+3. OxFml should not pre-flatten those rules into one eager value lane at the worksheet boundary.
+
+Current OxFml reply back to OxFunc:
+1. yes, the local packet now matches the earlier descriptor-driven registration reading,
+2. yes, OxFml now treats host API registration and VBA shim registration as first-class initiating channels that still converge on OxFunc-owned catalog truth,
+3. yes, unregister should use the same bounded mutation seam rather than a host-local side path,
+4. no, OxFml still does not read this as permission to make the runtime library-context snapshot the sole carrier of live register/unregister and invocation packets,
+5. the next useful OxFunc response should be only concrete packet-field or ownership mismatches inside this narrower `W052` surface.

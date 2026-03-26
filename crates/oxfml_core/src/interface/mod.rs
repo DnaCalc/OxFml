@@ -1,5 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use oxfunc_core::functions::call_register_id_family::{
+    RegisterIdRequest, RegisteredExternalDescriptor, RegisteredExternalProvider,
+    RegisteredExternalProviderError,
+};
 use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult};
 use oxfunc_core::host_info::{HostInfoError, HostInfoProvider};
 use oxfunc_core::locale_format::LocaleFormatContext;
@@ -19,6 +23,7 @@ pub enum TypedContextQueryFamily {
     WidthConversionMode,
     Translate,
     Rtd,
+    RegisteredExternal,
     NowSerial,
     RandomValue,
     LocaleFormatContext,
@@ -72,6 +77,7 @@ pub struct TableDescriptor {
 pub struct TypedContextQueryBundle<'a> {
     pub host_info: Option<&'a dyn HostInfoProvider>,
     pub rtd_provider: Option<&'a dyn RtdProvider>,
+    pub registered_external_provider: Option<&'a dyn RegisteredExternalProvider>,
     pub locale_ctx: Option<&'a LocaleFormatContext<'a>>,
     pub now_serial: Option<f64>,
     pub random_value: Option<f64>,
@@ -82,6 +88,10 @@ impl std::fmt::Debug for TypedContextQueryBundle<'_> {
         f.debug_struct("TypedContextQueryBundle")
             .field("host_info_enabled", &self.host_info.is_some())
             .field("rtd_provider_enabled", &self.rtd_provider.is_some())
+            .field(
+                "registered_external_provider_enabled",
+                &self.registered_external_provider.is_some(),
+            )
             .field("locale_ctx_enabled", &self.locale_ctx.is_some())
             .field("now_serial_enabled", &self.now_serial.is_some())
             .field("random_value_enabled", &self.random_value.is_some())
@@ -94,6 +104,7 @@ impl<'a> Default for TypedContextQueryBundle<'a> {
         Self {
             host_info: None,
             rtd_provider: None,
+            registered_external_provider: None,
             locale_ctx: None,
             now_serial: None,
             random_value: None,
@@ -112,10 +123,19 @@ impl<'a> TypedContextQueryBundle<'a> {
         Self {
             host_info,
             rtd_provider,
+            registered_external_provider: None,
             locale_ctx,
             now_serial,
             random_value,
         }
+    }
+
+    pub fn with_registered_external_provider(
+        mut self,
+        registered_external_provider: Option<&'a dyn RegisteredExternalProvider>,
+    ) -> Self {
+        self.registered_external_provider = registered_external_provider;
+        self
     }
 
     pub fn freeze_candidate_spec(&self) -> TypedContextQueryBundleSpec {
@@ -135,6 +155,9 @@ impl<'a> TypedContextQueryBundle<'a> {
         if self.rtd_provider.is_some() {
             families.insert(TypedContextQueryFamily::Rtd);
         }
+        if self.registered_external_provider.is_some() {
+            families.insert(TypedContextQueryFamily::RegisteredExternal);
+        }
         if self.now_serial.is_some() {
             families.insert(TypedContextQueryFamily::NowSerial);
         }
@@ -149,6 +172,58 @@ impl<'a> TypedContextQueryBundle<'a> {
             families: families.into_iter().collect(),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum RegisteredExternalRegistrationChannel {
+    WorksheetRegisterId,
+    HostApiRegistration,
+    VbaProjectShimRegistration,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegisteredExternalHostRegistrationRequest {
+    pub registration_channel: RegisteredExternalRegistrationChannel,
+    pub register_id_request: RegisterIdRequest,
+    pub stable_registration_id_hint: Option<String>,
+    pub display_name_hint: Option<String>,
+    pub help_text_hint: Option<String>,
+    pub source_project_ref: Option<String>,
+    pub source_module_ref: Option<String>,
+    pub source_procedure_ref: Option<String>,
+    pub host_execution_profile: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegisteredExternalUnregisterRequest {
+    pub registration_channel: RegisteredExternalRegistrationChannel,
+    pub stable_registration_id: String,
+    pub host_execution_profile: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RegisteredExternalCatalogMutationRequest {
+    Register(RegisteredExternalHostRegistrationRequest),
+    Unregister(RegisteredExternalUnregisterRequest),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RegisteredExternalCatalogMutationResult {
+    RegisterApplied {
+        descriptor: RegisteredExternalDescriptor,
+        host_execution_profile: Option<String>,
+    },
+    UnregisterApplied {
+        stable_registration_id: String,
+        host_execution_profile: Option<String>,
+    },
+}
+
+pub trait RegisteredExternalCatalogController {
+    fn apply_mutation(
+        &self,
+        request: &RegisteredExternalCatalogMutationRequest,
+    ) -> Result<RegisteredExternalCatalogMutationResult, RegisteredExternalProviderError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

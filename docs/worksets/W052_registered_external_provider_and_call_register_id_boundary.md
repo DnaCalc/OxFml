@@ -27,7 +27,13 @@ Narrow the first OxFml-owned worksheet `CALL` / `REGISTER.ID` seam packet so fut
 1. A canonical OxFml-side worksheet `CALL` / `REGISTER.ID` boundary note.
 2. A workset-owned list of first packet fields and ownership rules.
 3. A narrowed OxFml reply packet for the next OxFunc/OxCalc seam round.
-4. A plan for deterministic local harness cases once the packet is accepted.
+4. Deterministic local harness cases for:
+   - worksheet `REGISTER.ID`
+   - worksheet `CALL`
+   - reference-visible `CALL` arguments
+   - host API registration
+   - VBA shim registration
+   - unregister packet carriage.
 
 ## Gate Model
 ### Entry gate
@@ -35,8 +41,8 @@ Narrow the first OxFml-owned worksheet `CALL` / `REGISTER.ID` seam packet so fut
 - OxFunc has asked concrete questions about provider separation and packet carriage.
 
 ### Exit gate
-- The first worksheet `CALL` / `REGISTER.ID` packet is explicit enough to drive a deterministic local harness plan.
-- OxFunc and OxCalc have received a narrowed OxFml position on provider separation and packet carriage.
+- The first worksheet `CALL` / `REGISTER.ID` packet is explicit enough to drive deterministic local harness evidence.
+- OxFunc and OxCalc have received a narrowed OxFml position on provider separation, packet carriage, and registration-channel ownership.
 - Any remaining disagreement is a concrete field or ownership mismatch, not a broad seam ambiguity.
 
 ## Pre-Closure Verification Checklist
@@ -54,13 +60,13 @@ Narrow the first OxFml-owned worksheet `CALL` / `REGISTER.ID` seam packet so fut
 | 9 | CURRENT_BLOCKERS.md updated (new/resolved)? | |
 
 ## Status
-- execution_state: planned
+- execution_state: in_progress
 - scope_completeness: scope_partial
 - target_completeness: target_partial
 - integration_completeness: partial
 - open_lanes:
-  - the first OxFml best-effort packet is now drafted in `docs/spec/formula-language/OXFML_REGISTERED_EXTERNAL_PROVIDER_AND_CALL_REGISTER_ID_BOUNDARY.md`, but no local harness or fixture evidence exists yet
-  - the descriptor-driven reference/coercion rule is now drafted, but not yet acknowledged by OxFunc or OxCalc
-  - OxFunc and OxCalc have not yet both reacted to the same bounded packet
-  - worksheet `CALL` / `REGISTER.ID` remains intentionally outside the validated `W049` / `W050` adapter wave
-- claim_confidence: draft
+  - the first OxFml packet is now drafted and locally exercised through `crates/oxfml_core/tests/w052_registered_external_interface_tests.rs`, but it is not yet acknowledged by both OxFunc and OxCalc as the narrowed shared reading
+  - descriptor-driven reference/coercion ownership is locally evidenced, but not yet frozen as shared seam wording
+  - built-in catalog ownership plus runtime register/unregister ownership is now sharpened locally, but snapshot-generation and later coordinator-facing acknowledgment remain note-level
+  - worksheet `CALL` / `REGISTER.ID` remains a separate bounded lane rather than part of the already-validated `W049` / `W050` adapter wave
+- claim_confidence: provisional

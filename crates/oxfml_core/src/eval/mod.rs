@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use oxfunc_core::function::ArgPreparationProfile;
 use oxfunc_core::functions::adapters::PreparedArgValue;
+use oxfunc_core::functions::call_register_id_family::RegisteredExternalProvider;
 use oxfunc_core::functions::callable_helpers::{CallableInvocationError, CallableInvoker};
 use oxfunc_core::functions::cell::{CellEvalError, eval_cell_surface};
 use oxfunc_core::functions::info_fn::{InfoEvalError, eval_info_surface};
@@ -262,6 +263,7 @@ pub struct EvaluationContext<'a> {
     pub locale_ctx: Option<&'a LocaleFormatContext<'a>>,
     pub host_info: Option<&'a dyn HostInfoProvider>,
     pub rtd_provider: Option<&'a dyn RtdProvider>,
+    pub registered_external_provider: Option<&'a dyn RegisteredExternalProvider>,
     pub now_serial: Option<f64>,
     pub random_value: Option<f64>,
 }
@@ -279,6 +281,7 @@ impl<'a> EvaluationContext<'a> {
             locale_ctx: None,
             host_info: None,
             rtd_provider: None,
+            registered_external_provider: None,
             now_serial: None,
             random_value: None,
         }
@@ -292,11 +295,13 @@ impl<'a> EvaluationContext<'a> {
             self.now_serial,
             self.random_value,
         )
+        .with_registered_external_provider(self.registered_external_provider)
     }
 
     pub fn apply_typed_context_query_bundle(&mut self, bundle: TypedContextQueryBundle<'a>) {
         self.host_info = bundle.host_info;
         self.rtd_provider = bundle.rtd_provider;
+        self.registered_external_provider = bundle.registered_external_provider;
         self.locale_ctx = bundle.locale_ctx;
         self.now_serial = bundle.now_serial;
         self.random_value = bundle.random_value;
@@ -687,7 +692,7 @@ fn evaluate_function_call(
         context.host_info,
         Some(&callable_invoker),
         context.rtd_provider,
-        None,
+        context.registered_external_provider,
     )
     .or_else(|error| {
         if allow_host_query_worksheet_error_fallback(

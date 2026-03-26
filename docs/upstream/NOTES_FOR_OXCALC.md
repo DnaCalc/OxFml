@@ -652,3 +652,29 @@ Current working rule after this pass:
 1. `W051` should now move from draft-only packet proposal toward a narrower packet-freeze/readiness owner,
 2. the next OxCalc round on this topic should be mismatch-driven or implementation-driven,
 3. broader host/runtime, execution-restriction, and publication/topology watch lanes remain separate.
+
+## 20. Current W052 Read Relevant To OxCalc
+OxFml has now exercised the first local registered-external packet family under `W052`.
+
+Current OxFml read that matters to OxCalc:
+1. this does not freeze the broader production coordinator API,
+2. it does make the first stand-in and host-facing packet sharper for later coordinator use,
+3. built-in function and operator catalog truth remains OxFunc-owned,
+4. runtime registered-external catalog truth also remains OxFunc-owned,
+5. host- or coordinator-initiated registration channels should therefore be modeled as typed mutation requests funneled into OxFunc-owned catalog mutation rather than as local coordinator-owned catalog edits.
+
+Current local initiating channels now carried explicitly are:
+1. `WorksheetRegisterId`
+2. `HostApiRegistration`
+3. `VbaProjectShimRegistration`
+
+Current local host-facing packet additions are:
+1. `RegisteredExternalCatalogMutationRequest::{ Register, Unregister }`
+2. `RegisteredExternalCatalogMutationResult::{ RegisterApplied, UnregisterApplied }`
+3. `RegisteredExternalCatalogController`
+
+Current OxFml reading for OxCalc:
+1. the first stand-in packet should keep `RegisteredExternalProvider` optional,
+2. if later TreeCalc-facing integration wants host-side function registration, it should preserve the initiating channel and stable registration identity,
+3. OxCalc should not infer from this packet that it owns the function catalog itself,
+4. later snapshot-generation and coordinator acknowledgment consequences from register/unregister remain narrower than the current first packet and are not yet being frozen here.

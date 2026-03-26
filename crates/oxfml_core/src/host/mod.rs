@@ -1,5 +1,8 @@
 use std::collections::BTreeMap;
 
+use oxfunc_core::functions::call_register_id_family::{
+    RegisteredExternalProvider, RegisteredExternalProviderError,
+};
 use oxfunc_core::functions::rtd_fn::RtdProvider;
 use oxfunc_core::host_info::HostInfoProvider;
 use oxfunc_core::locale_format::LocaleFormatContext;
@@ -13,8 +16,10 @@ use crate::eval::{
     EvaluationOutput, evaluate_formula,
 };
 use crate::interface::{
-    LibraryContextProvider, LibraryContextSnapshotRef, ReturnedValueSurface, TableCallerRegion,
-    TableDescriptor, TableRef, TypedContextQueryBundle, TypedContextQueryBundleSpec,
+    LibraryContextProvider, LibraryContextSnapshotRef, RegisteredExternalCatalogController,
+    RegisteredExternalCatalogMutationRequest, RegisteredExternalCatalogMutationResult,
+    ReturnedValueSurface, TableCallerRegion, TableDescriptor, TableRef, TypedContextQueryBundle,
+    TypedContextQueryBundleSpec,
 };
 use crate::red::{RedProjection, project_red_view_incremental};
 use crate::scheduler::{ExecutionContract, build_execution_contract};
@@ -507,6 +512,36 @@ impl SingleFormulaHost {
             query_bundle,
             library_context_provider,
         )
+    }
+
+    pub fn recalc_with_registered_external_provider(
+        &mut self,
+        host_info: Option<&dyn HostInfoProvider>,
+        registered_external_provider: Option<&dyn RegisteredExternalProvider>,
+        locale_ctx: Option<&LocaleFormatContext<'_>>,
+        library_context_provider: Option<&dyn LibraryContextProvider>,
+    ) -> Result<HostRecalcOutput, String> {
+        let query_bundle = TypedContextQueryBundle::new(
+            host_info,
+            None,
+            locale_ctx,
+            self.now_serial,
+            self.random_value,
+        )
+        .with_registered_external_provider(registered_external_provider);
+        self.recalc_with_interfaces(
+            EvaluationBackend::OxFuncBacked,
+            query_bundle,
+            library_context_provider,
+        )
+    }
+
+    pub fn apply_registered_external_catalog_mutation(
+        &self,
+        controller: &dyn RegisteredExternalCatalogController,
+        request: &RegisteredExternalCatalogMutationRequest,
+    ) -> Result<RegisteredExternalCatalogMutationResult, RegisteredExternalProviderError> {
+        controller.apply_mutation(request)
     }
 }
 
