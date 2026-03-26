@@ -69,7 +69,7 @@ Build the first OxFml-side adapter and consumer harness that can feed OxFunc rea
   - the first adapter request/response packet now exists locally through `crates/oxfml_core/src/oxfunc_adapter/mod.rs`, but it is not yet frozen against the full current OxFunc first-wave artifact set
   - the real OxFml preparation pipeline is now projected into an OxFunc-facing harness artifact, but broader packet-mismatch reporting still needs widening beyond the first current fixture families
   - mismatch reporting is now structured at the packet level, but it has not yet been driven against the broader pinned OxFunc scenario corpus
-  - the current pinned first-wave table is now broadly mapped into local OxFml harness cases, but two callable residuals remain deferred
+  - the current pinned first-wave table is now fully mapped into local OxFml harness cases, but broader mismatch-taxonomy scaling still remains
   - deferred families such as `CALL` / `REGISTER.ID` still need to stay explicitly outside the first adapter floor
 - claim_confidence: provisional
 

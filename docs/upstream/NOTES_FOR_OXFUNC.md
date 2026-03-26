@@ -892,6 +892,49 @@ Current OxFml reply back to OxFunc on the validated `W049` / `W050` lane:
 3. yes, OxFml agrees the next useful adapter/fixed-fixture work should be mismatch-driven rather than note-driven,
 4. no, OxFml does not currently read the validated adapter wave as requiring another broad callable, `@`, or prepared-argument note round.
 
+Current concrete adapter details now exercised locally:
+1. the request packet now carries:
+   - `fixture_case_id`
+   - `formula_stable_id`
+   - `formula_text`
+   - `formula_channel_kind`
+   - `caller_anchor`
+   - optional `active_selection_anchor`
+   - `structure_context_version`
+   - `cell_fixture`
+   - `defined_name_bindings`
+   - `table_catalog`
+   - optional `enclosing_table_ref`
+   - optional `caller_table_region`
+   - `typed_context_query_bundle`
+   - optional `library_context_provider`
+   - optional `library_context_snapshot_ref`
+   - optional `host_query_capability_profile`
+2. the preparation artifact now emits:
+   - frozen query-bundle spec
+   - pinned snapshot ref
+   - syntax diagnostics
+   - bind diagnostics
+   - semantic diagnostics
+   - semantic plan key and bind hash
+   - execution profile and capability requirements
+   - availability summaries
+   - prepared-call frames
+3. the evaluation artifact now emits:
+   - internal `PreparedResult`
+   - published worksheet value
+   - published `ReturnedValueSurface`
+   - candidate result id
+   - commit decision kind
+   - optional reject code
+   - trace event kinds
+4. OxFml now intentionally distinguishes internal callable truth from worksheet publication:
+   - internal bare `LAMBDA(...)` remains a callable value in the evaluation artifact
+   - published worksheet value for the same top-level lane is `#CALC!`
+5. OxFml now intentionally distinguishes bind validation from normal evaluation for duplicate `LET` names:
+   - bind diagnostics record the duplicate binding name
+   - the adapter emits a stable `BindMismatch` rejection rather than treating the case as an ordinary accepted evaluation
+
 Current OxFml best-effort position on the new worksheet `CALL` / `REGISTER.ID` questions:
 1. `RegisteredExternalProvider` should remain separate from `HostInfoProvider`,
 2. the first bounded consumer model should carry `RegisterIdRequest`, `RegisteredExternalDescriptor`, and `RegisteredExternalCallRequest` as direct typed runtime packet lanes rather than only as library-context snapshot rows,
