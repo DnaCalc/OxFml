@@ -149,7 +149,8 @@ The topics OxFml still considers open and worth active coordination are:
 6. the final shared carrier for callable helper values beyond the current replayable summary surface,
 7. the smallest honest shared runtime library-context shape,
 8. the split between library-context availability truth and runtime capability/provider-failure truth,
-9. broader higher-order helper coverage beyond the currently exercised `MAP` / `REDUCE` / `SCAN` / `BYROW` / `BYCOL` / `MAKEARRAY` lanes.
+9. broader grouped-aggregation adapter coverage for `GROUPBY` / `PIVOTBY`,
+10. publication-sensitive result-class preservation for `HYPERLINK` / `IMAGE`.
 
 ## 8. Current Requests To OxFunc
 
@@ -158,7 +159,9 @@ The next useful OxFunc-side outputs for OxFml are:
 2. identify which callable-value facts OxFunc would need beyond the current helper summary carrier,
 3. identify whether any currently expected function traits are still missing from the semantic-plan profile,
 4. identify whether the present host-query capability split is already enough for the next `CELL` / `INFO` tightening pass,
-5. align the runtime/provider-consumer library-context model before widening note traffic further.
+5. align the runtime/provider-consumer library-context model before widening note traffic further,
+6. confirm the minimum first adapter families OxFunc wants for `GROUPBY` / `PIVOTBY` once the first local `W053` slice exists,
+7. confirm the smallest OxFunc-visible returned-value distinctions needed for `HYPERLINK` / `IMAGE`.
 
 ## 9. Current Summary
 
@@ -167,7 +170,7 @@ Current OxFml position to OxFunc:
 2. semantic distinctions around helper forms, callable values, scalarization, blankness, and host-query sensitivity remain intentional and should be preserved,
 3. the March 26 unary-negative-literal and blank single-cell issues are closed locally on the OxFml side,
 4. the recent `ASINH` / `PV` / `FV` / `PMT` cleanup is understood as OxFunc-local and repaired there,
-5. the main remaining joint topic is no longer historical residual cleanup; it is convergence on the runtime library-context and the still-open callable/provenance/profile vocabularies.
+5. the main remaining joint topics are no longer historical residual cleanup; they are `W052` typed registered-external packet tightening plus the newly-bounded `W053` grouped-aggregation/publication-class adapter expansion.
 
 ## 10. Current W052 Plan After OxFunc's Latest Note
 
@@ -357,3 +360,66 @@ Current remaining `W052` note-level open topics are:
 2. the smallest final shared `RegisteredExternalDescriptor` field set,
 3. minimum snapshot-generation consequences of register/unregister,
 4. any later coordinator-visible consequences if OxCalc needs the same packet sharpened further.
+
+## 11. Current Read After OxFunc's March 27 Note
+
+OxFml reads the current OxFunc note as:
+1. confirming that admitted `@` and the admitted helper family are already real seam facts rather than note-only topics,
+2. confirming that `CALL` / `REGISTER.ID` remains a bounded typed registered-external seam under `W052`,
+3. adding one new bounded adapter-expansion ask rather than reopening broad callable or provenance theory.
+
+Current OxFml owner mapping for OxFunc's newly sharpened asks is:
+1. `GROUPBY` / `PIVOTBY` adapter expansion plus helper bind-time rejection parity now belongs under new local owner `W053`,
+2. `HYPERLINK` and `IMAGE` remain primarily return-surface/publication-class work under `W042`, but their next bounded evidence push also sits inside `W053`,
+3. `CALL` / `REGISTER.ID` remains under `W052`, not under the new grouped-aggregation lane.
+
+Current OxFml read of the specific March 27 asks is:
+1. yes, the next bounded adapter work should be real `GROUPBY` / `PIVOTBY` cases through the live OxFml parser/binder/preparation/evaluation path,
+2. yes, bind-time helper rejection cases that Excel rejects before evaluation should stay on the bind/admission side rather than being treated as OxFunc runtime cleanup,
+3. yes, `HYPERLINK` should preserve publication intent above plain text,
+4. yes, `IMAGE` should preserve a richer result class than ordinary scalar text or a fake placeholder scalar.
+
+Current best-effort local plan for `W053` is:
+1. add one or more real `GROUPBY` adapter cases:
+   - built-in aggregation callable lane such as `SUM`
+   - prepared lambda lane if admitted by the current carrier
+   - at least one totals/filter/header/sort-sensitive lane
+2. add one or more real `PIVOTBY` adapter cases:
+   - default callable-backed pivot lane
+   - at least one totals/filter/header-band lane
+3. widen helper bind-time rejection adapter coverage for:
+   - duplicate `LET` names
+   - duplicate `LAMBDA` parameter names
+   - malformed helper lambda declarations already pinned locally
+4. widen `W042` evidence so:
+   - `HYPERLINK` preserves value plus publication intent
+   - `IMAGE` preserves a richer result/publication class rather than scalarizing to plain text
+
+Current local non-claims:
+1. OxFml is not claiming full `GROUPBY` / `PIVOTBY` option-matrix closure in this next lane,
+2. OxFml is not claiming final rich-value model closure for `IMAGE`,
+3. OxFml is not claiming a new generic callable ABI round is needed for this slice.
+
+Current next useful OxFunc reply after this note is:
+1. confirm whether the `W053` owner split is the right bounded next lane,
+2. identify any exact first adapter scenarios OxFunc most wants prioritized inside `GROUPBY` / `PIVOTBY`,
+3. identify whether OxFunc needs any extra returned-value fields beyond current OxFml `W042` vocabulary to preserve `HYPERLINK` publication intent and `IMAGE` rich-value classification honestly.
+
+### 11.1 Current local `W053` floor
+OxFml now has a first real local `W053` slice.
+
+Current local adapter evidence now exists for:
+1. `GROUPBY` default callable lane via inline arrays plus `LAMBDA(x,SUM(x))`,
+2. `GROUPBY` sort-sensitive lane,
+3. `PIVOTBY` default callable lane,
+4. `PIVOTBY` filter-and-zero-totals-sensitive lane.
+
+Current helper bind-time rejection evidence now also includes:
+1. duplicate `LAMBDA` parameter names as bind-time `BindMismatch`,
+2. malformed `LAMBDA` parameter declaration as bind-time `BindMismatch`,
+3. existing duplicate `LET` bind-time `BindMismatch`.
+
+Current return-surface consequences now relevant to `W053` are:
+1. `HYPERLINK` preserves `ValueWithPresentation` through evaluator, host, and adapter paths,
+2. rich-value packet classification now preserves explicit `rich_value_type_name`,
+3. `IMAGE` still lacks equivalent end-to-end evaluator/adapter evidence because no admitted local `IMAGE(...)` lane is exercised yet.

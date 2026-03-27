@@ -359,6 +359,7 @@ pub fn classify_library_context_field(field_name: &str) -> Option<LibraryContext
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReturnedValueSurfaceKind {
     OrdinaryValue,
+    RichValue,
     ValueWithPresentation,
     TypedHostProviderOutcome,
 }
@@ -385,6 +386,7 @@ pub struct HostProviderOutcomeSurface {
 pub struct ReturnedValueSurface {
     pub kind: ReturnedValueSurfaceKind,
     pub payload_summary: String,
+    pub rich_value_type_name: Option<String>,
     pub presentation_hint: Option<PresentationHint>,
     pub host_provider_outcome: Option<HostProviderOutcomeSurface>,
 }
@@ -395,24 +397,28 @@ impl ReturnedValueSurface {
             ExtendedValue::Core(core) => Self {
                 kind: ReturnedValueSurfaceKind::OrdinaryValue,
                 payload_summary: eval_value_summary(core),
+                rich_value_type_name: None,
                 presentation_hint: None,
                 host_provider_outcome: None,
             },
-            ExtendedValue::RichValue(_) => Self {
-                kind: ReturnedValueSurfaceKind::OrdinaryValue,
-                payload_summary: "RichValue".to_string(),
+            ExtendedValue::RichValue(rich) => Self {
+                kind: ReturnedValueSurfaceKind::RichValue,
+                payload_summary: format!("RichValue({})", rich.value_type.type_name),
+                rich_value_type_name: Some(rich.value_type.type_name.clone()),
                 presentation_hint: None,
                 host_provider_outcome: None,
             },
             ExtendedValue::ValueWithPresentation { value, hint } => Self {
                 kind: ReturnedValueSurfaceKind::ValueWithPresentation,
                 payload_summary: eval_value_summary(value),
+                rich_value_type_name: None,
                 presentation_hint: Some(*hint),
                 host_provider_outcome: None,
             },
             ExtendedValue::ErrorWithMetadata { code, .. } => Self {
                 kind: ReturnedValueSurfaceKind::OrdinaryValue,
                 payload_summary: format!("Error({code:?})"),
+                rich_value_type_name: None,
                 presentation_hint: None,
                 host_provider_outcome: None,
             },
@@ -440,6 +446,7 @@ impl ReturnedValueSurface {
         Self {
             kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
             payload_summary: format!("{outcome_kind:?}"),
+            rich_value_type_name: None,
             presentation_hint: None,
             host_provider_outcome: Some(HostProviderOutcomeSurface {
                 outcome_kind,
@@ -454,6 +461,7 @@ impl ReturnedValueSurface {
             RtdProviderResult::Value(value) => Self {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: eval_value_summary(value),
+                rich_value_type_name: None,
                 presentation_hint: None,
                 host_provider_outcome: Some(HostProviderOutcomeSurface {
                     outcome_kind: HostProviderOutcomeKind::Value,
@@ -464,6 +472,7 @@ impl ReturnedValueSurface {
             RtdProviderResult::NoValueYet => Self {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: "NoValueYet".to_string(),
+                rich_value_type_name: None,
                 presentation_hint: None,
                 host_provider_outcome: Some(HostProviderOutcomeSurface {
                     outcome_kind: HostProviderOutcomeKind::NoValueYet,
@@ -474,6 +483,7 @@ impl ReturnedValueSurface {
             RtdProviderResult::CapabilityDenied => Self {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: "CapabilityDenied".to_string(),
+                rich_value_type_name: None,
                 presentation_hint: None,
                 host_provider_outcome: Some(HostProviderOutcomeSurface {
                     outcome_kind: HostProviderOutcomeKind::CapabilityDenied,
@@ -484,6 +494,7 @@ impl ReturnedValueSurface {
             RtdProviderResult::ConnectionFailed => Self {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: "ConnectionFailed".to_string(),
+                rich_value_type_name: None,
                 presentation_hint: None,
                 host_provider_outcome: Some(HostProviderOutcomeSurface {
                     outcome_kind: HostProviderOutcomeKind::ConnectionFailed,
@@ -494,6 +505,7 @@ impl ReturnedValueSurface {
             RtdProviderResult::ProviderError(code) => Self {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: format!("ProviderError({code:?})"),
+                rich_value_type_name: None,
                 presentation_hint: None,
                 host_provider_outcome: Some(HostProviderOutcomeSurface {
                     outcome_kind: HostProviderOutcomeKind::ProviderError,
@@ -509,6 +521,7 @@ impl ReturnedValueSurface {
             EvalValue::Error(WorksheetErrorCode::NA) => Self {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: "NoValueYet".to_string(),
+                rich_value_type_name: None,
                 presentation_hint: None,
                 host_provider_outcome: Some(HostProviderOutcomeSurface {
                     outcome_kind: HostProviderOutcomeKind::NoValueYet,
@@ -519,6 +532,7 @@ impl ReturnedValueSurface {
             EvalValue::Error(WorksheetErrorCode::Blocked) => Self {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: "CapabilityDenied".to_string(),
+                rich_value_type_name: None,
                 presentation_hint: None,
                 host_provider_outcome: Some(HostProviderOutcomeSurface {
                     outcome_kind: HostProviderOutcomeKind::CapabilityDenied,
@@ -529,6 +543,7 @@ impl ReturnedValueSurface {
             EvalValue::Error(WorksheetErrorCode::Connect) => Self {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: "ConnectionFailed".to_string(),
+                rich_value_type_name: None,
                 presentation_hint: None,
                 host_provider_outcome: Some(HostProviderOutcomeSurface {
                     outcome_kind: HostProviderOutcomeKind::ConnectionFailed,
@@ -539,6 +554,7 @@ impl ReturnedValueSurface {
             EvalValue::Error(code) => Self {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: format!("ProviderError({code:?})"),
+                rich_value_type_name: None,
                 presentation_hint: None,
                 host_provider_outcome: Some(HostProviderOutcomeSurface {
                     outcome_kind: HostProviderOutcomeKind::ProviderError,
@@ -549,6 +565,7 @@ impl ReturnedValueSurface {
             _ => Self {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: eval_value_summary(value),
+                rich_value_type_name: None,
                 presentation_hint: None,
                 host_provider_outcome: Some(HostProviderOutcomeSurface {
                     outcome_kind: HostProviderOutcomeKind::Value,

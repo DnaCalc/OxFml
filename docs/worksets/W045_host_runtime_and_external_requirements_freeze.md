@@ -60,8 +60,8 @@ Unify the current OxFml host/runtime contract into one implementation-facing sea
 - open_lanes:
   - a canonical OxFml draft host/runtime requirements doc now exists and the current OxCalc note round is converged on first-slice implementation sufficiency, but it is not yet promoted as shared seam-freeze text
   - broader host/query, return-surface, and runtime-provider packet execution in `W041`, `W042`, and `W043` remains partial, so the unified host packet is still anchored to a partial local floor
-  - caller-anchor and address-mode carriage for the first TreeCalc relative-reference subset remains in the `W026` note lane rather than a frozen host-runtime clause
-  - execution-restriction transport shape and publication/topology breadth remain narrower than final shared closure
+  - caller-anchor and address-mode carriage for the first TreeCalc relative-reference subset remains in the packetized `W026` residual note lane rather than a frozen host-runtime clause
+  - execution-restriction transport shape and publication/topology breadth remain narrower than final shared closure and are now explicitly narrowed as the remaining `W026` residual sequences
   - provider-failure and callable-publication remain watch lanes only unless they become coordinator-visible in exercised evidence
   - full product-host policy, broader distributed/runtime ownership, and broader deferred-provider families remain intentionally outside scope
 - claim_confidence: provisional

@@ -848,6 +848,10 @@ fn bind_mismatch_detail(diagnostics: &[BindDiagnostic]) -> Option<String> {
             diagnostic
                 .message
                 .starts_with("duplicate LET binding name ")
+                || diagnostic
+                    .message
+                    .starts_with("duplicate LAMBDA parameter name ")
+                || diagnostic.message == "LAMBDA parameter did not bind as helper parameter"
         })
         .map(|diagnostic| diagnostic.message.clone())
 }

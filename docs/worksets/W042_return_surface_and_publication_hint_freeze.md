@@ -58,9 +58,10 @@ Freeze the first shared returned-value surface between OxFml and OxFunc for the 
 - integration_completeness: partial
 - open_lanes:
   - a first local `ReturnedValueSurface` carrier and grouped packet tests now exist, but the first shared return-surface split is not yet canonically frozen on the OxFml side
-  - deterministic evidence now exists for ordinary value, `ValueWithPresentation`, and typed host/provider outcome projection as packet types, and ordinary-value projection now flows through `EvaluationOutput`, `HostRecalcOutput`, `AcceptedCandidateResult`, and `CommitBundle`
+  - deterministic evidence now exists for ordinary value, explicit rich-value classification with preserved rich-value type name, `ValueWithPresentation`, and typed host/provider outcome projection as packet types, and ordinary-value projection now flows through `EvaluationOutput`, `HostRecalcOutput`, `AcceptedCandidateResult`, and `CommitBundle`
   - typed host/provider outcome projection is now a live exercised path for `RTD` value and capability-denied outcomes plus top-level `INFO` unsupported-query and `CELL` provider-failure outcomes through evaluator, host, candidate, and commit carriers
   - broader host-query/provider outcome projection is still not broadly exercised beyond the current `INFO` / `CELL` / `RTD` slice
+  - `HYPERLINK` now has local evaluator, host, and adapter evidence preserving publication intent as `ValueWithPresentation`, and rich-value packet classification now preserves explicit `rich_value_type_name`, but `IMAGE` still lacks equivalent end-to-end evaluator evidence because no local admitted `IMAGE(...)` function lane is exercised here yet
   - richer return-surface factoring beyond the first freeze remains intentionally out of scope
   - OxFml still needs to answer with implementation-facing precision whether the current ordinary-value / `ValueWithPresentation` / typed host-provider projection split can be frozen as-is
   - current OxFunc reading is that this is now a freeze-and-consumer packet rather than a broad semantic-open lane, and the final note round leaves local execution as the remaining next step

@@ -12,7 +12,7 @@ use oxfml_core::semantics::{
 };
 use oxfml_core::{PreparedSourceClass, PreparedStructureClass};
 use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult, RtdRequest};
-use oxfunc_core::value::EvalValue;
+use oxfunc_core::value::{CellStyleHint, EvalValue, ExcelText, PresentationHint};
 
 #[test]
 fn adapter_projects_direct_scalar_and_array_like_preparation_artifacts() {
@@ -193,6 +193,33 @@ fn adapter_surfaces_typed_rtd_outcome_and_bundle_spec() {
     assert_eq!(
         run.evaluation_artifact.evaluation_result.payload_summary,
         "Error(Blocked)"
+    );
+}
+
+#[test]
+fn adapter_preserves_hyperlink_publication_intent() {
+    let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
+        "hyperlink-publication-intent",
+        "formula:hyperlink-publication-intent",
+        "=HYPERLINK(\"https://example.com\",\"Go\")",
+        locus(1, 1),
+        TypedContextQueryBundle::default(),
+    ))
+    .expect("hyperlink adapter run");
+
+    assert_eq!(
+        run.evaluation_artifact.worksheet_value,
+        EvalValue::Text(ExcelText::from_interop_assignment("Go"))
+    );
+    assert_eq!(
+        run.evaluation_artifact.returned_value_surface.kind,
+        ReturnedValueSurfaceKind::ValueWithPresentation
+    );
+    assert_eq!(
+        run.evaluation_artifact
+            .returned_value_surface
+            .presentation_hint,
+        Some(PresentationHint::style(CellStyleHint::Hyperlink))
     );
 }
 

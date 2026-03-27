@@ -4,11 +4,11 @@ use std::path::PathBuf;
 
 use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
 use oxfunc_core::locale_format::en_us_context;
-use oxfunc_core::value::{EvalValue, ExcelText, ReferenceLike};
+use oxfunc_core::value::{CellStyleHint, EvalValue, ExcelText, PresentationHint, ReferenceLike};
 use serde::Deserialize;
 
 use oxfml_core::seam::{AcceptDecision, TraceEventKind};
-use oxfml_core::{EvaluationBackend, FenceSnapshot, SingleFormulaHost};
+use oxfml_core::{EvaluationBackend, FenceSnapshot, ReturnedValueSurfaceKind, SingleFormulaHost};
 
 #[test]
 fn single_formula_host_recalc_updates_defined_name_inputs() {
@@ -113,6 +113,39 @@ fn single_formula_host_runs_host_query_formula() {
             );
         }
         AcceptDecision::Rejected(_) => panic!("expected accepted host-query recalc"),
+    }
+}
+
+#[test]
+fn single_formula_host_preserves_hyperlink_publication_intent() {
+    let mut host = SingleFormulaHost::new(
+        "host:hyperlink",
+        "=HYPERLINK(\"https://example.com\",\"Go\")",
+    );
+    let run = host
+        .recalc(None, Some(&en_us_context()))
+        .expect("recalc should succeed");
+
+    assert_eq!(
+        run.returned_value_surface.kind,
+        ReturnedValueSurfaceKind::ValueWithPresentation
+    );
+    assert_eq!(
+        run.returned_value_surface.presentation_hint,
+        Some(PresentationHint::style(CellStyleHint::Hyperlink))
+    );
+    assert_eq!(
+        run.candidate_result.returned_value_surface.kind,
+        ReturnedValueSurfaceKind::ValueWithPresentation
+    );
+    match &run.commit_decision {
+        AcceptDecision::Accepted(bundle) => {
+            assert_eq!(
+                bundle.value_delta.published_payload,
+                oxfml_core::ValuePayload::Text("Go".to_string())
+            );
+        }
+        AcceptDecision::Rejected(_) => panic!("expected accepted hyperlink recalc"),
     }
 }
 

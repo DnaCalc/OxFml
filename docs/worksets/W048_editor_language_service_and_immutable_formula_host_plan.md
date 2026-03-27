@@ -121,8 +121,8 @@ The recommended next order is:
 - integration_completeness: partial
 - open_lanes:
   - function help and signature help still stop at deterministic lookup-request construction; OxFunc-backed help payload retrieval is not yet integrated
-  - no shared host/OxCalc immutable edit packet is frozen yet
-  - no shared host-facing packet for validated intelligent-completion results is frozen yet
+  - OxCalc now reads the immutable edit request / result / validated completion split as the right first packetization, but no shared host/OxCalc immutable edit packet is frozen yet
+  - containing-spine replacement and validated-completion acceptance are now converged as host/coordinator-owned, but no shared host-facing packet for validated intelligent-completion results is frozen yet
 - current_local_floor:
   - `crates/oxfml_core/src/language_service/mod.rs` now provides a first OxFml-local language-service packet layer
   - live internal packet types now exist for editor syntax snapshots, formula-edit requests/results, explicit text-change ranges, live diagnostics, deterministic completion, completion-validation, signature-help context, function-help lookup requests, and intelligent-completion context

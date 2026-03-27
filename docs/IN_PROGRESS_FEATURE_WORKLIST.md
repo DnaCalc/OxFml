@@ -3,7 +3,7 @@
 Canonical repo-level register of feature areas that are in-progress under workset completion doctrine.
 
 Status: active.
-Last updated: 2026-03-25.
+Last updated: 2026-03-27.
 
 ## Status Vocabulary
 
@@ -24,7 +24,7 @@ Last updated: 2026-03-25.
 ### IP-02: FEC/F3E Evaluator Session
 
 - **Status**: in-progress
-- **Current floor**: OxFml-owned seam design and exercised implementation now include accepted-candidate, commit-bundle, reject-record, fence snapshots, typed no-publish fence rejection, single-formula host recalc wiring, a managed `prepare -> open_session -> capability_view -> execute -> commit` session-service slice with abort/expire handling, invalid-phase structural-conflict rejection, surfaced execution-restriction effect facts, runtime contention enforcement across sessions, async-coupled external-provider consequence surfacing, runtime-async overlay registration, and checked local formal artifacts for the external capability gate plus busy-locus session contention, retry-after-release, overlay-cleanup, pinned-epoch overlay, distributed-placement, retry-ordering fairness, and placement-deferral expiry boundaries.
+- **Current floor**: OxFml-owned seam design and exercised implementation now include accepted-candidate, commit-bundle, reject-record, fence snapshots, typed no-publish fence rejection, single-formula host recalc wiring, a managed `prepare -> open_session -> capability_view -> execute -> commit` session-service slice with abort/expire handling, invalid-phase structural-conflict rejection, surfaced execution-restriction effect facts, runtime contention enforcement across sessions, async-coupled external-provider consequence surfacing, runtime-async overlay registration, explicit `HYPERLINK` publication-intent preservation in the current return-surface lane, explicit packet-level rich-value return classification, and checked local formal artifacts for the external capability gate plus busy-locus session contention, retry-after-release, overlay-cleanup, pinned-epoch overlay, distributed-placement, retry-ordering fairness, and placement-deferral expiry boundaries.
 - **Remaining gaps**: broader async/distributed runtime behavior beyond the local external-provider, contention, first placement-outcome floor, non-overtaking retry-order floor, and deferred-placement expiry floor, pack-grade replay/model artifacts, and broader host integration beyond the single-formula proving path.
 - **Why still open**: `W029` materially widened the local async-facing runtime floor and the current pass adds checked session-contention, retry-after-release, overlay-cleanup, pinned-epoch overlay, distributed-placement, retry-ordering fairness, and placement-deferral expiry boundary models, but repo-level runtime scope still extends beyond the exercised local contention, placement, retry-order, deferral-expiry, and external-provider model.
 - **Canonical owner**: `W001` now; exercised follow-on `W004`, `W015`, `W018`, `W021`, `W024`, and `W029`; planned next owners `W034` and `W035`.
@@ -100,9 +100,9 @@ Last updated: 2026-03-25.
 
 - **Status**: in-progress
 - **Current floor**: the OxFml/OxFunc seam is converged enough at note level around `W041`, `W042`, `W043`, and the committed `W044` snapshot/export that OxFunc now wants a real OxFml-backed preparation/evaluation adapter and pinned seam-fixture corpus rather than continued mock-only confidence. A first local adapter floor now exists in `crates/oxfml_core/src/oxfunc_adapter/mod.rs`, projecting canonical preparation, evaluation, and mismatch artifacts over the real `SingleFormulaHost` path while preserving `TypedContextQueryBundle`, `ReturnedValueSurface`, and runtime library-context snapshot refs. Deterministic local evidence exists in `crates/oxfml_core/tests/w049_oxfunc_adapter_tests.rs` for direct-scalar vs array-like preparation, caller-anchor carriage, pinned snapshot selection, typed `RTD` provider outcomes, and structured mismatch packets. A first local pinned `W050` fixture corpus now exists in `crates/oxfml_core/tests/fixtures/w050_oxfunc_admitted_fixture_cases.json` plus `crates/oxfml_core/tests/fixtures/w050_oxfunc_deferred_fixture_register.json`, exercised by `crates/oxfml_core/tests/w050_oxfunc_pinned_fixture_tests.rs`.
-- **Remaining gaps**: the authoritative published first-wave table is now confirmed by OxFunc to be 45 scenario ids and the local machine-readable corpus now admits all 45 of those ids; mismatch reporting against downstream packet artifacts is still narrow; worksheet `CALL` / `REGISTER.ID` remains outside the first adapter floor and now has a separate bounded owner.
-- **Why still open**: `W049` now has a real local adapter artifact and `W050` now covers the whole current pinned scenario table with explicit OxFml-side publication and bind-reject rules for the former `C12`/`C14` residuals, but broader packet-diff scaling and the next runtime lane under `W052` still remain.
-- **Canonical owner**: active owners `W049`, `W050`, and `W052`.
+- **Remaining gaps**: the authoritative published first-wave table is now confirmed by OxFunc to be 45 scenario ids and the local machine-readable corpus now admits all 45 of those ids; mismatch reporting against downstream packet artifacts is still narrow; worksheet `CALL` / `REGISTER.ID` remains outside the first adapter floor and now has a separate bounded owner; grouped-aggregation/publication-class expansion is only at its first bounded slice.
+- **Why still open**: `W049` now has a real local adapter artifact and `W050` now covers the whole current pinned scenario table with explicit OxFml-side publication and bind-reject rules for the former `C12`/`C14` residuals; `W053` now has real local `GROUPBY` / `PIVOTBY` adapter cases plus duplicate/malformed `LAMBDA` bind-rejection evidence, but broader packet-diff scaling, the next runtime lane under `W052`, and the remaining `IMAGE`/publication-class and grouped-aggregation breadth still remain.
+- **Canonical owner**: active owners `W049`, `W050`, `W052`, and `W053`.
 
 ### IP-15: Worksheet CALL And REGISTER.ID Runtime Boundary
 
@@ -114,8 +114,8 @@ Last updated: 2026-03-25.
 
 ### IP-14: Fixture Host And Coordinator Stand-In Packet
 
-- **Status**: planned
-- **Current floor**: the current OxFml/OxCalc host/runtime packet is converged enough for first-slice implementation planning, and the new OxFunc-facing adapter/fixture work makes it explicit that some deterministic test inputs are really stand-ins for host/coordinator-owned truths rather than pure evaluator-owned scaffolding.
-- **Remaining gaps**: no canonical stand-in host/coordinator packet exists yet; no OxCalc review pass has been executed against that packet; the boundary between fixture-host reuse and coordinator API freeze is still implicit.
-- **Why still open**: the next useful work is a bounded OxCalc seam round on the stand-in packet, now owned by `W051`.
-- **Canonical owner**: planned owner `W051`.
+- **Status**: in-progress
+- **Current floor**: a canonical first stand-in host/coordinator packet now exists in `docs/spec/OXFML_FIXTURE_HOST_AND_COORDINATOR_STANDIN_PACKET.md`; OxCalc has reviewed it as the right bounded deterministic packet for fixture-host and first TreeCalc-facing integration reuse; accepted refinements now include `fixture_input_id`, explicit structure-context identity, optional `formula_slot_id`, optional `RegisteredExternalProvider`, and the explicit rule that candidate/commit/reject capture stays a separate projection layer.
+- **Remaining gaps**: the packet is still only converged for the current narrow first wave; broader reuse across later formula-bearing slot families and any promotion into shared coordinator-API freeze remain open.
+- **Why still open**: `W051` is now past draft-only planning, but the stand-in packet remains intentionally narrower than the production coordinator API and still depends on later implementation reuse or mismatch evidence for further freezing.
+- **Canonical owner**: active owner `W051`.

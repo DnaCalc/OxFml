@@ -851,12 +851,21 @@ impl Binder {
         let mut bound_args = Vec::with_capacity(arg_nodes.len());
         let mut pushed_names = 0usize;
         let body_index = arg_nodes.len().saturating_sub(1);
+        let mut seen_parameter_names = BTreeSet::new();
 
         for (index, arg_node) in arg_nodes.iter().enumerate() {
             if index < body_index {
                 if let Some(name) = self.try_helper_parameter_name(arg_node) {
-                    self.helper_local_names.push(name.clone());
-                    pushed_names += 1;
+                    let normalized_name = name.to_ascii_uppercase();
+                    if seen_parameter_names.insert(normalized_name) {
+                        self.helper_local_names.push(name.clone());
+                        pushed_names += 1;
+                    } else {
+                        self.diagnostics.push(BindDiagnostic {
+                            message: format!("duplicate LAMBDA parameter name '{name}'"),
+                            span: arg_node.span,
+                        });
+                    }
                     bound_args.push(BoundExpr::HelperParameterName(name));
                 } else {
                     self.diagnostics.push(BindDiagnostic {

@@ -5,7 +5,10 @@ mod common;
 use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult};
 use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
 use oxfunc_core::locale_format::{LocaleFormatContext, en_us_context};
-use oxfunc_core::value::{ArrayCellValue, EvalValue, ExcelText, ReferenceKind, ReferenceLike};
+use oxfunc_core::value::{
+    ArrayCellValue, CellStyleHint, EvalValue, ExcelText, PresentationHint, ReferenceKind,
+    ReferenceLike,
+};
 
 use oxfml_core::binding::{
     BinaryOp, BoundExpr, NameKind, NameRef, NormalizedReference, ReferenceExpr,
@@ -86,6 +89,28 @@ fn evaluator_runs_info_with_host_info_provider() {
     );
     assert_eq!(output.result.payload_summary, "Text(C:\\Work)");
     assert_eq!(output.trace.prepared_calls[0].function_id, "FUNC.INFO");
+}
+
+#[test]
+fn evaluator_preserves_hyperlink_publication_intent() {
+    let output = evaluate(
+        "=HYPERLINK(\"https://example.com\",\"Go\")",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(
+        output.oxfunc_value,
+        EvalValue::Text(ExcelText::from_interop_assignment("Go"))
+    );
+    assert_eq!(
+        output.returned_value_surface.kind,
+        oxfml_core::ReturnedValueSurfaceKind::ValueWithPresentation
+    );
+    assert_eq!(
+        output.returned_value_surface.presentation_hint,
+        Some(PresentationHint::style(CellStyleHint::Hyperlink))
+    );
 }
 
 #[test]

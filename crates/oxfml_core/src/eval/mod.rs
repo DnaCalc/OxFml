@@ -11,7 +11,9 @@ use oxfunc_core::functions::op_implicit_intersection::{
     eval_op_implicit_intersection_surface, map_op_implicit_intersection_error_to_ws,
 };
 use oxfunc_core::functions::rtd_fn::RtdProvider;
-use oxfunc_core::functions::surface_dispatch::eval_surface_value_call_with_callable;
+use oxfunc_core::functions::surface_dispatch::{
+    eval_surface_extended_call, eval_surface_value_call_with_callable,
+};
 use oxfunc_core::host_info::HostInfoProvider;
 use oxfunc_core::locale_format::LocaleFormatContext;
 use oxfunc_core::resolver::{
@@ -354,6 +356,10 @@ fn returned_value_surface_for_output(
         return surface;
     }
 
+    if let Some(surface) = extended_surface_for_top_level_function_call(root, context) {
+        return surface;
+    }
+
     ReturnedValueSurface::from_extended_value(&ExtendedValue::Core(value.clone()))
 }
 
@@ -423,6 +429,41 @@ fn typed_surface_for_top_level_host_or_provider_call(
                 }
                 _ => None,
             }
+        }
+        _ => None,
+    }
+}
+
+fn extended_surface_for_top_level_function_call(
+    root: &BoundExpr,
+    context: &EvaluationContext<'_>,
+) -> Option<ReturnedValueSurface> {
+    match root {
+        BoundExpr::FunctionCall {
+            function_name,
+            args,
+        } if function_name == "HYPERLINK" => {
+            let meta = lookup_function_meta(function_name)?;
+            let call_args = build_top_level_call_args(args, context, true).ok()?;
+            let callable_registry = RefCell::new(CallableRegistry::default());
+            let resolver = LocalReferenceResolver {
+                cell_values: &context.cell_values,
+                defined_names: &context.defined_names,
+                caller_row: context.caller_row,
+                caller_col: context.caller_col,
+                callable_registry: &callable_registry,
+            };
+            let extended = eval_surface_extended_call(
+                meta.function_id,
+                &call_args,
+                &resolver,
+                context.now_serial,
+                context.random_value,
+                context.locale_ctx,
+                context.host_info,
+            )
+            .ok()?;
+            Some(ReturnedValueSurface::from_extended_value(&extended))
         }
         _ => None,
     }

@@ -57,10 +57,11 @@ Freeze the first bounded stand-in host/coordinator packet that OxFml can use in 
 - target_completeness: target_partial
 - integration_completeness: partial
 - open_lanes:
-  - a canonical stand-in host/coordinator packet draft now exists and OxCalc has reviewed it as directionally right, but the packet is not yet frozen beyond the current narrow first wave
-  - the packet still needs the accepted identity refinements carried through explicitly:
+  - a canonical stand-in host/coordinator packet draft now exists and OxCalc has reviewed it as settled enough for deterministic fixture-host and first TreeCalc-facing integration reuse, but the packet is not yet frozen beyond the current narrow first wave
+  - the accepted identity refinements are now part of the packet direction:
     - `fixture_input_id`
     - structure-context identity
     - optional `formula_slot_id`
-  - the boundary between fixture-host reuse and coordinator API freeze is clearer now, but still not promoted as shared seam-freeze text
-- claim_confidence: draft
+  - candidate / commit / reject capture remains intentionally separate from the stand-in input packet and that boundary is converged at note level, not yet shared seam-freeze text
+  - broader coordinator API freeze and later packet reuse across wider slot families remain outside the current narrow stand-in packet
+- claim_confidence: provisional

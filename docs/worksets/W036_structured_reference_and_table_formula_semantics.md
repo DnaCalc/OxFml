@@ -67,7 +67,8 @@ Realize the structured-reference and table-formula lanes classified by `W031` so
   - broader qualifier unions and totals/header/data mixed-selector breadth are still outside the exercised local floor
   - the current local evaluator floor uses bind-resolved structured targets rather than a broader runtime table subsystem
   - replay/proving-host fixtures for structured-reference identity preservation are still narrower than the eventual full `W036` floor
-  - OxCalc and OxFunc have the refined packet shape in notes, but there is not yet a mismatch-driven acknowledgment round on the new code floor
+  - OxCalc has now confirmed `table_catalog + enclosing_table_ref + caller_table_region` as the right first semantic packet, but that packet is still not promoted as shared seam-freeze text and broader workbook-table closure remains deferred
+  - OxFunc and OxCalc have the refined packet shape in notes, but there is not yet a mismatch-driven acknowledgment round on the newer code floor
 - claim_confidence: draft
 
 ## Structured-Reference Seams

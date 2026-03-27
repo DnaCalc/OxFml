@@ -65,8 +65,8 @@ Narrow the first OxFml-owned worksheet `CALL` / `REGISTER.ID` seam packet so fut
 - target_completeness: target_partial
 - integration_completeness: partial
 - open_lanes:
-  - the first OxFml packet is now drafted and locally exercised through `crates/oxfml_core/tests/w052_registered_external_interface_tests.rs`, but it is not yet acknowledged by both OxFunc and OxCalc as the narrowed shared reading
-  - descriptor-driven reference/coercion ownership is locally evidenced, but not yet frozen as shared seam wording
-  - built-in catalog ownership plus runtime register/unregister ownership is now sharpened locally, but snapshot-generation and later coordinator-facing acknowledgment remain note-level
-  - worksheet `CALL` / `REGISTER.ID` remains a separate bounded lane rather than part of the already-validated `W049` / `W050` adapter wave
+  - the first OxFml packet is now drafted and locally exercised through `crates/oxfml_core/tests/w052_registered_external_interface_tests.rs`, and both OxFunc and OxCalc now read the live lane as provider separation, packet carriage, initiating-channel preservation, and runtime ownership rather than broad seam ambiguity
+  - descriptor-driven reference/coercion ownership is locally evidenced and still appears aligned with OxFunc's runtime reading, but exact shared field naming is not yet frozen
+  - built-in catalog ownership plus runtime register/unregister ownership is now sharpened locally, but snapshot-generation consequences and later coordinator-facing acknowledgment remain note-level
+  - worksheet `CALL` / `REGISTER.ID` remains a separate bounded lane rather than part of the already-validated `W049` / `W050` adapter wave or the new grouped-aggregation expansion now owned by `W053`
 - claim_confidence: provisional

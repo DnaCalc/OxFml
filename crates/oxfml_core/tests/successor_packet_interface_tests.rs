@@ -17,6 +17,7 @@ use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, Inf
 use oxfunc_core::locale_format::en_us_context;
 use oxfunc_core::value::{
     EvalValue, ExcelText, ExtendedValue, NumberFormatHint, PresentationHint, ReferenceLike,
+    RichValue, RichValueData, RichValueType,
 };
 
 mod common;
@@ -88,6 +89,7 @@ fn returned_value_surface_keeps_three_way_split() {
         ReturnedValueSurface::from_extended_value(&ExtendedValue::Core(EvalValue::Number(42.0)));
     assert_eq!(ordinary.kind, ReturnedValueSurfaceKind::OrdinaryValue);
     assert_eq!(ordinary.payload_summary, "Number");
+    assert_eq!(ordinary.rich_value_type_name, None);
 
     let with_presentation =
         ReturnedValueSurface::from_extended_value(&ExtendedValue::ValueWithPresentation {
@@ -99,6 +101,7 @@ fn returned_value_surface_keeps_three_way_split() {
         ReturnedValueSurfaceKind::ValueWithPresentation
     );
     assert!(with_presentation.presentation_hint.is_some());
+    assert_eq!(with_presentation.rich_value_type_name, None);
 
     let provider_outcome =
         ReturnedValueSurface::from_rtd_provider_result(&RtdProviderResult::CapabilityDenied);
@@ -112,6 +115,23 @@ fn returned_value_surface_keeps_three_way_split() {
             .expect("typed outcome")
             .outcome_kind,
         HostProviderOutcomeKind::CapabilityDenied
+    );
+
+    let rich_value =
+        ReturnedValueSurface::from_extended_value(&ExtendedValue::RichValue(Box::new(RichValue {
+            value_type: RichValueType {
+                type_name: "_webimage".to_string(),
+                required_keys: vec!["WebImageIdentifier".to_string()],
+                key_flags: vec![],
+            },
+            fallback: RichValueData::Text(ExcelText::from_interop_assignment("Sphere")),
+            kvps: vec![],
+        })));
+    assert_eq!(rich_value.kind, ReturnedValueSurfaceKind::RichValue);
+    assert_eq!(rich_value.payload_summary, "RichValue(_webimage)");
+    assert_eq!(
+        rich_value.rich_value_type_name.as_deref(),
+        Some("_webimage")
     );
 }
 
