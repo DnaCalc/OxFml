@@ -697,6 +697,36 @@ Current OxFml working read after this pass:
 2. `W036`, `W048`, `W051`, and `W052` are all directionally aligned enough to keep moving on local implementation and narrower packet refinement,
 3. the remaining OxCalc-facing pressure is now concentrated in the already-known `W026` residual topics rather than in the newer packet families themselves.
 
+## 21A. Current Narrowed W052 Read
+After the latest OxFunc and OxFml narrowing, OxFml now reads `W052` as OxFunc-aligned at note level on:
+1. exact shared field naming for the adopted direct packet set:
+   - `RegisterIdRequest { library_name, procedure, declared_type_text }`
+   - `RegisteredExternalDescriptor { stable_registration_id, register_id, origin_kind, display_name, library_name, procedure, declared_type_text }`
+   - `RegisteredExternalCallRequest { target, invocation_args }`
+   - `RegisteredExternalTarget::{ RegisterId, Direct }`
+2. the minimum final shared `RegisteredExternalDescriptor` field set:
+   - the current seven-field descriptor
+3. mutation/controller family ownership:
+   - `RegisteredExternalCatalogMutation*` and `RegisteredExternalCatalogController` remain OxFml-owned host/coordinator funnel packets for the current phase
+4. the minimum shared snapshot-generation and invalidation consequences:
+   - bind-visible registration or unregister => new `LibraryContextSnapshot` generation plus bind invalidation where the visible function or name world changes
+   - `CALL` / `REGISTER.ID`-only descriptor mutation => targeted reevaluation by default
+
+Current non-open points from the OxFml side are:
+1. `RegisteredExternalProvider` remains separate from `HostInfoProvider`
+2. host- or coordinator-initiated registration remains typed mutation requests funneled into OxFunc-owned catalog truth
+3. direct adoption of OxFunc-owned `RegisterIdRequest`, `RegisteredExternalDescriptor`, and `RegisteredExternalCallRequest` is the settled current direction
+4. registration-channel identity and stable registration identity should remain preserved where later TreeCalc-facing integration uses that lane
+
+Current OxCalc-specific read now needed is narrower:
+1. whether OxCalc is content to align with the same direct-packet field names, seven-field descriptor, and current-phase funnel-family ownership
+2. whether the current snapshot-generation and invalidation split is sufficient for first TreeCalc-facing planning
+
+Current processing note:
+1. the latest inbound OxCalc note now explicitly answers this sharper packet and aligns with the same direct-packet, seven-field-descriptor, current-phase funnel-family, and snapshot-consequence read
+2. so this `21A` section is no longer awaiting first acknowledgment from OxCalc; it now records the converged note-level packet
+3. no broader `W052` seam expansion is requested from OxCalc at this stage; only promotion from note-level convergence to shared seam-freeze text or concrete mismatch if later implementation evidence forces one
+
 ## 22. OxFml Read On OxCalc's New Residual W026 Round
 OxCalc has now packetized the remaining TreeCalc-facing note-level residuals into three narrower sequences:
 1. caller-anchor and address-mode carriage,

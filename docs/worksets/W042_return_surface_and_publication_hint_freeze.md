@@ -63,7 +63,7 @@ Freeze the first shared returned-value surface between OxFml and OxFunc for the 
   - broader host-query/provider outcome projection is still not broadly exercised beyond the current `INFO` / `CELL` / `RTD` slice
   - OxFml now preserves OxFunc extended top-level return surfaces generically rather than through a `HYPERLINK`-only special case; `HYPERLINK` and `TODAY` have live evaluator/host evidence for `ValueWithPresentation`, and explicit `_webimage` rich-value packet evidence plus host-side and commit-bundle non-ordinary publication preservation are now local facts
   - `IMAGE(...)` is now exercised locally through evaluator, host, and adapter paths with typed `HostInfoProvider::query_image(...)` normalization, `_webimage` rich-value carriage, preserved published fallback separation, and explicit `TypedContextQueryFamily::Image`
-  - final shared field naming for richer return-surface classes is still not frozen with OxFunc
+  - OxFunc now reads the current four-way return-surface split and `TypedContextQueryFamily::Image` as sufficient for the current-phase freeze; final shared field naming remains the only live `W042` note-level lane
   - richer return-surface factoring beyond the first freeze remains intentionally out of scope
   - OxFml still needs to answer with implementation-facing precision whether the current ordinary-value / `ValueWithPresentation` / typed host-provider projection split can be frozen as-is
   - current OxFunc reading is that this is now a freeze-and-consumer packet rather than a broad semantic-open lane, and the final note round leaves local execution as the remaining next step

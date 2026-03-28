@@ -65,7 +65,7 @@ Narrow the first OxFml-owned worksheet `CALL` / `REGISTER.ID` seam packet so fut
 - target_completeness: target_complete
 - integration_completeness: partial
 - open_lanes:
-  - OxFunc and OxCalc have not both acknowledged the sharpened OxFml-side freeze packet yet
-  - exact shared field naming remains subject to the next bounded note round
-  - mutation/controller family ownership and minimum snapshot-generation consequences still need shared acknowledgment
+  - OxFunc and OxCalc now both align at note level with the sharpened OxFml-side freeze packet
+  - the packet remains only note-level converged until it is promoted to shared seam-freeze text
+  - broader snapshot-acknowledgment and publication consequences from register/unregister remain intentionally outside the current first packet
 - claim_confidence: provisional

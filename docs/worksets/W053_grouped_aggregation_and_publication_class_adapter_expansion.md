@@ -85,5 +85,6 @@ Narrow the next OxFml <-> OxFunc adapter-expansion lane after the first pinned 4
   - helper bind-time rejection parity is now exercised for duplicate `LET` names, duplicate `LAMBDA` parameter names, and malformed `LAMBDA` parameter declarations, including a deterministic fixture corpus in `crates/oxfml_core/tests/fixtures/w053_grouped_aggregation_cases.json`
   - `HYPERLINK` publication intent, generic extended top-level return-surface preservation, explicit `_webimage` rich-value packet classification, and end-to-end local `IMAGE(...)` evaluator/host/adapter evidence are now exercised locally
   - no new concrete OxFunc mismatch was exposed by the widened local `GROUPBY` / `PIVOTBY` / publication-class corpus
-  - OxFunc acknowledgment and integration of the widened `W053` floor remains pending, so the workset is not yet promotable beyond `integration_completeness: partial`
+  - OxFunc now treats the widened `W053` corpus as sufficient for the current grouped-aggregation regression floor; future reopening is mismatch-driven
+  - cross-repo acknowledgment has narrowed, but the workset remains `integration_completeness: partial` until the surrounding shared seam packets are fully frozen
 - claim_confidence: provisional

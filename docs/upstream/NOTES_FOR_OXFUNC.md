@@ -448,3 +448,92 @@ Current return-surface consequences now relevant to `W053` are:
 2. OxFml now preserves OxFunc extended top-level return surfaces generically rather than via a `HYPERLINK`-only branch, with `TODAY` now also exercised as `ValueWithPresentation`,
 3. explicit `_webimage` rich-value packet evidence now preserves `ReturnedValueSurfaceKind::RichValue` plus `rich_value_type_name`, host-side publication no longer drops non-ordinary return classes merely because the published worksheet fallback differs, and commit-bundle carriage now preserves the same non-ordinary rich-value class,
 4. `IMAGE(...)` is now exercised locally through evaluator, host, and adapter paths with typed `HostInfoProvider::query_image(...)` normalization, preserved published fallback, and `TypedContextQueryFamily::Image`.
+
+## 12. Current Closure Packet From OxFml
+
+This section is the cleaned-up closure packet for the currently open OxFml <-> OxFunc lanes. It is intended to supersede the more narrative parts of the earlier note when deciding what still needs acknowledgment.
+
+### 12.1 Current local OxFml position
+
+OxFml now considers the following local positions stable:
+1. `W042`
+   - the first shared returned-value split should be:
+     - `OrdinaryValue`
+     - `ValueWithPresentation`
+     - `RichValue`
+     - `TypedHostProviderOutcome`
+   - `HYPERLINK` is exercised locally as `ValueWithPresentation`
+   - `IMAGE` is exercised locally as `RichValue` carrying `_webimage`
+   - published worksheet fallback remains separate from the semantic return carrier
+   - `TypedContextQueryFamily::Image` is the proposed first freeze name for the `IMAGE` host-query lane
+2. `W052`
+   - OxFml adopts the OxFunc-owned shared packet types directly for:
+     - `RegisterIdRequest`
+     - `RegisteredExternalDescriptor`
+     - `RegisteredExternalCallRequest`
+   - descriptor-driven dereference and general type coercion remain OxFunc-owned
+   - `RegisteredExternalCatalogMutation*` and `RegisteredExternalCatalogController` remain OxFml-owned funnel packets unless OxFunc explicitly wants them promoted into the shared runtime packet family
+   - invalidation split should be:
+     - bind-visible registration/unregister => new `LibraryContextSnapshot` generation
+     - `CALL` / `REGISTER.ID`-only descriptor mutation => targeted reevaluation by default
+3. `W053`
+   - grouped-aggregation semantics remain OxFunc-owned
+   - OxFml’s responsibility is only the adapter seam:
+     - parse correctly
+     - bind helper forms correctly
+     - preserve callable-slot carriage
+     - reject malformed helper forms before runtime dispatch
+   - the widened local `GROUPBY` / `PIVOTBY` / helper-rejection / `HYPERLINK` / `IMAGE` corpus has not exposed a new concrete OxFunc mismatch
+
+### 12.2 Specific confirmations OxFml now needs from OxFunc
+
+OxFunc’s latest note now gives OxFml a convergent current-phase answer on `W052`:
+1. direct shared packet set:
+   - `RegisterIdRequest`
+   - `RegisteredExternalDescriptor`
+   - `RegisteredExternalCallRequest`
+2. minimum shared `RegisteredExternalDescriptor` field set:
+   - keep the current seven-field descriptor
+3. mutation/controller family ownership:
+   - keep `RegisteredExternalCatalogMutation*` and `RegisteredExternalCatalogController` OxFml-owned for the current phase
+4. minimum shared snapshot-generation consequences:
+   - bind-visible registration or unregister => new `LibraryContextSnapshot` generation plus bind invalidation where the visible function or name world changes
+   - `CALL` / `REGISTER.ID`-only descriptor mutation => targeted reevaluation by default
+
+Current sharper wording:
+1. OxFml is no longer asking whether `RegisteredExternalProvider` stays separate from `HostInfoProvider`; OxFml treats that as already settled
+2. OxFml is no longer asking whether a parallel OxFml wrapper vocabulary is needed for:
+   - `RegisterIdRequest`
+   - `RegisteredExternalDescriptor`
+   - `RegisteredExternalCallRequest`
+   OxFml treats direct adoption of the OxFunc packet types as the settled direction
+3. the only live shared decisions are now:
+   - exact field naming
+   - minimum `RegisteredExternalDescriptor` field set
+   - mutation/controller family ownership
+   - snapshot-generation consequences
+
+Current OxFml read after that latest OxFunc reply is:
+1. those four decisions are now converged with OxFunc at note level
+2. the remaining live work is to carry the same narrowed packet to OxCalc and promote it from note-level convergence to shared seam-freeze text
+
+### 12.3 Open lanes remaining after OxFml local work
+
+OxFunc’s current note now confirms:
+1. the four-way `W042` return-surface split is sufficient for the current-phase shared freeze
+2. no extra `IMAGE` fields are needed beyond the present `W042` vocabulary
+3. `TypedContextQueryFamily::Image` is the right first freeze name
+4. the widened `W053` grouped-aggregation corpus is sufficient as the current regression floor, with future reopening only on concrete mismatch
+
+So the remaining OxFml-side note lanes now reduce to:
+1. `W042`: final shared field naming freeze only
+2. `W052`: OxCalc-side acknowledgment and promotion from note-level convergence to shared seam-freeze text
+3. `W053`: mismatch-driven reopening only
+
+### 12.4 Non-asks
+
+OxFml is not asking OxFunc for:
+1. a new broad callable ABI redesign
+2. full `GROUPBY` / `PIVOTBY` option-matrix closure
+3. a broad new adapter round outside concrete mismatch
+4. a full rich-value object-model redesign beyond the first shared return-surface freeze
