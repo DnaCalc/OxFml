@@ -2,9 +2,14 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
-use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
+use oxfunc_core::host_info::{
+    CellInfoQuery, HostInfoError, HostInfoProvider, ImageProviderResult, ImageRequest, InfoQuery,
+    ResolvedWebImage,
+};
 use oxfunc_core::locale_format::en_us_context;
-use oxfunc_core::value::{CellStyleHint, EvalValue, ExcelText, PresentationHint, ReferenceLike};
+use oxfunc_core::value::{
+    CellStyleHint, EvalValue, ExcelText, NumberFormatHint, PresentationHint, ReferenceLike,
+};
 use serde::Deserialize;
 
 use oxfml_core::seam::{AcceptDecision, TraceEventKind};
@@ -146,6 +151,77 @@ fn single_formula_host_preserves_hyperlink_publication_intent() {
             );
         }
         AcceptDecision::Rejected(_) => panic!("expected accepted hyperlink recalc"),
+    }
+}
+
+#[test]
+fn single_formula_host_preserves_today_presentation_hint() {
+    let mut host = SingleFormulaHost::new("host:today", "=TODAY()");
+    let run = host
+        .recalc(None, Some(&en_us_context()))
+        .expect("recalc should succeed");
+
+    assert_eq!(
+        run.returned_value_surface.kind,
+        ReturnedValueSurfaceKind::ValueWithPresentation
+    );
+    assert_eq!(
+        run.returned_value_surface.presentation_hint,
+        Some(PresentationHint::number_format(NumberFormatHint::DateLike))
+    );
+    assert_eq!(
+        run.candidate_result.returned_value_surface.kind,
+        ReturnedValueSurfaceKind::ValueWithPresentation
+    );
+    match &run.commit_decision {
+        AcceptDecision::Accepted(bundle) => {
+            assert_eq!(
+                bundle.returned_value_surface.kind,
+                ReturnedValueSurfaceKind::ValueWithPresentation
+            );
+            assert_eq!(
+                bundle.value_delta.published_payload,
+                oxfml_core::ValuePayload::Number("46000".to_string())
+            );
+        }
+        AcceptDecision::Rejected(_) => panic!("expected accepted today recalc"),
+    }
+}
+
+#[test]
+fn single_formula_host_preserves_image_rich_value_surface() {
+    let mut host = SingleFormulaHost::new(
+        "host:image",
+        "=IMAGE(\"https://example.com/sphere.png\",\"Sphere\")",
+    );
+    let run = host
+        .recalc(Some(&ImageHostInfoProvider), Some(&en_us_context()))
+        .expect("recalc should succeed");
+
+    assert_eq!(
+        run.returned_value_surface.kind,
+        ReturnedValueSurfaceKind::RichValue
+    );
+    assert_eq!(
+        run.returned_value_surface.rich_value_type_name.as_deref(),
+        Some("_webimage")
+    );
+    assert_eq!(
+        run.candidate_result.returned_value_surface.kind,
+        ReturnedValueSurfaceKind::RichValue
+    );
+    match &run.commit_decision {
+        AcceptDecision::Accepted(bundle) => {
+            assert_eq!(
+                bundle.returned_value_surface.kind,
+                ReturnedValueSurfaceKind::RichValue
+            );
+            assert_eq!(
+                bundle.value_delta.published_payload,
+                oxfml_core::ValuePayload::Text("-2146826273".to_string())
+            );
+        }
+        AcceptDecision::Rejected(_) => panic!("expected accepted image recalc"),
     }
 }
 
@@ -369,6 +445,21 @@ impl HostInfoProvider for MockHostInfoProvider {
             ))),
             _ => Err(HostInfoError::UnsupportedInfoQuery(query)),
         }
+    }
+}
+
+struct ImageHostInfoProvider;
+
+impl HostInfoProvider for ImageHostInfoProvider {
+    fn query_image(&self, request: &ImageRequest) -> Result<ImageProviderResult, HostInfoError> {
+        assert_eq!(
+            request.source.to_string_lossy(),
+            "https://example.com/sphere.png"
+        );
+        Ok(ImageProviderResult::Image(ResolvedWebImage {
+            web_image_identifier: "img-1".to_string(),
+            published_fallback: ExcelText::from_interop_assignment("-2146826273"),
+        }))
     }
 }
 

@@ -3,11 +3,14 @@ use std::collections::BTreeMap;
 mod common;
 
 use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult};
-use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
+use oxfunc_core::host_info::{
+    CellInfoQuery, HostInfoError, HostInfoProvider, ImageProviderResult, ImageRequest,
+    ImageSizingMode, InfoQuery, ResolvedWebImage,
+};
 use oxfunc_core::locale_format::{LocaleFormatContext, en_us_context};
 use oxfunc_core::value::{
-    ArrayCellValue, CellStyleHint, EvalValue, ExcelText, PresentationHint, ReferenceKind,
-    ReferenceLike,
+    ArrayCellValue, CellStyleHint, EvalValue, ExcelText, NumberFormatHint, PresentationHint,
+    ReferenceKind, ReferenceLike,
 };
 
 use oxfml_core::binding::{
@@ -110,6 +113,67 @@ fn evaluator_preserves_hyperlink_publication_intent() {
     assert_eq!(
         output.returned_value_surface.presentation_hint,
         Some(PresentationHint::style(CellStyleHint::Hyperlink))
+    );
+}
+
+#[test]
+fn evaluator_preserves_today_presentation_hint_through_generic_extended_path() {
+    let output = evaluate("=TODAY()", None, None, Some(&en_us_context()));
+    assert_eq!(output.oxfunc_value, EvalValue::Number(46000.0));
+    assert_eq!(
+        output.returned_value_surface.kind,
+        oxfml_core::ReturnedValueSurfaceKind::ValueWithPresentation
+    );
+    assert_eq!(
+        output.returned_value_surface.presentation_hint,
+        Some(PresentationHint::number_format(NumberFormatHint::DateLike))
+    );
+}
+
+#[test]
+fn evaluator_preserves_image_rich_value_surface_through_host_query_lane() {
+    let output = evaluate(
+        "=IMAGE(\"https://example.com/sphere.png\",\"Sphere\")",
+        None,
+        Some(&ImageHostInfoProvider),
+        Some(&en_us_context()),
+    );
+    assert_eq!(
+        output.oxfunc_value,
+        EvalValue::Text(ExcelText::from_interop_assignment("-2146826273"))
+    );
+    assert_eq!(
+        output.returned_value_surface.kind,
+        oxfml_core::ReturnedValueSurfaceKind::RichValue
+    );
+    assert_eq!(
+        output
+            .returned_value_surface
+            .rich_value_type_name
+            .as_deref(),
+        Some("_webimage")
+    );
+}
+
+#[test]
+fn evaluator_maps_image_provider_denial_to_blocked_error() {
+    let output = evaluate(
+        "=IMAGE(\"https://example.com/sphere.png\")",
+        None,
+        Some(&BlockedImageHostInfoProvider),
+        Some(&en_us_context()),
+    );
+    assert_eq!(
+        output.oxfunc_value,
+        EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Blocked)
+    );
+    assert_eq!(
+        output.returned_value_surface.kind,
+        oxfml_core::ReturnedValueSurfaceKind::OrdinaryValue
+    );
+    assert_eq!(
+        output.returned_value_surface.payload_summary,
+        "Error(Blocked)"
     );
 }
 
@@ -1033,6 +1097,29 @@ impl HostInfoProvider for MockHostInfoProvider {
     }
 }
 
+struct ImageHostInfoProvider;
+
+impl HostInfoProvider for ImageHostInfoProvider {
+    fn query_image(&self, request: &ImageRequest) -> Result<ImageProviderResult, HostInfoError> {
+        assert_eq!(
+            request.source.to_string_lossy(),
+            "https://example.com/sphere.png"
+        );
+        assert_eq!(
+            request.alt_text.as_ref().map(ExcelText::to_string_lossy),
+            Some("Sphere".to_string())
+        );
+        assert_eq!(request.sizing, ImageSizingMode::FitCell);
+        assert_eq!(request.height, None);
+        assert_eq!(request.width, None);
+
+        Ok(ImageProviderResult::Image(ResolvedWebImage {
+            web_image_identifier: "img-1".to_string(),
+            published_fallback: ExcelText::from_interop_assignment("-2146826273"),
+        }))
+    }
+}
+
 struct FailingHostInfoProvider;
 
 impl HostInfoProvider for FailingHostInfoProvider {
@@ -1051,6 +1138,14 @@ impl HostInfoProvider for FailingHostInfoProvider {
 
     fn query_info(&self, query: InfoQuery) -> Result<EvalValue, HostInfoError> {
         Err(HostInfoError::UnsupportedInfoQuery(query))
+    }
+}
+
+struct BlockedImageHostInfoProvider;
+
+impl HostInfoProvider for BlockedImageHostInfoProvider {
+    fn query_image(&self, _request: &ImageRequest) -> Result<ImageProviderResult, HostInfoError> {
+        Ok(ImageProviderResult::CapabilityDenied)
     }
 }
 

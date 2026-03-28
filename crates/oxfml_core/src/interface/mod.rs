@@ -16,6 +16,7 @@ pub enum TypedContextQueryFamily {
     ReferenceResolver,
     CellInfo,
     Info,
+    Image,
     FormulaText,
     SheetIndex,
     SheetCount,
@@ -144,6 +145,7 @@ impl<'a> TypedContextQueryBundle<'a> {
             families.extend([
                 TypedContextQueryFamily::CellInfo,
                 TypedContextQueryFamily::Info,
+                TypedContextQueryFamily::Image,
                 TypedContextQueryFamily::FormulaText,
                 TypedContextQueryFamily::SheetIndex,
                 TypedContextQueryFamily::SheetCount,
@@ -434,6 +436,7 @@ impl ReturnedValueSurface {
             | HostInfoError::UnsupportedSheetCountQuery
             | HostInfoError::UnsupportedAggregateReferenceContextQuery
             | HostInfoError::UnsupportedWidthConversionProfileQuery(_)
+            | HostInfoError::UnsupportedImageQuery
             | HostInfoError::UnsupportedTranslateQuery => {
                 (HostProviderOutcomeKind::UnsupportedQuery, None)
             }

@@ -13,7 +13,10 @@ use oxfml_core::semantics::{
     RegistrationSourceKind,
 };
 use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult};
-use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
+use oxfunc_core::host_info::{
+    CellInfoQuery, HostInfoError, HostInfoProvider, ImageProviderResult, ImageRequest, InfoQuery,
+    ResolvedWebImage,
+};
 use oxfunc_core::locale_format::en_us_context;
 use oxfunc_core::value::{
     EvalValue, ExcelText, ExtendedValue, NumberFormatHint, PresentationHint, ReferenceLike,
@@ -41,6 +44,7 @@ fn typed_context_query_bundle_freeze_candidate_stays_capability_scoped() {
             TypedContextQueryFamily::ReferenceResolver,
             TypedContextQueryFamily::CellInfo,
             TypedContextQueryFamily::Info,
+            TypedContextQueryFamily::Image,
             TypedContextQueryFamily::FormulaText,
             TypedContextQueryFamily::SheetIndex,
             TypedContextQueryFamily::SheetCount,
@@ -116,7 +120,10 @@ fn returned_value_surface_keeps_three_way_split() {
             .outcome_kind,
         HostProviderOutcomeKind::CapabilityDenied
     );
+}
 
+#[test]
+fn returned_value_surface_preserves_image_rich_value_class() {
     let rich_value =
         ReturnedValueSurface::from_extended_value(&ExtendedValue::RichValue(Box::new(RichValue {
             value_type: RichValueType {
@@ -133,6 +140,8 @@ fn returned_value_surface_keeps_three_way_split() {
         rich_value.rich_value_type_name.as_deref(),
         Some("_webimage")
     );
+    assert_eq!(rich_value.presentation_hint, None);
+    assert_eq!(rich_value.host_provider_outcome, None);
 }
 
 #[test]
@@ -340,6 +349,13 @@ impl HostInfoProvider for MockHostInfoProvider {
             ))),
             _ => Err(HostInfoError::UnsupportedInfoQuery(query)),
         }
+    }
+
+    fn query_image(&self, _request: &ImageRequest) -> Result<ImageProviderResult, HostInfoError> {
+        Ok(ImageProviderResult::Image(ResolvedWebImage {
+            web_image_identifier: "img-1".to_string(),
+            published_fallback: ExcelText::from_interop_assignment("-2146826273"),
+        }))
     }
 }
 

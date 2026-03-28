@@ -1,6 +1,7 @@
 use oxfunc_core::functions::call_register_id_family::{
     RegisterIdRequest, RegisteredExternalDescriptor, RegisteredExternalOriginKind,
-    RegisteredExternalProvider, RegisteredExternalProviderError, RegisteredProcedureSpec,
+    RegisteredExternalProvider, RegisteredExternalProviderError, RegisteredExternalTarget,
+    RegisteredProcedureSpec,
 };
 use oxfunc_core::value::{CallArgValue, EvalValue, ExcelText, ReferenceKind, ReferenceLike};
 use std::cell::RefCell;
@@ -39,6 +40,16 @@ fn host_executes_register_id_and_call_through_registered_external_provider() {
     assert_eq!(
         register_output.published_worksheet_value,
         EvalValue::Number(4242.0)
+    );
+    assert_eq!(
+        register_output.evaluation.trace.prepared_calls[0]
+            .register_id_request
+            .as_ref(),
+        Some(&sample_register_id_request(
+            "Kernel32",
+            "GetTickCount",
+            Some("J!")
+        ))
     );
     assert_eq!(
         provider
@@ -84,6 +95,73 @@ fn host_executes_register_id_and_call_through_registered_external_provider() {
             CallArgValue::Eval(EvalValue::Number(3.0)),
         ]
     );
+    match call_output.evaluation.trace.prepared_calls[0]
+        .registered_external_call_request
+        .as_ref()
+        .expect("normalized call request")
+    {
+        oxfml_core::RegisteredExternalCallRequest {
+            target:
+                RegisteredExternalTarget::Direct(RegisterIdRequest {
+                    library_name,
+                    procedure: RegisteredProcedureSpec::Name(procedure),
+                    declared_type_text,
+                }),
+            invocation_args,
+        } => {
+            assert_eq!(library_name.to_string_lossy(), "Kernel32");
+            assert_eq!(procedure.to_string_lossy(), "MulDiv");
+            assert_eq!(
+                declared_type_text
+                    .as_ref()
+                    .map(|value| value.to_string_lossy()),
+                Some("JJJJ".to_string())
+            );
+            assert_eq!(
+                invocation_args,
+                &vec![
+                    CallArgValue::Eval(EvalValue::Number(6.0)),
+                    CallArgValue::Eval(EvalValue::Number(7.0)),
+                    CallArgValue::Eval(EvalValue::Number(3.0)),
+                ]
+            );
+        }
+        other => panic!("unexpected normalized call request: {other:?}"),
+    }
+}
+
+#[test]
+fn host_executes_call_by_register_id_through_lookup_lane() {
+    let provider = RecordingRegisteredExternalProvider::default();
+    let mut host = SingleFormulaHost::new("formula:call-register-id", "=CALL(4242,6,7,3)");
+
+    let output = host
+        .recalc_with_registered_external_provider(None, Some(&provider), None, None)
+        .expect("call by register id host recalc");
+
+    assert_eq!(output.published_worksheet_value, EvalValue::Number(14.0));
+    assert_eq!(provider.last_lookup.borrow().as_ref(), Some(&4242.0));
+    match output.evaluation.trace.prepared_calls[0]
+        .registered_external_call_request
+        .as_ref()
+        .expect("normalized by-id call request")
+    {
+        oxfml_core::RegisteredExternalCallRequest {
+            target: RegisteredExternalTarget::RegisterId(register_id),
+            invocation_args,
+        } => {
+            assert_eq!(*register_id, 4242.0);
+            assert_eq!(
+                invocation_args,
+                &vec![
+                    CallArgValue::Eval(EvalValue::Number(6.0)),
+                    CallArgValue::Eval(EvalValue::Number(7.0)),
+                    CallArgValue::Eval(EvalValue::Number(3.0)),
+                ]
+            );
+        }
+        other => panic!("unexpected normalized by-id call request: {other:?}"),
+    }
 }
 
 #[test]

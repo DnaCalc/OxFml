@@ -13,6 +13,12 @@ pub mod session;
 pub mod source;
 pub mod syntax;
 
+pub use oxfunc_core::functions::call_register_id_family::{
+    RegisterIdRequest, RegisteredExternalCallRequest, RegisteredExternalDescriptor,
+    RegisteredExternalOriginKind, RegisteredExternalProvider, RegisteredExternalProviderError,
+    RegisteredExternalTarget, RegisteredProcedureSpec,
+};
+
 pub use binding::{
     BindContext, BindDiagnostic, BindRequest, BindResult, BoundExpr, BoundFormula,
     IncrementalBindResult, NormalizedReference, ReferenceExpr, bind_formula,

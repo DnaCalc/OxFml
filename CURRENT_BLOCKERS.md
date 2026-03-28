@@ -2,7 +2,7 @@
 
 Status: no active blockers.
 
-Last reviewed: 2026-03-23 after `W040` higher-order callable validation.
+Last reviewed: 2026-03-28 after `W053` grouped-aggregation gate audit.
 
 ---
 

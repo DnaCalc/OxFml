@@ -18,8 +18,8 @@ use crate::eval::{
 use crate::interface::{
     LibraryContextProvider, LibraryContextSnapshotRef, RegisteredExternalCatalogController,
     RegisteredExternalCatalogMutationRequest, RegisteredExternalCatalogMutationResult,
-    ReturnedValueSurface, TableCallerRegion, TableDescriptor, TableRef, TypedContextQueryBundle,
-    TypedContextQueryBundleSpec,
+    ReturnedValueSurface, ReturnedValueSurfaceKind, TableCallerRegion, TableDescriptor, TableRef,
+    TypedContextQueryBundle, TypedContextQueryBundleSpec,
 };
 use crate::red::{RedProjection, project_red_view_incremental};
 use crate::scheduler::{ExecutionContract, build_execution_contract};
@@ -904,10 +904,70 @@ fn published_returned_value_surface(
     evaluation: &EvaluationOutput,
     published_value: &EvalValue,
 ) -> ReturnedValueSurface {
-    if published_value == &evaluation.oxfunc_value {
+    if published_value == &evaluation.oxfunc_value
+        || !matches!(
+            evaluation.returned_value_surface.kind,
+            ReturnedValueSurfaceKind::OrdinaryValue
+        )
+    {
         evaluation.returned_value_surface.clone()
     } else {
         ReturnedValueSurface::from_extended_value(&ExtendedValue::Core(published_value.clone()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::published_returned_value_surface;
+    use crate::eval::{
+        EvaluationOutput, EvaluationTrace, PreparedBlanknessClass, PreparedResult,
+        PreparedResultClass, PreparedStructureClass,
+    };
+    use crate::interface::{ReturnedValueSurface, ReturnedValueSurfaceKind};
+    use oxfunc_core::value::{
+        EvalValue, ExcelText, ExtendedValue, RichValue, RichValueData, RichValueType,
+        WorksheetErrorCode,
+    };
+
+    #[test]
+    fn published_returned_value_surface_preserves_non_ordinary_rich_surface() {
+        let evaluation = EvaluationOutput {
+            result: PreparedResult {
+                result_class: PreparedResultClass::Scalar,
+                structure_class: PreparedStructureClass::DirectScalar,
+                payload_summary: "Text(Sphere)".to_string(),
+                blankness_class: PreparedBlanknessClass::NonBlank,
+                reference_target: None,
+                callable_carrier: None,
+                callable_profile: None,
+                callable_profile_detail: None,
+                deferred_reason: None,
+                format_hint: None,
+                publication_hint: None,
+                capability_dependencies: Vec::new(),
+            },
+            oxfunc_value: EvalValue::Text(ExcelText::from_interop_assignment("Sphere")),
+            returned_value_surface: ReturnedValueSurface::from_extended_value(
+                &ExtendedValue::RichValue(Box::new(RichValue {
+                    value_type: RichValueType {
+                        type_name: "_webimage".to_string(),
+                        required_keys: vec!["WebImageIdentifier".to_string()],
+                        key_flags: vec![],
+                    },
+                    fallback: RichValueData::Text(ExcelText::from_interop_assignment("Sphere")),
+                    kvps: vec![],
+                })),
+            ),
+            trace: EvaluationTrace {
+                prepared_calls: Vec::new(),
+            },
+        };
+
+        let published = EvalValue::Error(WorksheetErrorCode::Connect);
+        let surface = published_returned_value_surface(&evaluation, &published);
+
+        assert_eq!(surface.kind, ReturnedValueSurfaceKind::RichValue);
+        assert_eq!(surface.rich_value_type_name.as_deref(), Some("_webimage"));
     }
 }
 

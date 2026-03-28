@@ -56,12 +56,19 @@ The first bounded consumer model should carry direct typed runtime lanes:
 Current OxFml reading:
 1. these are runtime request/result packets, not merely library-context snapshot metadata,
 2. they should therefore cross the seam directly where the host/runtime path needs them,
-3. the runtime library-context snapshot may still carry capability and profile truth about whether worksheet `CALL` / `REGISTER.ID` is admitted or gated in a given environment,
-4. but the snapshot/provider layer should not be the only place where per-request registration, invocation, and unregister packets can be observed.
-5. current local OxFml host support now exposes:
+3. OxFml should adopt the OxFunc-owned request/result packet types directly rather than wrapping them in a second OxFml-local vocabulary when no extra OxFml-owned fields are required,
+4. the current local host and adapter path now does this for `RegisterIdRequest`, `RegisteredExternalCallRequest`, and `RegisteredExternalDescriptor`,
+5. normalized worksheet `REGISTER.ID` and `CALL` packets should therefore be visible in OxFml artifacts as first-class packet facts, not only implied by provider callbacks,
+6. the runtime library-context snapshot may still carry capability and profile truth about whether worksheet `CALL` / `REGISTER.ID` is admitted or gated in a given environment,
+7. but the snapshot/provider layer should not be the only place where per-request registration, invocation, and unregister packets can be observed.
+8. current local OxFml host support now exposes:
    - `SingleFormulaHost::recalc_with_registered_external_provider(...)`
    - `SingleFormulaHost::apply_registered_external_catalog_mutation(...)`
    as the first internal host-facing surface for that packet family.
+9. current local OxFml trace and adapter artifacts also expose normalized request packets through `PreparedCall` for:
+   - worksheet `REGISTER.ID`
+   - worksheet `CALL` direct-library targets
+   - worksheet `CALL` register-id targets
 
 ## Reference And Conversion Reading
 Current OxFml reading should align worksheet `CALL` more closely with the built-in function seam:
@@ -79,35 +86,33 @@ Current implication:
 3. OxFml should preserve reference-visible prepared arguments where the descriptor may require them, rather than hard-coding one eager dereference rule in OxFml.
 4. the same descriptor-driven reading should govern general worksheet-to-external type conversion rather than treating coercion as an OxFml-owned pre-flattening step.
 
-## Suggested First Packet Shape
-Current best-effort OxFml packet split:
+## First Packet Shape
+Current OxFml-side freeze:
 
 ### `RegisterIdRequest`
 1. `library_name`
-2. `procedure_name`
-3. optional `type_text`
-4. `caller_anchor`
-5. optional `host_execution_profile`
+2. `procedure`
+3. `declared_type_text`
+4. `caller_anchor` and `host_execution_profile` stay adjacent OxFml host/adaptor facts rather than widening the shared OxFunc-owned request packet
 
 ### `RegisteredExternalDescriptor`
-1. `register_id`
-2. `library_name`
-3. `procedure_name`
-4. optional `type_text`
-5. `descriptor_state`
+1. `stable_registration_id`
+2. `register_id`
+3. `origin_kind`
+4. `display_name`
+5. `library_name`
+6. `procedure`
+7. `declared_type_text`
+8. if more argument-policy facts are needed, OxFunc should extend this shared descriptor upstream and OxFml should adopt that extension directly rather than forking a sibling wrapper
 
 ### `RegisteredExternalCallRequest`
-1. `target_kind`
-   - `RegisterId`
-   - `DirectLibraryProcedure`
-2. optional `register_id`
-3. optional `library_name`
-4. optional `procedure_name`
-5. optional `type_text`
-6. `normalized_arguments`
-7. `caller_anchor`
-8. optional `host_execution_profile`
-9. optional `descriptor_ref`
+1. adopt OxFunc's current packet directly:
+   - `target`
+   - `invocation_args`
+2. `target` remains:
+   - `RegisterId(f64)`
+   - `Direct(RegisterIdRequest)`
+3. OxFml-owned caller-anchor and host execution profile facts remain adjacent host/adaptor packet facts, not reasons to fork the underlying call-request type
 
 ### `RegisteredExternalProvider`
 1. `register_id`
@@ -145,7 +150,7 @@ Current best-effort OxFml packet split:
 ## Current Non-Claims
 This note does not claim:
 1. that the final host/coordinator safety model is frozen,
-2. that the exact field names above are canonically frozen,
+2. that OxFunc and OxCalc have both acknowledged the local freeze above as shared seam text yet,
 3. that OxFunc must consume raw native-library details or own external invocation,
 4. that VBA project loading policy belongs in OxFml,
 5. that runtime snapshot-generation side effects for register/unregister are already frozen beyond the current best-effort ownership split.
@@ -154,8 +159,10 @@ This note does not claim:
 If OxFunc asks for a current best-effort answer, OxFml's reply is:
 1. keep `RegisteredExternalProvider` separate from `HostInfoProvider`,
 2. carry `RegisterIdRequest`, `RegisteredExternalDescriptor`, `RegisteredExternalCallRequest`, and typed catalog-mutation packets directly in the bounded runtime packet,
-3. let OxFunc use registration metadata or direct-call metadata to decide reference dereference and general type coercion at the worksheet `CALL` boundary,
-4. treat built-in catalog truth and runtime registered-external catalog mutation as OxFunc-owned,
-5. treat host API registration and VBA shim registration as host-initiated channels that OxFml funnels into the same OxFunc-owned mutation seam,
-6. keep the library-context snapshot/provider lane for admission/profile truth rather than as the sole carrier of live registration/invocation packets,
-7. keep worksheet `CALL` runtime above OxFunc except for request normalization, descriptor-driven argument handling, and worksheet-visible result projection unless concrete evidence forces a narrower split.
+3. prefer direct adoption of those OxFunc-owned request/result packet types rather than a parallel OxFml wrapper vocabulary,
+4. expose normalized `REGISTER.ID` and `CALL` packets in OxFml artifacts so adapter and host evidence can prove the seam shape directly,
+5. let OxFunc use registration metadata or direct-call metadata to decide reference dereference and general type coercion at the worksheet `CALL` boundary,
+6. treat built-in catalog truth and runtime registered-external catalog mutation as OxFunc-owned,
+7. treat host API registration and VBA shim registration as host-initiated channels that OxFml funnels into the same OxFunc-owned mutation seam,
+8. keep the library-context snapshot/provider lane for admission/profile truth rather than as the sole carrier of live registration/invocation packets,
+9. keep worksheet `CALL` runtime above OxFunc except for request normalization, descriptor-driven argument handling, and worksheet-visible result projection unless concrete evidence forces a narrower split.

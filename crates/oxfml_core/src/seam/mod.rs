@@ -429,3 +429,121 @@ fn fence_mismatch_reject(
         trace_correlation_id: trace_correlation_id.to_string(),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        AcceptDecision, AcceptedCandidateResult, CommitRequest, DynamicReferenceFact, Extent,
+        FenceSnapshot, Locus, ShapeDelta, ShapeOutcomeClass, SpillEvent, TopologyDelta, ValueDelta,
+        ValuePayload, WorksheetValueClass, commit_candidate,
+    };
+    use crate::interface::ReturnedValueSurface;
+    use crate::interface::ReturnedValueSurfaceKind;
+    use oxfunc_core::value::{ExcelText, ExtendedValue, RichValue, RichValueData, RichValueType};
+
+    #[test]
+    fn commit_candidate_preserves_rich_value_return_surface() {
+        let fence = FenceSnapshot {
+            formula_token: "formula:token".to_string(),
+            snapshot_epoch: "snapshot:v1".to_string(),
+            bind_hash: "bind:hash".to_string(),
+            profile_version: "profile:v1".to_string(),
+            capability_view_key: None,
+        };
+        let candidate = AcceptedCandidateResult {
+            formula_stable_id: "formula:image".to_string(),
+            session_id: Some("session:image".to_string()),
+            candidate_result_id: "candidate:image".to_string(),
+            fence_snapshot: fence.clone(),
+            value_delta: ValueDelta {
+                formula_stable_id: "formula:image".to_string(),
+                primary_locus: Locus {
+                    sheet_id: "sheet:1".to_string(),
+                    row: 1,
+                    col: 1,
+                },
+                affected_value_loci: vec![Locus {
+                    sheet_id: "sheet:1".to_string(),
+                    row: 1,
+                    col: 1,
+                }],
+                published_value_class: WorksheetValueClass::Error,
+                published_payload: ValuePayload::ErrorCode("Connect".to_string()),
+                result_extent: Some(Extent { rows: 1, cols: 1 }),
+                candidate_result_id: Some("candidate:image".to_string()),
+            },
+            shape_delta: ShapeDelta {
+                formula_stable_id: "formula:image".to_string(),
+                anchor_locus: Locus {
+                    sheet_id: "sheet:1".to_string(),
+                    row: 1,
+                    col: 1,
+                },
+                intended_extent: Extent { rows: 1, cols: 1 },
+                published_extent: Some(Extent { rows: 1, cols: 1 }),
+                blocked_loci: Vec::new(),
+                shape_outcome_class: ShapeOutcomeClass::Established,
+                candidate_result_id: Some("candidate:image".to_string()),
+            },
+            topology_delta: TopologyDelta {
+                formula_stable_id: "formula:image".to_string(),
+                dependency_additions: Vec::new(),
+                dependency_removals: Vec::new(),
+                dependency_reclassifications: Vec::new(),
+                dependency_consequence_facts: Vec::new(),
+                dynamic_reference_facts: Vec::<DynamicReferenceFact>::new(),
+                spill_facts: Vec::new(),
+                format_dependency_facts: Vec::new(),
+                capability_effect_facts: Vec::new(),
+                candidate_result_id: Some("candidate:image".to_string()),
+            },
+            format_delta: None,
+            display_delta: None,
+            returned_value_surface: ReturnedValueSurface::from_extended_value(
+                &ExtendedValue::RichValue(Box::new(RichValue {
+                    value_type: RichValueType {
+                        type_name: "_webimage".to_string(),
+                        required_keys: vec!["WebImageIdentifier".to_string()],
+                        key_flags: Vec::new(),
+                    },
+                    fallback: RichValueData::Text(ExcelText::from_interop_assignment("Sphere")),
+                    kvps: Vec::new(),
+                })),
+            ),
+            spill_events: Vec::<SpillEvent>::new(),
+            execution_profile: None,
+            trace_correlation_id: "trace:image".to_string(),
+        };
+
+        let accepted = commit_candidate(CommitRequest {
+            candidate_result: candidate,
+            commit_attempt_id: "commit:image".to_string(),
+            observed_fence: fence,
+        });
+
+        let AcceptDecision::Accepted(bundle) = accepted else {
+            panic!("commit should accept identical fence")
+        };
+        assert_eq!(
+            bundle.returned_value_surface.kind,
+            ReturnedValueSurfaceKind::RichValue
+        );
+        assert_eq!(
+            bundle
+                .returned_value_surface
+                .rich_value_type_name
+                .as_deref(),
+            Some("_webimage")
+        );
+        assert_eq!(
+            bundle.value_delta.published_payload,
+            ValuePayload::ErrorCode("Connect".to_string())
+        );
+        assert_eq!(
+            bundle.returned_value_surface.payload_summary,
+            "RichValue(_webimage)"
+        );
+        assert_eq!(bundle.candidate_result_id, "candidate:image");
+        assert_eq!(bundle.trace_correlation_id, "trace:image");
+    }
+}

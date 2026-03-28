@@ -11,8 +11,15 @@ use oxfml_core::semantics::{
     RegistrationSourceKind,
 };
 use oxfml_core::{PreparedSourceClass, PreparedStructureClass};
+use oxfunc_core::functions::call_register_id_family::{
+    RegisterIdRequest, RegisteredExternalOriginKind, RegisteredExternalProvider,
+    RegisteredExternalProviderError, RegisteredExternalTarget, RegisteredProcedureSpec,
+};
 use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult, RtdRequest};
-use oxfunc_core::value::{CellStyleHint, EvalValue, ExcelText, PresentationHint};
+use oxfunc_core::host_info::{
+    HostInfoError, HostInfoProvider, ImageProviderResult, ImageRequest, ResolvedWebImage,
+};
+use oxfunc_core::value::{CallArgValue, CellStyleHint, EvalValue, ExcelText, PresentationHint};
 
 #[test]
 fn adapter_projects_direct_scalar_and_array_like_preparation_artifacts() {
@@ -224,6 +231,125 @@ fn adapter_preserves_hyperlink_publication_intent() {
 }
 
 #[test]
+fn adapter_preserves_image_rich_value_surface() {
+    let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
+        "image-rich-value",
+        "formula:image-rich-value",
+        "=IMAGE(\"https://example.com/sphere.png\",\"Sphere\")",
+        locus(1, 1),
+        TypedContextQueryBundle::new(Some(&ImageHostInfoProvider), None, None, None, None),
+    ))
+    .expect("image adapter run");
+
+    assert!(
+        run.preparation_artifact
+            .typed_query_bundle_spec
+            .families
+            .contains(&TypedContextQueryFamily::Image)
+    );
+    assert_eq!(
+        run.evaluation_artifact.worksheet_value,
+        EvalValue::Text(ExcelText::from_interop_assignment("-2146826273"))
+    );
+    assert_eq!(
+        run.evaluation_artifact.returned_value_surface.kind,
+        ReturnedValueSurfaceKind::RichValue
+    );
+    assert_eq!(
+        run.evaluation_artifact
+            .returned_value_surface
+            .rich_value_type_name
+            .as_deref(),
+        Some("_webimage")
+    );
+}
+
+#[test]
+fn adapter_projects_image_capability_denied_as_blocked_error() {
+    let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
+        "image-capability-denied",
+        "formula:image-capability-denied",
+        "=IMAGE(\"https://example.com/sphere.png\")",
+        locus(1, 1),
+        TypedContextQueryBundle::new(Some(&BlockedImageHostInfoProvider), None, None, None, None),
+    ))
+    .expect("blocked image adapter run");
+
+    assert_eq!(
+        run.evaluation_artifact.worksheet_value,
+        EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Blocked)
+    );
+    assert_eq!(
+        run.evaluation_artifact.returned_value_surface.kind,
+        ReturnedValueSurfaceKind::OrdinaryValue
+    );
+    assert_eq!(
+        run.evaluation_artifact
+            .returned_value_surface
+            .payload_summary,
+        "Error(Blocked)"
+    );
+}
+
+#[test]
+fn adapter_projects_registered_external_requests_for_register_id_and_call() {
+    let provider = RecordingRegisteredExternalProvider::default();
+
+    let register_run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
+        "register-id-request",
+        "formula:register-id-request",
+        "=REGISTER.ID(\"Kernel32\",\"GetTickCount\",\"J!\")",
+        locus(1, 1),
+        TypedContextQueryBundle::default().with_registered_external_provider(Some(&provider)),
+    ))
+    .expect("register.id adapter run");
+
+    assert_eq!(
+        register_run.preparation_artifact.prepared_calls[0]
+            .register_id_request
+            .as_ref(),
+        Some(&RegisterIdRequest {
+            library_name: ExcelText::from_interop_assignment("Kernel32"),
+            procedure: RegisteredProcedureSpec::Name(ExcelText::from_interop_assignment(
+                "GetTickCount"
+            )),
+            declared_type_text: Some(ExcelText::from_interop_assignment("J!")),
+        })
+    );
+
+    let call_run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
+        "call-request",
+        "formula:call-request",
+        "=CALL(4242,6,7,3)",
+        locus(1, 1),
+        TypedContextQueryBundle::default().with_registered_external_provider(Some(&provider)),
+    ))
+    .expect("call adapter run");
+
+    match call_run.preparation_artifact.prepared_calls[0]
+        .registered_external_call_request
+        .as_ref()
+        .expect("normalized call request")
+    {
+        oxfml_core::RegisteredExternalCallRequest {
+            target: RegisteredExternalTarget::RegisterId(register_id),
+            invocation_args,
+        } => {
+            assert_eq!(*register_id, 4242.0);
+            assert_eq!(
+                invocation_args,
+                &vec![
+                    CallArgValue::Eval(EvalValue::Number(6.0)),
+                    CallArgValue::Eval(EvalValue::Number(7.0)),
+                    CallArgValue::Eval(EvalValue::Number(3.0)),
+                ]
+            );
+        }
+        other => panic!("unexpected normalized call request: {other:?}"),
+    }
+}
+
+#[test]
 fn adapter_builds_structured_mismatch_artifact() {
     let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
         "mismatch-seed",
@@ -359,5 +485,90 @@ struct CapabilityDeniedRtdProvider;
 impl RtdProvider for CapabilityDeniedRtdProvider {
     fn resolve_rtd(&self, _request: &RtdRequest) -> RtdProviderResult {
         RtdProviderResult::CapabilityDenied
+    }
+}
+
+struct ImageHostInfoProvider;
+
+impl HostInfoProvider for ImageHostInfoProvider {
+    fn query_image(&self, request: &ImageRequest) -> Result<ImageProviderResult, HostInfoError> {
+        assert_eq!(
+            request.source.to_string_lossy(),
+            "https://example.com/sphere.png"
+        );
+        Ok(ImageProviderResult::Image(ResolvedWebImage {
+            web_image_identifier: "img-1".to_string(),
+            published_fallback: ExcelText::from_interop_assignment("-2146826273"),
+        }))
+    }
+}
+
+struct BlockedImageHostInfoProvider;
+
+impl HostInfoProvider for BlockedImageHostInfoProvider {
+    fn query_image(&self, _request: &ImageRequest) -> Result<ImageProviderResult, HostInfoError> {
+        Ok(ImageProviderResult::CapabilityDenied)
+    }
+}
+
+#[derive(Default)]
+struct RecordingRegisteredExternalProvider;
+
+impl RegisteredExternalProvider for RecordingRegisteredExternalProvider {
+    fn resolve_register_id(
+        &self,
+        request: &RegisterIdRequest,
+    ) -> Result<oxfml_core::RegisteredExternalDescriptor, RegisteredExternalProviderError> {
+        let display_name = match &request.procedure {
+            RegisteredProcedureSpec::Name(name) => name.clone(),
+            RegisteredProcedureSpec::Ordinal(ordinal) => {
+                ExcelText::from_interop_assignment(&ordinal.to_string())
+            }
+        };
+        Ok(oxfml_core::RegisteredExternalDescriptor {
+            stable_registration_id: format!(
+                "REG.{}",
+                request.library_name.to_string_lossy().to_ascii_lowercase()
+            ),
+            register_id: 4242.0,
+            origin_kind: RegisteredExternalOriginKind::WorksheetRegisterId,
+            display_name: Some(display_name),
+            library_name: request.library_name.clone(),
+            procedure: request.procedure.clone(),
+            declared_type_text: request.declared_type_text.clone(),
+        })
+    }
+
+    fn lookup_registered_external(
+        &self,
+        register_id: f64,
+    ) -> Result<oxfml_core::RegisteredExternalDescriptor, RegisteredExternalProviderError> {
+        Ok(oxfml_core::RegisteredExternalDescriptor {
+            stable_registration_id: "REG.by-id".to_string(),
+            register_id,
+            origin_kind: RegisteredExternalOriginKind::WorksheetRegisterId,
+            display_name: Some(ExcelText::from_interop_assignment("LookupById")),
+            library_name: ExcelText::from_interop_assignment("Kernel32"),
+            procedure: RegisteredProcedureSpec::Name(ExcelText::from_interop_assignment("MulDiv")),
+            declared_type_text: Some(ExcelText::from_interop_assignment("JJJJ")),
+        })
+    }
+
+    fn invoke_registered_external(
+        &self,
+        descriptor: &oxfml_core::RegisteredExternalDescriptor,
+        args: &[CallArgValue],
+    ) -> Result<EvalValue, RegisteredExternalProviderError> {
+        match (&descriptor.procedure, args) {
+            (
+                RegisteredProcedureSpec::Name(name),
+                [
+                    CallArgValue::Eval(EvalValue::Number(a)),
+                    CallArgValue::Eval(EvalValue::Number(b)),
+                    CallArgValue::Eval(EvalValue::Number(c)),
+                ],
+            ) if name.to_string_lossy() == "MulDiv" => Ok(EvalValue::Number((a * b) / c)),
+            _ => Ok(EvalValue::Number(descriptor.register_id)),
+        }
     }
 }

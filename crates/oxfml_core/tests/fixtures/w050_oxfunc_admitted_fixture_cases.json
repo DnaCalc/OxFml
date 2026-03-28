@@ -566,7 +566,7 @@
     "snapshot_surface_name": "NOW",
     "cell_fixture": {},
     "expected_value_summary": "Number(45000.5)",
-    "expected_returned_value_surface_kind": "OrdinaryValue",
+    "expected_returned_value_surface_kind": "ValueWithPresentation",
     "expected_prepared_argument_structures": null,
     "expected_prepared_argument_sources": null,
     "now_serial": 45000.5,
