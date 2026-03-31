@@ -234,15 +234,20 @@ The current intended split is:
 Current OxFml baseline:
 1. helper forms are exercised locally,
 2. lexical helper capture is preserved semantically,
-3. callable results now carry a typed minimum carrier for origin, invocation model, capture mode, and arity,
+3. callable results now carry a typed minimum carrier for origin, capture mode, and arity,
 4. that callable floor now also covers helper-bound and defined-name callable bindings, so callable meaning is no longer confined to immediate helper-local scope in the local proving floor,
 5. typed invocation over an opaque callable identity is now exercised locally for `MAP`, `REDUCE`, `SCAN`, `BYROW`, `BYCOL`, and `MAKEARRAY` rather than remaining a note-only boundary,
 6. the current callable-value carrier remains provisional and replay-summary-oriented rather than finalized as a shared downstream transport.
 
 Current narrowing direction:
-1. the next smaller shared carrier may legitimately converge toward an opaque callable identity plus minimum semantic fields,
+1. the next smaller shared carrier may legitimately converge toward:
+   - opaque callable identity or token
+   - `origin_kind`
+   - `capture_mode`
+   - `arity_shape`
+   - `invocation_contract_ref`
 2. parameter names, capture names, and body-kind detail do not necessarily belong in that minimum carrier if provenance/replay surfaces preserve them explicitly,
-3. any opaque callable identity is still too weak if origin, capture mode, arity shape, or invocation contract become unrecoverable,
+3. any opaque callable identity is still too weak if origin, capture mode, arity shape, or invocation-contract meaning become unrecoverable,
 4. workbook Defined Name callable preservation should be treated as first-pass seam pressure rather than deferred callable transport cleanup,
 5. higher-order helper evidence from OxFunc is now strong downstream pressure, and OxFml now has matching local evidence for `MAP`, `REDUCE`, `SCAN`, `BYROW`, `BYCOL`, and `MAKEARRAY`: their `W044` catalog rows are consumed directly in local semantic-plan tests and their runtime lanes now execute through a local typed callable invoker,
 6. OxFml also now has local `ISOMITTED` evidence narrow enough to stop treating it as a seam driver:
@@ -258,6 +263,12 @@ Working rule:
 4. named callable bindings adopted into OxFml-defined name context may preserve callable meaning and typed invocation without forcing immediate publication-policy closure,
 5. transport details remain open, but callable-value meaning must stay recoverable.
 6. parameter-name, capture-name, and body-kind detail may remain provenance/replay detail rather than minimum transport fields if the smaller shared callable carrier still preserves lexical meaning honestly.
+
+Current freeze-candidate read:
+1. OxFunc now points to `../OxFunc/docs/function-lane/OXFML_OXFUNC_SHARED_INTERFACE_FREEZE_CANDIDATE_V1.md` as the current-phase shared-model candidate,
+2. OxFml reads that candidate as aligned with the narrower callable carrier above,
+3. no additional explicit invocation-model field is currently required beyond opaque callable identity plus `invocation_contract_ref`,
+4. the remaining callable-carrier work is promotion of this minimum carrier into shared seam-freeze text rather than another broad callable transport redesign.
 
 ## 6AA. Host-Provider And Subscription Seam Pattern
 Some function families should be treated as prepared request plus typed host/provider outcome seams rather than as ordinary pure-function kernels or generic provider fetches.

@@ -66,6 +66,7 @@ Narrow the first OxFml-owned worksheet `CALL` / `REGISTER.ID` seam packet so fut
 - integration_completeness: partial
 - open_lanes:
   - OxFunc and OxCalc now both align at note level with the sharpened OxFml-side freeze packet
-  - the packet remains only note-level converged until it is promoted to shared seam-freeze text
+  - the current local freeze candidate is now mirrored in `docs/spec/formula-language/OXFML_OXFUNC_SHARED_INTERFACE_FREEZE_CANDIDATE_V1.md`, and OxFunc's freeze-promotion handoff is now acceptable locally for the narrowed shared packet family
+  - the remaining `W052` work is coordinator-facing propagation and canonical promotion, not a live OxFml/OxFunc packet-shape mismatch
   - broader snapshot-acknowledgment and publication consequences from register/unregister remain intentionally outside the current first packet
 - claim_confidence: provisional

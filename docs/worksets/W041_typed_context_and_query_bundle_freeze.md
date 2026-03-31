@@ -56,9 +56,10 @@ Freeze the first shared OxFml/OxFunc typed context and query bundle for the curr
 - target_completeness: target_partial
 - integration_completeness: partial
 - open_lanes:
-  - a first local `TypedContextQueryBundle`, grouped `INFO` / `CELL` / `RTD` host-run evidence, and matching packet-family tests now exist, but the first shared typed context/query bundle is not yet canonically frozen on the OxFml side
+  - a first local `TypedContextQueryBundle`, grouped `INFO` / `CELL` / `RTD` / `IMAGE` evidence, and matching packet-family tests now exist, and the current family set is now aligned locally with the mirrored freeze packet plus `HO-FN-004`
   - current OxFunc query names and result partitions are accepted as a first freeze candidate, but not yet promoted through broader evaluator/session-facing packet use
-  - deterministic OxFml evidence now exists for the bundle shape and first grouped host/query families, but broader seam-heavy query execution evidence is still incomplete outside the exercised `INFO` / `CELL` / `RTD` slice
+  - deterministic OxFml evidence now exists for the bundle shape and first grouped host/query families, but broader seam-heavy query execution evidence is still incomplete outside the exercised `INFO` / `CELL` / `RTD` / `IMAGE` slice
   - OxFml still needs to answer with implementation-facing precision whether the current query families should remain exactly as named or be capability-family merged/split before promotion
-  - current OxFunc reading is that this is now a freeze-and-consumer packet rather than a broad semantic-open lane, and the final note round leaves local execution as the remaining next step
+  - the current local freeze candidate is now mirrored in `docs/spec/formula-language/OXFML_OXFUNC_SHARED_INTERFACE_FREEZE_CANDIDATE_V1.md`, and OxFunc's `HO-FN-004` now treats that family as part of the shared freeze floor for the narrowed seam families
+  - current OxFunc reading is that this is now a freeze-and-consumer packet rather than a broad semantic-open lane, so the remaining next step is local consumer promotion rather than more packet-shape debate
 - claim_confidence: provisional

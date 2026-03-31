@@ -65,5 +65,6 @@ Turn the converged OxFml/OxFunc runtime library-context direction into a first r
   - OxFml now prefers a cleaner runtime-only shape plus explicit CSV/export mapping, and that preference is backed by the first local provider model plus host consumption, but not yet by broader multi-surface consumer use
   - deterministic local evidence now exists for snapshot pinning and surface lookup through the first provider model, but broader generation/update behavior remains unexercised
   - the runtime-truth versus export-only field split is now explicit in local helper code, but not yet promoted into a wider canonical implementation surface
-  - current OxFunc reading is that this is now a freeze-and-consumer packet rather than a broad semantic-open lane, and the final note round leaves local execution as the remaining next step
+  - the current local freeze candidate is now mirrored in `docs/spec/formula-language/OXFML_OXFUNC_SHARED_INTERFACE_FREEZE_CANDIDATE_V1.md`, and OxFunc's `HO-FN-004` now treats the runtime consumer shape as part of the shared freeze floor for the narrowed seam families
+  - current OxFunc reading is that this is now a freeze-and-consumer packet rather than a broad semantic-open lane, so the remaining next step is broader local consumer propagation rather than more interface-shape debate
 - claim_confidence: provisional

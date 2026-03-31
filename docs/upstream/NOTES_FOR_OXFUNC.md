@@ -20,7 +20,8 @@ The main current points for OxFunc are:
 2. caller-context, scalarization, host-query, and formatting-sensitive lanes are represented in replayable local artifacts,
 3. prepared arguments and prepared results preserve semantic distinctions that OxFunc should continue to treat as real seam facts,
 4. the current OxFml direction is still toward a runtime library-context interface rather than long-term build-time catalog ingestion,
-5. the March 26 unary-negative-literal and blank single-cell issues are no longer open OxFml seam defects.
+5. the March 26 unary-negative-literal and blank single-cell issues are no longer open OxFml seam defects,
+6. OxFunc's `docs/function-lane/OXFML_OXFUNC_SHARED_INTERFACE_FREEZE_CANDIDATE_V1.md` plus `docs/handoffs/HANDOFF_SHARED_INTERFACE_FREEZE_PROMOTION_TO_OXFML_V1.md` are now the current shared freeze floor from the OxFml side for the narrowed seam families.
 
 ## 3. Current Evidence In OxFml
 
@@ -57,7 +58,13 @@ OxFml has an exercised local floor for:
 Current OxFml reading:
 1. helper lambdas must preserve lexical capture rather than dynamic name re-read,
 2. callable values are semantically real even where worksheet publication remains narrower,
-3. the final downstream shared callable-value carrier is still open.
+3. the minimum shared callable carrier is now narrowed candidate rather than wholly open:
+   - opaque callable identity or token
+   - `origin_kind`
+   - `capture_mode`
+   - `arity_shape`
+   - `invocation_contract_ref`
+4. parameter-name, capture-name, and body-kind detail may remain provenance/replay detail rather than minimum shared transport fields for the current phase.
 
 ### 4.2 Scalarization and caller context
 OxFml currently exercises:
@@ -154,14 +161,11 @@ The topics OxFml still considers open and worth active coordination are:
 
 ## 8. Current Requests To OxFunc
 
-The next useful OxFunc-side outputs for OxFml are:
+The next useful OxFunc-side outputs for OxFml are now narrow:
 1. keep the current library-context export stable enough for bounded OxFml-side consumption until the runtime interface replaces it,
-2. identify which callable-value facts OxFunc would need beyond the current helper summary carrier,
-3. identify whether any currently expected function traits are still missing from the semantic-plan profile,
-4. identify whether the present host-query capability split is already enough for the next `CELL` / `INFO` tightening pass,
-5. align the runtime/provider-consumer library-context model before widening note traffic further,
-6. confirm the smallest OxFunc-visible returned-value distinctions needed for `HYPERLINK` / `IMAGE`,
-7. continue narrowing exact `W052` field names and snapshot-generation consequences rather than reopening broad grouped-aggregation debate.
+2. flag only concrete wording corrections against the mirrored freeze packet or `HO-FN-004`,
+3. flag only concrete packet or carrier mismatches that block promotion,
+4. otherwise treat the mirrored packet plus `HO-FN-004` as the shared freeze floor for current owner-packet promotion.
 
 ## 9. Current Summary
 
@@ -514,8 +518,8 @@ Current sharper wording:
    - snapshot-generation consequences
 
 Current OxFml read after that latest OxFunc reply is:
-1. those four decisions are now converged with OxFunc at note level
-2. the remaining live work is to carry the same narrowed packet to OxCalc and promote it from note-level convergence to shared seam-freeze text
+1. those four decisions are now converged with OxFunc and acceptable from the OxFml side as current shared freeze wording for the narrowed `W052` packet family
+2. the remaining live work is coordinator-facing propagation and canonical promotion, not further OxFml/OxFunc model redesign
 
 ### 12.3 Open lanes remaining after OxFml local work
 
@@ -526,8 +530,8 @@ OxFunc’s current note now confirms:
 4. the widened `W053` grouped-aggregation corpus is sufficient as the current regression floor, with future reopening only on concrete mismatch
 
 So the remaining OxFml-side note lanes now reduce to:
-1. `W042`: final shared field naming freeze only
-2. `W052`: OxCalc-side acknowledgment and promotion from note-level convergence to shared seam-freeze text
+1. `W042`: broader packet promotion and consumer uptake, not return-surface model disagreement
+2. `W052`: coordinator-facing propagation and canonical promotion, not packet-shape disagreement with OxFunc
 3. `W053`: mismatch-driven reopening only
 
 ### 12.4 Non-asks
@@ -537,3 +541,24 @@ OxFml is not asking OxFunc for:
 2. full `GROUPBY` / `PIVOTBY` option-matrix closure
 3. a broad new adapter round outside concrete mismatch
 4. a full rich-value object-model redesign beyond the first shared return-surface freeze
+
+### 12.5 Current Freeze-Candidate Read
+
+Current OxFml read of OxFunc's newest note is:
+1. the OxFunc-side `OXFML_OXFUNC_SHARED_INTERFACE_FREEZE_CANDIDATE_V1.md` is the right current anchor for promoting the shared interface into explicit freeze text
+2. the minimum shared callable carrier is now converged enough to state explicitly as:
+   - opaque callable identity or token
+   - `origin_kind`
+   - `capture_mode`
+   - `arity_shape`
+   - `invocation_contract_ref`
+3. parameter-name, capture-name, and body-kind detail may remain provenance/replay detail rather than minimum shared transport fields for the current phase
+4. no additional explicit invocation-model field is currently needed beyond the opaque callable identity plus `invocation_contract_ref`
+5. OxFml has now mirrored that current-phase packet set locally in:
+   - `docs/spec/formula-language/OXFML_OXFUNC_SHARED_INTERFACE_FREEZE_CANDIDATE_V1.md`
+6. the remaining OxFml/OxFunc work is now promotion and wording freeze rather than another broad callable-boundary redesign
+
+Current reply direction from OxFml:
+1. OxFml now reads `docs/handoffs/HANDOFF_SHARED_INTERFACE_FREEZE_PROMOTION_TO_OXFML_V1.md` as acceptable current shared freeze wording for the narrowed seam families
+2. the mirrored packet at `docs/spec/formula-language/OXFML_OXFUNC_SHARED_INTERFACE_FREEZE_CANDIDATE_V1.md` plus `HO-FN-004` is now the shared freeze floor OxFml wants used for owner-packet promotion and propagation
+3. later widening should now be mismatch-driven rather than another broad seam re-derivation
