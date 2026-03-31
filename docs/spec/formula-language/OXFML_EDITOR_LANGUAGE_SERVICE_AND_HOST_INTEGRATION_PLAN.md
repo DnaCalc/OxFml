@@ -410,7 +410,37 @@ Out of scope for the first extension wave:
 4. storing the whole workbook object model inside OxFml,
 5. conflating editor services with FEC/F3E runtime session semantics.
 
-## 12. Current Recommendation
+## 12. Integration Readiness Classification For Downstream Hosts
+
+### 12.1 Integration-Ready Packet Surfaces
+The following language-service packet surfaces are currently good enough for downstream host integration. Hosts such as DNA OneCalc should consume these rather than inventing local equivalents:
+
+1. `FormulaEditRequest` / `FormulaEditResult` — immutable edit request/result with text-change ranges, incremental parse/red/bind reuse, optional semantic-plan follow-on.
+2. `LiveDiagnosticSnapshot` — unified syntax/bind/semantic-plan diagnostics for squiggle and list use.
+3. Deterministic completion proposals — over visible functions, names, tables, table columns, structured selectors, and R1C1 syntax assists.
+4. Completion-candidate validation and proposal application — re-enters the normal parse/bind pipeline.
+5. `SignatureHelpContext` — cursor-sensitive call and argument context.
+6. `FunctionHelpLookupRequest` — deterministic construction keyed to the current library-context snapshot.
+7. `IntelligentCompletionContext` — normalized context packet for external non-canonical completion.
+8. `EditorSyntaxSnapshot` — owned-trivia token view for editor rendering.
+
+### 12.2 Local-Only Evidence Surfaces (Not Yet Integration-Ready)
+The following exist as deterministic local evidence but are not yet frozen for host integration:
+
+1. OxFunc-backed help/signature payload retrieval — depends on OxFunc help-metadata freeze.
+2. Shared host/OxCalc immutable formula-edit packet — depends on OxCalc immutable-edit seam round.
+3. Shared host-facing validated intelligent-completion result packet — depends on OxCalc validated-completion seam round.
+4. Editor packet replay-appliance projection — depends on replay adapter promotion.
+
+### 12.3 Downstream Integration Working Rule
+1. downstream hosts should consume the integration-ready surfaces in Section 12.1 as their canonical formula-edit, diagnostic, completion, and help-lookup substrate,
+2. for OxFunc-backed help payloads, downstream hosts should start from the library-context snapshot export metadata fields while keeping the host ready for the later provider-backed snapshot model,
+3. intelligent completion remains host-owned and non-canonical until re-validated through OxFml's ordinary edit path,
+4. hosts may add presentation, interaction, and command affordances but must not locally own canonical parse, bind, diagnostic, completion validity, or function/signature help payload truth.
+
+For the full downstream clarification including field-level obligations and not-authorized surfaces, see `../OXFML_DNA_ONECALC_DOWNSTREAM_CONSUMER_CONTRACT.md`.
+
+## 13. Current Recommendation
 The next honest planning owner should:
 1. freeze the editor-grade green-tree/trivia model first,
 2. keep the update path host-driven and immutable-spine-friendly,

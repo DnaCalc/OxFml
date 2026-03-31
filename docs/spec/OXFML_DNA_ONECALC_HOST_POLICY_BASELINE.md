@@ -11,13 +11,15 @@ It exists to separate:
 Status rule:
 1. this document remains the reduced-profile DNA OneCalc host-policy companion,
 2. `OXFML_HOST_RUNTIME_AND_EXTERNAL_REQUIREMENTS.md` is now the primary host/runtime coordination packet,
-3. this document should be read as a narrower downstream-host policy supplement rather than a full host/runtime contract.
+3. `OXFML_DNA_ONECALC_DOWNSTREAM_CONSUMER_CONTRACT.md` is now the single downstream-consumer clarification for first integration, covering mandatory fields, packet taxonomy, editor integration readiness, returned-value obligations, and not-authorized surfaces,
+4. this document should be read as a narrower downstream-host policy supplement rather than a full host/runtime contract.
 
 Read together with:
-1. `OXFML_TEST_LADDER_AND_PROVING_HOSTS.md`
-2. `OXFML_EMPIRICAL_PACK_PLANNING.md`
-3. `fec-f3e/FEC_F3E_TESTING_AND_REPLAY.md`
-4. `OXFML_HOST_RUNTIME_AND_EXTERNAL_REQUIREMENTS.md`
+1. `OXFML_DNA_ONECALC_DOWNSTREAM_CONSUMER_CONTRACT.md`
+2. `OXFML_HOST_RUNTIME_AND_EXTERNAL_REQUIREMENTS.md`
+3. `OXFML_TEST_LADDER_AND_PROVING_HOSTS.md`
+4. `OXFML_EMPIRICAL_PACK_PLANNING.md`
+5. `fec-f3e/FEC_F3E_TESTING_AND_REPLAY.md`
 
 ## 2. Authority Boundary
 OxFml remains authoritative for:
@@ -101,7 +103,11 @@ The following remain open beyond the current baseline:
 4. pack-grade empirical capture and promotion policy,
 5. host behavior for later richer callable-value carriers.
 
-## 9. Working Rule
+## 9. Downstream Consumer Contract Pointer
+For the full first-integration downstream-consumer clarification including mandatory field splits by host profile, packet taxonomy with allowed and forbidden fields, editor/language-service integration readiness, returned-value host obligations, and the current not-authorized list, see:
+1. `OXFML_DNA_ONECALC_DOWNSTREAM_CONSUMER_CONTRACT.md`
+
+## 10. Working Rule
 Use this document to keep the current DNA OneCalc-facing host boundary explicit.
 
 Do not use it to overclaim:
