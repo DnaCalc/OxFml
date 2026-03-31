@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use csv::ReaderBuilder;
+use oxfml_core::interface::LibraryContextSnapshotRef;
 use oxfml_core::semantics::{
     FunctionAvailabilitySummary, LibraryAvailabilityState, LibraryContextSnapshot,
     LibraryContextSnapshotEntry, RegistrationSourceKind,
@@ -50,8 +51,11 @@ fn w044_export_ordinary_rows_round_trip_into_semantic_plan() {
     let plan = compiled.semantic_plan;
 
     assert_eq!(
-        plan.library_context_snapshot_ref.as_deref(),
-        Some(expected_snapshot_ref.as_str())
+        plan.library_context_snapshot_ref,
+        Some(
+            LibraryContextSnapshotRef::from_compound_ref(&expected_snapshot_ref)
+                .expect("snapshot ref should be well-formed"),
+        )
     );
 
     assert_ordinary_row(
@@ -105,8 +109,11 @@ fn w044_export_seam_heavy_rows_round_trip_into_semantic_plan() {
     let plan = compiled.semantic_plan;
 
     assert_eq!(
-        plan.library_context_snapshot_ref.as_deref(),
-        Some(expected_snapshot_ref.as_str())
+        plan.library_context_snapshot_ref,
+        Some(
+            LibraryContextSnapshotRef::from_compound_ref(&expected_snapshot_ref)
+                .expect("snapshot ref should be well-formed"),
+        )
     );
     assert!(plan.helper_profile.contains_let);
     assert!(plan.helper_profile.contains_lambda);
@@ -199,8 +206,11 @@ fn w044_export_higher_order_rows_round_trip_into_semantic_plan() {
     let plan = compiled.semantic_plan;
 
     assert_eq!(
-        plan.library_context_snapshot_ref.as_deref(),
-        Some(expected_snapshot_ref.as_str())
+        plan.library_context_snapshot_ref,
+        Some(
+            LibraryContextSnapshotRef::from_compound_ref(&expected_snapshot_ref)
+                .expect("snapshot ref should be well-formed"),
+        )
     );
     assert!(plan.helper_profile.contains_lambda);
     assert_eq!(plan.helper_profile.lambda_invocation_count, 0);

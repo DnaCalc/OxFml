@@ -212,6 +212,24 @@ fn first_host_replay_capture_packet_preserves_snapshot_and_provider_outcomes() {
         ))
     );
     assert_eq!(
+        info_packet.typed_query_bundle_spec.families,
+        vec![
+            oxfml_core::TypedContextQueryFamily::ReferenceResolver,
+            oxfml_core::TypedContextQueryFamily::CellInfo,
+            oxfml_core::TypedContextQueryFamily::Info,
+            oxfml_core::TypedContextQueryFamily::Image,
+            oxfml_core::TypedContextQueryFamily::FormulaText,
+            oxfml_core::TypedContextQueryFamily::SheetIndex,
+            oxfml_core::TypedContextQueryFamily::SheetCount,
+            oxfml_core::TypedContextQueryFamily::AggregateReferenceContext,
+            oxfml_core::TypedContextQueryFamily::WidthConversionMode,
+            oxfml_core::TypedContextQueryFamily::Translate,
+            oxfml_core::TypedContextQueryFamily::NowSerial,
+            oxfml_core::TypedContextQueryFamily::RandomValue,
+            oxfml_core::TypedContextQueryFamily::LocaleFormatContext,
+        ]
+    );
+    assert_eq!(
         info_packet.returned_value_surface.kind,
         ReturnedValueSurfaceKind::TypedHostProviderOutcome
     );

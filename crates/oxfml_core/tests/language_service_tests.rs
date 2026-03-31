@@ -1,5 +1,8 @@
 use oxfml_core::binding::{BindContext, BindRequest, NameKind, bind_formula};
-use oxfml_core::interface::{TableColumnDescriptor, TableDescriptor};
+use oxfml_core::interface::{
+    InMemoryLibraryContextProvider, LibraryContextSnapshotRef, TableColumnDescriptor,
+    TableDescriptor,
+};
 use oxfml_core::language_service::{
     CompletionProposalKind, CompletionRequest, CompletionValidationRequest, EditFollowOnStage,
     FormulaEditRequest, SemanticPlanEditOptions, apply_completion_proposal, apply_formula_edit,
@@ -155,6 +158,9 @@ fn completion_proposals_include_functions_defined_names_and_table_names() {
     });
     let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
     let mut bind_context = editor_bind_context(source.clone());
+    let snapshot = sample_library_context_snapshot();
+    let snapshot_ref = LibraryContextSnapshotRef::from(&snapshot);
+    let provider = InMemoryLibraryContextProvider::new(snapshot);
     bind_context
         .names
         .insert("SummaryName".to_string(), NameKind::ValueLike);
@@ -164,7 +170,9 @@ fn completion_proposals_include_functions_defined_names_and_table_names() {
         green_tree: &parse.green_tree,
         red_projection: &red,
         bind_context: &bind_context,
-        library_context_snapshot: Some(&sample_library_context_snapshot()),
+        library_context_provider: Some(&provider),
+        library_context_snapshot_ref: Some(&snapshot_ref),
+        library_context_snapshot: None,
         cursor_offset: source.entered_formula_text.chars().count(),
     });
 
@@ -189,6 +197,42 @@ fn completion_proposals_include_functions_defined_names_and_table_names() {
 }
 
 #[test]
+fn completion_proposals_use_pinned_snapshot_ref_over_provider_current_snapshot() {
+    let source = FormulaSourceRecord::new("editor-pinned-snapshot", 1, "=TA");
+    let parse = parse_formula(ParseRequest {
+        source: source.clone(),
+    });
+    let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
+    let bind_context = editor_bind_context(source.clone());
+    let pinned_snapshot = sample_library_context_snapshot();
+    let current_snapshot = sample_library_context_snapshot_v2();
+    let pinned_snapshot_ref = LibraryContextSnapshotRef::from(&pinned_snapshot);
+    let current_snapshot_ref = LibraryContextSnapshotRef::from(&current_snapshot);
+    let provider = InMemoryLibraryContextProvider::with_snapshots(
+        current_snapshot_ref,
+        vec![pinned_snapshot, current_snapshot],
+    );
+
+    let result = collect_completion_proposals(CompletionRequest {
+        source: &source,
+        green_tree: &parse.green_tree,
+        red_projection: &red,
+        bind_context: &bind_context,
+        library_context_provider: Some(&provider),
+        library_context_snapshot_ref: Some(&pinned_snapshot_ref),
+        library_context_snapshot: None,
+        cursor_offset: source.entered_formula_text.chars().count(),
+    });
+
+    assert!(
+        !result
+            .proposals
+            .iter()
+            .any(|proposal| proposal.display_text == "TAKE")
+    );
+}
+
+#[test]
 fn completion_proposals_include_structured_selectors_and_columns() {
     let source = FormulaSourceRecord::new("editor-structured", 1, "=Table1[#H");
     let parse = parse_formula(ParseRequest {
@@ -202,6 +246,8 @@ fn completion_proposals_include_structured_selectors_and_columns() {
         green_tree: &parse.green_tree,
         red_projection: &red,
         bind_context: &bind_context,
+        library_context_provider: None,
+        library_context_snapshot_ref: None,
         library_context_snapshot: None,
         cursor_offset: source.entered_formula_text.chars().count(),
     });
@@ -229,6 +275,8 @@ fn completion_proposals_include_structured_selectors_and_columns() {
         green_tree: &column_parse.green_tree,
         red_projection: &column_red,
         bind_context: &bind_context,
+        library_context_provider: None,
+        library_context_snapshot_ref: None,
         library_context_snapshot: None,
         cursor_offset: column_source.entered_formula_text.chars().count(),
     });
@@ -259,6 +307,8 @@ fn completion_proposals_include_r1c1_syntax_assists_in_r1c1_channel() {
         green_tree: &parse.green_tree,
         red_projection: &red,
         bind_context: &bind_context,
+        library_context_provider: None,
+        library_context_snapshot_ref: None,
         library_context_snapshot: None,
         cursor_offset: source.entered_formula_text.chars().count(),
     });
@@ -303,19 +353,48 @@ fn function_help_lookup_request_tracks_active_callee_and_snapshot() {
     let parse = parse_formula(ParseRequest {
         source: source.clone(),
     });
+    let snapshot = sample_library_context_snapshot();
+    let snapshot_ref = LibraryContextSnapshotRef::from(&snapshot);
 
     let request = build_function_help_lookup_request(
         &source,
         &parse.green_tree,
         9,
-        Some(&sample_library_context_snapshot()),
+        None,
+        Some(&snapshot_ref),
+        Some(&snapshot),
     )
     .expect("cursor should resolve to a call-site help request");
 
     assert_eq!(request.lookup_key, "SUM");
     assert_eq!(
-        request.library_context_snapshot_ref.as_deref(),
-        Some("editor-snapshot@v1")
+        request.library_context_snapshot_ref,
+        Some(LibraryContextSnapshotRef::new("editor-snapshot", "v1"))
+    );
+}
+
+#[test]
+fn function_help_lookup_request_uses_provider_current_snapshot_when_unpinned() {
+    let source = FormulaSourceRecord::new("editor-help-current", 1, "=SUM(1,2,3)");
+    let parse = parse_formula(ParseRequest {
+        source: source.clone(),
+    });
+    let snapshot = sample_library_context_snapshot_v2();
+    let provider = InMemoryLibraryContextProvider::new(snapshot);
+
+    let request = build_function_help_lookup_request(
+        &source,
+        &parse.green_tree,
+        9,
+        Some(&provider),
+        None,
+        None,
+    )
+    .expect("cursor should resolve to a call-site help request");
+
+    assert_eq!(
+        request.library_context_snapshot_ref,
+        Some(LibraryContextSnapshotRef::new("editor-snapshot", "v2"))
     );
 }
 
@@ -338,6 +417,9 @@ fn intelligent_completion_context_carries_scope_and_active_diagnostics() {
             library_context_snapshot: Some(sample_library_context_snapshot()),
         }),
     });
+    let snapshot = sample_library_context_snapshot();
+    let snapshot_ref = LibraryContextSnapshotRef::from(&snapshot);
+    let provider = InMemoryLibraryContextProvider::new(snapshot.clone());
 
     let context = build_intelligent_completion_context(
         CompletionRequest {
@@ -345,7 +427,9 @@ fn intelligent_completion_context_carries_scope_and_active_diagnostics() {
             green_tree: &result.green_tree,
             red_projection: &result.red_projection,
             bind_context: &bind_context,
-            library_context_snapshot: Some(&sample_library_context_snapshot()),
+            library_context_provider: Some(&provider),
+            library_context_snapshot_ref: Some(&snapshot_ref),
+            library_context_snapshot: Some(&snapshot),
             cursor_offset: 5,
         },
         &result.live_diagnostics,
@@ -355,8 +439,8 @@ fn intelligent_completion_context_carries_scope_and_active_diagnostics() {
     assert!(context.visible_tables.iter().any(|table| table == "Table1"));
     assert!(!context.active_diagnostics.is_empty());
     assert_eq!(
-        context.library_context_snapshot_ref.as_deref(),
-        Some("editor-snapshot@v1")
+        context.library_context_snapshot_ref,
+        Some(LibraryContextSnapshotRef::new("editor-snapshot", "v1"))
     );
 }
 
@@ -400,13 +484,18 @@ fn apply_completion_proposal_preserves_proposal_identity() {
     });
     let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
     let bind_context = editor_bind_context(source.clone());
+    let snapshot = sample_library_context_snapshot();
+    let snapshot_ref = LibraryContextSnapshotRef::from(&snapshot);
+    let provider = InMemoryLibraryContextProvider::new(snapshot);
 
     let completion = collect_completion_proposals(CompletionRequest {
         source: &source,
         green_tree: &parse.green_tree,
         red_projection: &red,
         bind_context: &bind_context,
-        library_context_snapshot: Some(&sample_library_context_snapshot()),
+        library_context_provider: Some(&provider),
+        library_context_snapshot_ref: Some(&snapshot_ref),
+        library_context_snapshot: None,
         cursor_offset: source.entered_formula_text.chars().count(),
     });
     let sum = completion
@@ -526,6 +615,33 @@ fn sample_library_context_snapshot() -> LibraryContextSnapshot {
             },
         ],
     }
+}
+
+fn sample_library_context_snapshot_v2() -> LibraryContextSnapshot {
+    let mut snapshot = sample_library_context_snapshot();
+    snapshot.snapshot_id = "editor-snapshot".to_string();
+    snapshot.snapshot_version = "v2".to_string();
+    snapshot.entries.push(LibraryContextSnapshotEntry {
+        surface_name: "TAKE".to_string(),
+        canonical_id: Some("FUNC.TAKE".to_string()),
+        surface_stable_id: Some("surface:take".to_string()),
+        name_resolution_table_ref: None,
+        semantic_trait_profile_ref: None,
+        gating_profile_ref: None,
+        metadata_status: None,
+        special_interface_kind: None,
+        admission_interface_kind: None,
+        preparation_owner: None,
+        runtime_boundary_kind: None,
+        arity_shape_note: None,
+        interface_contract_ref: Some("contract:take".to_string()),
+        registration_source_kind: RegistrationSourceKind::BuiltIn,
+        parse_bind_state: LibraryAvailabilityState::CatalogKnown,
+        semantic_plan_state: LibraryAvailabilityState::CatalogKnown,
+        runtime_capability_state: Some(LibraryAvailabilityState::CatalogKnown),
+        post_dispatch_state: None,
+    });
+    snapshot
 }
 
 fn collect_green_tokens(node: &GreenNode) -> Vec<oxfml_core::syntax::token::Token> {

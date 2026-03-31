@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use oxfml_core::binding::NameKind;
+use oxfml_core::interface::LibraryContextSnapshotRef;
 use oxfml_core::semantics::{
     EvaluationRequirement, FormulaDeterminismClass, FormulaThreadSafetyClass,
     FormulaVolatilityClass, LibraryAvailabilityState, LibraryContextSnapshot,
@@ -361,8 +362,8 @@ fn semantic_plan_uses_snapshot_minimum_fields_and_builtin_fallback_refs() {
     let plan = compiled.semantic_plan;
 
     assert_eq!(
-        plan.library_context_snapshot_ref.as_deref(),
-        Some("libctx.semantic@v1")
+        plan.library_context_snapshot_ref,
+        Some(LibraryContextSnapshotRef::new("libctx.semantic", "v1"))
     );
 
     let sum = plan

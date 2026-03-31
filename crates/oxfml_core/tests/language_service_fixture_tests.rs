@@ -2,7 +2,10 @@ use std::fs;
 use std::path::PathBuf;
 
 use oxfml_core::binding::BindContext;
-use oxfml_core::interface::{TableColumnDescriptor, TableDescriptor};
+use oxfml_core::interface::{
+    InMemoryLibraryContextProvider, LibraryContextSnapshotRef, TableColumnDescriptor,
+    TableDescriptor,
+};
 use oxfml_core::language_service::{
     CompletionProposalKind, CompletionRequest, CompletionValidationRequest, EditFollowOnStage,
     apply_completion_proposal, build_editor_syntax_snapshot, collect_completion_proposals,
@@ -102,13 +105,18 @@ fn language_service_fixtures_match_expected_snapshots() {
                 });
                 let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
                 let bind_context = editor_bind_context(source.clone());
+                let snapshot = sample_library_context_snapshot();
+                let snapshot_ref = LibraryContextSnapshotRef::from(&snapshot);
+                let provider = InMemoryLibraryContextProvider::new(snapshot);
 
                 let result = collect_completion_proposals(CompletionRequest {
                     source: &source,
                     green_tree: &parse.green_tree,
                     red_projection: &red,
                     bind_context: &bind_context,
-                    library_context_snapshot: Some(&sample_library_context_snapshot()),
+                    library_context_provider: Some(&provider),
+                    library_context_snapshot_ref: Some(&snapshot_ref),
+                    library_context_snapshot: None,
                     cursor_offset,
                 });
 
@@ -133,13 +141,18 @@ fn language_service_fixtures_match_expected_snapshots() {
                 });
                 let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
                 let bind_context = editor_bind_context(source.clone());
+                let snapshot = sample_library_context_snapshot();
+                let snapshot_ref = LibraryContextSnapshotRef::from(&snapshot);
+                let provider = InMemoryLibraryContextProvider::new(snapshot);
 
                 let completion = collect_completion_proposals(CompletionRequest {
                     source: &source,
                     green_tree: &parse.green_tree,
                     red_projection: &red,
                     bind_context: &bind_context,
-                    library_context_snapshot: Some(&sample_library_context_snapshot()),
+                    library_context_provider: Some(&provider),
+                    library_context_snapshot_ref: Some(&snapshot_ref),
+                    library_context_snapshot: None,
                     cursor_offset,
                 });
                 let proposal = completion

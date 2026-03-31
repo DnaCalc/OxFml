@@ -131,44 +131,37 @@ impl SessionService {
     }
 
     pub fn prepare(&self, request: PrepareRequest) -> Result<PreparedSession, RejectRecord> {
-        if request.source.formula_stable_id.0 != request.bound_formula.formula_stable_id
-            || request.source.formula_stable_id.0 != request.semantic_plan.formula_stable_id
+        let PrepareRequest {
+            source,
+            bound_formula,
+            semantic_plan,
+            primary_locus,
+        } = request;
+
+        if source.formula_stable_id.0 != bound_formula.formula_stable_id
+            || source.formula_stable_id.0 != semantic_plan.formula_stable_id
         {
             return Err(prepare_mismatch_reject(
-                &request.source.formula_stable_id.0,
+                &source.formula_stable_id.0,
                 "formula_stable_id_mismatch",
             ));
         }
 
-        if request.bound_formula.bind_hash != request.semantic_plan.bind_hash {
+        if bound_formula.bind_hash != semantic_plan.bind_hash {
             return Err(prepare_mismatch_reject(
-                &request.source.formula_stable_id.0,
+                &source.formula_stable_id.0,
                 "bind_hash_mismatch",
             ));
         }
 
-        let library_context_snapshot_ref = match request
-            .semantic_plan
-            .library_context_snapshot_ref
-            .as_deref()
-        {
-            Some(value) => Some(
-                LibraryContextSnapshotRef::from_compound_ref(value).ok_or_else(|| {
-                    prepare_mismatch_reject(
-                        &request.source.formula_stable_id.0,
-                        "library_context_snapshot_ref_malformed",
-                    )
-                })?,
-            ),
-            None => None,
-        };
+        let library_context_snapshot_ref = semantic_plan.library_context_snapshot_ref.clone();
 
         Ok(PreparedSession {
-            source: request.source,
-            bound_formula: request.bound_formula,
-            semantic_plan: request.semantic_plan,
+            source,
+            bound_formula,
+            semantic_plan,
             library_context_snapshot_ref,
-            primary_locus: request.primary_locus,
+            primary_locus,
         })
     }
 
@@ -1075,10 +1068,7 @@ fn build_candidate_result(
                     diagnostics: Vec::new(),
                 },
                 semantic_plan: semantic_plan.clone(),
-                library_context_snapshot_ref: semantic_plan
-                    .library_context_snapshot_ref
-                    .as_deref()
-                    .and_then(LibraryContextSnapshotRef::from_compound_ref),
+                library_context_snapshot_ref: semantic_plan.library_context_snapshot_ref.clone(),
                 primary_locus: primary_locus.clone(),
             },
             capability_view_key,

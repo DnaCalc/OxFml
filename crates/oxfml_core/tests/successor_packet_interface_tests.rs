@@ -177,8 +177,8 @@ fn single_formula_host_can_consume_runtime_library_context_provider() {
         .expect("host recalc");
 
     assert_eq!(
-        output.semantic_plan.library_context_snapshot_ref.as_deref(),
-        Some("snapshot:host@v1")
+        output.semantic_plan.library_context_snapshot_ref,
+        Some(LibraryContextSnapshotRef::new("snapshot:host", "v1"))
     );
 }
 

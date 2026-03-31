@@ -55,25 +55,24 @@ Planned follow-on review lane after that wave:
 
 ## Next Critical Path
 1. `W032` OxFunc catalog, callable transport, and provider closure
-2. `W041` typed context and query bundle freeze
-3. `W042` return surface and publication-hint freeze
-4. `W043` runtime library-context provider consumer model
-5. `W049` OxFunc preparation adapter and consumer harness
-6. `W050` OxFunc snapshot-pinned seam fixture families
-7. `W051` OxCalc fixture host and stand-in packet
-8. `W052` registered external provider and CALL REGISTER.ID boundary
-9. `W053` grouped aggregation and publication-class adapter expansion
-10. `W045` host runtime and external requirements freeze
-11. `W034` distributed runtime and coordinator consequence boundary
-12. `W035` broader formal family and concurrency model expansion
-13. `W038` name and external-name host resolution boundary
-14. `W048` editor language service and immutable formula host plan
+2. `W042` return surface and publication-hint freeze
+3. `W043` runtime library-context provider consumer model
+4. `W049` OxFunc preparation adapter and consumer harness
+5. `W050` OxFunc snapshot-pinned seam fixture families
+6. `W051` OxCalc fixture host and stand-in packet
+7. `W052` registered external provider and CALL REGISTER.ID boundary
+8. `W053` grouped aggregation and publication-class adapter expansion
+9. `W045` host runtime and external requirements freeze
+10. `W034` distributed runtime and coordinator consequence boundary
+11. `W035` broader formal family and concurrency model expansion
+12. `W038` name and external-name host resolution boundary
+13. `W048` editor language service and immutable formula host plan
 
 ## Next Parallelism
 1. `W033` can proceed after `W025`, `W028`, `W029`, `W030`, and the now-exercised `W031` classification floor without waiting for the full `W032 -> W034` chain.
 2. `W036` can proceed after `W031` without waiting for the full runtime/distributed chain.
-3. `W041`, `W042`, and `W043` should continue to narrow in parallel where needed, because the host packet and the remaining OxFunc seam work still depend on them.
-4. `W049` should start once `W041`, `W042`, and `W043` are strong enough to project into one real OxFml-backed integration adapter.
+3. `W042` and `W043` should continue to narrow in parallel where needed, because the host packet and the remaining OxFunc seam work still depend on them.
+4. `W049` should start once `W042` and `W043` are strong enough to project into one real OxFml-backed integration adapter.
 5. `W050` should follow `W049` so the first pinned seam-fixture corpus is tied to a real adapter rather than a synthetic packet-only model.
 6. `W051` should narrow in parallel with `W049` / `W050` because some adapter-fixture inputs are really stand-in host/coordinator truths.
 7. `W052` should narrow in parallel with later `W049` / `W050` follow-on work because worksheet `CALL` / `REGISTER.ID` is a new bounded OxFunc seam lane rather than part of the already-validated first adapter wave.
@@ -81,22 +80,19 @@ Planned follow-on review lane after that wave:
 9. `W045` remains the canonical host/runtime contract while those successor packets keep narrowing.
 10. `W038` should follow the host/runtime and provider narrowing and remain scoped to host-managed name/external-name resolution boundary work rather than generic formula-carrier ownership.
 11. `W035` should wait for both the wider replay and runtime floors so the new checked artifacts match exercised local behavior rather than speculative designs.
-12. `W048` should follow the current host/runtime and parser/binder packet strengthening rather than racing ahead of `W041`, `W043`, and `W045`.
+12. `W048` should follow the current host/runtime and parser/binder packet strengthening rather than racing ahead of `W043` and `W045`.
 
 ## Why This Next Sequence
 1. `W031` has already converted the pending `MS-OE376` rule families into explicit OxFml-owned backlog and semantic classification,
 2. `W032` directly addresses the narrowest active OxFml/OxFunc seam topics left open by the latest note exchanges,
-3. the latest OxFunc round now makes three narrower successor packets explicit:
-   - typed context/query bundle freeze
-   - return-surface and publication-hint freeze
-   - runtime library-context provider consumer model,
+3. the latest OxFunc round narrowed the successor packet work into return-surface and runtime-library-context consumer closure after the now-exercised typed context/query bundle freeze,
 4. the newest OxFunc note also asks for a real OxFml-backed evaluation adapter and pinned seam-fixture corpus so OxFunc can stop relying only on mock resolvers,
-5. `W049` and `W050` therefore become the next concrete artifact-driven closure lanes after the successor freeze packets,
+5. `W049` and `W050` therefore become the next concrete artifact-driven closure lanes after the remaining successor freeze packets,
 6. some of those adapter-fixture inputs are actually stand-ins for OxCalc-owned host/coordinator truths, so `W051` narrows that reuse boundary explicitly instead of letting it remain implicit test scaffolding,
 7. the latest OxFunc validation round leaves `W049` / `W050` largely mismatch-driven and isolates worksheet `CALL` / `REGISTER.ID` as the next bounded OxFunc seam topic, so `W052` becomes an explicit owner rather than leaving that lane as floating note debt,
 8. OxFunc's March 27 note also adds a new bounded adapter-evidence lane for `GROUPBY`, `PIVOTBY`, helper bind-time rejection parity, and publication-sensitive return classes, so `W053` should own that expansion rather than overloading `W052`,
 9. `W047` has already executed the immediate first-host readiness push, so the next sequence can return to the remaining seam, host-packet, runtime, and adapter-artifact owners,
-10. `W045` turns the partial `W041` / `W042` / `W043` packet floor into one implementation-facing host/runtime contract for both direct-host and OxCalc-integrated host use,
+10. `W045` turns the partial `W042` / `W043` packet floor into one implementation-facing host/runtime contract for both direct-host and OxCalc-integrated host use,
 11. `W033` addresses the largest remaining assurance gap by moving beyond promotion-readiness planning toward broader `cap.C4`-adjacent evidence,
 12. `W034` takes the current local async/runtime floor into the next coordinator-visible consequence boundary without collapsing OxCalc policy into OxFml,
 13. `W035` broadens checked local formal coverage only after replay and runtime surfaces are stronger than they are today,

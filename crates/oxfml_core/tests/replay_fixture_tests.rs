@@ -9,6 +9,7 @@ use serde::Deserialize;
 use oxfml_core::binding::{BindContext, BindRequest, bind_formula};
 use oxfml_core::eval::{DefinedNameBinding, EvaluationContext, evaluate_formula};
 use oxfml_core::host::SingleFormulaHost;
+use oxfml_core::interface::TypedContextQueryBundle;
 use oxfml_core::red::project_red_view;
 use oxfml_core::scheduler::{ExecutionRestriction, build_execution_contract};
 use oxfml_core::seam::{
@@ -1128,7 +1129,6 @@ fn evaluate_fixture_formula(
 
     let mut context = EvaluationContext::new(&bind.bound_formula, &plan);
     let locale_ctx = en_us_context();
-    context.locale_ctx = Some(&locale_ctx);
     context.defined_names = binding_map;
     context
         .cell_values
@@ -1139,11 +1139,15 @@ fn evaluate_fixture_formula(
     context
         .cell_values
         .insert("B2".to_string(), EvalValue::Number(13.0));
-    if host_query_profile.is_some() {
-        context.host_info = Some(&ReplayHostInfoProvider);
-    }
-    context.now_serial = Some(46000.0);
-    context.random_value = Some(0.25);
+    context.apply_typed_context_query_bundle(TypedContextQueryBundle::new(
+        host_query_profile
+            .is_some()
+            .then_some(&ReplayHostInfoProvider as &dyn HostInfoProvider),
+        None,
+        Some(&locale_ctx),
+        Some(46000.0),
+        Some(0.25),
+    ));
 
     evaluate_formula(context).expect("fixture evaluation should succeed")
 }

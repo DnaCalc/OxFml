@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::binding::{BindContext, BindRequest, BoundFormula, bind_formula_incremental};
+use crate::interface::{LibraryContextProvider, LibraryContextSnapshotRef};
 use crate::red::{RedProjection, project_red_view_incremental};
 use crate::semantics::{
     CompileSemanticPlanRequest, LibraryContextSnapshot, SemanticPlan, compile_semantic_plan,
@@ -183,12 +184,14 @@ pub struct CompletionValidationResult {
     pub edit_result: FormulaEditResult,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct CompletionRequest<'a> {
     pub source: &'a FormulaSourceRecord,
     pub green_tree: &'a GreenTreeRoot,
     pub red_projection: &'a RedProjection,
     pub bind_context: &'a BindContext,
+    pub library_context_provider: Option<&'a dyn LibraryContextProvider>,
+    pub library_context_snapshot_ref: Option<&'a LibraryContextSnapshotRef>,
     pub library_context_snapshot: Option<&'a LibraryContextSnapshot>,
     pub cursor_offset: usize,
 }
@@ -196,7 +199,7 @@ pub struct CompletionRequest<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionHelpLookupRequest {
     pub lookup_key: String,
-    pub library_context_snapshot_ref: Option<String>,
+    pub library_context_snapshot_ref: Option<LibraryContextSnapshotRef>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -225,7 +228,7 @@ pub struct IntelligentCompletionContext {
     pub red_context_summary: String,
     pub visible_defined_names: Vec<String>,
     pub visible_tables: Vec<String>,
-    pub library_context_snapshot_ref: Option<String>,
+    pub library_context_snapshot_ref: Option<LibraryContextSnapshotRef>,
     pub active_diagnostics: Vec<LiveDiagnostic>,
     pub signature_help_context: Option<SignatureHelpContext>,
 }
@@ -234,6 +237,8 @@ pub fn build_function_help_lookup_request(
     source: &FormulaSourceRecord,
     green_tree: &GreenTreeRoot,
     cursor_offset: usize,
+    library_context_provider: Option<&dyn LibraryContextProvider>,
+    library_context_snapshot_ref: Option<&LibraryContextSnapshotRef>,
     library_context_snapshot: Option<&LibraryContextSnapshot>,
 ) -> Option<FunctionHelpLookupRequest> {
     let signature_help = signature_help_context_at_cursor(source, green_tree, cursor_offset)?;
@@ -243,8 +248,11 @@ pub fn build_function_help_lookup_request(
 
     Some(FunctionHelpLookupRequest {
         lookup_key: signature_help.callee_text,
-        library_context_snapshot_ref: library_context_snapshot
-            .map(|snapshot| format!("{}@{}", snapshot.snapshot_id, snapshot.snapshot_version)),
+        library_context_snapshot_ref: effective_library_context_snapshot_ref(
+            library_context_provider,
+            library_context_snapshot_ref,
+            library_context_snapshot,
+        ),
     })
 }
 
@@ -579,7 +587,8 @@ pub fn collect_completion_proposals(request: CompletionRequest<'_>) -> Completio
         }
     }
 
-    if let Some(snapshot) = request.library_context_snapshot {
+    let library_context_snapshot = resolve_library_context_snapshot(&request);
+    if let Some(snapshot) = library_context_snapshot.as_ref() {
         let mut seen_functions = BTreeSet::new();
         for entry in &snapshot.entries {
             if seen_functions.insert(entry.surface_name.to_ascii_lowercase())
@@ -632,9 +641,11 @@ pub fn build_intelligent_completion_context(
             .iter()
             .map(|table| table.table_name.clone())
             .collect(),
-        library_context_snapshot_ref: request
-            .library_context_snapshot
-            .map(|snapshot| format!("{}@{}", snapshot.snapshot_id, snapshot.snapshot_version)),
+        library_context_snapshot_ref: effective_library_context_snapshot_ref(
+            request.library_context_provider,
+            request.library_context_snapshot_ref,
+            request.library_context_snapshot,
+        ),
         active_diagnostics: diagnostics
             .diagnostics
             .iter()
@@ -643,6 +654,38 @@ pub fn build_intelligent_completion_context(
             .collect(),
         signature_help_context,
     }
+}
+
+fn resolve_library_context_snapshot(
+    request: &CompletionRequest<'_>,
+) -> Option<LibraryContextSnapshot> {
+    match (
+        request.library_context_provider,
+        request.library_context_snapshot_ref,
+        request.library_context_snapshot,
+    ) {
+        (Some(provider), Some(snapshot_ref), _) => provider.snapshot_by_identity(snapshot_ref),
+        (_, _, Some(snapshot)) => Some(snapshot.clone()),
+        (Some(provider), None, None) => Some(provider.current_snapshot()),
+        (None, Some(_), None) => None,
+        (None, None, None) => None,
+    }
+}
+
+fn effective_library_context_snapshot_ref(
+    library_context_provider: Option<&dyn LibraryContextProvider>,
+    library_context_snapshot_ref: Option<&LibraryContextSnapshotRef>,
+    library_context_snapshot: Option<&LibraryContextSnapshot>,
+) -> Option<LibraryContextSnapshotRef> {
+    library_context_snapshot_ref
+        .cloned()
+        .or_else(|| library_context_snapshot.map(LibraryContextSnapshotRef::from))
+        .or_else(|| {
+            library_context_provider.map(|provider| {
+                let current_snapshot = provider.current_snapshot();
+                LibraryContextSnapshotRef::from(&current_snapshot)
+            })
+        })
 }
 
 pub fn signature_help_context_at_cursor(

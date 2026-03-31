@@ -9,6 +9,7 @@ use oxfunc_core::function::{
 use oxfunc_core::xll_export_specs::lookup_function_meta as lookup_oxfunc_function_meta;
 
 use crate::binding::{BoundExpr, BoundFormula, NormalizedReference, ReferenceExpr};
+use crate::interface::LibraryContextSnapshotRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompileSemanticPlanRequest {
@@ -31,7 +32,7 @@ pub struct SemanticPlan {
     pub formula_stable_id: String,
     pub bind_hash: String,
     pub oxfunc_catalog_identity: String,
-    pub library_context_snapshot_ref: Option<String>,
+    pub library_context_snapshot_ref: Option<LibraryContextSnapshotRef>,
     pub locale_profile: Option<String>,
     pub date_system: Option<String>,
     pub format_profile: Option<String>,
@@ -250,7 +251,7 @@ pub fn compile_semantic_plan(request: CompileSemanticPlanRequest) -> CompileSema
 
     let library_context_snapshot_ref = library_context_snapshot
         .as_ref()
-        .map(|snapshot| format!("{}@{}", snapshot.snapshot_id, snapshot.snapshot_version));
+        .map(LibraryContextSnapshotRef::from);
 
     let mut compiler = SemanticCompiler {
         function_bindings: Vec::new(),
@@ -277,7 +278,7 @@ pub fn compile_semantic_plan(request: CompileSemanticPlanRequest) -> CompileSema
         &compiler.capability_requirements,
         &compiler.diagnostics,
         oxfunc_catalog_identity.as_str(),
-        library_context_snapshot_ref.as_deref(),
+        library_context_snapshot_ref.as_ref(),
         locale_profile.as_deref(),
         date_system.as_deref(),
         format_profile.as_deref(),

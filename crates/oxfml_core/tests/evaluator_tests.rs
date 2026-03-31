@@ -20,6 +20,7 @@ use oxfml_core::eval::{
     CallableDefinedNameBinding, CallableValueCarrier, CallableValueProfile, DefinedNameBinding,
     EvaluationContext, evaluate_formula,
 };
+use oxfml_core::interface::TypedContextQueryBundle;
 
 #[test]
 fn evaluator_runs_text_with_locale_format_context() {
@@ -963,11 +964,13 @@ fn evaluate_with_rtd_provider(
         .cell_values
         .insert("B2".to_string(), EvalValue::Number(13.0));
     context.defined_names = defined_names.unwrap_or_default();
-    context.host_info = host_info;
-    context.rtd_provider = rtd_provider;
-    context.locale_ctx = locale_ctx;
-    context.now_serial = Some(46000.0);
-    context.random_value = Some(0.25);
+    context.apply_typed_context_query_bundle(TypedContextQueryBundle::new(
+        host_info,
+        rtd_provider,
+        locale_ctx,
+        Some(46000.0),
+        Some(0.25),
+    ));
 
     evaluate_formula(context)
 }

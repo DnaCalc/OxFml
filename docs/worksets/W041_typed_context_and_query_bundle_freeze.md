@@ -27,6 +27,64 @@ Freeze the first shared OxFml/OxFunc typed context and query bundle for the curr
 3. Deterministic evidence for the covered query families.
 4. An explicit list of any still-unfrozen names or result partitions.
 
+## Fresh-Eyes Reset
+`W041` is no longer mainly a packet-shape debate.
+The shared family set is narrow enough to treat as frozen for the current phase.
+
+The real remaining work is internal architectural consolidation:
+1. `TypedContextQueryBundle` must become the canonical input packet for every runtime execution surface that needs host/query capabilities.
+2. `TypedContextQueryBundleSpec` must become the canonical durable record of what capability/query families were actually admitted on that run.
+3. New or refactored internal surfaces should stop growing ad hoc `host_info` / `locale_ctx` / `now_serial` / `random_value` plumbing as separate boundary fields.
+4. Family merge/split should now be mismatch-driven only; the default posture is to keep the current family set stable.
+
+## Target End-State
+The desired `W041` end-state is:
+1. one canonical ephemeral runtime packet:
+   `TypedContextQueryBundle`
+2. one canonical durable retained/replay packet:
+   `TypedContextQueryBundleSpec`
+3. one canonical family vocabulary, stable for the current freeze:
+   `ReferenceResolver`, grouped host-info families, `Rtd`, `RegisteredExternal`, `NowSerial`, `RandomValue`, `LocaleFormatContext`
+4. one architectural rule:
+   boundary and service surfaces accept the bundle/spec rather than re-spelling the same capability set as unrelated parameters
+
+Internal execution code may still expand the bundle into convenient local fields for hot-path evaluation.
+That is an implementation detail, not the architectural source of truth.
+
+## Implementation Meaning
+This work should now be read as a comprehensive refactor lane, not a series of conservative packet tweaks.
+
+The architectural direction is:
+1. `bundle-first execution surfaces`
+   host, adapter, session, replay, editor/test helpers, and future coordinator-facing execution paths should accept a `TypedContextQueryBundle` at the boundary
+2. `spec-first retained surfaces`
+   retained artifacts, replay packets, accepted candidate records, and session records should carry `TypedContextQueryBundleSpec` whenever they need durable capability/query-family evidence
+3. `family-stability by default`
+   do not reopen family naming unless a concrete unsupported/misaligned function lane forces it
+4. `no new loose query fields`
+   new surfaces should not add fresh one-off `host_info_enabled`-style parameters when the bundle/spec can carry the same truth
+
+## Refactoring Direction
+The best-quality endpoint is not “touch as little as possible”.
+The best-quality endpoint is a clean internal rule:
+all host/query capability truth crosses OxFml inside the typed bundle/spec pair.
+
+That implies the following bold refactor direction:
+1. reduce legacy helper/setup code that still constructs execution state by assigning loose fields directly
+2. convert replay/oracle/helper paths to bundle-first setup so the exercised evidence matches the intended architecture
+3. keep `EvaluationContext` free to cache expanded pointers/values internally, but require bundle application at its boundary
+4. treat bundle/spec propagation gaps as design debt to remove, not as acceptable permanent adapter glue
+
+## Execution Phases
+1. `Phase A: Boundary normalization`
+   convert remaining helper/replay/oracle paths that still build execution state through loose fields into bundle-first setup
+2. `Phase B: Durable packet normalization`
+   ensure replay/retained surfaces that need query-family truth carry `TypedContextQueryBundleSpec` explicitly rather than reconstructing it indirectly
+3. `Phase C: Family-freeze hardening`
+   state explicitly that the current family set is the phase-1 freeze unless a concrete mismatch forces merge/split
+4. `Phase D: Cleanup enforcement`
+   remove or quarantine redundant boundary parameters that duplicate bundle/spec truth
+
 ## Gate Model
 ### Entry gate
 - `W032` has narrowed the catalog/callable seam enough that typed host/context surfaces are the next honest lock lane.
@@ -51,16 +109,31 @@ Freeze the first shared OxFml/OxFunc typed context and query bundle for the curr
 | 9 | CURRENT_BLOCKERS.md updated (new/resolved)? | |
 
 ## Status
-- execution_state: in_progress
-- scope_completeness: scope_partial
-- target_completeness: target_partial
-- integration_completeness: partial
-- open_lanes:
-  - a first local `TypedContextQueryBundle`, grouped `INFO` / `CELL` / `RTD` / `IMAGE` evidence, matching packet-family tests, and broader session-path propagation now exist, and the current family set is now aligned locally with the mirrored freeze packet plus `HO-FN-004`
-  - the managed session path now executes through `TypedContextQueryBundle` directly and records `TypedContextQueryBundleSpec` on the session record, so the remaining `W041` work is no longer "first broader consumer use" but wider packet adoption beyond the currently exercised host and session surfaces
-  - deterministic OxFml evidence now exists for the bundle shape and first grouped host/query families, but broader seam-heavy query execution evidence is still incomplete outside the exercised `INFO` / `CELL` / `RTD` / `IMAGE` slice
-  - OxFml still needs to answer with implementation-facing precision whether the current query families should remain exactly as named or be capability-family merged/split before promotion
-  - the current local freeze candidate is now mirrored in `docs/spec/formula-language/OXFML_OXFUNC_SHARED_INTERFACE_FREEZE_CANDIDATE_V1.md`, and OxFunc's `HO-FN-004` now treats that family as part of the shared freeze floor for the narrowed seam families
-  - deterministic local evidence for the broader session-path packet use now exists in `crates/oxfml_core/tests/session_service_tests.rs` and `crates/oxfml_core/tests/session_replay_fixture_tests.rs`
-  - current OxFunc reading is that this is now a freeze-and-consumer packet rather than a broad semantic-open lane, so the remaining next step is wider local consumer promotion rather than more packet-shape debate
-- claim_confidence: provisional
+- execution_state: complete
+- scope_completeness: scope_complete
+- target_completeness: target_complete
+- integration_completeness: integrated
+- open_lanes: none
+- claim_confidence: validated
+
+## Closure Reading
+`W041` is closed for its declared scope.
+
+The declared scope was:
+1. freeze the first shared typed context/query bundle,
+2. decide the first query-family partitioning,
+3. keep the packet capability-scoped and typed,
+4. add deterministic local evidence for the covered families,
+5. answer whether the current family set needs merge/split before promotion.
+
+Those are now satisfied locally:
+1. `TypedContextQueryBundle` and `TypedContextQueryBundleSpec` are the exercised packet pair,
+2. the phase-1 family set is explicit and mirrored in `docs/spec/formula-language/OXFML_OXFUNC_SHARED_INTERFACE_FREEZE_CANDIDATE_V1.md`,
+3. host, session, adapter, replay-capture, evaluator helper, replay-fixture helper, and selected editor/help surfaces now exercise that packet pair directly,
+4. deterministic local evidence exists across host, session, replay, adapter, and editor/help surfaces,
+5. OxFml's phase-1 answer is now explicit: no merge/split unless a concrete mismatch forces it.
+
+Remaining broader architecture work is real, but it belongs to:
+1. `W043` provider-plus-pinned-snapshot runtime normalization,
+2. `W045` host/runtime unification,
+3. later broader replay/oracle and coordinator-facing propagation.

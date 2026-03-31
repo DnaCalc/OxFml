@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
+use oxfml_core::interface::LibraryContextSnapshotRef;
 use oxfml_core::semantics::{
     LibraryAvailabilityState, LibraryContextSnapshot, LibraryContextSnapshotEntry,
     RegistrationSourceKind,
@@ -90,8 +91,11 @@ fn semantic_plan_library_context_snapshot_fixtures_round_trip() {
         let plan = compiled.semantic_plan;
 
         assert_eq!(
-            plan.library_context_snapshot_ref.as_deref(),
-            Some(fixture.expected.snapshot_ref.as_str()),
+            plan.library_context_snapshot_ref,
+            Some(
+                LibraryContextSnapshotRef::from_compound_ref(&fixture.expected.snapshot_ref)
+                    .expect("fixture snapshot ref should be well-formed"),
+            ),
             "snapshot ref mismatch for {}",
             fixture.case_id
         );

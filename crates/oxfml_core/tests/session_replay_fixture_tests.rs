@@ -412,6 +412,12 @@ fn session_lifecycle_replay_fixtures_match_expected_snapshots() {
             "trace event mismatch for {}",
             fixture.case_id
         );
+        assert_eq!(
+            session.typed_query_bundle_spec,
+            expected_typed_query_bundle_spec(&fixture),
+            "typed query bundle spec mismatch for {}",
+            fixture.case_id
+        );
     }
 }
 
@@ -425,6 +431,25 @@ fn session_query_bundle<'a>(
         Some(46000.0),
         Some(0.25),
     )
+}
+
+fn expected_typed_query_bundle_spec(
+    fixture: &SessionReplayFixture,
+) -> Option<oxfml_core::TypedContextQueryBundleSpec> {
+    match fixture.action.as_str() {
+        "execute_commit" | "execute_commit_rejected" | "execute_twice" => {
+            Some(session_query_bundle(None).freeze_candidate_spec())
+        }
+        "contention_execute_rejected" => Some(
+            session_query_bundle(Some(&ReplayHostInfoProvider as &dyn HostInfoProvider))
+                .freeze_candidate_spec(),
+        ),
+        "capability_only"
+        | "abort_before_execute"
+        | "commit_without_execute"
+        | "expire_before_execute" => None,
+        other => panic!("unsupported action {other} for expected typed bundle spec"),
+    }
 }
 
 fn session_locale_context() -> &'static oxfunc_core::locale_format::LocaleFormatContext<'static> {
