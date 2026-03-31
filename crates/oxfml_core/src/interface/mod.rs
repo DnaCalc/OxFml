@@ -241,6 +241,18 @@ impl LibraryContextSnapshotRef {
             snapshot_version: snapshot_version.into(),
         }
     }
+
+    pub fn from_compound_ref(value: &str) -> Option<Self> {
+        let (snapshot_id, snapshot_version) = value.split_once('@')?;
+        if snapshot_id.is_empty() || snapshot_version.is_empty() {
+            return None;
+        }
+        Some(Self::new(snapshot_id, snapshot_version))
+    }
+
+    pub fn compound_ref(&self) -> String {
+        format!("{}@{}", self.snapshot_id, self.snapshot_version)
+    }
 }
 
 impl From<&LibraryContextSnapshot> for LibraryContextSnapshotRef {

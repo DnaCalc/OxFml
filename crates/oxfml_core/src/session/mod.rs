@@ -1,12 +1,13 @@
 use std::collections::BTreeMap;
 
-use oxfunc_core::host_info::HostInfoProvider;
-use oxfunc_core::locale_format::LocaleFormatContext;
 use oxfunc_core::value::EvalValue;
 
 use crate::binding::BoundFormula;
 use crate::eval::{
     DefinedNameBinding, EvaluationBackend, EvaluationContext, EvaluationOutput, evaluate_formula,
+};
+use crate::interface::{
+    LibraryContextSnapshotRef, TypedContextQueryBundle, TypedContextQueryBundleSpec,
 };
 use crate::scheduler::{ExecutionRestriction, build_execution_contract};
 use crate::seam::{
@@ -33,6 +34,7 @@ pub struct PreparedSession {
     pub source: FormulaSourceRecord,
     pub bound_formula: BoundFormula,
     pub semantic_plan: SemanticPlan,
+    pub library_context_snapshot_ref: Option<LibraryContextSnapshotRef>,
     pub primary_locus: Locus,
 }
 
@@ -76,6 +78,7 @@ pub struct CapabilityView {
 pub struct OpenSessionResult {
     pub session_id: String,
     pub fence_snapshot: FenceSnapshot,
+    pub library_context_snapshot_ref: Option<LibraryContextSnapshotRef>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -84,6 +87,7 @@ pub struct SessionRecord {
     pub prepared: PreparedSession,
     pub phase: SessionPhase,
     pub capability_view: Option<CapabilityView>,
+    pub typed_query_bundle_spec: Option<TypedContextQueryBundleSpec>,
     pub candidate_result: Option<AcceptedCandidateResult>,
     pub last_reject: Option<RejectRecord>,
     pub trace_events: Vec<TraceEvent>,
@@ -105,10 +109,7 @@ pub struct ExecuteRequest<'a> {
     pub caller_col: usize,
     pub cell_values: BTreeMap<String, EvalValue>,
     pub defined_names: BTreeMap<String, DefinedNameBinding>,
-    pub locale_ctx: Option<&'a LocaleFormatContext<'a>>,
-    pub host_info: Option<&'a dyn HostInfoProvider>,
-    pub now_serial: Option<f64>,
-    pub random_value: Option<f64>,
+    pub typed_query_bundle: TypedContextQueryBundle<'a>,
 }
 
 #[derive(Debug, Default)]
@@ -146,10 +147,27 @@ impl SessionService {
             ));
         }
 
+        let library_context_snapshot_ref = match request
+            .semantic_plan
+            .library_context_snapshot_ref
+            .as_deref()
+        {
+            Some(value) => Some(
+                LibraryContextSnapshotRef::from_compound_ref(value).ok_or_else(|| {
+                    prepare_mismatch_reject(
+                        &request.source.formula_stable_id.0,
+                        "library_context_snapshot_ref_malformed",
+                    )
+                })?,
+            ),
+            None => None,
+        };
+
         Ok(PreparedSession {
             source: request.source,
             bound_formula: request.bound_formula,
             semantic_plan: request.semantic_plan,
+            library_context_snapshot_ref,
             primary_locus: request.primary_locus,
         })
     }
@@ -166,6 +184,7 @@ impl SessionService {
                 prepared: prepared.clone(),
                 phase: SessionPhase::Open,
                 capability_view: None,
+                typed_query_bundle_spec: None,
                 candidate_result: None,
                 last_reject: None,
                 trace_events: vec![TraceEvent {
@@ -186,6 +205,7 @@ impl SessionService {
         OpenSessionResult {
             session_id,
             fence_snapshot,
+            library_context_snapshot_ref: prepared.library_context_snapshot_ref,
         }
     }
 
@@ -393,6 +413,8 @@ impl SessionService {
                 .sessions
                 .get_mut(&request.session_id)
                 .expect("session should exist for execute");
+            record.typed_query_bundle_spec =
+                Some(request.typed_query_bundle.freeze_candidate_spec());
             let mut evaluation_context = EvaluationContext::new(
                 &record.prepared.bound_formula,
                 &record.prepared.semantic_plan,
@@ -402,10 +424,7 @@ impl SessionService {
             evaluation_context.caller_col = request.caller_col;
             evaluation_context.cell_values = request.cell_values;
             evaluation_context.defined_names = request.defined_names;
-            evaluation_context.locale_ctx = request.locale_ctx;
-            evaluation_context.host_info = request.host_info;
-            evaluation_context.now_serial = request.now_serial;
-            evaluation_context.random_value = request.random_value;
+            evaluation_context.apply_typed_context_query_bundle(request.typed_query_bundle);
 
             let evaluation = match evaluate_formula(evaluation_context) {
                 Ok(evaluation) => evaluation,
@@ -1056,6 +1075,10 @@ fn build_candidate_result(
                     diagnostics: Vec::new(),
                 },
                 semantic_plan: semantic_plan.clone(),
+                library_context_snapshot_ref: semantic_plan
+                    .library_context_snapshot_ref
+                    .as_deref()
+                    .and_then(LibraryContextSnapshotRef::from_compound_ref),
                 primary_locus: primary_locus.clone(),
             },
             capability_view_key,

@@ -5,15 +5,19 @@ use oxfunc_core::locale_format::en_us_context;
 use oxfunc_core::value::{EvalValue, ExcelText, ReferenceLike};
 
 use oxfml_core::binding::{BindContext, BindRequest, NameKind, bind_formula};
+use oxfml_core::interface::{
+    LibraryContextSnapshotRef, TypedContextQueryBundle, TypedContextQueryFamily,
+};
 use oxfml_core::red::project_red_view;
+use oxfml_core::semantics::LibraryContextSnapshot;
 use oxfml_core::session::{
     CapabilityViewSpec, ExecuteRequest, PrepareRequest, SessionPhase, SessionService,
 };
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
 use oxfml_core::{
-    AcceptDecision, DefinedNameBinding, EvaluationBackend, Locus, RejectCode, TraceEventKind,
-    compile_semantic_plan,
+    AcceptDecision, DefinedNameBinding, EvaluationBackend, LibraryAvailabilityState, Locus,
+    RegistrationSourceKind, RejectCode, TraceEventKind, compile_semantic_plan,
 };
 
 #[test]
@@ -40,10 +44,7 @@ fn managed_session_happy_path_runs_through_commit() {
             caller_col: 1,
             cell_values: BTreeMap::new(),
             defined_names,
-            locale_ctx: Some(&en_us_context()),
-            host_info: None,
-            now_serial: Some(46000.0),
-            random_value: Some(0.25),
+            typed_query_bundle: session_query_bundle(None),
         })
         .expect("execute should succeed");
     assert_eq!(service.overlay_entries(&open.session_id).len(), 1);
@@ -82,12 +83,73 @@ fn managed_session_happy_path_runs_through_commit() {
         TraceEventKind::CapabilityViewEstablished
     );
     assert_eq!(
+        session.typed_query_bundle_spec,
+        Some(session_query_bundle(None).freeze_candidate_spec())
+    );
+    assert_eq!(
         session.trace_events[2].event_kind,
         TraceEventKind::AcceptedCandidateResultBuilt
     );
     assert_eq!(
         session.trace_events[3].event_kind,
         TraceEventKind::CommitAccepted
+    );
+}
+
+#[test]
+fn managed_session_carries_library_snapshot_ref_and_typed_query_bundle_spec() {
+    let prepared = compile_prepared_with_snapshot("=SUM(1,2)", false, Some(test_snapshot()));
+    let expected_snapshot_ref = LibraryContextSnapshotRef::new("libctx.session", "v1");
+    let mut service = SessionService::new();
+    let prepared = service.prepare(prepared).expect("prepare should succeed");
+    assert_eq!(
+        prepared.library_context_snapshot_ref,
+        Some(expected_snapshot_ref.clone())
+    );
+    let open = service.open_session(prepared);
+    assert_eq!(
+        open.library_context_snapshot_ref,
+        Some(expected_snapshot_ref.clone())
+    );
+    service
+        .establish_capability_view(&open.session_id, CapabilityViewSpec::default())
+        .expect("capability view should succeed");
+
+    service
+        .execute(ExecuteRequest {
+            session_id: open.session_id.clone(),
+            backend: EvaluationBackend::OxFuncBacked,
+            caller_row: 1,
+            caller_col: 1,
+            cell_values: BTreeMap::new(),
+            defined_names: BTreeMap::new(),
+            typed_query_bundle: session_query_bundle(None),
+        })
+        .expect("execute should succeed");
+
+    let session = service
+        .session(&open.session_id)
+        .expect("session should exist");
+    assert_eq!(
+        session.prepared.library_context_snapshot_ref,
+        Some(expected_snapshot_ref)
+    );
+    let spec = session
+        .typed_query_bundle_spec
+        .as_ref()
+        .expect("session should record typed bundle spec");
+    assert!(
+        spec.families
+            .contains(&TypedContextQueryFamily::ReferenceResolver)
+    );
+    assert!(
+        spec.families
+            .contains(&TypedContextQueryFamily::LocaleFormatContext)
+    );
+    assert!(spec.families.contains(&TypedContextQueryFamily::NowSerial));
+    assert!(
+        spec.families
+            .contains(&TypedContextQueryFamily::RandomValue)
     );
 }
 
@@ -121,10 +183,7 @@ fn managed_session_rejects_contention_on_busy_locus_until_release() {
             caller_col: 1,
             cell_values: BTreeMap::new(),
             defined_names: BTreeMap::new(),
-            locale_ctx: Some(&en_us_context()),
-            host_info: Some(&SessionMockHostInfoProvider),
-            now_serial: Some(46000.0),
-            random_value: Some(0.25),
+            typed_query_bundle: session_query_bundle(Some(&SessionMockHostInfoProvider)),
         })
         .expect("primary execute should succeed");
 
@@ -151,10 +210,7 @@ fn managed_session_rejects_contention_on_busy_locus_until_release() {
             caller_col: 1,
             cell_values: BTreeMap::new(),
             defined_names: BTreeMap::new(),
-            locale_ctx: Some(&en_us_context()),
-            host_info: Some(&SessionMockHostInfoProvider),
-            now_serial: Some(46000.0),
-            random_value: Some(0.25),
+            typed_query_bundle: session_query_bundle(Some(&SessionMockHostInfoProvider)),
         })
         .expect_err("secondary execute should reject on contention");
 
@@ -216,10 +272,7 @@ fn managed_session_abort_prevents_execute() {
             caller_col: 1,
             cell_values: BTreeMap::new(),
             defined_names: BTreeMap::new(),
-            locale_ctx: Some(&en_us_context()),
-            host_info: None,
-            now_serial: Some(46000.0),
-            random_value: Some(0.25),
+            typed_query_bundle: session_query_bundle(None),
         })
         .expect_err("execute should reject");
 
@@ -258,10 +311,7 @@ fn managed_session_rejects_second_execute_as_structural_conflict() {
             caller_col: 1,
             cell_values: BTreeMap::new(),
             defined_names: defined_names.clone(),
-            locale_ctx: Some(&en_us_context()),
-            host_info: None,
-            now_serial: Some(46000.0),
-            random_value: Some(0.25),
+            typed_query_bundle: session_query_bundle(None),
         })
         .expect("first execute should succeed");
 
@@ -273,10 +323,7 @@ fn managed_session_rejects_second_execute_as_structural_conflict() {
             caller_col: 1,
             cell_values: BTreeMap::new(),
             defined_names,
-            locale_ctx: Some(&en_us_context()),
-            host_info: None,
-            now_serial: Some(46000.0),
-            random_value: Some(0.25),
+            typed_query_bundle: session_query_bundle(None),
         })
         .expect_err("second execute should reject");
 
@@ -307,10 +354,7 @@ fn managed_session_rejects_commit_on_stale_formula_token_fence() {
             caller_col: 1,
             cell_values: BTreeMap::new(),
             defined_names,
-            locale_ctx: Some(&en_us_context()),
-            host_info: None,
-            now_serial: Some(46000.0),
-            random_value: Some(0.25),
+            typed_query_bundle: session_query_bundle(None),
         })
         .expect("execute should succeed");
 
@@ -373,10 +417,7 @@ fn managed_session_surfaces_execution_restriction_effects() {
             caller_col: 1,
             cell_values: BTreeMap::new(),
             defined_names: BTreeMap::new(),
-            locale_ctx: Some(&en_us_context()),
-            host_info: Some(&SessionMockHostInfoProvider),
-            now_serial: Some(46000.0),
-            random_value: Some(0.25),
+            typed_query_bundle: session_query_bundle(Some(&SessionMockHostInfoProvider)),
         })
         .expect("execute should succeed");
 
@@ -449,10 +490,7 @@ fn managed_session_external_provider_lane_surfaces_dynamic_reference_and_async_e
             caller_col: 1,
             cell_values: BTreeMap::new(),
             defined_names: BTreeMap::new(),
-            locale_ctx: Some(&en_us_context()),
-            host_info: None,
-            now_serial: Some(46000.0),
-            random_value: Some(0.25),
+            typed_query_bundle: session_query_bundle(None),
         })
         .expect("execute should succeed");
 
@@ -515,6 +553,14 @@ fn managed_session_external_provider_lane_surfaces_dynamic_reference_and_async_e
 }
 
 fn compile_prepared(formula: &str, with_input_name: bool) -> PrepareRequest {
+    compile_prepared_with_snapshot(formula, with_input_name, None)
+}
+
+fn compile_prepared_with_snapshot(
+    formula: &str,
+    with_input_name: bool,
+    library_context_snapshot: Option<LibraryContextSnapshot>,
+) -> PrepareRequest {
     let source = FormulaSourceRecord::new("session-fixture", 1, formula.to_string());
     let parse = parse_formula(ParseRequest {
         source: source.clone(),
@@ -540,7 +586,7 @@ fn compile_prepared(formula: &str, with_input_name: bool) -> PrepareRequest {
         locale_profile: Some("en-US".to_string()),
         date_system: Some("1900".to_string()),
         format_profile: Some("excel-default".to_string()),
-        library_context_snapshot: None,
+        library_context_snapshot,
     })
     .semantic_plan;
 
@@ -553,6 +599,49 @@ fn compile_prepared(formula: &str, with_input_name: bool) -> PrepareRequest {
             row: 1,
             col: 1,
         },
+    }
+}
+
+fn session_query_bundle<'a>(
+    host_info: Option<&'a dyn HostInfoProvider>,
+) -> TypedContextQueryBundle<'a> {
+    TypedContextQueryBundle::new(
+        host_info,
+        None,
+        Some(session_locale_context()),
+        Some(46000.0),
+        Some(0.25),
+    )
+}
+
+fn session_locale_context() -> &'static oxfunc_core::locale_format::LocaleFormatContext<'static> {
+    Box::leak(Box::new(en_us_context()))
+}
+
+fn test_snapshot() -> LibraryContextSnapshot {
+    LibraryContextSnapshot {
+        snapshot_id: "libctx.session".to_string(),
+        snapshot_version: "v1".to_string(),
+        entries: vec![oxfml_core::LibraryContextSnapshotEntry {
+            surface_name: "SUM".to_string(),
+            canonical_id: Some("FUNC.SUM".to_string()),
+            surface_stable_id: Some("surface.sum".to_string()),
+            name_resolution_table_ref: Some("name-table:sum".to_string()),
+            semantic_trait_profile_ref: Some("trait:sum".to_string()),
+            gating_profile_ref: Some("gate:default".to_string()),
+            metadata_status: Some("stable".to_string()),
+            special_interface_kind: None,
+            admission_interface_kind: Some("ordinary".to_string()),
+            preparation_owner: Some("OxFunc".to_string()),
+            runtime_boundary_kind: Some("ordinary".to_string()),
+            arity_shape_note: Some("variadic".to_string()),
+            interface_contract_ref: Some("contract:sum".to_string()),
+            registration_source_kind: RegistrationSourceKind::BuiltIn,
+            parse_bind_state: LibraryAvailabilityState::CatalogKnown,
+            semantic_plan_state: LibraryAvailabilityState::CatalogKnown,
+            runtime_capability_state: Some(LibraryAvailabilityState::CatalogKnown),
+            post_dispatch_state: Some(LibraryAvailabilityState::CatalogKnown),
+        }],
     }
 }
 

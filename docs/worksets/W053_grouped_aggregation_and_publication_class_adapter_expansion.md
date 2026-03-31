@@ -86,5 +86,5 @@ Narrow the next OxFml <-> OxFunc adapter-expansion lane after the first pinned 4
   - `HYPERLINK` publication intent, generic extended top-level return-surface preservation, explicit `_webimage` rich-value packet classification, and end-to-end local `IMAGE(...)` evaluator/host/adapter evidence are now exercised locally
   - no new concrete OxFunc mismatch was exposed by the widened local `GROUPBY` / `PIVOTBY` / publication-class corpus
   - OxFunc now treats the widened `W053` corpus as sufficient for the current grouped-aggregation regression floor; future reopening is mismatch-driven
-  - cross-repo acknowledgment has narrowed, but the workset remains `integration_completeness: partial` until the surrounding shared seam packets are fully frozen
+  - no further honest local `W053` execution remains on the OxFml side beyond future mismatch-driven reopen; the workset remains `integration_completeness: partial` only because surrounding shared seam packets still need broader promotion/freeze work
 - claim_confidence: provisional

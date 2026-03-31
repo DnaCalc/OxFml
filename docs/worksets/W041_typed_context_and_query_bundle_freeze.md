@@ -56,10 +56,11 @@ Freeze the first shared OxFml/OxFunc typed context and query bundle for the curr
 - target_completeness: target_partial
 - integration_completeness: partial
 - open_lanes:
-  - a first local `TypedContextQueryBundle`, grouped `INFO` / `CELL` / `RTD` / `IMAGE` evidence, and matching packet-family tests now exist, and the current family set is now aligned locally with the mirrored freeze packet plus `HO-FN-004`
-  - current OxFunc query names and result partitions are accepted as a first freeze candidate, but not yet promoted through broader evaluator/session-facing packet use
+  - a first local `TypedContextQueryBundle`, grouped `INFO` / `CELL` / `RTD` / `IMAGE` evidence, matching packet-family tests, and broader session-path propagation now exist, and the current family set is now aligned locally with the mirrored freeze packet plus `HO-FN-004`
+  - the managed session path now executes through `TypedContextQueryBundle` directly and records `TypedContextQueryBundleSpec` on the session record, so the remaining `W041` work is no longer "first broader consumer use" but wider packet adoption beyond the currently exercised host and session surfaces
   - deterministic OxFml evidence now exists for the bundle shape and first grouped host/query families, but broader seam-heavy query execution evidence is still incomplete outside the exercised `INFO` / `CELL` / `RTD` / `IMAGE` slice
   - OxFml still needs to answer with implementation-facing precision whether the current query families should remain exactly as named or be capability-family merged/split before promotion
   - the current local freeze candidate is now mirrored in `docs/spec/formula-language/OXFML_OXFUNC_SHARED_INTERFACE_FREEZE_CANDIDATE_V1.md`, and OxFunc's `HO-FN-004` now treats that family as part of the shared freeze floor for the narrowed seam families
-  - current OxFunc reading is that this is now a freeze-and-consumer packet rather than a broad semantic-open lane, so the remaining next step is local consumer promotion rather than more packet-shape debate
+  - deterministic local evidence for the broader session-path packet use now exists in `crates/oxfml_core/tests/session_service_tests.rs` and `crates/oxfml_core/tests/session_replay_fixture_tests.rs`
+  - current OxFunc reading is that this is now a freeze-and-consumer packet rather than a broad semantic-open lane, so the remaining next step is wider local consumer promotion rather than more packet-shape debate
 - claim_confidence: provisional

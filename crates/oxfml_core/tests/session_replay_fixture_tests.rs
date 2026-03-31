@@ -8,6 +8,7 @@ use oxfunc_core::value::{EvalValue, ExcelText, ReferenceLike};
 use serde::Deserialize;
 
 use oxfml_core::binding::{BindContext, BindRequest, NameKind, bind_formula};
+use oxfml_core::interface::TypedContextQueryBundle;
 use oxfml_core::red::project_red_view;
 use oxfml_core::session::{
     CapabilityViewSpec, ExecuteRequest, PrepareRequest, SessionPhase, SessionService,
@@ -80,10 +81,7 @@ fn session_lifecycle_replay_fixtures_match_expected_snapshots() {
                         caller_col: 1,
                         cell_values: BTreeMap::new(),
                         defined_names,
-                        locale_ctx: Some(&en_us_context()),
-                        host_info: None,
-                        now_serial: Some(46000.0),
-                        random_value: Some(0.25),
+                        typed_query_bundle: session_query_bundle(None),
                     })
                     .expect("execute should succeed");
 
@@ -197,10 +195,7 @@ fn session_lifecycle_replay_fixtures_match_expected_snapshots() {
                         caller_col: 1,
                         cell_values: BTreeMap::new(),
                         defined_names,
-                        locale_ctx: Some(&en_us_context()),
-                        host_info: None,
-                        now_serial: Some(46000.0),
-                        random_value: Some(0.25),
+                        typed_query_bundle: session_query_bundle(None),
                     })
                     .expect("execute should succeed");
 
@@ -273,10 +268,7 @@ fn session_lifecycle_replay_fixtures_match_expected_snapshots() {
                         caller_col: 1,
                         cell_values: BTreeMap::new(),
                         defined_names: defined_names.clone(),
-                        locale_ctx: Some(&en_us_context()),
-                        host_info: None,
-                        now_serial: Some(46000.0),
-                        random_value: Some(0.25),
+                        typed_query_bundle: session_query_bundle(None),
                     })
                     .expect("first execute should succeed");
                 let reject = service
@@ -287,10 +279,7 @@ fn session_lifecycle_replay_fixtures_match_expected_snapshots() {
                         caller_col: 1,
                         cell_values: BTreeMap::new(),
                         defined_names,
-                        locale_ctx: Some(&en_us_context()),
-                        host_info: None,
-                        now_serial: Some(46000.0),
-                        random_value: Some(0.25),
+                        typed_query_bundle: session_query_bundle(None),
                     })
                     .expect_err("second execute should reject");
                 assert_eq!(
@@ -347,10 +336,7 @@ fn session_lifecycle_replay_fixtures_match_expected_snapshots() {
                         caller_col: 1,
                         cell_values: BTreeMap::new(),
                         defined_names: BTreeMap::new(),
-                        locale_ctx: Some(&en_us_context()),
-                        host_info: Some(&ReplayHostInfoProvider),
-                        now_serial: Some(46000.0),
-                        random_value: Some(0.25),
+                        typed_query_bundle: session_query_bundle(Some(&ReplayHostInfoProvider)),
                     })
                     .expect("primary execute should succeed");
 
@@ -373,10 +359,7 @@ fn session_lifecycle_replay_fixtures_match_expected_snapshots() {
                         caller_col: 1,
                         cell_values: BTreeMap::new(),
                         defined_names: BTreeMap::new(),
-                        locale_ctx: Some(&en_us_context()),
-                        host_info: Some(&ReplayHostInfoProvider),
-                        now_serial: Some(46000.0),
-                        random_value: Some(0.25),
+                        typed_query_bundle: session_query_bundle(Some(&ReplayHostInfoProvider)),
                     })
                     .expect_err("second execute should reject");
                 assert_eq!(
@@ -430,6 +413,22 @@ fn session_lifecycle_replay_fixtures_match_expected_snapshots() {
             fixture.case_id
         );
     }
+}
+
+fn session_query_bundle<'a>(
+    host_info: Option<&'a dyn HostInfoProvider>,
+) -> TypedContextQueryBundle<'a> {
+    TypedContextQueryBundle::new(
+        host_info,
+        None,
+        Some(session_locale_context()),
+        Some(46000.0),
+        Some(0.25),
+    )
+}
+
+fn session_locale_context() -> &'static oxfunc_core::locale_format::LocaleFormatContext<'static> {
+    Box::leak(Box::new(en_us_context()))
 }
 
 fn fixture_path(name: &str) -> PathBuf {
