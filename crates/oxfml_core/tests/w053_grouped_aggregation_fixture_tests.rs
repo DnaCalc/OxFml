@@ -2,8 +2,8 @@ use std::fs;
 use std::path::PathBuf;
 
 use oxfml_core::interface::TypedContextQueryBundle;
-use oxfml_core::oxfunc_adapter::{OxFuncAdapterRequest, run_oxfunc_preparation_adapter};
 use oxfml_core::seam::{Locus, RejectCode};
+use oxfml_core::substrate::oxfunc_adapter::{OxFuncAdapterRequest, run_oxfunc_preparation_adapter};
 use oxfunc_core::host_info::{
     HostInfoError, HostInfoProvider, ImageProviderResult, ImageRequest, ResolvedWebImage,
 };

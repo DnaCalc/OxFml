@@ -6,12 +6,13 @@ use oxfunc_core::functions::call_register_id_family::{
 use oxfunc_core::value::{CallArgValue, EvalValue, ExcelText, ReferenceKind, ReferenceLike};
 use std::cell::RefCell;
 
+use oxfml_core::TypedContextQueryBundleSpec;
 use oxfml_core::interface::{
     RegisteredExternalCatalogController, RegisteredExternalCatalogMutationRequest,
     RegisteredExternalCatalogMutationResult, RegisteredExternalHostRegistrationRequest,
     RegisteredExternalRegistrationChannel, TypedContextQueryBundle, TypedContextQueryFamily,
 };
-use oxfml_core::{SingleFormulaHost, TypedContextQueryBundleSpec};
+use oxfml_core::substrate::host::SingleFormulaHost;
 
 #[test]
 fn typed_query_bundle_includes_registered_external_family_when_provider_present() {
@@ -118,8 +119,8 @@ fn host_executes_register_id_and_call_through_registered_external_provider() {
                 Some("JJJJ".to_string())
             );
             assert_eq!(
-                invocation_args,
-                &vec![
+                *invocation_args,
+                vec![
                     CallArgValue::Eval(EvalValue::Number(6.0)),
                     CallArgValue::Eval(EvalValue::Number(7.0)),
                     CallArgValue::Eval(EvalValue::Number(3.0)),
@@ -152,8 +153,8 @@ fn host_executes_call_by_register_id_through_lookup_lane() {
         } => {
             assert_eq!(*register_id, 4242.0);
             assert_eq!(
-                invocation_args,
-                &vec![
+                *invocation_args,
+                vec![
                     CallArgValue::Eval(EvalValue::Number(6.0)),
                     CallArgValue::Eval(EvalValue::Number(7.0)),
                     CallArgValue::Eval(EvalValue::Number(3.0)),

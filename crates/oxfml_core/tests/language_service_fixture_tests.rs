@@ -2,21 +2,17 @@ use std::fs;
 use std::path::PathBuf;
 
 use oxfml_core::binding::BindContext;
+use oxfml_core::consumer::editor::{
+    CompletionProposalKind, EditorAnalysisStage, EditorEditService, EditorEnvironment,
+};
 use oxfml_core::interface::{
-    InMemoryLibraryContextProvider, LibraryContextSnapshotRef, TableColumnDescriptor,
-    TableDescriptor,
+    InMemoryLibraryContextProvider, TableColumnDescriptor, TableDescriptor,
 };
-use oxfml_core::language_service::{
-    CompletionProposalKind, CompletionRequest, CompletionValidationRequest, EditFollowOnStage,
-    apply_completion_proposal, build_editor_syntax_snapshot, collect_completion_proposals,
-};
-use oxfml_core::red::project_red_view;
 use oxfml_core::semantics::{
     LibraryAvailabilityState, LibraryContextSnapshot, LibraryContextSnapshotEntry,
     RegistrationSourceKind,
 };
 use oxfml_core::source::{FormulaChannelKind, FormulaSourceRecord, StructureContextVersion};
-use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -62,12 +58,12 @@ fn language_service_fixtures_match_expected_snapshots() {
                 expected_leading_trivia,
                 expected_trailing_trivia,
             } => {
-                let source = FormulaSourceRecord::new(case_id, 1, formula);
-                let parse = parse_formula(ParseRequest {
-                    source: source.clone(),
-                });
-                let snapshot = build_editor_syntax_snapshot(&source, &parse.green_tree);
-                let token = snapshot
+                let service =
+                    EditorEditService::new(EditorEnvironment::new(BindContext::default()));
+                let document =
+                    service.open_document(FormulaSourceRecord::new(case_id, 1, formula), None);
+                let token = document
+                    .editor_syntax_snapshot
                     .tokens
                     .iter()
                     .find(|token| token.text == expected_token_text)
@@ -100,25 +96,16 @@ fn language_service_fixtures_match_expected_snapshots() {
             } => {
                 let source = FormulaSourceRecord::new(case_id, 1, formula)
                     .with_formula_channel_kind(parse_channel_kind(&formula_channel_kind));
-                let parse = parse_formula(ParseRequest {
-                    source: source.clone(),
-                });
-                let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
-                let bind_context = editor_bind_context(source.clone());
                 let snapshot = sample_library_context_snapshot();
-                let snapshot_ref = LibraryContextSnapshotRef::from(&snapshot);
+                let snapshot_ref = oxfml_core::LibraryContextSnapshotRef::from(&snapshot);
                 let provider = InMemoryLibraryContextProvider::new(snapshot);
+                let service = EditorEditService::new(
+                    EditorEnvironment::new(editor_bind_context(source.clone()))
+                        .with_pinned_library_context(&provider, snapshot_ref),
+                );
 
-                let result = collect_completion_proposals(CompletionRequest {
-                    source: &source,
-                    green_tree: &parse.green_tree,
-                    red_projection: &red,
-                    bind_context: &bind_context,
-                    library_context_provider: Some(&provider),
-                    library_context_snapshot_ref: Some(&snapshot_ref),
-                    library_context_snapshot: None,
-                    cursor_offset,
-                });
+                let document = service.open_document(source, None);
+                let result = service.completion_at_cursor(&document, cursor_offset);
 
                 assert!(result.proposals.iter().any(|proposal| {
                     proposal.display_text == expected_display_text
@@ -136,52 +123,40 @@ fn language_service_fixtures_match_expected_snapshots() {
                 expected_change_new_len,
             } => {
                 let source = FormulaSourceRecord::new(case_id, 1, formula);
-                let parse = parse_formula(ParseRequest {
-                    source: source.clone(),
-                });
-                let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
-                let bind_context = editor_bind_context(source.clone());
                 let snapshot = sample_library_context_snapshot();
-                let snapshot_ref = LibraryContextSnapshotRef::from(&snapshot);
+                let snapshot_ref = oxfml_core::LibraryContextSnapshotRef::from(&snapshot);
                 let provider = InMemoryLibraryContextProvider::new(snapshot);
+                let service = EditorEditService::new(
+                    EditorEnvironment::new(editor_bind_context(source.clone()))
+                        .with_pinned_library_context(&provider, snapshot_ref),
+                );
 
-                let completion = collect_completion_proposals(CompletionRequest {
-                    source: &source,
-                    green_tree: &parse.green_tree,
-                    red_projection: &red,
-                    bind_context: &bind_context,
-                    library_context_provider: Some(&provider),
-                    library_context_snapshot_ref: Some(&snapshot_ref),
-                    library_context_snapshot: None,
-                    cursor_offset,
-                });
+                let document = service.open_document(source.clone(), None);
+                let completion = service.completion_at_cursor(&document, cursor_offset);
                 let proposal = completion
                     .proposals
                     .iter()
                     .find(|proposal| proposal.proposal_id == proposal_id)
                     .expect("expected proposal should exist");
 
-                let result = apply_completion_proposal(
-                    CompletionValidationRequest {
-                        source: source.clone(),
-                        bind_context,
-                        previous_green_tree: Some(&parse.green_tree),
-                        previous_red_projection: Some(&red),
-                        previous_bound_formula: None,
-                        replacement_span: None,
-                        insert_text: String::new(),
-                        follow_on_stage: EditFollowOnStage::ParseAndBind,
-                        semantic_plan_options: None,
-                    },
+                let result = service.apply_completion_proposal(
+                    &document,
                     proposal,
+                    EditorAnalysisStage::SyntaxAndBind,
+                    None,
                 );
 
                 assert_eq!(
-                    result.updated_source.entered_formula_text,
+                    result
+                        .interaction_result
+                        .document
+                        .source
+                        .entered_formula_text,
                     expected_updated_formula
                 );
                 let change = result
-                    .edit_result
+                    .interaction_result
+                    .document
                     .text_change_range
                     .expect("completion application should report a change range");
                 assert_eq!(change.start, expected_change_start);

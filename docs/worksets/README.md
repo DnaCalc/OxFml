@@ -136,6 +136,7 @@ Current baseline sequence after `W001`:
 49. `W051` OxCalc fixture host and stand-in packet
 50. `W052` registered external provider and CALL REGISTER.ID boundary
 51. `W053` grouped aggregation and publication-class adapter expansion
+52. `W054` consumer-facing interface rearchitecture and facade packaging
 
 This sequence is the current planning baseline.
 It may be refined, but new worksets should preserve dependency clarity rather than bypass it informally.

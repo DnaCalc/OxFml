@@ -112,16 +112,28 @@ The better end-point is:
 - target_completeness: target_partial
 - integration_completeness: partial
 - open_lanes:
-  - OxFml now has a first real local consumer/model packet:
-    - `LibraryContextProvider`
-    - `InMemoryLibraryContextProvider`
-    - `LibraryContextSnapshotRef`
-    - runtime-field classification helpers,
-    and the semantic-plan compile surface, single-formula host, managed session path, and `language_service` function-help/intelligent-completion packets now all consume or preserve the typed snapshot-ref packet instead of raw compound strings, while `language_service` completion/help consumers now prefer provider + pinned-ref resolution over inline whole-snapshot opportunism; broader runtime consumers are still not fully normalized onto that same model
-  - OxFml now prefers a cleaner runtime-only shape plus explicit CSV/export mapping, and that preference is backed by the first local provider model plus host consumption plus explicit session/editor-surface snapshot-ref carriage and pinned provider lookup, but not yet by broader multi-surface consumer use or an explicit pinned runtime-view abstraction
-  - deterministic local evidence now exists for snapshot pinning and surface lookup through the first provider model, semantic-plan compilation and the `W044` export-consumption path now preserve the typed snapshot ref directly, the managed session path now carries `LibraryContextSnapshotRef` explicitly on prepared/opened sessions, and `language_service` now preserves the typed snapshot ref through function-help and intelligent-completion packets while using pinned provider lookup for completions, but broader generation/update behavior remains only partially exercised
-  - the runtime-truth versus export-only field split is now explicit in local helper code, but OxFml still lacks a broader runtime-facing projection/view layer that would let consumers avoid repeated raw entry handling cleanly
+  - OxFml now has a real reusable runtime-view abstraction:
+    - `PinnedLibraryContextView`
+    - `LibraryContextProvider::current_snapshot_ref()`
+    and that abstraction now drives `language_service` resolution plus the single-formula host runtime path rather than leaving current-vs-pinned behavior as duplicated ad hoc logic
+  - the single-formula host now has an explicit pinned execution entrypoint:
+    - `recalc_with_interfaces_and_snapshot_ref(...)`
+    and semantic-plan reuse now invalidates when `library_context_snapshot_ref` changes, so a provider update can no longer silently reuse a plan compiled against a different snapshot identity
+  - the consumer-facing architecture now has shared facade-native
+    provider-plus-pin environment builders for runtime/editor facades rather
+    than repeating provider, pinned snapshot ref, and optional inline snapshot
+    fields ad hoc
+  - the editor/language-service boundary now uses one canonical pinned-view carrier:
+    - `PinnedLibraryContextView`
+    on `CompletionRequest` and function-help lookup construction, so completion/help packet building no longer re-specifies provider/snapshot-ref/snapshot triples at every callsite
+  - the OxFunc adapter no longer materializes a temporary one-snapshot provider just to simulate pinning; it now drives the same host-side provider-plus-pin execution path directly, which is a materially better internal end-state for `W043`
+  - deterministic local evidence now exists for snapshot pinning and surface lookup through the provider model, semantic-plan compilation and the `W044` export-consumption path preserve the typed snapshot ref directly, the managed session path carries `LibraryContextSnapshotRef` explicitly on prepared/opened sessions, `language_service` completion/help uses pinned provider lookup, and the single-formula host now proves pinned-vs-current divergence plus cache invalidation under snapshot change; broader generation/update behavior remains only partially exercised
+  - the consumer runtime facade now executes both one-shot and managed-session
+    flows against a full `PinnedLibraryContextView`, and managed session
+    open/execute/commit/abort-expire packets preserve pinned snapshot identity
+    directly rather than dropping back to ambient provider-current behavior
+  - the runtime-truth versus export-only field split is explicit in local helper code, and OxFml now has a first runtime-facing projection/view layer for pinned library-context lookup, but broader multi-surface consumer normalization and broader generation/update evidence are still open
   - the current local freeze candidate is now mirrored in `docs/spec/formula-language/OXFML_OXFUNC_SHARED_INTERFACE_FREEZE_CANDIDATE_V1.md`, and OxFunc's `HO-FN-004` now treats the runtime consumer shape as part of the shared freeze floor for the narrowed seam families
-  - deterministic local evidence for the broader compile/session/editor snapshot-ref carriage now exists in `crates/oxfml_core/tests/semantic_plan_tests.rs`, `crates/oxfml_core/tests/library_context_snapshot_tests.rs`, `crates/oxfml_core/tests/oxfunc_catalog_snapshot_export_tests.rs`, `crates/oxfml_core/tests/session_service_tests.rs`, and `crates/oxfml_core/tests/language_service_tests.rs`, including current-vs-pinned completion/help evidence through `InMemoryLibraryContextProvider::with_snapshots(...)`, but the next honest step is broader generation/update evidence across more runtime surfaces rather than more single-surface assertions
-  - current OxFunc reading is that this is now a freeze-and-consumer packet rather than a broad semantic-open lane, so the remaining next step is comprehensive local normalization toward provider-plus-pin runtime use rather than more interface-shape debate
+  - deterministic local evidence for the broader compile/session/editor/host snapshot-ref carriage now exists in `crates/oxfml_core/tests/semantic_plan_tests.rs`, `crates/oxfml_core/tests/library_context_snapshot_tests.rs`, `crates/oxfml_core/tests/oxfunc_catalog_snapshot_export_tests.rs`, `crates/oxfml_core/tests/session_service_tests.rs`, `crates/oxfml_core/tests/language_service_tests.rs`, `crates/oxfml_core/tests/successor_packet_interface_tests.rs`, and `crates/oxfml_core/tests/host_tests.rs`, including current-vs-pinned completion/help evidence and host-plan invalidation under snapshot change; the next honest step is broader generation/update evidence across more runtime surfaces rather than more single-surface assertions
+  - current OxFunc reading is that this is now a freeze-and-consumer packet rather than a broad semantic-open lane, so the remaining next step is broader local propagation and generation/update proof rather than more interface-shape debate
 - claim_confidence: provisional

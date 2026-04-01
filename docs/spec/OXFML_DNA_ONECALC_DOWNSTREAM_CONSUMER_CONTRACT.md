@@ -21,13 +21,15 @@ Status:
 1. `OXFML_HOST_RUNTIME_AND_EXTERNAL_REQUIREMENTS.md` — primary host/runtime coordination packet
 2. `OXFML_DNA_ONECALC_HOST_POLICY_BASELINE.md` — reduced-profile OneCalc companion
 3. `OXFML_PUBLIC_API_AND_RUNTIME_SERVICE_SKETCH.md` — code-facing surface sketch
-4. `formula-language/OXFML_EDITOR_LANGUAGE_SERVICE_AND_HOST_INTEGRATION_PLAN.md` — editor/language-service plan
-5. `OXFML_FIXTURE_HOST_AND_COORDINATOR_STANDIN_PACKET.md` — deterministic fixture-host packet
-6. `OXFML_CANONICAL_ARTIFACT_SHAPES.md` — canonical artifact ladder
-7. `OXFML_MINIMUM_SEAM_SCHEMAS.md` — minimum candidate/commit/reject/trace fields
-8. `OXFML_DELTA_EFFECT_TRACE_AND_REJECT_TAXONOMIES.md` — reject and effect taxonomy
-9. `formula-language/OXFML_OXFUNC_LIBRARY_CONTEXT_RUNTIME_INTERFACE.md` — runtime library-context model
-10. `formula-language/OXFML_REGISTERED_EXTERNAL_PROVIDER_AND_CALL_REGISTER_ID_BOUNDARY.md` — registered-external boundary
+4. `OXFML_CONSUMER_INTERFACE_REARCHITECTURE_PLAN.md` — preferred consumer-facing facade direction
+5. `OXFML_CONSUMER_INTERFACE_AND_FACADE_CONTRACT_V1.md` — canonical consumer-facing contract packet
+6. `formula-language/OXFML_EDITOR_LANGUAGE_SERVICE_AND_HOST_INTEGRATION_PLAN.md` — editor/language-service plan
+7. `OXFML_FIXTURE_HOST_AND_COORDINATOR_STANDIN_PACKET.md` — deterministic fixture-host packet
+8. `OXFML_CANONICAL_ARTIFACT_SHAPES.md` — canonical artifact ladder
+9. `OXFML_MINIMUM_SEAM_SCHEMAS.md` — minimum candidate/commit/reject/trace fields
+10. `OXFML_DELTA_EFFECT_TRACE_AND_REJECT_TAXONOMIES.md` — reject and effect taxonomy
+11. `formula-language/OXFML_OXFUNC_LIBRARY_CONTEXT_RUNTIME_INTERFACE.md` — runtime library-context model
+12. `formula-language/OXFML_REGISTERED_EXTERNAL_PROVIDER_AND_CALL_REGISTER_ID_BOUNDARY.md` — registered-external boundary
 
 ---
 
@@ -228,7 +230,7 @@ The following OxFml language-service packet surfaces are currently good enough f
 | 3 | Deterministic completion proposals | `language_service/mod.rs` | **yes** | function names, defined names, table names, table columns, structured selectors, R1C1 syntax assists |
 | 4 | Completion-candidate validation and proposal application | `language_service/mod.rs` | **yes** | re-enters normal parse/bind pipeline |
 | 5 | `SignatureHelpContext` | `language_service/mod.rs` | **yes** | cursor-sensitive call/argument context |
-| 6 | `FunctionHelpLookupRequest` | `language_service/mod.rs` | **yes** | deterministic construction keyed to library-context snapshot |
+| 6 | `FunctionHelpPacket` with pinned snapshot context | `consumer/editor` facade | **yes** | canonical help payload and pinned snapshot context at the facade boundary |
 | 7 | `IntelligentCompletionContext` | `language_service/mod.rs` | **yes** | normalized context packet for external non-canonical completion |
 | 8 | `EditorSyntaxSnapshot` | `language_service/mod.rs` | **yes** | owned-trivia token view for editor rendering |
 
@@ -321,7 +323,7 @@ The current OxFml draft does not authorize DNA OneCalc to claim the following:
 4. full semantic-formatting family coverage beyond the current exercised subset.
 
 ### 6.4 Extension And Provider Scope
-1. full worksheet `CALL` / `REGISTER.ID` runtime as a frozen shared seam — the current packet is converged at note level but not yet promoted beyond note-level convergence,
+1. broader worksheet `CALL` / `REGISTER.ID` host/coordinator behavior beyond the current frozen OxFml/OxFunc packet floor,
 2. deferred external/provider families not already exercised in the current floor,
 3. final cross-process ABI for extensions.
 
@@ -347,7 +349,7 @@ Where the canonical OxFml docs already use specific field names, DNA OneCalc sho
 4. `LocaleFormatContext`,
 5. `AcceptedCandidateResult`, `CommitBundle`, `RejectRecord`,
 6. `FormulaEditRequest`, `FormulaEditResult`,
-7. `LiveDiagnosticSnapshot`, `SignatureHelpContext`, `FunctionHelpLookupRequest`,
+7. `LiveDiagnosticSnapshot`, `SignatureHelpContext`, `FunctionHelpPacket`,
 8. `IntelligentCompletionContext`,
 9. `ReturnedValueSurface`.
 
@@ -356,6 +358,26 @@ Where the canonical OxFml docs already use specific field names, DNA OneCalc sho
 2. OxFunc owns function semantics, value-type universe, library-context catalog truth, and function-help payload truth.
 3. DNA OneCalc owns host shell, host policy, UI, persistence, scenario orchestration, and upstream handoff production.
 4. DNA OneCalc must not locally redefine any OxFml- or OxFunc-owned semantic surface.
+
+### 7.4 Consumer-Facing Packaging Direction
+DNA OneCalc should treat the current flat OxFml crate surface as transitional.
+
+Current support rule:
+1. until `W054` lands real facade modules, DNA OneCalc should integrate through the currently supported host, language-service, replay-projection, and packet surfaces exposed by OxFml,
+2. it should not wait for facade packaging before integrating with the current exercised OxFml floor.
+
+Preferred migration target:
+1. consume the runtime facade family for execution and host integration,
+2. consume the editor facade family for edit/diagnostic/completion/help interactions,
+3. consume the replay facade family for replay-aware capture and projection,
+4. use low-level transform or seam artifacts directly only for advanced harness or schema-provenance work,
+5. do not introduce a competing wrapper vocabulary over frozen OxFml/OxFunc shared packet families while doing so.
+
+Current contract rule:
+1. `OXFML_CONSUMER_INTERFACE_AND_FACADE_CONTRACT_V1.md` is now the canonical
+   OxFml-owned packet for the runtime/editor/replay consumer model,
+2. this document remains the OneCalc-specific narrowing and host-profile
+   companion for that broader contract.
 
 ---
 

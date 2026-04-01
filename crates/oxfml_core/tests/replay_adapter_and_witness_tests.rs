@@ -14,8 +14,8 @@ use oxfml_core::seam::{
     ShapeDelta, ShapeOutcomeClass, SpillEvent, SpillEventKind, TopologyDelta, ValueDelta,
     ValuePayload, WorksheetValueClass, commit_candidate,
 };
-use oxfml_core::session::{CapabilityViewSpec, PrepareRequest, SessionService};
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
+use oxfml_core::substrate::session::{CapabilityViewSpec, PrepareRequest, SessionService};
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
 use oxfml_core::{CompileSemanticPlanRequest, ReturnedValueSurface, compile_semantic_plan};
 

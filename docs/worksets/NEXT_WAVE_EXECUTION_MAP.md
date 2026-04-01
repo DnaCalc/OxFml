@@ -63,10 +63,11 @@ Planned follow-on review lane after that wave:
 7. `W052` registered external provider and CALL REGISTER.ID boundary
 8. `W053` grouped aggregation and publication-class adapter expansion
 9. `W045` host runtime and external requirements freeze
-10. `W034` distributed runtime and coordinator consequence boundary
-11. `W035` broader formal family and concurrency model expansion
-12. `W038` name and external-name host resolution boundary
-13. `W048` editor language service and immutable formula host plan
+10. `W054` consumer-facing interface rearchitecture and facade packaging
+11. `W034` distributed runtime and coordinator consequence boundary
+12. `W035` broader formal family and concurrency model expansion
+13. `W038` name and external-name host resolution boundary
+14. `W048` editor language service and immutable formula host plan
 
 ## Next Parallelism
 1. `W033` can proceed after `W025`, `W028`, `W029`, `W030`, and the now-exercised `W031` classification floor without waiting for the full `W032 -> W034` chain.
@@ -81,6 +82,12 @@ Planned follow-on review lane after that wave:
 10. `W038` should follow the host/runtime and provider narrowing and remain scoped to host-managed name/external-name resolution boundary work rather than generic formula-carrier ownership.
 11. `W035` should wait for both the wider replay and runtime floors so the new checked artifacts match exercised local behavior rather than speculative designs.
 12. `W048` should follow the current host/runtime and parser/binder packet strengthening rather than racing ahead of `W043` and `W045`.
+13. `W054` should follow the `W043` / `W045` / `W046` / `W048` floor and reset the user-facing surface before downstream hosts build further local wrappers on top of the current flat export set.
+14. once `W054` materially starts, execute it in this sub-order:
+   - runtime consumer facade first,
+   - editor facade second,
+   - replay facade third,
+   - cleanup and public tightening fourth.
 
 ## Why This Next Sequence
 1. `W031` has already converted the pending `MS-OE376` rule families into explicit OxFml-owned backlog and semantic classification,
@@ -100,3 +107,9 @@ Planned follow-on review lane after that wave:
 15. `W038` is now narrowed to host-managed name/external-name boundary work rather than generic formula-carrier ownership,
 16. the now-exercised `W040` callable-evidence wave means the remaining callable work is narrower carrier/provenance freeze work rather than another broad higher-order evidence push.
 17. editor-grade green-tree trivia, live language services, and immutable formula-host updates are a real next-wave extension, but they should build on the current parser/binder and host packet floor rather than inventing a separate architecture.
+18. the current crate surface still reflects historical growth more than the three real downstream consumers, so `W054` is now the right place to prevent consumer-facing technical debt before OxCalc, DNA OneCalc, and replay tooling harden around ad hoc wrapper layers.
+19. the OxFml <-> OxFunc seam is now frozen for the admitted shared families, so `W054` should be treated as downstream-consumer packaging and migration work rather than another seam-design round.
+20. the consumer seam is now provisionally frozen strongly enough that `W054`
+    should proceed from a concrete implementation program tied to actual module
+    moves, cleanup targets, and downstream migration checkpoints rather
+    than more abstract architecture text.

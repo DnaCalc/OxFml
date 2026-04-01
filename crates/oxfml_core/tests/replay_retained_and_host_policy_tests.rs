@@ -7,8 +7,9 @@ use oxfunc_core::locale_format::en_us_context;
 use oxfunc_core::value::{EvalValue, ExcelText, ReferenceKind, ReferenceLike};
 use serde::Deserialize;
 
+use oxfml_core::EvaluationBackend;
 use oxfml_core::seam::AcceptDecision;
-use oxfml_core::{EmpiricalOracleScenario, EvaluationBackend, SingleFormulaHost};
+use oxfml_core::substrate::host::{EmpiricalOracleScenario, HostRecalcOutput, SingleFormulaHost};
 
 #[derive(Debug, Deserialize)]
 struct ReductionManifest {
@@ -628,7 +629,7 @@ fn validate_reduced_empirical_oracle_host_query_witness() {
     );
 }
 
-fn replay_host_case(fixture: &HostReplayFixture) -> oxfml_core::HostRecalcOutput {
+fn replay_host_case(fixture: &HostReplayFixture) -> HostRecalcOutput {
     let mut host = SingleFormulaHost::new(&fixture.case_id, &fixture.formula);
 
     for (name, wire_value) in &fixture.defined_names {
@@ -666,9 +667,7 @@ fn replay_host_case(fixture: &HostReplayFixture) -> oxfml_core::HostRecalcOutput
         .expect("replayed host case should execute")
 }
 
-fn replay_empirical_oracle_case(
-    scenario: &EmpiricalOracleScenarioWire,
-) -> oxfml_core::HostRecalcOutput {
+fn replay_empirical_oracle_case(scenario: &EmpiricalOracleScenarioWire) -> HostRecalcOutput {
     let host_info = scenario
         .host_query_profile
         .as_deref()
@@ -692,10 +691,7 @@ fn replay_empirical_oracle_case(
     .expect("replayed empirical oracle case should execute")
 }
 
-fn assert_host_trace_and_effects(
-    run: &oxfml_core::HostRecalcOutput,
-    expected: &HostReplayExpected,
-) {
+fn assert_host_trace_and_effects(run: &HostRecalcOutput, expected: &HostReplayExpected) {
     let actual_trace_kinds = run
         .trace_events
         .iter()

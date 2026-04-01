@@ -13,7 +13,15 @@ use oxfunc_core::value::{
 use serde::Deserialize;
 
 use oxfml_core::seam::{AcceptDecision, TraceEventKind};
-use oxfml_core::{EvaluationBackend, FenceSnapshot, ReturnedValueSurfaceKind, SingleFormulaHost};
+use oxfml_core::semantics::{
+    LibraryAvailabilityState, LibraryContextSnapshot, LibraryContextSnapshotEntry,
+    RegistrationSourceKind,
+};
+use oxfml_core::substrate::host::{EmpiricalOracleScenario, SingleFormulaHost};
+use oxfml_core::{
+    EvaluationBackend, FenceSnapshot, InMemoryLibraryContextProvider, LibraryContextSnapshotRef,
+    ReturnedValueSurfaceKind,
+};
 
 #[test]
 fn single_formula_host_recalc_updates_defined_name_inputs() {
@@ -295,7 +303,7 @@ fn empirical_oracle_scenarios_execute_through_single_formula_host() {
             .as_deref()
             .map(|_| &MockHostInfoProvider as &dyn HostInfoProvider);
         let run = SingleFormulaHost::run_empirical_oracle_scenario(
-            &oxfml_core::EmpiricalOracleScenario {
+            &EmpiricalOracleScenario {
                 scenario_id: scenario.scenario_id.clone(),
                 formula: scenario.formula.clone(),
                 entered_formula_text: scenario.entered_formula_text.clone(),
@@ -413,6 +421,86 @@ fn locale_sensitive_host_run_surfaces_format_dependency_fact() {
     );
 }
 
+#[test]
+fn single_formula_host_uses_pinned_snapshot_ref_over_provider_current_snapshot() {
+    let pinned_snapshot = host_library_context_snapshot_v1();
+    let selected_snapshot_ref = LibraryContextSnapshotRef::from(&pinned_snapshot);
+    let current_snapshot = host_library_context_snapshot_v2();
+    let current_snapshot_ref = LibraryContextSnapshotRef::from(&current_snapshot);
+    let provider = InMemoryLibraryContextProvider::with_snapshots(
+        current_snapshot_ref,
+        vec![pinned_snapshot, current_snapshot],
+    );
+    let locale = en_us_context();
+    let bundle = oxfml_core::TypedContextQueryBundle::new(
+        None,
+        None,
+        Some(&locale),
+        Some(46000.0),
+        Some(0.25),
+    );
+    let mut host = SingleFormulaHost::new("host:pinned-snapshot", "=TAKE({1,2},1)");
+
+    let first = host
+        .recalc_with_interfaces_and_snapshot_ref(
+            EvaluationBackend::OxFuncBacked,
+            bundle,
+            Some(&provider),
+            Some(&selected_snapshot_ref),
+        )
+        .expect("first recalc should succeed");
+
+    assert_eq!(
+        first.library_context_snapshot_ref,
+        Some(selected_snapshot_ref.clone())
+    );
+    assert_eq!(
+        first.semantic_plan.library_context_snapshot_ref,
+        Some(selected_snapshot_ref.clone())
+    );
+    let take_first = first
+        .semantic_plan
+        .availability_summaries
+        .iter()
+        .find(|summary| summary.surface_name == "TAKE")
+        .expect("TAKE availability summary");
+    assert_eq!(take_first.metadata_status, None);
+    assert_eq!(take_first.surface_stable_id.as_deref(), Some("FUNC.TAKE"));
+
+    let current_snapshot_ref = LibraryContextSnapshotRef::new("host-runtime", "v2");
+    let second = host
+        .recalc_with_interfaces_and_snapshot_ref(
+            EvaluationBackend::OxFuncBacked,
+            bundle,
+            Some(&provider),
+            Some(&current_snapshot_ref),
+        )
+        .expect("second recalc should succeed");
+
+    assert!(second.artifact_reuse.green_tree_reused);
+    assert!(second.artifact_reuse.red_projection_reused);
+    assert!(second.artifact_reuse.bound_formula_reused);
+    assert!(!second.artifact_reuse.semantic_plan_reused);
+    assert_eq!(
+        second.library_context_snapshot_ref,
+        Some(current_snapshot_ref.clone())
+    );
+    let take_second = second
+        .semantic_plan
+        .availability_summaries
+        .iter()
+        .find(|summary| summary.surface_name == "TAKE")
+        .expect("TAKE availability summary");
+    assert_eq!(
+        take_second.metadata_status.as_deref(),
+        Some("runtime_snapshot")
+    );
+    assert_eq!(
+        take_second.surface_stable_id.as_deref(),
+        Some("surface:take")
+    );
+}
+
 fn load_empirical_scenarios() -> Vec<EmpiricalOracleScenarioWire> {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("tests");
@@ -488,4 +576,57 @@ struct EmpiricalOracleScenarioWire {
     expected_format_delta_classes: Vec<String>,
     #[serde(default)]
     expected_display_delta_classes: Vec<String>,
+}
+
+fn host_library_context_snapshot_v1() -> LibraryContextSnapshot {
+    LibraryContextSnapshot {
+        snapshot_id: "host-runtime".to_string(),
+        snapshot_version: "v1".to_string(),
+        entries: vec![LibraryContextSnapshotEntry {
+            surface_name: "SUM".to_string(),
+            canonical_id: Some("FUNC.SUM".to_string()),
+            surface_stable_id: Some("surface:sum".to_string()),
+            name_resolution_table_ref: None,
+            semantic_trait_profile_ref: None,
+            gating_profile_ref: None,
+            metadata_status: Some("runtime_snapshot".to_string()),
+            special_interface_kind: None,
+            admission_interface_kind: None,
+            preparation_owner: None,
+            runtime_boundary_kind: None,
+            arity_shape_note: None,
+            interface_contract_ref: Some("contract:sum".to_string()),
+            registration_source_kind: RegistrationSourceKind::BuiltIn,
+            parse_bind_state: LibraryAvailabilityState::CatalogKnown,
+            semantic_plan_state: LibraryAvailabilityState::CatalogKnown,
+            runtime_capability_state: Some(LibraryAvailabilityState::CatalogKnown),
+            post_dispatch_state: None,
+        }],
+    }
+}
+
+fn host_library_context_snapshot_v2() -> LibraryContextSnapshot {
+    let mut snapshot = host_library_context_snapshot_v1();
+    snapshot.snapshot_version = "v2".to_string();
+    snapshot.entries.push(LibraryContextSnapshotEntry {
+        surface_name: "TAKE".to_string(),
+        canonical_id: Some("FUNC.TAKE".to_string()),
+        surface_stable_id: Some("surface:take".to_string()),
+        name_resolution_table_ref: None,
+        semantic_trait_profile_ref: None,
+        gating_profile_ref: None,
+        metadata_status: Some("runtime_snapshot".to_string()),
+        special_interface_kind: None,
+        admission_interface_kind: None,
+        preparation_owner: None,
+        runtime_boundary_kind: None,
+        arity_shape_note: None,
+        interface_contract_ref: Some("contract:take".to_string()),
+        registration_source_kind: RegistrationSourceKind::BuiltIn,
+        parse_bind_state: LibraryAvailabilityState::CatalogKnown,
+        semantic_plan_state: LibraryAvailabilityState::CatalogKnown,
+        runtime_capability_state: Some(LibraryAvailabilityState::CatalogKnown),
+        post_dispatch_state: None,
+    });
+    snapshot
 }

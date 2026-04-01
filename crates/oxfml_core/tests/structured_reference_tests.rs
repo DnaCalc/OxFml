@@ -5,13 +5,13 @@ use oxfml_core::binding::{
     BindContext, BindRequest, BoundExpr, NameKind, NormalizedReference, ReferenceExpr,
     StructuredResolvedRef, StructuredSectionKind, StructuredSelectorKind, bind_formula,
 };
-use oxfml_core::host::SingleFormulaHost;
 use oxfml_core::interface::{
     TableCallerRegion, TableColumnDescriptor, TableDescriptor, TableRef, TableRegionKind,
     TypedContextQueryBundle,
 };
 use oxfml_core::red::project_red_view;
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
+use oxfml_core::substrate::host::SingleFormulaHost;
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
 
 #[test]

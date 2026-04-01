@@ -1,7 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::binding::{BindContext, BindRequest, BoundFormula, bind_formula_incremental};
-use crate::interface::{LibraryContextProvider, LibraryContextSnapshotRef};
+use crate::consumer::editor::{
+    CompletionProposal, CompletionProposalKind, CompletionResult, EditorAnalysisStage,
+    EditorPlanOptions, EditorSyntaxSnapshot, EditorToken, EditorTrivia, EditorTriviaKind,
+    FormulaEditReuseSummary, FormulaTextChangeRange, IntelligentCompletionContext, LiveDiagnostic,
+    LiveDiagnosticSeverity, LiveDiagnosticSnapshot, LiveDiagnosticStage, SignatureHelpContext,
+};
+use crate::interface::{LibraryContextSnapshotRef, PinnedLibraryContextView};
 use crate::red::{RedProjection, project_red_view_incremental};
 use crate::semantics::{
     CompileSemanticPlanRequest, LibraryContextSnapshot, SemanticPlan, compile_semantic_plan,
@@ -11,91 +17,6 @@ use crate::syntax::green::{GreenChild, GreenNode, GreenTreeRoot, SyntaxKind};
 use crate::syntax::parser::{ParseRequest, parse_formula_incremental};
 use crate::syntax::token::{SyntaxTrivia, SyntaxTriviaKind, TextSpan, TokenKind};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EditorTriviaKind {
-    Whitespace,
-    Unknown,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EditorTrivia {
-    pub kind: EditorTriviaKind,
-    pub text: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EditorToken {
-    pub kind: TokenKind,
-    pub text: String,
-    pub leading_trivia: Vec<EditorTrivia>,
-    pub trailing_trivia: Vec<EditorTrivia>,
-    pub span: TextSpan,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EditorSyntaxSnapshot {
-    pub formula_stable_id: String,
-    pub formula_channel_kind: FormulaChannelKind,
-    pub green_tree_key: String,
-    pub tokens: Vec<EditorToken>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LiveDiagnosticSeverity {
-    Error,
-    Warning,
-    Info,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LiveDiagnosticStage {
-    Syntax,
-    Bind,
-    SemanticPlan,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LiveDiagnostic {
-    pub diagnostic_id: String,
-    pub severity: LiveDiagnosticSeverity,
-    pub stage: LiveDiagnosticStage,
-    pub message: String,
-    pub primary_span: TextSpan,
-    pub related_spans: Vec<TextSpan>,
-    pub code: Option<String>,
-    pub suggested_fix_kind: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LiveDiagnosticSnapshot {
-    pub formula_stable_id: String,
-    pub formula_token: String,
-    pub diagnostics: Vec<LiveDiagnostic>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FormulaTextChangeRange {
-    pub start: usize,
-    pub old_len: usize,
-    pub new_len: usize,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EditFollowOnStage {
-    ParseOnly,
-    ParseAndBind,
-    ParseBindAndPlan,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SemanticPlanEditOptions {
-    pub oxfunc_catalog_identity: String,
-    pub locale_profile: Option<String>,
-    pub date_system: Option<String>,
-    pub format_profile: Option<String>,
-    pub library_context_snapshot: Option<LibraryContextSnapshot>,
-}
-
 #[derive(Debug, Clone)]
 pub struct FormulaEditRequest<'a> {
     pub source: FormulaSourceRecord,
@@ -103,15 +24,8 @@ pub struct FormulaEditRequest<'a> {
     pub previous_green_tree: Option<&'a GreenTreeRoot>,
     pub previous_red_projection: Option<&'a RedProjection>,
     pub previous_bound_formula: Option<&'a BoundFormula>,
-    pub follow_on_stage: EditFollowOnStage,
-    pub semantic_plan_options: Option<SemanticPlanEditOptions>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct FormulaEditReuseSummary {
-    pub reused_green_tree: bool,
-    pub reused_red_projection: bool,
-    pub reused_bound_formula: bool,
+    pub analysis_stage: EditorAnalysisStage,
+    pub plan_options: Option<EditorPlanOptions>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -127,42 +41,6 @@ pub struct FormulaEditResult {
     pub reuse_summary: FormulaEditReuseSummary,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CompletionProposalKind {
-    Function,
-    DefinedName,
-    TableName,
-    TableColumn,
-    StructuredSelector,
-    SyntaxAssist,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CompletionProposal {
-    pub proposal_id: String,
-    pub proposal_kind: CompletionProposalKind,
-    pub display_text: String,
-    pub insert_text: String,
-    pub replacement_span: Option<TextSpan>,
-    pub documentation_ref: Option<String>,
-    pub requires_revalidation: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SignatureHelpContext {
-    pub callee_text: String,
-    pub call_span: TextSpan,
-    pub active_argument_index: usize,
-    pub invocation_kind: SyntaxKind,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CompletionResult {
-    pub replacement_span: Option<TextSpan>,
-    pub proposals: Vec<CompletionProposal>,
-    pub signature_help_context: Option<SignatureHelpContext>,
-}
-
 #[derive(Debug, Clone)]
 pub struct CompletionValidationRequest<'a> {
     pub source: FormulaSourceRecord,
@@ -172,8 +50,8 @@ pub struct CompletionValidationRequest<'a> {
     pub previous_bound_formula: Option<&'a BoundFormula>,
     pub replacement_span: Option<TextSpan>,
     pub insert_text: String,
-    pub follow_on_stage: EditFollowOnStage,
-    pub semantic_plan_options: Option<SemanticPlanEditOptions>,
+    pub analysis_stage: EditorAnalysisStage,
+    pub plan_options: Option<EditorPlanOptions>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -190,56 +68,21 @@ pub struct CompletionRequest<'a> {
     pub green_tree: &'a GreenTreeRoot,
     pub red_projection: &'a RedProjection,
     pub bind_context: &'a BindContext,
-    pub library_context_provider: Option<&'a dyn LibraryContextProvider>,
-    pub library_context_snapshot_ref: Option<&'a LibraryContextSnapshotRef>,
-    pub library_context_snapshot: Option<&'a LibraryContextSnapshot>,
+    pub library_context: PinnedLibraryContextView<'a>,
     pub cursor_offset: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FunctionHelpLookupRequest {
+pub(crate) struct FunctionHelpLookupRequest {
     pub lookup_key: String,
     pub library_context_snapshot_ref: Option<LibraryContextSnapshotRef>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FunctionHelpSignatureForm {
-    pub display_signature: String,
-    pub min_arity: usize,
-    pub max_arity: Option<usize>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FunctionHelpPacket {
-    pub display_name: String,
-    pub signature_forms: Vec<FunctionHelpSignatureForm>,
-    pub argument_help: Vec<String>,
-    pub short_description: Option<String>,
-    pub availability_summary: Option<String>,
-    pub deferred_or_profile_limited: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IntelligentCompletionContext {
-    pub formula_text: String,
-    pub formula_channel_kind: FormulaChannelKind,
-    pub cursor_offset: usize,
-    pub green_tree_key: String,
-    pub red_context_summary: String,
-    pub visible_defined_names: Vec<String>,
-    pub visible_tables: Vec<String>,
-    pub library_context_snapshot_ref: Option<LibraryContextSnapshotRef>,
-    pub active_diagnostics: Vec<LiveDiagnostic>,
-    pub signature_help_context: Option<SignatureHelpContext>,
-}
-
-pub fn build_function_help_lookup_request(
+pub(crate) fn build_function_help_lookup_request(
     source: &FormulaSourceRecord,
     green_tree: &GreenTreeRoot,
     cursor_offset: usize,
-    library_context_provider: Option<&dyn LibraryContextProvider>,
-    library_context_snapshot_ref: Option<&LibraryContextSnapshotRef>,
-    library_context_snapshot: Option<&LibraryContextSnapshot>,
+    library_context: PinnedLibraryContextView<'_>,
 ) -> Option<FunctionHelpLookupRequest> {
     let signature_help = signature_help_context_at_cursor(source, green_tree, cursor_offset)?;
     if signature_help.callee_text.is_empty() {
@@ -248,15 +91,11 @@ pub fn build_function_help_lookup_request(
 
     Some(FunctionHelpLookupRequest {
         lookup_key: signature_help.callee_text,
-        library_context_snapshot_ref: effective_library_context_snapshot_ref(
-            library_context_provider,
-            library_context_snapshot_ref,
-            library_context_snapshot,
-        ),
+        library_context_snapshot_ref: library_context.effective_snapshot_ref(),
     })
 }
 
-pub fn build_editor_syntax_snapshot(
+pub(crate) fn build_editor_syntax_snapshot(
     source: &FormulaSourceRecord,
     green_tree: &GreenTreeRoot,
 ) -> EditorSyntaxSnapshot {
@@ -271,7 +110,7 @@ pub fn build_editor_syntax_snapshot(
     }
 }
 
-pub fn apply_formula_edit(request: FormulaEditRequest<'_>) -> FormulaEditResult {
+pub(crate) fn apply_formula_edit(request: FormulaEditRequest<'_>) -> FormulaEditResult {
     let text_change_range = request.previous_green_tree.and_then(|previous_green_tree| {
         compute_text_change_range(
             &green_tree_text(previous_green_tree),
@@ -290,9 +129,9 @@ pub fn apply_formula_edit(request: FormulaEditRequest<'_>) -> FormulaEditResult 
         request.previous_red_projection,
     );
 
-    let (bound_formula, reused_bound_formula) = match request.follow_on_stage {
-        EditFollowOnStage::ParseOnly => (None, false),
-        EditFollowOnStage::ParseAndBind | EditFollowOnStage::ParseBindAndPlan => {
+    let (bound_formula, reused_bound_formula) = match request.analysis_stage {
+        EditorAnalysisStage::SyntaxOnly => (None, false),
+        EditorAnalysisStage::SyntaxAndBind | EditorAnalysisStage::FullSemanticPlan => {
             let bind = bind_formula_incremental(
                 BindRequest {
                     source: request.source.clone(),
@@ -306,19 +145,15 @@ pub fn apply_formula_edit(request: FormulaEditRequest<'_>) -> FormulaEditResult 
         }
     };
 
-    let semantic_plan = match request.follow_on_stage {
-        EditFollowOnStage::ParseBindAndPlan => bound_formula.as_ref().map(|bound_formula| {
-            let options =
-                request
-                    .semantic_plan_options
-                    .clone()
-                    .unwrap_or(SemanticPlanEditOptions {
-                        oxfunc_catalog_identity: "editor-catalog".to_string(),
-                        locale_profile: None,
-                        date_system: None,
-                        format_profile: None,
-                        library_context_snapshot: None,
-                    });
+    let semantic_plan = match request.analysis_stage {
+        EditorAnalysisStage::FullSemanticPlan => bound_formula.as_ref().map(|bound_formula| {
+            let options = request.plan_options.clone().unwrap_or(EditorPlanOptions {
+                oxfunc_catalog_identity: "editor-catalog".to_string(),
+                locale_profile: None,
+                date_system: None,
+                format_profile: None,
+                library_context_snapshot: None,
+            });
             compile_semantic_plan(CompileSemanticPlanRequest {
                 bound_formula: bound_formula.clone(),
                 oxfunc_catalog_identity: options.oxfunc_catalog_identity,
@@ -356,7 +191,7 @@ pub fn apply_formula_edit(request: FormulaEditRequest<'_>) -> FormulaEditResult 
     }
 }
 
-pub fn apply_completion_proposal(
+pub(crate) fn apply_completion_proposal(
     mut request: CompletionValidationRequest<'_>,
     proposal: &CompletionProposal,
 ) -> CompletionValidationResult {
@@ -367,7 +202,7 @@ pub fn apply_completion_proposal(
     result
 }
 
-pub fn validate_completion_candidate(
+pub(crate) fn validate_completion_candidate(
     request: CompletionValidationRequest<'_>,
 ) -> CompletionValidationResult {
     let applied_span = request
@@ -389,8 +224,8 @@ pub fn validate_completion_candidate(
         previous_green_tree: request.previous_green_tree,
         previous_red_projection: request.previous_red_projection,
         previous_bound_formula: request.previous_bound_formula,
-        follow_on_stage: request.follow_on_stage,
-        semantic_plan_options: request.semantic_plan_options,
+        analysis_stage: request.analysis_stage,
+        plan_options: request.plan_options,
     });
 
     CompletionValidationResult {
@@ -401,7 +236,7 @@ pub fn validate_completion_candidate(
     }
 }
 
-pub fn build_live_diagnostics(
+pub(crate) fn build_live_diagnostics(
     source: &FormulaSourceRecord,
     green_tree: &GreenTreeRoot,
     bound_formula: Option<&BoundFormula>,
@@ -459,7 +294,7 @@ pub fn build_live_diagnostics(
     }
 }
 
-pub fn collect_completion_proposals(request: CompletionRequest<'_>) -> CompletionResult {
+pub(crate) fn collect_completion_proposals(request: CompletionRequest<'_>) -> CompletionResult {
     let (replacement_span, prefix) =
         completion_prefix(&request.source.entered_formula_text, request.cursor_offset);
     let normalized_prefix = prefix.to_ascii_lowercase();
@@ -622,7 +457,7 @@ pub fn collect_completion_proposals(request: CompletionRequest<'_>) -> Completio
     }
 }
 
-pub fn build_intelligent_completion_context(
+pub(crate) fn build_intelligent_completion_context(
     request: CompletionRequest<'_>,
     diagnostics: &LiveDiagnosticSnapshot,
 ) -> IntelligentCompletionContext {
@@ -641,11 +476,7 @@ pub fn build_intelligent_completion_context(
             .iter()
             .map(|table| table.table_name.clone())
             .collect(),
-        library_context_snapshot_ref: effective_library_context_snapshot_ref(
-            request.library_context_provider,
-            request.library_context_snapshot_ref,
-            request.library_context_snapshot,
-        ),
+        library_context_snapshot_ref: request.library_context.effective_snapshot_ref(),
         active_diagnostics: diagnostics
             .diagnostics
             .iter()
@@ -659,36 +490,10 @@ pub fn build_intelligent_completion_context(
 fn resolve_library_context_snapshot(
     request: &CompletionRequest<'_>,
 ) -> Option<LibraryContextSnapshot> {
-    match (
-        request.library_context_provider,
-        request.library_context_snapshot_ref,
-        request.library_context_snapshot,
-    ) {
-        (Some(provider), Some(snapshot_ref), _) => provider.snapshot_by_identity(snapshot_ref),
-        (_, _, Some(snapshot)) => Some(snapshot.clone()),
-        (Some(provider), None, None) => Some(provider.current_snapshot()),
-        (None, Some(_), None) => None,
-        (None, None, None) => None,
-    }
+    request.library_context.resolve_snapshot()
 }
 
-fn effective_library_context_snapshot_ref(
-    library_context_provider: Option<&dyn LibraryContextProvider>,
-    library_context_snapshot_ref: Option<&LibraryContextSnapshotRef>,
-    library_context_snapshot: Option<&LibraryContextSnapshot>,
-) -> Option<LibraryContextSnapshotRef> {
-    library_context_snapshot_ref
-        .cloned()
-        .or_else(|| library_context_snapshot.map(LibraryContextSnapshotRef::from))
-        .or_else(|| {
-            library_context_provider.map(|provider| {
-                let current_snapshot = provider.current_snapshot();
-                LibraryContextSnapshotRef::from(&current_snapshot)
-            })
-        })
-}
-
-pub fn signature_help_context_at_cursor(
+pub(crate) fn signature_help_context_at_cursor(
     source: &FormulaSourceRecord,
     green_tree: &GreenTreeRoot,
     cursor_offset: usize,

@@ -61,7 +61,7 @@ What remains here is mainly packet freeze, not local semantic discovery.
 OxFml can already:
 1. detect the active call site,
 2. compute active argument index,
-3. construct a deterministic `FunctionHelpLookupRequest`.
+3. publish a deterministic `FunctionHelpPacket` built from pinned call-context resolution.
 
 What now needs freezing with OxFunc:
 1. whether help retrieval rides the existing runtime `LibraryContextProvider` or a sibling metadata/help provider,
@@ -120,7 +120,7 @@ The recommended next order is:
 - target_completeness: target_partial
 - integration_completeness: partial
 - open_lanes:
-  - function help and signature help still stop at deterministic lookup-request construction; OxFunc-backed help payload retrieval is not yet integrated
+  - function help and signature help now reach deterministic facade packet publication; OxFunc-backed richer help payload retrieval is not yet integrated
   - OxCalc now reads the immutable edit request / result / validated completion split as the right first packetization, but no shared host/OxCalc immutable edit packet is frozen yet
   - containing-spine replacement and validated-completion acceptance are now converged as host/coordinator-owned, but no shared host-facing packet for validated intelligent-completion results is frozen yet
 - current_local_floor:

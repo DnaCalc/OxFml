@@ -10,10 +10,10 @@ use serde::Deserialize;
 use oxfml_core::binding::{BindContext, BindRequest, NameKind, bind_formula};
 use oxfml_core::interface::TypedContextQueryBundle;
 use oxfml_core::red::project_red_view;
-use oxfml_core::session::{
+use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
+use oxfml_core::substrate::session::{
     CapabilityViewSpec, ExecuteRequest, PrepareRequest, SessionPhase, SessionService,
 };
-use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
 use oxfml_core::{
     AcceptDecision, DefinedNameBinding, EvaluationBackend, Locus, RejectCode, TraceEventKind,

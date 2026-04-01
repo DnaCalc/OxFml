@@ -1,17 +1,33 @@
 pub mod binding;
 pub mod carrier;
+pub mod consumer;
 pub mod eval;
-pub mod host;
+mod host;
 pub mod interface;
-pub mod language_service;
-pub mod oxfunc_adapter;
+mod language_service;
+mod oxfunc_adapter;
 pub mod red;
 pub mod scheduler;
 pub mod seam;
 pub mod semantics;
-pub mod session;
+mod session;
 pub mod source;
 pub mod syntax;
+
+#[doc(hidden)]
+pub mod substrate {
+    pub mod host {
+        pub use crate::host::*;
+    }
+
+    pub mod oxfunc_adapter {
+        pub use crate::oxfunc_adapter::*;
+    }
+
+    pub mod session {
+        pub use crate::session::*;
+    }
+}
 
 pub use oxfunc_core::functions::call_register_id_family::{
     RegisterIdRequest, RegisteredExternalCallRequest, RegisteredExternalDescriptor,
@@ -36,35 +52,16 @@ pub use eval::{
     PreparedBlanknessClass, PreparedCall, PreparedEvaluationMode, PreparedResult,
     PreparedResultClass, PreparedSourceClass, PreparedStructureClass, evaluate_formula,
 };
-pub use host::{
-    ArtifactReuseReport, EmpiricalOracleScenario, FirstHostReplayCapturePacket, HostRecalcOutput,
-    SingleFormulaHost,
-};
 pub use interface::{
     HostProviderOutcomeKind, HostProviderOutcomeSurface, InMemoryLibraryContextProvider,
     LibraryContextFieldClass, LibraryContextProvider, LibraryContextSnapshotRef,
-    RegisteredExternalCatalogController, RegisteredExternalCatalogMutationRequest,
-    RegisteredExternalCatalogMutationResult, RegisteredExternalHostRegistrationRequest,
-    RegisteredExternalRegistrationChannel, RegisteredExternalUnregisterRequest,
-    ReturnedValueSurface, ReturnedValueSurfaceKind, TableCallerRegion, TableColumnDescriptor,
-    TableDescriptor, TableRef, TableRegionKind, TypedContextQueryBundle,
-    TypedContextQueryBundleSpec, TypedContextQueryFamily, classify_library_context_field,
-};
-pub use language_service::{
-    CompletionProposal, CompletionProposalKind, CompletionRequest, CompletionResult,
-    CompletionValidationRequest, CompletionValidationResult, EditFollowOnStage,
-    EditorSyntaxSnapshot, EditorToken, EditorTrivia, EditorTriviaKind, FormulaEditRequest,
-    FormulaEditResult, FormulaEditReuseSummary, FormulaTextChangeRange, FunctionHelpLookupRequest,
-    FunctionHelpPacket, FunctionHelpSignatureForm, IntelligentCompletionContext, LiveDiagnostic,
-    LiveDiagnosticSeverity, LiveDiagnosticSnapshot, LiveDiagnosticStage, SemanticPlanEditOptions,
-    SignatureHelpContext, apply_completion_proposal, apply_formula_edit,
-    build_editor_syntax_snapshot, build_function_help_lookup_request,
-    build_intelligent_completion_context, build_live_diagnostics, collect_completion_proposals,
-    signature_help_context_at_cursor, validate_completion_candidate,
-};
-pub use oxfunc_adapter::{
-    OxFuncAdapterRequest, OxFuncAdapterRun, OxFuncEvaluationArtifact, OxFuncMismatchArtifact,
-    OxFuncMismatchOwnerGuess, OxFuncPreparationArtifact, run_oxfunc_preparation_adapter,
+    PinnedLibraryContextView, RegisteredExternalCatalogController,
+    RegisteredExternalCatalogMutationRequest, RegisteredExternalCatalogMutationResult,
+    RegisteredExternalHostRegistrationRequest, RegisteredExternalRegistrationChannel,
+    RegisteredExternalUnregisterRequest, ReturnedValueSurface, ReturnedValueSurfaceKind,
+    TableCallerRegion, TableColumnDescriptor, TableDescriptor, TableRef, TableRegionKind,
+    TypedContextQueryBundle, TypedContextQueryBundleSpec, TypedContextQueryFamily,
+    classify_library_context_field,
 };
 pub use red::{
     IncrementalRedProjectionResult, RedNode, RedProjection, project_red_view,
@@ -90,10 +87,6 @@ pub use semantics::{
     HelperEnvironmentProfile, LibraryAvailabilityState, LibraryContextSnapshot,
     LibraryContextSnapshotEntry, RegistrationSourceKind, SemanticDiagnostic, SemanticPlan,
     compile_semantic_plan,
-};
-pub use session::{
-    CapabilityView, CapabilityViewSpec, ExecuteRequest, OpenSessionResult, PrepareRequest,
-    PreparedSession, SessionPhase, SessionRecord, SessionService,
 };
 pub use source::{
     FormulaChannelKind, FormulaSourceRecord, FormulaStableId, FormulaTextVersion, FormulaToken,

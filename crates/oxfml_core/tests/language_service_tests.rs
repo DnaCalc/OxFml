@@ -1,16 +1,12 @@
-use oxfml_core::binding::{BindContext, BindRequest, NameKind, bind_formula};
+use oxfml_core::binding::{BindContext, NameKind};
+use oxfml_core::consumer::editor::{
+    CompletionProposalKind, EditorAnalysisStage, EditorEditService, EditorEnvironment,
+    EditorPlanOptions, FormulaTextChangeRange,
+};
 use oxfml_core::interface::{
-    InMemoryLibraryContextProvider, LibraryContextSnapshotRef, TableColumnDescriptor,
-    TableDescriptor,
+    InMemoryLibraryContextProvider, LibraryContextProvider, LibraryContextSnapshotRef,
+    TableColumnDescriptor, TableDescriptor,
 };
-use oxfml_core::language_service::{
-    CompletionProposalKind, CompletionRequest, CompletionValidationRequest, EditFollowOnStage,
-    FormulaEditRequest, SemanticPlanEditOptions, apply_completion_proposal, apply_formula_edit,
-    build_editor_syntax_snapshot, build_function_help_lookup_request,
-    build_intelligent_completion_context, collect_completion_proposals,
-    signature_help_context_at_cursor, validate_completion_candidate,
-};
-use oxfml_core::red::project_red_view;
 use oxfml_core::semantics::{
     LibraryAvailabilityState, LibraryContextSnapshot, LibraryContextSnapshotEntry,
     RegistrationSourceKind,
@@ -18,25 +14,48 @@ use oxfml_core::semantics::{
 use oxfml_core::source::{FormulaChannelKind, FormulaSourceRecord, StructureContextVersion};
 use oxfml_core::syntax::green::{GreenChild, GreenNode};
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
+use oxfml_core::syntax::token::TextSpan;
 
 #[test]
 fn editor_syntax_snapshot_tracks_leading_and_trailing_trivia() {
     let source = FormulaSourceRecord::new("editor-trivia", 1, "=SUM( A1 ) ");
-    let parse = parse_formula(ParseRequest {
-        source: source.clone(),
-    });
+    let service = EditorEditService::new(EditorEnvironment::new(BindContext::default()));
 
-    let snapshot = build_editor_syntax_snapshot(&source, &parse.green_tree);
+    let document = service.open_document(source, None);
 
-    assert_eq!(snapshot.tokens.len(), 5);
-    assert_eq!(snapshot.tokens[3].text, "A1");
-    assert_eq!(snapshot.tokens[3].leading_trivia.len(), 1);
-    assert_eq!(snapshot.tokens[3].leading_trivia[0].text, " ");
-    assert_eq!(snapshot.tokens[4].text, ")");
-    assert_eq!(snapshot.tokens[4].leading_trivia.len(), 1);
-    assert_eq!(snapshot.tokens[4].leading_trivia[0].text, " ");
-    assert_eq!(snapshot.tokens[4].trailing_trivia.len(), 1);
-    assert_eq!(snapshot.tokens[4].trailing_trivia[0].text, " ");
+    assert_eq!(document.editor_syntax_snapshot.tokens.len(), 5);
+    assert_eq!(document.editor_syntax_snapshot.tokens[3].text, "A1");
+    assert_eq!(
+        document.editor_syntax_snapshot.tokens[3]
+            .leading_trivia
+            .len(),
+        1
+    );
+    assert_eq!(
+        document.editor_syntax_snapshot.tokens[3].leading_trivia[0].text,
+        " "
+    );
+    assert_eq!(document.editor_syntax_snapshot.tokens[4].text, ")");
+    assert_eq!(
+        document.editor_syntax_snapshot.tokens[4]
+            .leading_trivia
+            .len(),
+        1
+    );
+    assert_eq!(
+        document.editor_syntax_snapshot.tokens[4].leading_trivia[0].text,
+        " "
+    );
+    assert_eq!(
+        document.editor_syntax_snapshot.tokens[4]
+            .trailing_trivia
+            .len(),
+        1
+    );
+    assert_eq!(
+        document.editor_syntax_snapshot.tokens[4].trailing_trivia[0].text,
+        " "
+    );
 }
 
 #[test]
@@ -69,55 +88,48 @@ fn green_tree_tokens_canonically_own_trivia() {
 #[test]
 fn apply_formula_edit_reuses_green_red_and_bind_when_text_is_unchanged() {
     let source = FormulaSourceRecord::new("editor-reuse", 1, "=SUM(A1)");
-    let parse = parse_formula(ParseRequest {
-        source: source.clone(),
-    });
-    let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
-    let bind = bind_formula(BindRequest {
-        source: source.clone(),
-        green_tree: parse.green_tree.clone(),
-        red_projection: red.clone(),
-        context: editor_bind_context(source.clone()),
-    });
+    let service =
+        EditorEditService::new(EditorEnvironment::new(editor_bind_context(source.clone())));
 
-    let result = apply_formula_edit(FormulaEditRequest {
-        source: source.clone(),
-        bind_context: editor_bind_context(source.clone()),
-        previous_green_tree: Some(&parse.green_tree),
-        previous_red_projection: Some(&red),
-        previous_bound_formula: Some(&bind.bound_formula),
-        follow_on_stage: EditFollowOnStage::ParseAndBind,
-        semantic_plan_options: None,
-    });
+    let first = service.apply_edit(
+        source.clone(),
+        None,
+        EditorAnalysisStage::SyntaxAndBind,
+        None,
+    );
+    let second = service.apply_edit(
+        source,
+        Some(&first.document),
+        EditorAnalysisStage::SyntaxAndBind,
+        None,
+    );
 
-    assert!(result.reuse_summary.reused_green_tree);
-    assert!(result.reuse_summary.reused_red_projection);
-    assert!(result.reuse_summary.reused_bound_formula);
-    assert!(result.bound_formula.is_some());
-    assert_eq!(result.text_change_range, None);
+    assert!(second.document.reuse_summary.reused_green_tree);
+    assert!(second.document.reuse_summary.reused_red_projection);
+    assert!(second.document.reuse_summary.reused_bound_formula);
+    assert!(second.document.bound_formula.is_some());
+    assert_eq!(second.document.text_change_range, None);
 }
 
 #[test]
 fn apply_formula_edit_reports_smallest_text_change_range() {
     let previous_source = FormulaSourceRecord::new("editor-change-range", 1, "=SUM(A1)");
-    let previous_parse = parse_formula(ParseRequest {
-        source: previous_source.clone(),
-    });
+    let service = EditorEditService::new(EditorEnvironment::new(editor_bind_context(
+        previous_source.clone(),
+    )));
+    let previous = service.apply_edit(previous_source, None, EditorAnalysisStage::SyntaxOnly, None);
 
     let updated_source = FormulaSourceRecord::new("editor-change-range", 2, "=SUM(B1)");
-    let result = apply_formula_edit(FormulaEditRequest {
-        source: updated_source,
-        bind_context: editor_bind_context(previous_source.clone()),
-        previous_green_tree: Some(&previous_parse.green_tree),
-        previous_red_projection: None,
-        previous_bound_formula: None,
-        follow_on_stage: EditFollowOnStage::ParseOnly,
-        semantic_plan_options: None,
-    });
+    let result = service.apply_edit(
+        updated_source,
+        Some(&previous.document),
+        EditorAnalysisStage::SyntaxOnly,
+        None,
+    );
 
     assert_eq!(
-        result.text_change_range,
-        Some(oxfml_core::FormulaTextChangeRange {
+        result.document.text_change_range,
+        Some(FormulaTextChangeRange {
             start: 5,
             old_len: 1,
             new_len: 1,
@@ -128,19 +140,14 @@ fn apply_formula_edit_reports_smallest_text_change_range() {
 #[test]
 fn apply_formula_edit_surfaces_bind_diagnostics_in_live_snapshot() {
     let source = FormulaSourceRecord::new("editor-bind-diag", 1, "=[@Amount]");
+    let service =
+        EditorEditService::new(EditorEnvironment::new(editor_bind_context(source.clone())));
 
-    let result = apply_formula_edit(FormulaEditRequest {
-        source: source.clone(),
-        bind_context: editor_bind_context(source),
-        previous_green_tree: None,
-        previous_red_projection: None,
-        previous_bound_formula: None,
-        follow_on_stage: EditFollowOnStage::ParseAndBind,
-        semantic_plan_options: None,
-    });
+    let result = service.apply_edit(source, None, EditorAnalysisStage::SyntaxAndBind, None);
 
     assert!(
         result
+            .document
             .live_diagnostics
             .diagnostics
             .iter()
@@ -153,56 +160,33 @@ fn apply_formula_edit_surfaces_bind_diagnostics_in_live_snapshot() {
 #[test]
 fn completion_proposals_include_functions_defined_names_and_table_names() {
     let source = FormulaSourceRecord::new("editor-complete", 1, "=SU");
-    let parse = parse_formula(ParseRequest {
-        source: source.clone(),
-    });
-    let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
     let mut bind_context = editor_bind_context(source.clone());
-    let snapshot = sample_library_context_snapshot();
-    let snapshot_ref = LibraryContextSnapshotRef::from(&snapshot);
-    let provider = InMemoryLibraryContextProvider::new(snapshot);
     bind_context
         .names
         .insert("SummaryName".to_string(), NameKind::ValueLike);
-
-    let result = collect_completion_proposals(CompletionRequest {
-        source: &source,
-        green_tree: &parse.green_tree,
-        red_projection: &red,
-        bind_context: &bind_context,
-        library_context_provider: Some(&provider),
-        library_context_snapshot_ref: Some(&snapshot_ref),
-        library_context_snapshot: None,
-        cursor_offset: source.entered_formula_text.chars().count(),
-    });
-
-    assert!(
-        result
-            .proposals
-            .iter()
-            .any(
-                |proposal| proposal.proposal_kind == CompletionProposalKind::Function
-                    && proposal.display_text == "SUM"
-            )
+    let snapshot = sample_library_context_snapshot();
+    let snapshot_ref = LibraryContextSnapshotRef::from(&snapshot);
+    let provider = InMemoryLibraryContextProvider::new(snapshot);
+    let service = EditorEditService::new(
+        EditorEnvironment::new(bind_context).with_pinned_library_context(&provider, snapshot_ref),
     );
-    assert!(
-        result
-            .proposals
-            .iter()
-            .any(
-                |proposal| proposal.proposal_kind == CompletionProposalKind::DefinedName
-                    && proposal.display_text == "SummaryName"
-            )
-    );
+
+    let document = service.open_document(source.clone(), None);
+    let result =
+        service.completion_at_cursor(&document, source.entered_formula_text.chars().count());
+
+    assert!(result.proposals.iter().any(|proposal| {
+        proposal.proposal_kind == CompletionProposalKind::Function && proposal.display_text == "SUM"
+    }));
+    assert!(result.proposals.iter().any(|proposal| {
+        proposal.proposal_kind == CompletionProposalKind::DefinedName
+            && proposal.display_text == "SummaryName"
+    }));
 }
 
 #[test]
 fn completion_proposals_use_pinned_snapshot_ref_over_provider_current_snapshot() {
     let source = FormulaSourceRecord::new("editor-pinned-snapshot", 1, "=TA");
-    let parse = parse_formula(ParseRequest {
-        source: source.clone(),
-    });
-    let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
     let bind_context = editor_bind_context(source.clone());
     let pinned_snapshot = sample_library_context_snapshot();
     let current_snapshot = sample_library_context_snapshot_v2();
@@ -212,17 +196,14 @@ fn completion_proposals_use_pinned_snapshot_ref_over_provider_current_snapshot()
         current_snapshot_ref,
         vec![pinned_snapshot, current_snapshot],
     );
+    let service = EditorEditService::new(
+        EditorEnvironment::new(bind_context)
+            .with_pinned_library_context(&provider, pinned_snapshot_ref),
+    );
 
-    let result = collect_completion_proposals(CompletionRequest {
-        source: &source,
-        green_tree: &parse.green_tree,
-        red_projection: &red,
-        bind_context: &bind_context,
-        library_context_provider: Some(&provider),
-        library_context_snapshot_ref: Some(&pinned_snapshot_ref),
-        library_context_snapshot: None,
-        cursor_offset: source.entered_formula_text.chars().count(),
-    });
+    let document = service.open_document(source.clone(), None);
+    let result =
+        service.completion_at_cursor(&document, source.entered_formula_text.chars().count());
 
     assert!(
         !result
@@ -234,113 +215,62 @@ fn completion_proposals_use_pinned_snapshot_ref_over_provider_current_snapshot()
 
 #[test]
 fn completion_proposals_include_structured_selectors_and_columns() {
-    let source = FormulaSourceRecord::new("editor-structured", 1, "=Table1[#H");
-    let parse = parse_formula(ParseRequest {
-        source: source.clone(),
-    });
-    let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
-    let bind_context = editor_bind_context(source.clone());
+    let bind_context = editor_bind_context(FormulaSourceRecord::new("editor-structured", 1, "=1"));
+    let service = EditorEditService::new(EditorEnvironment::new(bind_context));
 
-    let selector_result = collect_completion_proposals(CompletionRequest {
-        source: &source,
-        green_tree: &parse.green_tree,
-        red_projection: &red,
-        bind_context: &bind_context,
-        library_context_provider: None,
-        library_context_snapshot_ref: None,
-        library_context_snapshot: None,
-        cursor_offset: source.entered_formula_text.chars().count(),
-    });
-
-    assert!(
-        selector_result
-            .proposals
-            .iter()
-            .any(
-                |proposal| proposal.proposal_kind == CompletionProposalKind::StructuredSelector
-                    && proposal.display_text == "#Headers"
-            )
+    let selector_source = FormulaSourceRecord::new("editor-structured", 1, "=Table1[#H");
+    let selector_document = service.open_document(selector_source.clone(), None);
+    let selector_result = service.completion_at_cursor(
+        &selector_document,
+        selector_source.entered_formula_text.chars().count(),
     );
+    assert!(selector_result.proposals.iter().any(|proposal| {
+        proposal.proposal_kind == CompletionProposalKind::StructuredSelector
+            && proposal.display_text == "#Headers"
+    }));
 
     let column_source = FormulaSourceRecord::new("editor-column", 1, "=Table1[A");
-    let column_parse = parse_formula(ParseRequest {
-        source: column_source.clone(),
-    });
-    let column_red = project_red_view(
-        column_source.formula_stable_id.clone(),
-        &column_parse.green_tree,
+    let column_document = service.open_document(column_source.clone(), None);
+    let column_result = service.completion_at_cursor(
+        &column_document,
+        column_source.entered_formula_text.chars().count(),
     );
-    let column_result = collect_completion_proposals(CompletionRequest {
-        source: &column_source,
-        green_tree: &column_parse.green_tree,
-        red_projection: &column_red,
-        bind_context: &bind_context,
-        library_context_provider: None,
-        library_context_snapshot_ref: None,
-        library_context_snapshot: None,
-        cursor_offset: column_source.entered_formula_text.chars().count(),
-    });
-
-    assert!(
-        column_result
-            .proposals
-            .iter()
-            .any(
-                |proposal| proposal.proposal_kind == CompletionProposalKind::TableColumn
-                    && proposal.display_text == "Amount"
-            )
-    );
+    assert!(column_result.proposals.iter().any(|proposal| {
+        proposal.proposal_kind == CompletionProposalKind::TableColumn
+            && proposal.display_text == "Amount"
+    }));
 }
 
 #[test]
 fn completion_proposals_include_r1c1_syntax_assists_in_r1c1_channel() {
     let source = FormulaSourceRecord::new("editor-r1c1-complete", 1, "=R")
         .with_formula_channel_kind(FormulaChannelKind::WorksheetR1C1);
-    let parse = parse_formula(ParseRequest {
-        source: source.clone(),
-    });
-    let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
-    let bind_context = editor_bind_context(source.clone());
+    let service =
+        EditorEditService::new(EditorEnvironment::new(editor_bind_context(source.clone())));
 
-    let result = collect_completion_proposals(CompletionRequest {
-        source: &source,
-        green_tree: &parse.green_tree,
-        red_projection: &red,
-        bind_context: &bind_context,
-        library_context_provider: None,
-        library_context_snapshot_ref: None,
-        library_context_snapshot: None,
-        cursor_offset: source.entered_formula_text.chars().count(),
-    });
+    let document = service.open_document(source.clone(), None);
+    let result =
+        service.completion_at_cursor(&document, source.entered_formula_text.chars().count());
 
-    assert!(
-        result
-            .proposals
-            .iter()
-            .any(
-                |proposal| proposal.proposal_kind == CompletionProposalKind::SyntaxAssist
-                    && proposal.display_text == "R"
-            )
-    );
-    assert!(
-        result
-            .proposals
-            .iter()
-            .any(
-                |proposal| proposal.proposal_kind == CompletionProposalKind::SyntaxAssist
-                    && proposal.display_text == "RC"
-            )
-    );
+    assert!(result.proposals.iter().any(|proposal| {
+        proposal.proposal_kind == CompletionProposalKind::SyntaxAssist
+            && proposal.display_text == "R"
+    }));
+    assert!(result.proposals.iter().any(|proposal| {
+        proposal.proposal_kind == CompletionProposalKind::SyntaxAssist
+            && proposal.display_text == "RC"
+    }));
 }
 
 #[test]
 fn signature_help_context_tracks_active_argument_index() {
     let source = FormulaSourceRecord::new("editor-signature", 1, "=SUM(1,2,3)");
-    let parse = parse_formula(ParseRequest {
-        source: source.clone(),
-    });
+    let service =
+        EditorEditService::new(EditorEnvironment::new(editor_bind_context(source.clone())));
 
-    let signature = signature_help_context_at_cursor(&source, &parse.green_tree, 9)
+    let document = service.open_document(source, None);
+    let signature = service
+        .signature_help_at_cursor(&document, 9)
         .expect("cursor should be inside SUM argument list");
 
     assert_eq!(signature.callee_text, "SUM");
@@ -348,52 +278,45 @@ fn signature_help_context_tracks_active_argument_index() {
 }
 
 #[test]
-fn function_help_lookup_request_tracks_active_callee_and_snapshot() {
+fn function_help_packet_tracks_active_callee_and_snapshot() {
     let source = FormulaSourceRecord::new("editor-help", 1, "=SUM(1,2,3)");
-    let parse = parse_formula(ParseRequest {
-        source: source.clone(),
-    });
     let snapshot = sample_library_context_snapshot();
     let snapshot_ref = LibraryContextSnapshotRef::from(&snapshot);
+    let provider = InMemoryLibraryContextProvider::new(snapshot);
+    let service = EditorEditService::new(
+        EditorEnvironment::new(editor_bind_context(source.clone()))
+            .with_pinned_library_context(&provider, snapshot_ref),
+    );
 
-    let request = build_function_help_lookup_request(
-        &source,
-        &parse.green_tree,
-        9,
-        None,
-        Some(&snapshot_ref),
-        Some(&snapshot),
-    )
-    .expect("cursor should resolve to a call-site help request");
+    let interaction = service.open_and_interact(source, 9, None);
+    let packet = interaction
+        .function_help_packet
+        .expect("cursor should resolve to a call-site help packet");
 
-    assert_eq!(request.lookup_key, "SUM");
+    assert_eq!(packet.lookup_key, "SUM");
     assert_eq!(
-        request.library_context_snapshot_ref,
+        packet.library_context_snapshot_ref,
         Some(LibraryContextSnapshotRef::new("editor-snapshot", "v1"))
     );
 }
 
 #[test]
-fn function_help_lookup_request_uses_provider_current_snapshot_when_unpinned() {
+fn function_help_packet_uses_provider_current_snapshot_when_unpinned() {
     let source = FormulaSourceRecord::new("editor-help-current", 1, "=SUM(1,2,3)");
-    let parse = parse_formula(ParseRequest {
-        source: source.clone(),
-    });
     let snapshot = sample_library_context_snapshot_v2();
     let provider = InMemoryLibraryContextProvider::new(snapshot);
+    let service = EditorEditService::new(
+        EditorEnvironment::new(editor_bind_context(source.clone()))
+            .with_library_context_provider(&provider),
+    );
 
-    let request = build_function_help_lookup_request(
-        &source,
-        &parse.green_tree,
-        9,
-        Some(&provider),
-        None,
-        None,
-    )
-    .expect("cursor should resolve to a call-site help request");
+    let interaction = service.open_and_interact(source, 9, None);
+    let packet = interaction
+        .function_help_packet
+        .expect("cursor should resolve to a call-site help packet");
 
     assert_eq!(
-        request.library_context_snapshot_ref,
+        packet.library_context_snapshot_ref,
         Some(LibraryContextSnapshotRef::new("editor-snapshot", "v2"))
     );
 }
@@ -402,38 +325,26 @@ fn function_help_lookup_request_uses_provider_current_snapshot_when_unpinned() {
 fn intelligent_completion_context_carries_scope_and_active_diagnostics() {
     let source = FormulaSourceRecord::new("editor-intel", 1, "=[@Amount]");
     let bind_context = editor_bind_context(source.clone());
-    let result = apply_formula_edit(FormulaEditRequest {
-        source: source.clone(),
-        bind_context: bind_context.clone(),
-        previous_green_tree: None,
-        previous_red_projection: None,
-        previous_bound_formula: None,
-        follow_on_stage: EditFollowOnStage::ParseBindAndPlan,
-        semantic_plan_options: Some(SemanticPlanEditOptions {
+    let snapshot = sample_library_context_snapshot();
+    let snapshot_ref = LibraryContextSnapshotRef::from(&snapshot);
+    let provider = InMemoryLibraryContextProvider::new(snapshot.clone());
+    let service = EditorEditService::new(
+        EditorEnvironment::new(bind_context)
+            .with_library_context_provider(&provider)
+            .with_inline_library_context_snapshot(snapshot),
+    );
+
+    let document = service.open_document(
+        source,
+        Some(EditorPlanOptions {
             oxfunc_catalog_identity: "editor-catalog".to_string(),
             locale_profile: None,
             date_system: None,
             format_profile: None,
-            library_context_snapshot: Some(sample_library_context_snapshot()),
+            library_context_snapshot: provider.snapshot_by_identity(&snapshot_ref),
         }),
-    });
-    let snapshot = sample_library_context_snapshot();
-    let snapshot_ref = LibraryContextSnapshotRef::from(&snapshot);
-    let provider = InMemoryLibraryContextProvider::new(snapshot.clone());
-
-    let context = build_intelligent_completion_context(
-        CompletionRequest {
-            source: &source,
-            green_tree: &result.green_tree,
-            red_projection: &result.red_projection,
-            bind_context: &bind_context,
-            library_context_provider: Some(&provider),
-            library_context_snapshot_ref: Some(&snapshot_ref),
-            library_context_snapshot: Some(&snapshot),
-            cursor_offset: 5,
-        },
-        &result.live_diagnostics,
     );
+    let context = service.intelligent_completion_context_at_cursor(&document, 5);
 
     assert!(context.red_context_summary.starts_with("kind="));
     assert!(context.visible_tables.iter().any(|table| table == "Table1"));
@@ -447,28 +358,38 @@ fn intelligent_completion_context_carries_scope_and_active_diagnostics() {
 #[test]
 fn validate_completion_candidate_reenters_normal_edit_pipeline() {
     let source = FormulaSourceRecord::new("editor-validate", 3, "=SU");
-    let parse = parse_formula(ParseRequest {
-        source: source.clone(),
-    });
-    let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
+    let service =
+        EditorEditService::new(EditorEnvironment::new(editor_bind_context(source.clone())));
+    let initial = service.apply_edit(source, None, EditorAnalysisStage::SyntaxAndBind, None);
 
-    let result = validate_completion_candidate(CompletionValidationRequest {
-        source: source.clone(),
-        bind_context: editor_bind_context(source),
-        previous_green_tree: Some(&parse.green_tree),
-        previous_red_projection: Some(&red),
-        previous_bound_formula: None,
-        replacement_span: Some(oxfml_core::syntax::token::TextSpan::new(1, 2)),
-        insert_text: "SUM".to_string(),
-        follow_on_stage: EditFollowOnStage::ParseAndBind,
-        semantic_plan_options: None,
-    });
+    let result = service.validate_completion(
+        &initial.document,
+        Some(TextSpan::new(1, 2)),
+        "SUM",
+        EditorAnalysisStage::SyntaxAndBind,
+        None,
+    );
 
-    assert_eq!(result.updated_source.entered_formula_text, "=SUM");
-    assert_eq!(result.updated_source.formula_text_version.0, 4);
     assert_eq!(
-        result.edit_result.text_change_range,
-        Some(oxfml_core::FormulaTextChangeRange {
+        result
+            .interaction_result
+            .document
+            .source
+            .entered_formula_text,
+        "=SUM"
+    );
+    assert_eq!(
+        result
+            .interaction_result
+            .document
+            .source
+            .formula_text_version
+            .0,
+        4
+    );
+    assert_eq!(
+        result.interaction_result.document.text_change_range,
+        Some(FormulaTextChangeRange {
             start: 3,
             old_len: 0,
             new_len: 1,
@@ -479,48 +400,35 @@ fn validate_completion_candidate_reenters_normal_edit_pipeline() {
 #[test]
 fn apply_completion_proposal_preserves_proposal_identity() {
     let source = FormulaSourceRecord::new("editor-proposal", 5, "=SU");
-    let parse = parse_formula(ParseRequest {
-        source: source.clone(),
-    });
-    let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
-    let bind_context = editor_bind_context(source.clone());
     let snapshot = sample_library_context_snapshot();
     let snapshot_ref = LibraryContextSnapshotRef::from(&snapshot);
     let provider = InMemoryLibraryContextProvider::new(snapshot);
+    let service = EditorEditService::new(
+        EditorEnvironment::new(editor_bind_context(source.clone()))
+            .with_pinned_library_context(&provider, snapshot_ref),
+    );
 
-    let completion = collect_completion_proposals(CompletionRequest {
-        source: &source,
-        green_tree: &parse.green_tree,
-        red_projection: &red,
-        bind_context: &bind_context,
-        library_context_provider: Some(&provider),
-        library_context_snapshot_ref: Some(&snapshot_ref),
-        library_context_snapshot: None,
-        cursor_offset: source.entered_formula_text.chars().count(),
-    });
+    let document = service.open_document(source.clone(), None);
+    let completion =
+        service.completion_at_cursor(&document, source.entered_formula_text.chars().count());
     let sum = completion
         .proposals
         .iter()
         .find(|proposal| proposal.display_text == "SUM")
         .expect("SUM proposal should exist");
 
-    let result = apply_completion_proposal(
-        CompletionValidationRequest {
-            source: source.clone(),
-            bind_context,
-            previous_green_tree: Some(&parse.green_tree),
-            previous_red_projection: Some(&red),
-            previous_bound_formula: None,
-            replacement_span: None,
-            insert_text: String::new(),
-            follow_on_stage: EditFollowOnStage::ParseAndBind,
-            semantic_plan_options: None,
-        },
-        sum,
-    );
+    let result =
+        service.apply_completion_proposal(&document, sum, EditorAnalysisStage::SyntaxAndBind, None);
 
     assert_eq!(result.proposal_id.as_deref(), Some("function:SUM"));
-    assert_eq!(result.updated_source.entered_formula_text, "=SUM");
+    assert_eq!(
+        result
+            .interaction_result
+            .document
+            .source
+            .entered_formula_text,
+        "=SUM"
+    );
 }
 
 fn editor_bind_context(source: FormulaSourceRecord) -> BindContext {

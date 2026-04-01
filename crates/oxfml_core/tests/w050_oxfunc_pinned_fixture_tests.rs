@@ -3,12 +3,12 @@ use std::fs;
 use std::path::PathBuf;
 
 use oxfml_core::interface::{InMemoryLibraryContextProvider, TypedContextQueryBundle};
-use oxfml_core::oxfunc_adapter::{OxFuncAdapterRequest, run_oxfunc_preparation_adapter};
 use oxfml_core::seam::Locus;
 use oxfml_core::semantics::{
     LibraryAvailabilityState, LibraryContextSnapshot, LibraryContextSnapshotEntry,
     RegistrationSourceKind,
 };
+use oxfml_core::substrate::oxfunc_adapter::{OxFuncAdapterRequest, run_oxfunc_preparation_adapter};
 use oxfunc_core::value::{EvalValue, ExcelText, WorksheetErrorCode};
 use serde::Deserialize;
 

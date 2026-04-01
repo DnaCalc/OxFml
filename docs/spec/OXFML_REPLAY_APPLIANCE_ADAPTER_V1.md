@@ -14,6 +14,8 @@ Read together with:
 6. `fec-f3e/FEC_F3E_TESTING_AND_REPLAY.md`
 7. `fec-f3e/FEC_F3E_SCHEMA_REPLAY_FIXTURE_PLAN.md`
 8. `fec-f3e/FEC_F3E_FORMAL_AND_ASSURANCE_MAP.md`
+9. `OXFML_CONSUMER_INTERFACE_REARCHITECTURE_PLAN.md`
+10. `OXFML_CONSUMER_INTERFACE_AND_FACADE_CONTRACT_V1.md`
 
 ## 2. Scope and Non-Goals
 ### 2.1 Scope
@@ -251,3 +253,22 @@ Use this adapter document as the OxFml-local replay rollout authority for:
 4. witness rollout planning into `W009` and `W010`.
 
 Do not use this document to weaken OxFml-owned semantic meaning or to authorize generic replay rewrites that OxFml has not declared replay-safe.
+
+Consumer-facing packaging rule:
+1. the replay facade/projection service is the preferred target packaging direction under `W054`,
+2. until that facade exists, the current supported replay-facing entry surface remains the exercised helper and adapter projection path,
+3. direct use of proving-host helper packets or broad internal artifact families should be treated as advanced/provenance usage rather than the preferred long-term public integration shape,
+4. the current first replay-facade floor now covers:
+   - runtime-result projection,
+   - host-result projection,
+   - session-lifecycle projection,
+   - fixture-family metadata projection,
+   - retained-witness metadata projection,
+5. broader registry/lifecycle/promotion breadth remains outside that current first floor.
+4. replay packaging work must not rename or reinterpret frozen OxFml/OxFunc shared packet families.
+
+Current migration sequence:
+1. keep existing replay helper and adapter projection surfaces active,
+2. introduce a replay projection facade that delegates to the same underlying projection logic,
+3. move replay-oriented downstream docs to the facade as the preferred entry surface,
+4. only then consider compatibility tightening or helper demotion.

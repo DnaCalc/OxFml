@@ -18,6 +18,59 @@ For the next OxCalc coordination round, the important points are:
 3. a reduced-profile DNA OneCalc host boundary is now explicit so OxCalc integration can stay distinct from the proving-host lane,
 4. OxFml still remains authoritative for evaluator artifact meaning, reject semantics, replay-safe identity, and fence meaning.
 
+## 2AA. Consumer-Facing Runtime Refactor Direction
+OxFml is now also planning a consumer-facing interface refactor under `W054`.
+
+Current OxFml message to OxCalc:
+1. this is a packaging and consumer-entry refactor, not a reopening of the OxFml <-> OxFunc seam,
+2. OxCalc is the primary downstream consumer of the planned runtime facade,
+3. the canonical consumer packet for that runtime-facing migration is now:
+   - `docs/spec/OXFML_CONSUMER_INTERFACE_AND_FACADE_CONTRACT_V1.md`
+4. OxCalc should plan against the runtime facade as the intended consumer
+   contract now,
+5. coordinator policy and publication semantics remain OxCalc-owned above that
+   facade.
+
+Current OxFml rule for OxCalc:
+1. do not build new long-term OxCalc wrappers around the current flat OxFml root if they can be avoided,
+2. do not fork frozen OxFml/OxFunc packet vocabulary while preparing for the runtime facade,
+3. treat the coming runtime facade as a consumer-entry cleanup over the existing host/runtime packet floor, not as a new semantic seam,
+4. treat the current consumer packet as preserving the already-consumed runtime
+   packet truth rather than replacing it with facade-only vocabulary.
+
+## 2AB. Short Runtime-Facade Response To OxCalc
+OxFml's current short answer to OxCalc's runtime-facade requests is:
+1. yes, OxFml will publish and maintain a concrete current-surface to
+   target-surface migration table as part of `W054`,
+2. yes, `RuntimeEnvironment`, `RuntimeFormulaRequest`,
+   `RuntimeFormulaResult`, and `RuntimeSessionFacade` are the intended first
+   runtime-facing object set,
+3. yes, provider-plus-pin library-context selection remains first-class and
+   explicit,
+4. yes, candidate / commit / reject / trace families remain visible in the
+   runtime-facing result/session path,
+5. yes, cleaner packaging does not close the narrower `W026` residuals by
+   implication.
+
+Current OxFml finish-pass after the latest OxCalc note is:
+1. `RuntimeFormulaResult` now explicitly names the first stable correlation
+   subset:
+   - `candidate_result_id`
+   - `commit_attempt_id`
+   - `reject_record_id`
+   - optional fence snapshot references,
+2. the runtime-facing contract now explicitly preserves surfaced
+   execution-restriction, capability-sensitive, topology/effect, and
+   dependency-sensitive fact families in reachable consumer form,
+3. the runtime-facing contract now explicitly keeps caller-context carriage for
+   the first admitted caller-sensitive subset and adds a caller-context
+   dependence signal where OxFml can surface it honestly,
+4. OxFml continues to treat these as bounded finish-work on the runtime-facing
+   contract, not as a broad seam reopen,
+5. OxFml now treats the consumer contract as provisionally frozen for the next
+   implementation wave, with only bounded implementation-driven clarifications
+   left open.
+
 ## 2A. New Coordination Packet: Host Runtime and External Requirements
 OxFml now has a single canonical draft intended to anchor the next host/coordinator seam round:
 1. `docs/spec/OXFML_HOST_RUNTIME_AND_EXTERNAL_REQUIREMENTS.md`

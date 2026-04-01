@@ -346,7 +346,10 @@ fn assert_higher_order_row(
         summary.semantic_plan_state,
         LibraryAvailabilityState::CatalogKnown
     );
-    assert_eq!(summary.metadata_status.as_deref(), Some("catalog_only"));
+    assert_eq!(
+        summary.metadata_status.as_deref(),
+        Some("function_meta_curated")
+    );
     assert_eq!(
         summary.special_interface_kind.as_deref(),
         Some("callable_helper_runtime")

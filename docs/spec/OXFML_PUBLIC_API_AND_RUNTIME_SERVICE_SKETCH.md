@@ -9,7 +9,8 @@ It is the current API-shape baseline that implementation work should target unle
 Status rule:
 1. this document remains the detailed code-surface sketch,
 2. `OXFML_HOST_RUNTIME_AND_EXTERNAL_REQUIREMENTS.md` is now the primary host/runtime coordination packet,
-3. this document should be read as a supporting code-shape companion to that host/runtime packet rather than a separate peer host contract.
+3. this document should be read as a supporting code-shape companion to that host/runtime packet rather than a separate peer host contract,
+4. until `W054` lands real packaging, this document still describes the active supported Rust-facing surface.
 
 Read together with:
 1. `OXFML_IMPLEMENTATION_SURFACES_AND_STATE_OPTIONS.md`
@@ -19,6 +20,9 @@ Read together with:
 5. `formula-language/OXFML_PARSER_AND_BINDER_REALIZATION.md`
 6. `fec-f3e/FEC_F3E_DESIGN_SPEC.md`
 7. `OXFML_HOST_RUNTIME_AND_EXTERNAL_REQUIREMENTS.md`
+8. `OXFML_CONSUMER_INTERFACE_REARCHITECTURE_PLAN.md`
+9. `OXFML_CONSUMER_INTERFACE_AND_FACADE_CONTRACT_V1.md`
+10. `OXFML_CONSUMER_INTERFACE_IMPLEMENTATION_PROGRAM_V1.md`
 
 ## 2. Surface Rule
 The public OxFml surface should separate:
@@ -26,6 +30,37 @@ The public OxFml surface should separate:
 2. optional repositories and runtime services,
 3. evaluator-session and commit operations,
 4. proving-host helpers.
+
+Current redesign rule:
+1. this document now treats the flat export surface as transitional,
+2. new downstream users should be guided toward consumer-oriented facades first,
+3. the preferred long-term user model is defined in
+   `OXFML_CONSUMER_INTERFACE_REARCHITECTURE_PLAN.md`,
+4. the detailed consumer-facing contract for that model is now defined in
+   `OXFML_CONSUMER_INTERFACE_AND_FACADE_CONTRACT_V1.md`,
+5. the concrete implementation waves for that model are now defined in
+   `OXFML_CONSUMER_INTERFACE_IMPLEMENTATION_PROGRAM_V1.md`.
+
+Current support rule:
+1. the facade-first direction remains the target packaging model,
+2. a first partial runtime facade now exists under
+   `crates/oxfml_core/src/consumer/runtime`,
+3. a first partial editor facade now also exists under
+   `crates/oxfml_core/src/consumer/editor`,
+4. a first partial replay facade now also exists under
+   `crates/oxfml_core/src/consumer/replay`,
+5. ordinary consumer-facing entry should now be treated as explicit module use:
+   - `oxfml_core::consumer::runtime`
+   - `oxfml_core::consumer::editor`
+   - `oxfml_core::consumer::replay`,
+6. the partial editor facade now includes direct canonical function-help packet
+   carriage, and the partial replay facade now includes retained-witness and
+   fixture-family metadata projection,
+7. historical direct-consumer substrate is no longer part of the endorsed
+   public contract and now sits behind hidden `substrate::...` namespacing as a
+   temporary advanced transition surface,
+8. consumer-surface cleanup must compose over the frozen OxFml/OxFunc shared
+   interface families rather than redefining them.
 
 The canonical artifact transforms are normative.
 Repositories and services are optional operational layers over the same semantics.
@@ -219,10 +254,8 @@ Current first-pass families are:
 
 Working rule:
 1. OxFml prefers capability-scoped typed providers over raw host objects,
-2. the current OxFunc query names and result partitioning are acceptable as the first freeze candidate,
-3. exact names may still be merged or split later if a concrete consumer mismatch appears,
-4. any such merge/split must preserve the same semantic families,
-5. the remaining clarification is now implementation-facing rather than semantic: whether actual OxFml consumer modeling exposes a concrete need to merge or split any first-pass family.
+2. the current OxFunc query names and result partitioning are part of the frozen shared seam for the admitted slice,
+3. consumer-facing facades may wrap assembly and entry flow, but must not silently fork or rename the shared packet vocabulary.
 
 ## 8B. First Shared Returned Value Surface
 For the current covered scope, the first returned-value split should remain explicit.
@@ -236,7 +269,7 @@ Working rule:
 1. OxFml currently accepts that explicit split as the first shared freeze candidate,
 2. richer publication-facing or display-facing factoring should not be invented until a concrete mismatch appears,
 3. publication-aware value hints remain distinct from typed host/provider outcome projection,
-4. the remaining clarification is now implementation-facing rather than semantic: whether actual return-carrier freezing exposes a concrete need to refactor the current first-pass split.
+4. consumer-facing packaging work must preserve this frozen shared split rather than reinterpret it.
 
 ## 8C. First Runtime Library-Context Consumer Model
 For the current covered OxFunc scope, OxFml should also model a real runtime consumer for built-in catalog truth rather than rely only on export-file pinning.
@@ -255,7 +288,7 @@ Working rule:
 2. the committed `W044` export remains the immediate pinning and mismatch artifact,
 3. runtime registration or removal must yield explicit new snapshot generations rather than mutate a pinned snapshot in place,
 4. snapshot drift must not be hidden inside evaluation or session execution,
-5. the remaining clarification is now implementation-facing rather than semantic: whether actual OxFml consumer modeling exposes any runtime-only versus export-mapping mismatch that forces a narrower shape.
+5. consumer-facing runtime packaging must compose over this provider-plus-pin model rather than revive ambient-current-snapshot semantics.
 
 ## 9. Current Preferred Packaging Shape
 The current preferred packaging shape is:
@@ -263,8 +296,25 @@ The current preferred packaging shape is:
 2. optional repository/service modules,
 3. an FEC/F3E session service layer,
 4. an optional proving-host helper layer.
+5. a partial `consumer::runtime` facade layer now exists and should be treated
+   as the start of the new preferred user-facing packaging model.
+6. a partial `consumer::editor` facade layer now exists and should be treated
+   as the start of the preferred editing-facing packaging model.
+7. a partial `consumer::replay` facade layer now exists and should be treated
+   as the start of the preferred replay-facing packaging model.
+8. advanced substrate access now lives under `substrate::...`, not as ordinary
+   top-level consumer entry.
 
 This is the API reflection of the hybrid implementation baseline.
+
+### 9.1 Updated consumer-facing packaging preference
+For real downstream consumers, the preferred target packaging direction is now:
+1. low-level canonical transforms as substrate,
+2. `runtime` facade for execution consumers,
+3. `editor` facade for language-service consumers,
+4. `replay` facade for replay-projection consumers,
+5. temporary internal transition helpers only where they materially reduce
+   refactor risk, and then remove them.
 
 ## 10. Deferred Decisions
 The following remain open:
@@ -275,9 +325,8 @@ The following remain open:
 5. exact error/result carrier style for language bindings,
 6. the smallest honest library-context snapshot shape beyond the current local minimum field floor,
 7. the final callable-value carrier beyond the current typed minimum plus replay-summary floor.
-8. whether the first typed context/query bundle needs a narrower capability-family merge or split after initial consumer modeling.
-9. whether the runtime `LibraryContextProvider` model should mirror the CSV artifact closely or use a cleaner runtime-only shape plus explicit mapping layer.
-10. exact shared field names for the first frozen typed context/query bundle and returned-value split.
+8. whether the runtime `LibraryContextProvider` model should mirror the CSV artifact closely or use a cleaner runtime-only shape plus explicit mapping layer.
+9. exact public Rust module names for the new consumer-oriented facades.
 
 ## 11. Workset Implications
 Current expected primary owners:
@@ -288,10 +337,18 @@ Current expected primary owners:
 5. `W041`: typed context and query bundle freeze
 6. `W042`: return surface and publication-hint freeze
 7. `W043`: runtime library-context provider consumer model
+8. `W054`: consumer-facing interface rearchitecture and facade packaging
 
 ## 12. Working Rule
-Implementation should treat this document as the current public-surface baseline:
-1. direct transforms first,
-2. optional services second,
-3. publication and reject consequences typed,
-4. proving-host helpers narrow and explicit.
+Implementation should treat this document as the current supported Rust-surface baseline while `W054` remains open:
+1. direct transforms and canonical packet/capability surfaces remain supported entrypoints,
+2. publication and reject consequences remain typed and explicit,
+3. the partial runtime facade is now an active supported entry surface for early
+   uptake and validation,
+4. the partial editor facade is now an active supported entry surface for early
+   uptake and validation,
+5. the partial replay facade is now an active supported entry surface for early
+   uptake and validation,
+6. the full facade-first model remains the preferred target endpoint,
+7. consumer-surface work must not modify the frozen OxFml/OxFunc shared
+   interface families.

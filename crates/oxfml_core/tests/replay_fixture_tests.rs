@@ -8,7 +8,6 @@ use serde::Deserialize;
 
 use oxfml_core::binding::{BindContext, BindRequest, bind_formula};
 use oxfml_core::eval::{DefinedNameBinding, EvaluationContext, evaluate_formula};
-use oxfml_core::host::SingleFormulaHost;
 use oxfml_core::interface::TypedContextQueryBundle;
 use oxfml_core::red::project_red_view;
 use oxfml_core::scheduler::{ExecutionRestriction, build_execution_contract};
@@ -23,6 +22,7 @@ use oxfml_core::semantics::{
     FormulaThreadSafetyClass, FormulaVolatilityClass, compile_semantic_plan,
 };
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
+use oxfml_core::substrate::host::SingleFormulaHost;
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
 use oxfml_core::{ExecutionProfileSummary, ReturnedValueSurface};
 

@@ -43,7 +43,7 @@ That local floor currently includes:
 3. `LiveDiagnosticSnapshot` unifying syntax, bind, and semantic-plan diagnostics for squiggle/list use,
 4. deterministic completion packets over visible functions, names, tables, table columns, structured selectors, and first `R1C1` syntax assists,
 5. cursor-sensitive `SignatureHelpContext`,
-6. deterministic `FunctionHelpLookupRequest` construction so OxFml can ask OxFunc for help payloads without guessing at call context,
+6. deterministic function-help subject construction so OxFml can publish a canonical help packet without guessing at call context,
 7. `IntelligentCompletionContext` so an external intelligent completer can work from one normalized context packet,
 8. deterministic completion-candidate validation and proposal application that re-enter the normal parse/bind/plan pipeline rather than bypassing it.
 
@@ -420,7 +420,7 @@ The following language-service packet surfaces are currently good enough for dow
 3. Deterministic completion proposals — over visible functions, names, tables, table columns, structured selectors, and R1C1 syntax assists.
 4. Completion-candidate validation and proposal application — re-enters the normal parse/bind pipeline.
 5. `SignatureHelpContext` — cursor-sensitive call and argument context.
-6. `FunctionHelpLookupRequest` — deterministic construction keyed to the current library-context snapshot.
+6. function-help packet publication — deterministic subject resolution keyed to the current library-context snapshot.
 7. `IntelligentCompletionContext` — normalized context packet for external non-canonical completion.
 8. `EditorSyntaxSnapshot` — owned-trivia token view for editor rendering.
 

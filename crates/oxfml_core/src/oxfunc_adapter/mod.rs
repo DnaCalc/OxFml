@@ -6,9 +6,8 @@ use crate::binding::BindDiagnostic;
 use crate::eval::{DefinedNameBinding, EvaluationBackend, PreparedCall, PreparedResult};
 use crate::host::{HostRecalcOutput, SingleFormulaHost};
 use crate::interface::{
-    InMemoryLibraryContextProvider, LibraryContextProvider, LibraryContextSnapshotRef,
-    ReturnedValueSurface, TableCallerRegion, TableDescriptor, TableRef, TypedContextQueryBundle,
-    TypedContextQueryBundleSpec,
+    LibraryContextProvider, LibraryContextSnapshotRef, ReturnedValueSurface, TableCallerRegion,
+    TableDescriptor, TableRef, TypedContextQueryBundle, TypedContextQueryBundleSpec,
 };
 use crate::seam::{AcceptDecision, Locus, RejectCode};
 use crate::semantics::{ExecutionProfileSummary, FunctionAvailabilitySummary, SemanticDiagnostic};
@@ -198,19 +197,11 @@ pub fn run_oxfunc_preparation_adapter(
         }
     }
 
-    let pinned_snapshot_provider = select_requested_snapshot_provider(
-        library_context_provider,
-        library_context_snapshot_ref.as_ref(),
-    )?;
-    let library_context_provider = pinned_snapshot_provider
-        .as_ref()
-        .map(|provider| provider as &dyn LibraryContextProvider)
-        .or(library_context_provider);
-
-    let host_output = host.recalc_with_interfaces(
+    let host_output = host.recalc_with_interfaces_and_snapshot_ref(
         EvaluationBackend::OxFuncBacked,
         typed_context_query_bundle,
         library_context_provider,
+        library_context_snapshot_ref.as_ref(),
     )?;
 
     let preparation_artifact = OxFuncPreparationArtifact {
@@ -261,27 +252,4 @@ pub fn run_oxfunc_preparation_adapter(
         preparation_artifact,
         evaluation_artifact,
     })
-}
-
-fn select_requested_snapshot_provider(
-    library_context_provider: Option<&dyn LibraryContextProvider>,
-    library_context_snapshot_ref: Option<&LibraryContextSnapshotRef>,
-) -> Result<Option<InMemoryLibraryContextProvider>, String> {
-    match (library_context_provider, library_context_snapshot_ref) {
-        (_, None) => Ok(None),
-        (None, Some(snapshot_ref)) => Err(format!(
-            "requested library context snapshot {}@{} without provider",
-            snapshot_ref.snapshot_id, snapshot_ref.snapshot_version
-        )),
-        (Some(provider), Some(snapshot_ref)) => provider
-            .snapshot_by_identity(snapshot_ref)
-            .map(InMemoryLibraryContextProvider::new)
-            .map(Some)
-            .ok_or_else(|| {
-                format!(
-                    "requested library context snapshot {}@{} did not resolve",
-                    snapshot_ref.snapshot_id, snapshot_ref.snapshot_version
-                )
-            }),
-    }
 }

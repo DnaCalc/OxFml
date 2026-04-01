@@ -267,6 +267,10 @@ impl From<&LibraryContextSnapshot> for LibraryContextSnapshotRef {
 pub trait LibraryContextProvider {
     fn current_snapshot(&self) -> LibraryContextSnapshot;
 
+    fn current_snapshot_ref(&self) -> LibraryContextSnapshotRef {
+        LibraryContextSnapshotRef::from(&self.current_snapshot())
+    }
+
     fn snapshot_by_identity(
         &self,
         snapshot_ref: &LibraryContextSnapshotRef,
@@ -324,11 +328,74 @@ impl LibraryContextProvider for InMemoryLibraryContextProvider {
             .clone()
     }
 
+    fn current_snapshot_ref(&self) -> LibraryContextSnapshotRef {
+        self.current_snapshot_ref.clone()
+    }
+
     fn snapshot_by_identity(
         &self,
         snapshot_ref: &LibraryContextSnapshotRef,
     ) -> Option<LibraryContextSnapshot> {
         self.snapshots.get(snapshot_ref).cloned()
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct PinnedLibraryContextView<'a> {
+    provider: Option<&'a dyn LibraryContextProvider>,
+    snapshot_ref: Option<&'a LibraryContextSnapshotRef>,
+    snapshot: Option<&'a LibraryContextSnapshot>,
+}
+
+impl<'a> std::fmt::Debug for PinnedLibraryContextView<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PinnedLibraryContextView")
+            .field("provider_enabled", &self.provider.is_some())
+            .field("snapshot_ref", &self.snapshot_ref)
+            .field("inline_snapshot_enabled", &self.snapshot.is_some())
+            .finish()
+    }
+}
+
+impl<'a> PinnedLibraryContextView<'a> {
+    pub fn new(
+        provider: Option<&'a dyn LibraryContextProvider>,
+        snapshot_ref: Option<&'a LibraryContextSnapshotRef>,
+        snapshot: Option<&'a LibraryContextSnapshot>,
+    ) -> Self {
+        Self {
+            provider,
+            snapshot_ref,
+            snapshot,
+        }
+    }
+
+    pub fn resolve_snapshot(&self) -> Option<LibraryContextSnapshot> {
+        match (self.provider, self.snapshot_ref, self.snapshot) {
+            (Some(provider), Some(snapshot_ref), _) => provider.snapshot_by_identity(snapshot_ref),
+            (_, _, Some(snapshot)) => Some(snapshot.clone()),
+            (Some(provider), None, None) => Some(provider.current_snapshot()),
+            (None, Some(_), None) => None,
+            (None, None, None) => None,
+        }
+    }
+
+    pub fn effective_snapshot_ref(&self) -> Option<LibraryContextSnapshotRef> {
+        match (self.provider, self.snapshot_ref, self.snapshot) {
+            (Some(_), Some(snapshot_ref), _) => Some(snapshot_ref.clone()),
+            (_, _, Some(snapshot)) => Some(LibraryContextSnapshotRef::from(snapshot)),
+            (Some(provider), None, None) => Some(provider.current_snapshot_ref()),
+            (None, Some(_), None) => None,
+            (None, None, None) => None,
+        }
+    }
+
+    pub fn provider(&self) -> Option<&'a dyn LibraryContextProvider> {
+        self.provider
+    }
+
+    pub fn snapshot_ref(&self) -> Option<&'a LibraryContextSnapshotRef> {
+        self.snapshot_ref
     }
 }
 

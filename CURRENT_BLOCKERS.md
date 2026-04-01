@@ -2,7 +2,7 @@
 
 Status: no active blockers.
 
-Last reviewed: 2026-03-28 after `W053` grouped-aggregation gate audit.
+Last reviewed: 2026-04-01 after `W054` Epic E1 editor-facade refactor validation.
 
 ---
 
@@ -33,6 +33,16 @@ Last reviewed: 2026-03-28 after `W053` grouped-aggregation gate audit.
 - **Recommendation**: workaround
 - **Opened**: 2026-03-16
 - **Resolved**: 2026-03-16
+
+### BLK-FML-003: Rust compiler ICE briefly interrupted full `cargo test -p oxfml_core` validation
+
+- **Status**: resolved
+- **Impact**: temporarily interrupted full-suite validation during `W054` Epic E1
+- **Current state**: a later serial rerun of `cargo test -p oxfml_core` completed successfully with the E1 slice in place
+- **Exact unblock steps**: completed; reran the full suite after the focused editor/refactor passes finished and the transient compiler failure did not recur
+- **Recommendation**: workaround
+- **Opened**: 2026-04-01
+- **Resolved**: 2026-04-01
 
 ---
 

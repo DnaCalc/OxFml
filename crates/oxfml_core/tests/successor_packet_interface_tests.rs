@@ -2,16 +2,17 @@ use std::collections::BTreeMap;
 
 use oxfml_core::binding::NameKind;
 use oxfml_core::eval::EvaluationContext;
-use oxfml_core::host::SingleFormulaHost;
 use oxfml_core::interface::{
     HostProviderOutcomeKind, InMemoryLibraryContextProvider, LibraryContextProvider,
-    LibraryContextSnapshotRef, ReturnedValueSurface, ReturnedValueSurfaceKind,
-    TypedContextQueryBundle, TypedContextQueryFamily, classify_library_context_field,
+    LibraryContextSnapshotRef, PinnedLibraryContextView, ReturnedValueSurface,
+    ReturnedValueSurfaceKind, TypedContextQueryBundle, TypedContextQueryFamily,
+    classify_library_context_field,
 };
 use oxfml_core::semantics::{
     LibraryAvailabilityState, LibraryContextSnapshot, LibraryContextSnapshotEntry,
     RegistrationSourceKind,
 };
+use oxfml_core::substrate::host::SingleFormulaHost;
 use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult};
 use oxfunc_core::host_info::{
     CellInfoQuery, HostInfoError, HostInfoProvider, ImageProviderResult, ImageRequest, InfoQuery,
@@ -158,6 +159,53 @@ fn runtime_library_context_provider_pins_and_looks_up_snapshots() {
     assert_eq!(
         provider.snapshot_by_identity(&snapshot_ref),
         Some(test_snapshot())
+    );
+}
+
+#[test]
+fn pinned_library_context_view_prefers_pinned_snapshot_ref_over_provider_current_snapshot() {
+    let pinned_snapshot = test_snapshot();
+    let pinned_snapshot_ref = LibraryContextSnapshotRef::from(&pinned_snapshot);
+    let mut current_snapshot = test_snapshot();
+    current_snapshot.snapshot_version = "v2".to_string();
+    current_snapshot.entries.push(LibraryContextSnapshotEntry {
+        surface_name: "TAKE".to_string(),
+        canonical_id: Some("FUNC.TAKE".to_string()),
+        surface_stable_id: Some("surface:take".to_string()),
+        name_resolution_table_ref: None,
+        semantic_trait_profile_ref: None,
+        gating_profile_ref: None,
+        metadata_status: Some("runtime_snapshot".to_string()),
+        special_interface_kind: None,
+        admission_interface_kind: None,
+        preparation_owner: None,
+        runtime_boundary_kind: None,
+        arity_shape_note: None,
+        interface_contract_ref: Some("contract:take".to_string()),
+        registration_source_kind: RegistrationSourceKind::BuiltIn,
+        parse_bind_state: LibraryAvailabilityState::CatalogKnown,
+        semantic_plan_state: LibraryAvailabilityState::CatalogKnown,
+        runtime_capability_state: Some(LibraryAvailabilityState::CatalogKnown),
+        post_dispatch_state: None,
+    });
+    let current_snapshot_ref = LibraryContextSnapshotRef::from(&current_snapshot);
+    let provider = InMemoryLibraryContextProvider::with_snapshots(
+        current_snapshot_ref,
+        vec![pinned_snapshot.clone(), current_snapshot],
+    );
+
+    let view = PinnedLibraryContextView::new(Some(&provider), Some(&pinned_snapshot_ref), None);
+    let resolved = view
+        .resolve_snapshot()
+        .expect("pinned snapshot should resolve");
+
+    assert_eq!(view.effective_snapshot_ref(), Some(pinned_snapshot_ref));
+    assert_eq!(resolved, pinned_snapshot);
+    assert!(
+        !resolved
+            .entries
+            .iter()
+            .any(|entry| entry.surface_name.eq_ignore_ascii_case("TAKE"))
     );
 }
 

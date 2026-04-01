@@ -17,16 +17,18 @@ Status:
 
 Read together with:
 1. `OXFML_PUBLIC_API_AND_RUNTIME_SERVICE_SKETCH.md`
-2. `OXFML_DNA_ONECALC_HOST_POLICY_BASELINE.md`
-3. `OXFML_CANONICAL_ARTIFACT_SHAPES.md`
-4. `OXFML_MINIMUM_SEAM_SCHEMAS.md`
-5. `OXFML_DELTA_EFFECT_TRACE_AND_REJECT_TAXONOMIES.md`
-6. `fec-f3e/FEC_F3E_DESIGN_SPEC.md`
-7. `formula-language/OXFML_OXFUNC_LIBRARY_CONTEXT_RUNTIME_INTERFACE.md`
-8. `formula-language/OXFML_R1C1_FORMULA_CHANNEL.md`
-9. `formula-language/OXFML_CF_DV_RESTRICTED_SUBLANGUAGES.md`
-10. `formula-language/OXFML_STRUCTURED_REFERENCE_AND_TABLE_BOUNDARY.md`
-11. `formula-language/OXFML_NAME_WORLD_AND_RUNTIME_REGISTRATION_INVALIDATION.md`
+2. `OXFML_CONSUMER_INTERFACE_REARCHITECTURE_PLAN.md`
+3. `OXFML_CONSUMER_INTERFACE_AND_FACADE_CONTRACT_V1.md`
+4. `OXFML_DNA_ONECALC_HOST_POLICY_BASELINE.md`
+5. `OXFML_CANONICAL_ARTIFACT_SHAPES.md`
+6. `OXFML_MINIMUM_SEAM_SCHEMAS.md`
+7. `OXFML_DELTA_EFFECT_TRACE_AND_REJECT_TAXONOMIES.md`
+8. `fec-f3e/FEC_F3E_DESIGN_SPEC.md`
+9. `formula-language/OXFML_OXFUNC_LIBRARY_CONTEXT_RUNTIME_INTERFACE.md`
+10. `formula-language/OXFML_R1C1_FORMULA_CHANNEL.md`
+11. `formula-language/OXFML_CF_DV_RESTRICTED_SUBLANGUAGES.md`
+12. `formula-language/OXFML_STRUCTURED_REFERENCE_AND_TABLE_BOUNDARY.md`
+13. `formula-language/OXFML_NAME_WORLD_AND_RUNTIME_REGISTRATION_INVALIDATION.md`
 
 ## 2. Authority Boundary
 OxFml remains authoritative for:
@@ -51,6 +53,12 @@ Hosts must not:
 2. collapse accepted candidate into committed publication,
 3. replace typed evaluator/runtime outcomes with generic host failures,
 4. hide snapshot drift or host/provider truth behind opaque mutable globals.
+
+Current consumer-surface direction:
+1. hosts should be steered toward the runtime facade family defined in `OXFML_CONSUMER_INTERFACE_REARCHITECTURE_PLAN.md` once that packaging exists,
+2. this document remains the semantic host/runtime contract,
+3. the current supported Rust-facing host surface remains the exercised host/session/provider APIs until `W054` lands,
+4. consumer-surface packaging work must compose over the frozen OxFml/OxFunc shared interface families rather than reopen them.
 
 ## 3. Host Modes
 Two host modes are in scope for the current OxFml contract.

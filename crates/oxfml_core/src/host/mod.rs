@@ -16,10 +16,11 @@ use crate::eval::{
     EvaluationOutput, evaluate_formula,
 };
 use crate::interface::{
-    LibraryContextProvider, LibraryContextSnapshotRef, RegisteredExternalCatalogController,
-    RegisteredExternalCatalogMutationRequest, RegisteredExternalCatalogMutationResult,
-    ReturnedValueSurface, ReturnedValueSurfaceKind, TableCallerRegion, TableDescriptor, TableRef,
-    TypedContextQueryBundle, TypedContextQueryBundleSpec,
+    LibraryContextProvider, LibraryContextSnapshotRef, PinnedLibraryContextView,
+    RegisteredExternalCatalogController, RegisteredExternalCatalogMutationRequest,
+    RegisteredExternalCatalogMutationResult, ReturnedValueSurface, ReturnedValueSurfaceKind,
+    TableCallerRegion, TableDescriptor, TableRef, TypedContextQueryBundle,
+    TypedContextQueryBundleSpec,
 };
 use crate::red::{RedProjection, project_red_view_incremental};
 use crate::scheduler::{ExecutionContract, build_execution_contract};
@@ -60,6 +61,7 @@ struct CachedHostArtifacts {
 pub struct SingleFormulaHost {
     pub formula_stable_id: String,
     pub formula_text: String,
+    pub stored_formula_text: Option<String>,
     pub formula_channel_kind: crate::source::FormulaChannelKind,
     pub formula_text_version: u64,
     pub structure_context_version: String,
@@ -153,6 +155,7 @@ impl SingleFormulaHost {
         Self {
             formula_stable_id: formula_stable_id.into(),
             formula_text: formula_text.into(),
+            stored_formula_text: None,
             formula_channel_kind: crate::source::FormulaChannelKind::WorksheetA1,
             formula_text_version: 1,
             structure_context_version: "host-struct-v1".to_string(),
@@ -180,6 +183,35 @@ impl SingleFormulaHost {
         self.formula_text = formula_text.into();
         self.formula_text_version += 1;
         self.cached_artifacts = None;
+    }
+
+    pub fn set_formula_source(&mut self, source: &FormulaSourceRecord) {
+        let mut invalidate = false;
+
+        if self.formula_stable_id != source.formula_stable_id.0 {
+            self.formula_stable_id = source.formula_stable_id.0.clone();
+            invalidate = true;
+        }
+        if self.formula_text != source.entered_formula_text {
+            self.formula_text = source.entered_formula_text.clone();
+            invalidate = true;
+        }
+        if self.stored_formula_text != source.stored_formula_text {
+            self.stored_formula_text = source.stored_formula_text.clone();
+            invalidate = true;
+        }
+        if self.formula_channel_kind != source.formula_channel_kind {
+            self.formula_channel_kind = source.formula_channel_kind;
+            invalidate = true;
+        }
+        if self.formula_text_version != source.formula_text_version.0 {
+            self.formula_text_version = source.formula_text_version.0;
+            invalidate = true;
+        }
+
+        if invalidate {
+            self.cached_artifacts = None;
+        }
     }
 
     pub fn set_formula_channel_kind(
@@ -269,13 +301,47 @@ impl SingleFormulaHost {
         query_bundle: TypedContextQueryBundle<'_>,
         library_context_provider: Option<&dyn LibraryContextProvider>,
     ) -> Result<HostRecalcOutput, String> {
+        self.recalc_with_library_context_view(
+            backend,
+            query_bundle,
+            PinnedLibraryContextView::new(library_context_provider, None, None),
+        )
+    }
+
+    pub fn recalc_with_interfaces_and_snapshot_ref(
+        &mut self,
+        backend: EvaluationBackend,
+        query_bundle: TypedContextQueryBundle<'_>,
+        library_context_provider: Option<&dyn LibraryContextProvider>,
+        library_context_snapshot_ref: Option<&LibraryContextSnapshotRef>,
+    ) -> Result<HostRecalcOutput, String> {
+        self.recalc_with_library_context_view(
+            backend,
+            query_bundle,
+            PinnedLibraryContextView::new(
+                library_context_provider,
+                library_context_snapshot_ref,
+                None,
+            ),
+        )
+    }
+
+    pub fn recalc_with_library_context_view(
+        &mut self,
+        backend: EvaluationBackend,
+        query_bundle: TypedContextQueryBundle<'_>,
+        library_context_view: PinnedLibraryContextView<'_>,
+    ) -> Result<HostRecalcOutput, String> {
         let typed_query_bundle_spec = query_bundle.freeze_candidate_spec();
-        let source = FormulaSourceRecord::new(
+        let mut source = FormulaSourceRecord::new(
             self.formula_stable_id.clone(),
             self.formula_text_version,
             self.formula_text.clone(),
         )
         .with_formula_channel_kind(self.formula_channel_kind);
+        if let Some(stored_formula_text) = &self.stored_formula_text {
+            source = source.with_stored_formula_text(stored_formula_text.clone());
+        }
         let cached_artifacts = self.cached_artifacts.as_ref();
         let parse = parse_formula_incremental(
             ParseRequest {
@@ -334,14 +400,21 @@ impl SingleFormulaHost {
         let format_profile = query_bundle
             .locale_ctx
             .map(|_| "locale-format-context".to_string());
-        let library_context_snapshot =
-            library_context_provider.map(LibraryContextProvider::current_snapshot);
-        let library_context_snapshot_ref = library_context_snapshot
-            .as_ref()
-            .map(LibraryContextSnapshotRef::from);
+        let library_context_snapshot = library_context_view.resolve_snapshot();
+        if let Some(snapshot_ref) = library_context_view.snapshot_ref() {
+            if library_context_snapshot.is_none() {
+                return Err(format!(
+                    "requested library context snapshot {}@{} did not resolve",
+                    snapshot_ref.snapshot_id, snapshot_ref.snapshot_version
+                ));
+            }
+        }
+        let library_context_snapshot_ref = library_context_view.effective_snapshot_ref();
         let (semantic_plan, semantic_plan_reused) = if let Some(previous) = cached_artifacts {
             if previous.bound_formula.bind_hash == bind.bound_formula.bind_hash
                 && previous.semantic_plan_catalog_identity == semantic_plan_catalog_identity
+                && previous.semantic_plan.library_context_snapshot_ref
+                    == library_context_snapshot_ref
                 && previous.locale_profile == locale_profile
                 && previous.date_system == date_system
                 && previous.format_profile == format_profile
@@ -484,6 +557,9 @@ impl SingleFormulaHost {
         locale_ctx: Option<&LocaleFormatContext<'_>>,
     ) -> Result<HostRecalcOutput, String> {
         let mut host = SingleFormulaHost::new(&scenario.scenario_id, &scenario.formula);
+        if let Some(stored_formula_text) = &scenario.stored_formula_text {
+            host.stored_formula_text = Some(stored_formula_text.clone());
+        }
         for (name, summary) in &scenario.input_bindings {
             apply_empirical_input_binding(&mut host, name, summary)?;
         }
