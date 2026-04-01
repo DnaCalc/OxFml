@@ -8,7 +8,7 @@ Relationship: outbound consumer-architecture and migration note from OxFml for t
 Record the current OxFml-side plan for migrating DNA OneCalc onto the new consumer-facing OxFml architecture without reopening the frozen OxFml <-> OxFunc seam.
 
 This note is an OxFml-owned design and migration input.
-It is not a bilateral freeze packet and it does not claim that the new facade modules already exist.
+It is not a bilateral freeze packet.
 
 ## 2. Core Message
 OxFml has now turned the earlier facade direction into one canonical consumer
@@ -25,13 +25,12 @@ Current OxFml reading:
    deepening long-lived dependence on historical OxFml host, language-service,
    and replay entry surfaces,
 2. DNA OneCalc should not build a competing wrapper vocabulary around frozen OxFml/OxFunc packet families,
-3. once the new facades exist, DNA OneCalc should migrate onto them as the preferred integration shape,
+3. DNA OneCalc should migrate onto the landed facades as the preferred integration shape,
 4. the new canonical packet deliberately weights DNA OneCalc's direct consumer
    experience highest, especially around runtime assembly burden, editor
    stitching burden, and function-help ownership at the consumer boundary,
-5. OxFml now treats the consumer contract as provisionally frozen for the next
-   implementation wave, with only bounded implementation-driven clarifications
-   left open.
+5. OxFml now treats the consumer contract as the landed `OxFml_V1` surface for
+   downstream implementation.
 
 Current OxFml refinement after the latest OneCalc input:
 1. `RuntimeEnvironment` is now explicitly provider-plus-pin and reusable rather
@@ -65,12 +64,10 @@ Target surface after `W054` is:
 3. replay facade.
 
 Current implementation reality:
-1. historical crate-root, host, language-service, and replay helper surfaces
-   still exist in OxFml code today,
-2. those surfaces are implementation substrate during the refactor, not the
-   intended consumer contract,
-3. any temporary transition path should be treated as a short-lived refactor aid
-   rather than a new supported downstream architecture.
+1. the facade modules now exist in OxFml code,
+2. ordinary downstream integration should use those facade modules,
+3. historical low-level surfaces that still exist are implementation substrate
+   or explicit `test_support`, not the intended downstream contract.
 
 ## 5. Detailed Migration Plan For DNA OneCalc
 

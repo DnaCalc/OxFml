@@ -8,21 +8,21 @@ It exists to turn the current broad redesign direction into one concrete packet
 that downstream users can compare against and implement toward.
 
 Status:
-1. canonical OxFml draft for consumer-facing interface redesign,
-2. implementation-driving for `W054`,
+1. canonical OxFml consumer-facing interface contract for `OxFml_V1`,
+2. the implemented and documented consumer-facing architecture packet for `W054`,
 3. intended to replace ad hoc consumer-specific interpretations of the facade
    direction,
 4. compatible with the frozen OxFml <-> OxFunc seam,
-5. current provisionally frozen consumer-seam packet from the OxFml side for
-   downstream consumer migration,
-6. the named facade set is only partially landed in code today:
-   - runtime facade has a first implementation slice,
-   - editor facade has a first implementation slice,
-   - replay facade has a first implementation slice,
-   - editor function-help now has a first canonical packet at the facade
-     boundary,
-   - replay projection now has first fixture-family and retained-witness
-     metadata carriage.
+5. frozen `OxFml_V1` consumer-seam packet from the OxFml side for downstream
+   consumer migration,
+6. the named facade set has landed in code:
+   - runtime facade is implemented,
+   - editor facade is implemented,
+   - replay facade is implemented,
+   - editor function-help has a canonical packet at the facade boundary,
+   - replay projection carries fixture-family and retained-witness metadata,
+   - ordinary public consumer entry is `consumer::runtime`,
+     `consumer::editor`, and `consumer::replay`.
 
 Read together with:
 1. `OXFML_CONSUMER_INTERFACE_REARCHITECTURE_PLAN.md`
@@ -66,24 +66,25 @@ Current consumer-side disposition:
    treated as the most important acknowledgment of the target shape for runtime,
    editor, and replay packaging.
 
-## 2A. Provisional Freeze Rule
-This packet is now provisionally frozen as the consumer-facing seam target for:
+## 2A. Freeze Rule
+This packet is now frozen as the `OxFml_V1` consumer-facing seam target for:
 1. `DNA OneCalc`
 2. `OxCalc`
 3. `OxReplay`
 
 Working meaning:
-1. downstream implementation and migration work should now target this packet,
-2. broad architecture direction should not be renegotiated again by default,
-3. only bounded implementation-driven issues should reopen this packet,
-4. any such reopen should preserve the frozen OxFml <-> OxFunc seam.
+1. downstream implementation and migration work should target this packet,
+2. the broad architecture direction is no longer open for `W054`,
+3. any later issue belongs to a new bounded follow-on workset rather than to
+   `W054`,
+4. any such future follow-on must preserve the frozen OxFml <-> OxFunc seam.
 
 Explicit reopen rule:
-1. reopen only for concrete implementation-discovered issues,
-2. prefer additive or narrowing clarifications over structural redesign,
+1. do not reopen `W054`,
+2. prefer later bounded follow-on worksets over reopening the consumer
+   architecture packet,
 3. do not use implementation churn alone as a reason to widen semantic scope,
-4. record any reopen as a bounded `W054` follow-on clarification rather than a
-   new broad consumer-architecture restart.
+4. any future issue must be recorded outside `W054`.
 
 ## 3. Hard Boundary: Frozen OxFml/OxFunc Seam
 This contract does not reopen the frozen OxFml/OxFunc seam.
@@ -511,33 +512,32 @@ Working rule:
    discovery.
 
 ## 11. Implementation Contract For W054
-`W054` should now be read as:
-1. runtime facade implementation first,
-2. editor facade implementation second,
-3. replay facade implementation third,
-4. internal refactoring support only where it materially accelerates migration
-   toward the facade shape,
-5. downstream coordination notes updated after each wave,
-6. the concrete wave mechanics are owned by
+`W054` should now be read as an executed redesign/refactor program:
+1. runtime facade implemented,
+2. editor facade implemented,
+3. replay facade implemented,
+4. public consumer packaging reset to facade-first,
+5. downstream coordination notes updated to the landed public surface,
+6. concrete execution history remains recorded in
    `OXFML_CONSUMER_INTERFACE_IMPLEMENTATION_PROGRAM_V1.md`.
 
-Current code-floor note:
-1. Wave 1 now has a first real code slice under `crates/oxfml_core/src/consumer/runtime`,
-2. that slice exposes:
+Current landed code note:
+1. `crates/oxfml_core/src/consumer/runtime` exposes:
    - `RuntimeEnvironment`
    - `RuntimeFormulaRequest`
    - `RuntimeFormulaResult`
    - `RuntimeSessionFacade`
-3. it is still only a first runtime wave floor, not the full `W054` endpoint.
-4. Wave 2 now also has:
-   - `crates/oxfml_core/src/consumer/editor`
-5. Wave 3 now also has:
-   - `crates/oxfml_core/src/consumer/replay`
-6. the current editor slice now includes canonical function-help packet
-   carriage, and the current replay slice now includes retained-witness and
-   fixture-family metadata projection.
-7. those slices are still partial and exist to advance the intended facade
-   endpoint, not to claim the full consumer-endpoint has landed.
+2. `crates/oxfml_core/src/consumer/editor` exposes:
+   - `EditorEnvironment`
+   - `EditorDocument`
+   - `EditorEditService`
+   - `EditorInteractionResult`
+3. `crates/oxfml_core/src/consumer/replay` exposes:
+   - `ReplayProjectionRequest`
+   - `ReplayProjectionService`
+   - `ReplayProjectionResult`
+4. public `substrate::...` access is gone from the library surface,
+5. remaining advanced access is explicit `test_support` only.
 
 The key implementation test is:
 1. ordinary consumers should be able to use OxFml through stable environment,
@@ -546,29 +546,18 @@ The key implementation test is:
 3. while still preserving pinned runtime truth, canonical result truth, and
    replay/provenance truth.
 
-## 12. Questions Back To Consumers
-The next consumer-note round should answer only implementation-shaping
-questions, not reopen the architecture packet itself.
+## 12. W054 Scope Boundary
+`W054` includes:
+1. the consumer-facing architecture redesign,
+2. the facade module implementation,
+3. the facade-first public packaging reset,
+4. the consumer-facing documentation and notes sync for that architecture.
 
-For `DNA OneCalc`:
-1. which current entrypoints should be migrated first in code,
-2. whether canonical function-help payload return from the editor facade is
-   enough to retire local OxFunc stitching.
-
-For `OxCalc`:
-1. whether the runtime migration table is sufficient for first uptake,
-2. whether replay capture should project directly from runtime/session result in
-   the first wave,
-3. whether the explicit correlation subset, surfaced fact list, and
-   caller-context dependence signal are now sufficient for the first runtime
-   seam packet.
-
-For `OxReplay`:
-1. whether the proposed replay projection result contains enough mandatory
-   metadata for alias, pin, and registry-aware intake,
-2. whether embedded alias publication is sufficient for the first wave,
-3. whether session lifecycle is the right first post-FEC preferred projection
-   family.
+`W054` does not include:
+1. later replay breadth expansion beyond the landed `ReplayProjection*` floor,
+2. further optional narrowing of explicit `test_support` helpers,
+3. new downstream uptake work inside other repos,
+4. any future refinement that would require a new workset name.
 
 ## 13. Working Rule
 Use this document as the current OxFml-owned consumer-interface packet for:
@@ -584,7 +573,7 @@ Do not use it to:
 4. claim that the facade modules already exist today.
 
 Current freeze rule:
-1. this packet is now provisionally frozen for the next implementation wave,
+1. this packet is now the `OxFml_V1` consumer contract,
 2. downstream repos should implement against it,
-3. minor implementation-driven issues may still narrow or clarify it later,
-4. such later changes must be explicit and bounded.
+3. `W054` itself is not a lane for further broadening,
+4. any future change must be explicit, bounded, and outside `W054`.

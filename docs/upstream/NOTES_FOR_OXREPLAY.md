@@ -29,10 +29,10 @@ Current OxFml message to OxReplay is:
 Current OxFml read:
 1. OxReplay is treated as aligned with this replay-facing direction at the
    contract level,
-2. the remaining replay-facade work is implementation and metadata export
-   realization, not broad contract disagreement,
-3. the consumer contract is now treated as provisionally frozen for the next
-   implementation wave.
+2. the consumer-facing replay contract is now landed and should be treated as
+   the current OxFml replay surface,
+3. the consumer contract is now treated as the landed `OxFml_V1` surface for
+   downstream implementation.
 
 ## 3. Current OxFml Reply To OxReplay's Main Requests
 OxFml's current answer is:
@@ -70,7 +70,7 @@ Current first-wave narrowing:
    projection uptake.
 
 ## 5. Current Implementation Reality
-Historical helper and adapter projection paths still exist in code today, but:
+Historical helper and adapter projection paths may still exist in code today, but:
 1. the replay facade is the intended consumer contract,
 2. broad internal artifact use should be treated as advanced provenance or
    schema work, not as the preferred long-term consumer integration path,

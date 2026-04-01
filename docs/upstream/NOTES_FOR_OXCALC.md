@@ -19,7 +19,7 @@ For the next OxCalc coordination round, the important points are:
 4. OxFml still remains authoritative for evaluator artifact meaning, reject semantics, replay-safe identity, and fence meaning.
 
 ## 2AA. Consumer-Facing Runtime Refactor Direction
-OxFml is now also planning a consumer-facing interface refactor under `W054`.
+OxFml has now landed the consumer-facing interface refactor under `W054`.
 
 Current OxFml message to OxCalc:
 1. this is a packaging and consumer-entry refactor, not a reopening of the OxFml <-> OxFunc seam,
@@ -67,9 +67,8 @@ Current OxFml finish-pass after the latest OxCalc note is:
    dependence signal where OxFml can surface it honestly,
 4. OxFml continues to treat these as bounded finish-work on the runtime-facing
    contract, not as a broad seam reopen,
-5. OxFml now treats the consumer contract as provisionally frozen for the next
-   implementation wave, with only bounded implementation-driven clarifications
-   left open.
+5. OxFml now treats the consumer contract as the landed `OxFml_V1` surface for
+   downstream implementation.
 
 ## 2A. New Coordination Packet: Host Runtime and External Requirements
 OxFml now has a single canonical draft intended to anchor the next host/coordinator seam round:

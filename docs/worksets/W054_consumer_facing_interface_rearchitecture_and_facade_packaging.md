@@ -22,7 +22,7 @@ canonical transforms as implementation substrate.
 3. Define promoted boundary objects such as runtime environment, editor environment, replay projection service, and provider-plus-pin runtime view.
 4. Update the core user-facing OxFml docs to point to the new consumer-oriented model.
 5. Plan the staged public packaging reset.
-6. Keep the distinction clear between intended consumer contract and current implementation substrate while the facade modules are still partial.
+6. Keep the distinction clear between intended consumer contract and current implementation substrate during the redesign and rollout.
 7. Keep the frozen OxFml/OxFunc shared interface families unchanged while consumer-facing packaging evolves.
 
 ### Out of scope
@@ -173,9 +173,8 @@ Working rule:
   downstream notes.
 - The runtime-facing contract explicitly names the first stable correlation
   subset, surfaced fact visibility rule, and caller-context carriage rule.
-- The consumer-interface contract is provisionally frozen as the target seam
-  packet for downstream implementation, with only bounded implementation-driven
-  clarifications left open.
+- The consumer-interface contract is frozen as the `OxFml_V1` seam packet for
+  downstream implementation.
 - Current docs no longer treat the flat export surface as the preferred long-term integration shape.
 - Current docs clearly distinguish the supported surface now from the target facade surface later.
 - Current docs do not imply that consumer-facing packaging work reopens the frozen OxFml/OxFunc seam.
@@ -183,6 +182,8 @@ Working rule:
 - Remaining packaging and implementation work is explicitly listed.
 - The implementation program is explicit enough to drive code refactoring and
   downstream uptake coordination without reopening the architecture packet.
+- For `OxFml_V1`, the redesign/refactor scope is finite and any future
+  broadening must be outside `W054`.
 
 ## Pre-Closure Verification Checklist
 
@@ -199,49 +200,16 @@ Working rule:
 | 9 | CURRENT_BLOCKERS.md updated (new/resolved)? | |
 
 ## Status
-- execution_state: in_progress
-- scope_completeness: scope_partial
-- target_completeness: target_partial
-- integration_completeness: partial
-- open_lanes:
-  - the redesign direction and provisionally frozen consumer packet now have an
-     explicit implementation program, and Waves 1-3 now each have first facade
-     code slices under `crates/oxfml_core/src/consumer/runtime`,
-     `crates/oxfml_core/src/consumer/editor`, and
-     `crates/oxfml_core/src/consumer/replay`, but the broader facade family is
-     still partial
-  - the implementation program is no longer only a wave outline; it now
-    includes a helper-by-helper migration matrix and a complete substrate
-    demotion map, so the remaining work can be driven as a full refactor rather
-    than as incremental discovery
-  - Wave 1 runtime is now at the planned `R1` parity floor:
-    facade-native one-shot execution, repeated execution with reuse, managed
-    open / execute / commit / abort-expire, one-step execute-to-commit,
-    provider-plus-pin library-context selection, typed query bundle carriage,
-    registered-external execution, runtime-owned registration/catalog mutation,
-    and bounded managed diagnostics for overlay/locus-claim state
-  - Wave 4 has now materially advanced in code: flat crate-root facade
-    re-exports are gone, direct top-level `host` / `session` /
-    `language_service` / `oxfunc_adapter` exposure is demoted, ordinary
-    consumer discovery now runs through explicit `consumer::...` module paths,
-    and Epic E1 has now removed public `substrate::language_service` reach
-  - public `substrate::...` reach is now gone; the remaining advanced access
-    has been narrowed to explicit `test_support::{host,session,oxfunc_adapter}`
-    support surfaces and private implementation substrate
-  - temporary transition helpers still need tighter cleanup rules and later
-    removal once facade-native paths are strong enough
-  - Wave 2 editor coverage is now at the planned E1 floor: editor payload
-    vocabulary is facade-owned, ordinary editor tests target
-    `consumer::editor`, public `substrate::language_service` access is gone,
-    and facade-owned `EditorPlanOptions` plus `EditorAnalysisStage` now
-    replace the last substrate-shaped public editor config
-  - Wave 3 replay is now at the planned `P1` parity floor: ordinary replay
-    projection is runtime-first, bounded first-host capture now flows through
-    `ReplayFirstHostCaptureSource`, managed runtime-session lifecycle packets
-    remain first-class replay sources, raw `host_result` and `session_record`
-    constructors are no longer part of the public replay contract, and OxFunc
-    adapter evidence helpers now live under explicit `test_support`
-  - full-suite validation is green after the current runtime/editor/replay pass
-  - any future reopen should be bounded to implementation-driven clarifications
-    rather than broad redesign
-- claim_confidence: draft
+- execution_state: complete
+- scope_completeness: scope_complete
+- target_completeness: target_complete
+- integration_completeness: integrated
+- open_lanes: none
+- claim_confidence: high
+
+## Out Of Scope After W054
+The following are not open `W054` lanes:
+1. later replay breadth expansion beyond the landed replay facade floor,
+2. optional further narrowing of explicit `test_support` helpers,
+3. downstream uptake or migration work inside consumer repos,
+4. any future bounded clarification that would require a new workset.

@@ -1,7 +1,7 @@
 # OxFml Consumer Interface Implementation Program V1
 
 ## 1. Purpose
-This document turns the provisionally frozen consumer contract into a concrete
+This document turns the frozen `OxFml_V1` consumer contract into a concrete
 implementation program for `W054`.
 
 It exists to answer:
@@ -810,8 +810,8 @@ Phase C: Replay parity and adapter collapse
 1. keep ordinary consumer replay projection on runtime-first and bounded
    first-host-capture sources only
 2. keep OxFunc adapter artifacts in explicit test-support
-3. internalize replay substrate helpers further once broader replay parity is
-   reached
+3. stop ordinary replay consumers from depending on broader raw projection
+   substrate
 
 Phase D: Final packaging cut
 1. remove public `substrate::...` access entirely
@@ -820,26 +820,17 @@ Phase D: Final packaging cut
 3. update all downstream notes and docs to match that final public surface
 
 ## 11. Status
-- execution_state: in_progress
-- scope_completeness: scope_partial
-- target_completeness: target_partial
-- integration_completeness: partial
-- open_lanes:
-  - first runtime, editor, and replay facade modules now exist, but each wave
-    is still only partial relative to the full W054 target
-  - some temporary transition helpers still exist in code, but they should not
-    define the public architecture and still need later cleanup/removal
-  - `W043` provider-plus-pin normalization still needs to stay aligned with
-    the remaining runtime, editor, and replay facade work
-  - Epic E1 editor parity is now at its planned floor:
-    editor payload vocabulary now lives under `consumer::editor`, facade-owned
-    `EditorPlanOptions` and `EditorAnalysisStage` replace the last
-    substrate-shaped public editor config, ordinary editor-facing tests now
-    exercise the facade contract, public `substrate::language_service` access
-    has been removed, and `language_service` now acts as private editor
-    substrate
-  - replay projection now carries retained-witness, fixture-family, bounded
-    first-host-capture, and managed-session lifecycle metadata, while raw
-    host-result and session-record constructors are no longer part of the
-    public replay contract
-  - full-suite validation is green again after the E1 pass
+- execution_state: complete
+- scope_completeness: scope_complete
+- target_completeness: target_complete
+- integration_completeness: integrated
+- open_lanes: none
+
+## 12. Post-W054 Boundary
+This program has been executed for the bounded `W054` scope.
+
+Not retained as open `W054` lanes:
+1. later replay breadth expansion,
+2. optional further narrowing of `test_support`,
+3. downstream migration work in consumer repos,
+4. future bounded clarifications that would require a new workset.
