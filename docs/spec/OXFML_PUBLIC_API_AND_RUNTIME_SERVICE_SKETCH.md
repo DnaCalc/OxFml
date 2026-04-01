@@ -10,7 +10,7 @@ Status rule:
 1. this document remains the detailed code-surface sketch,
 2. `OXFML_HOST_RUNTIME_AND_EXTERNAL_REQUIREMENTS.md` is now the primary host/runtime coordination packet,
 3. this document should be read as a supporting code-shape companion to that host/runtime packet rather than a separate peer host contract,
-4. until `W054` lands real packaging, this document still describes the active supported Rust-facing surface.
+4. after `W054`, this document describes the landed `OxFml_V1` consumer-facing surface shape.
 
 Read together with:
 1. `OXFML_IMPLEMENTATION_SURFACES_AND_STATE_OPTIONS.md`
@@ -42,24 +42,25 @@ Current redesign rule:
    `OXFML_CONSUMER_INTERFACE_IMPLEMENTATION_PROGRAM_V1.md`.
 
 Current support rule:
-1. the facade-first direction remains the target packaging model,
-2. a first partial runtime facade now exists under
+1. the facade-first direction is now the landed `OxFml_V1` packaging model,
+2. the runtime facade exists under
    `crates/oxfml_core/src/consumer/runtime`,
-3. a first partial editor facade now also exists under
+3. the editor facade exists under
    `crates/oxfml_core/src/consumer/editor`,
-4. a first partial replay facade now also exists under
+4. the replay facade exists under
    `crates/oxfml_core/src/consumer/replay`,
-5. ordinary consumer-facing entry should now be treated as explicit module use:
+5. ordinary consumer-facing entry should be treated as explicit module use:
    - `oxfml_core::consumer::runtime`
    - `oxfml_core::consumer::editor`
    - `oxfml_core::consumer::replay`,
-6. the partial editor facade now includes direct canonical function-help packet
-   carriage, and the partial replay facade now includes retained-witness and
-   fixture-family metadata projection,
+6. the editor facade includes direct canonical function-help packet carriage,
+   and the replay facade includes retained-witness and fixture-family metadata
+   projection,
 7. historical direct-consumer substrate is no longer part of the endorsed
-   public contract and now sits behind hidden `substrate::...` namespacing as a
-   temporary advanced transition surface,
-8. consumer-surface cleanup must compose over the frozen OxFml/OxFunc shared
+   public contract,
+8. remaining advanced access is explicit `test_support::...` support surface
+   only, not ordinary downstream contract,
+9. consumer-surface cleanup must compose over the frozen OxFml/OxFunc shared
    interface families rather than redefining them.
 
 The canonical artifact transforms are normative.
@@ -296,13 +297,10 @@ The current preferred packaging shape is:
 2. optional repository/service modules,
 3. an FEC/F3E session service layer,
 4. an optional proving-host helper layer.
-5. a partial `consumer::runtime` facade layer now exists and should be treated
-   as the start of the new preferred user-facing packaging model.
-6. a partial `consumer::editor` facade layer now exists and should be treated
-   as the start of the preferred editing-facing packaging model.
-7. a partial `consumer::replay` facade layer now exists and should be treated
-   as the start of the preferred replay-facing packaging model.
-8. advanced substrate access now lives under `substrate::...`, not as ordinary
+5. `consumer::runtime` is the preferred execution-facing packaging model.
+6. `consumer::editor` is the preferred editing-facing packaging model.
+7. `consumer::replay` is the preferred replay-facing packaging model.
+8. advanced support access now lives under `test_support::...`, not as ordinary
    top-level consumer entry.
 
 This is the API reflection of the hybrid implementation baseline.
@@ -340,15 +338,12 @@ Current expected primary owners:
 8. `W054`: consumer-facing interface rearchitecture and facade packaging
 
 ## 12. Working Rule
-Implementation should treat this document as the current supported Rust-surface baseline while `W054` remains open:
+Implementation should treat this document as the current supported Rust-surface baseline for `OxFml_V1`:
 1. direct transforms and canonical packet/capability surfaces remain supported entrypoints,
 2. publication and reject consequences remain typed and explicit,
-3. the partial runtime facade is now an active supported entry surface for early
-   uptake and validation,
-4. the partial editor facade is now an active supported entry surface for early
-   uptake and validation,
-5. the partial replay facade is now an active supported entry surface for early
-   uptake and validation,
-6. the full facade-first model remains the preferred target endpoint,
+3. the runtime facade is an active supported entry surface,
+4. the editor facade is an active supported entry surface,
+5. the replay facade is an active supported entry surface,
+6. the facade-first model is the preferred current endpoint,
 7. consumer-surface work must not modify the frozen OxFml/OxFunc shared
    interface families.

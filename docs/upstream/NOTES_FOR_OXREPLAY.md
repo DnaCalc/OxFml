@@ -17,6 +17,16 @@ OxFml has now turned the replay-facing consumer direction into one canonical
 consumer packet:
 1. `docs/spec/OXFML_CONSUMER_INTERFACE_AND_FACADE_CONTRACT_V1.md`
 
+Navigation packet for OxReplay:
+1. start with `docs/spec/OXFML_CONSUMER_INTERFACE_AND_FACADE_CONTRACT_V1.md`
+2. then read `docs/spec/OXFML_REPLAY_APPLIANCE_ADAPTER_V1.md`
+3. then read `docs/spec/OXFML_PUBLIC_API_AND_RUNTIME_SERVICE_SKETCH.md`
+4. for replay-governance companions, use `docs/spec/fec-f3e/FEC_F3E_TESTING_AND_REPLAY.md`
+
+Ordinary `OxFml_V1` entry surface for OxReplay:
+1. `oxfml_core::consumer::replay`
+2. `oxfml_core::consumer::runtime` only where replay projection begins from runtime result/session objects
+
 Current OxFml message to OxReplay is:
 1. replay projection is the preferred long-term consumer entry surface,
 2. replay projection remains additive over OxFml semantic truth,

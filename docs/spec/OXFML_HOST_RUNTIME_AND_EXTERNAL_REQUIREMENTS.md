@@ -55,9 +55,9 @@ Hosts must not:
 4. hide snapshot drift or host/provider truth behind opaque mutable globals.
 
 Current consumer-surface direction:
-1. hosts should be steered toward the runtime facade family defined in `OXFML_CONSUMER_INTERFACE_REARCHITECTURE_PLAN.md` once that packaging exists,
+1. hosts should use the runtime facade family defined in `OXFML_CONSUMER_INTERFACE_AND_FACADE_CONTRACT_V1.md`,
 2. this document remains the semantic host/runtime contract,
-3. the current supported Rust-facing host surface remains the exercised host/session/provider APIs until `W054` lands,
+3. the current ordinary Rust-facing host surface is the landed `consumer::runtime` family,
 4. consumer-surface packaging work must compose over the frozen OxFml/OxFunc shared interface families rather than reopen them.
 
 ## 3. Host Modes

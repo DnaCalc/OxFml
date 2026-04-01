@@ -15,14 +15,19 @@ Status:
 1. canonical OxFml downstream-consumer clarification note,
 2. read together with the documents listed in Section 1A,
 3. does not supersede the broader host/runtime contract or the canonical spec set,
-4. sequence-bound to the current exercised OxFml local floor and the Foundation `DNA_ONECALC_SCOPE_AND_SPEC.md` as of its writing.
+4. sequence-bound to the landed `OxFml_V1` consumer surface and the Foundation `DNA_ONECALC_SCOPE_AND_SPEC.md` as of its writing.
 
 ### 1A. Read Together With
+Start here for DNA OneCalc integration:
+1. `OXFML_CONSUMER_INTERFACE_AND_FACADE_CONTRACT_V1.md` — top-level `OxFml_V1` consumer seam
+2. `OXFML_DNA_ONECALC_DOWNSTREAM_CONSUMER_CONTRACT.md` — this document
+3. `OXFML_PUBLIC_API_AND_RUNTIME_SERVICE_SKETCH.md` — code-facing surface map
+
+Then use these narrower companion specs:
 1. `OXFML_HOST_RUNTIME_AND_EXTERNAL_REQUIREMENTS.md` — primary host/runtime coordination packet
 2. `OXFML_DNA_ONECALC_HOST_POLICY_BASELINE.md` — reduced-profile OneCalc companion
-3. `OXFML_PUBLIC_API_AND_RUNTIME_SERVICE_SKETCH.md` — code-facing surface sketch
-4. `OXFML_CONSUMER_INTERFACE_REARCHITECTURE_PLAN.md` — preferred consumer-facing facade direction
-5. `OXFML_CONSUMER_INTERFACE_AND_FACADE_CONTRACT_V1.md` — canonical consumer-facing contract packet
+3. `OXFML_CONSUMER_INTERFACE_REARCHITECTURE_PLAN.md` — design background
+4. `OXFML_CONSUMER_INTERFACE_AND_FACADE_CONTRACT_V1.md` — canonical consumer-facing contract packet
 6. `formula-language/OXFML_EDITOR_LANGUAGE_SERVICE_AND_HOST_INTEGRATION_PLAN.md` — editor/language-service plan
 7. `OXFML_FIXTURE_HOST_AND_COORDINATOR_STANDIN_PACKET.md` — deterministic fixture-host packet
 8. `OXFML_CANONICAL_ARTIFACT_SHAPES.md` — canonical artifact ladder
@@ -34,6 +39,11 @@ Status:
 ---
 
 ## 2. Host/Runtime Subset For DNA OneCalc
+Ordinary `OxFml_V1` entry rule for DNA OneCalc:
+1. use `oxfml_core::consumer::runtime` for execution-facing integration,
+2. use `oxfml_core::consumer::editor` for edit/help/completion integration,
+3. use `oxfml_core::consumer::replay` for replay-aware projection,
+4. do not treat any explicit `test_support::...` access as ordinary downstream contract.
 
 ### 2.1 OC-H0 Mandatory Fields (Literal And Function Core)
 The narrowest honest H0 host path requires these fields explicitly:

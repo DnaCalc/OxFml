@@ -2,6 +2,29 @@
 
 This directory is the canonical OxFml spec set for the formula-processing and single-node evaluator lane.
 
+## Consumer Repo Entry Points
+For the landed `OxFml_V1` consumer seam, use this reading order:
+
+1. All consumer repos start with:
+   - `docs/spec/OXFML_CONSUMER_INTERFACE_AND_FACADE_CONTRACT_V1.md`
+   - `docs/spec/OXFML_PUBLIC_API_AND_RUNTIME_SERVICE_SKETCH.md`
+2. `DNA OneCalc` then reads:
+   - `docs/spec/OXFML_DNA_ONECALC_DOWNSTREAM_CONSUMER_CONTRACT.md`
+   - `docs/spec/formula-language/OXFML_EDITOR_LANGUAGE_SERVICE_AND_HOST_INTEGRATION_PLAN.md`
+3. `OxCalc` then reads:
+   - `docs/spec/OXFML_HOST_RUNTIME_AND_EXTERNAL_REQUIREMENTS.md`
+   - `docs/spec/formula-language/OXFML_REGISTERED_EXTERNAL_PROVIDER_AND_CALL_REGISTER_ID_BOUNDARY.md`
+4. `OxReplay` then reads:
+   - `docs/spec/OXFML_REPLAY_APPLIANCE_ADAPTER_V1.md`
+   - `docs/spec/fec-f3e/FEC_F3E_TESTING_AND_REPLAY.md`
+
+Ordinary `OxFml_V1` code entry:
+1. `oxfml_core::consumer::runtime`
+2. `oxfml_core::consumer::editor`
+3. `oxfml_core::consumer::replay`
+
+Explicit `test_support::...` access is support-only and not part of the ordinary downstream integration contract.
+
 ## Bootstrap Set
 When starting OxFml design or implementation work, read these documents and ignore archive paths unless you are doing migration archaeology:
 

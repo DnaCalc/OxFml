@@ -6,6 +6,12 @@ This document defines the OxFml-local adapter contract for the Foundation Replay
 It adapts the Foundation `DNA ReCalc` replay governance model into the OxFml canonical spec set without transferring OxFml semantic ownership to Foundation or to generic replay tooling.
 
 Read together with:
+Start here for OxReplay integration:
+1. `OXFML_CONSUMER_INTERFACE_AND_FACADE_CONTRACT_V1.md`
+2. `OXFML_REPLAY_APPLIANCE_ADAPTER_V1.md` — this document
+3. `OXFML_PUBLIC_API_AND_RUNTIME_SERVICE_SKETCH.md`
+
+Then use these replay-governance companions:
 1. `OXFML_ARTIFACT_IDENTITIES_AND_VERSION_KEYS.md`
 2. `OXFML_CANONICAL_ARTIFACT_SHAPES.md`
 3. `OXFML_MINIMUM_SEAM_SCHEMAS.md`
@@ -16,6 +22,11 @@ Read together with:
 8. `fec-f3e/FEC_F3E_FORMAL_AND_ASSURANCE_MAP.md`
 9. `OXFML_CONSUMER_INTERFACE_REARCHITECTURE_PLAN.md`
 10. `OXFML_CONSUMER_INTERFACE_AND_FACADE_CONTRACT_V1.md`
+
+Ordinary `OxFml_V1` entry rule for OxReplay:
+1. use `oxfml_core::consumer::replay` as the preferred replay-facing entry surface,
+2. use `oxfml_core::consumer::runtime` only where replay projection begins from runtime result/session objects,
+3. do not treat any explicit `test_support::...` access as ordinary replay-consumer contract.
 
 ## 2. Scope and Non-Goals
 ### 2.1 Scope

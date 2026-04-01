@@ -21,6 +21,17 @@ For the next OxCalc coordination round, the important points are:
 ## 2AA. Consumer-Facing Runtime Refactor Direction
 OxFml has now landed the consumer-facing interface refactor under `W054`.
 
+Navigation packet for OxCalc:
+1. start with `docs/spec/OXFML_CONSUMER_INTERFACE_AND_FACADE_CONTRACT_V1.md`
+2. then read `docs/spec/OXFML_HOST_RUNTIME_AND_EXTERNAL_REQUIREMENTS.md`
+3. then read `docs/spec/OXFML_PUBLIC_API_AND_RUNTIME_SERVICE_SKETCH.md`
+4. for registered-external seam details, use `docs/spec/formula-language/OXFML_REGISTERED_EXTERNAL_PROVIDER_AND_CALL_REGISTER_ID_BOUNDARY.md`
+
+Ordinary `OxFml_V1` entry surface for OxCalc:
+1. `oxfml_core::consumer::runtime`
+2. `oxfml_core::consumer::editor` where OxCalc consumes editor-facing services
+3. `oxfml_core::consumer::replay` where OxCalc consumes replay projection
+
 Current OxFml message to OxCalc:
 1. this is a packaging and consumer-entry refactor, not a reopening of the OxFml <-> OxFunc seam,
 2. OxCalc is the primary downstream consumer of the planned runtime facade,

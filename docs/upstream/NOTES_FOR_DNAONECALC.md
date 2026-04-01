@@ -15,6 +15,17 @@ OxFml has now turned the earlier facade direction into one canonical consumer
 interface packet:
 1. `docs/spec/OXFML_CONSUMER_INTERFACE_AND_FACADE_CONTRACT_V1.md`
 
+Navigation packet for DNA OneCalc:
+1. start with `docs/spec/OXFML_CONSUMER_INTERFACE_AND_FACADE_CONTRACT_V1.md`
+2. then read `docs/spec/OXFML_DNA_ONECALC_DOWNSTREAM_CONSUMER_CONTRACT.md`
+3. then read `docs/spec/OXFML_PUBLIC_API_AND_RUNTIME_SERVICE_SKETCH.md`
+4. for editor-specific behavior, use `docs/spec/formula-language/OXFML_EDITOR_LANGUAGE_SERVICE_AND_HOST_INTEGRATION_PLAN.md`
+
+Ordinary `OxFml_V1` entry surface for DNA OneCalc:
+1. `oxfml_core::consumer::runtime`
+2. `oxfml_core::consumer::editor`
+3. `oxfml_core::consumer::replay`
+
 OxFml intends to move DNA OneCalc toward a cleaner consumer-facing integration model:
 1. runtime facade for execution,
 2. editor facade for edit/diagnostic/completion/help interactions,
