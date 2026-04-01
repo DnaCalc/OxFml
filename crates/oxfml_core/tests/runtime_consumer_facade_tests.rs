@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use oxfml_core::consumer::runtime::{
     RuntimeEnvironment, RuntimeFormulaRequest, RuntimeManagedSessionError,
     RuntimeManagedSessionPhase, RuntimeSessionFacade,
@@ -8,9 +10,19 @@ use oxfml_core::semantics::{
 };
 use oxfml_core::{
     AcceptDecision, FormulaSourceRecord, InMemoryLibraryContextProvider, LibraryContextSnapshotRef,
-    TypedContextQueryBundle,
+    RegisteredExternalCatalogController, RegisteredExternalCatalogMutationRequest,
+    RegisteredExternalCatalogMutationResult, RegisteredExternalHostRegistrationRequest,
+    RegisteredExternalRegistrationChannel, TypedContextQueryBundle, TypedContextQueryFamily,
 };
+use oxfunc_core::functions::call_register_id_family::{
+    RegisterIdRequest, RegisteredExternalDescriptor, RegisteredExternalOriginKind,
+    RegisteredExternalProvider, RegisteredExternalProviderError, RegisteredExternalTarget,
+    RegisteredProcedureSpec,
+};
+use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult, RtdRequest};
+use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
 use oxfunc_core::value::EvalValue;
+use oxfunc_core::value::{CallArgValue, ExcelText};
 
 #[test]
 fn runtime_environment_executes_against_pinned_snapshot_ref() {
@@ -347,6 +359,152 @@ fn runtime_session_facade_executes_and_commits_managed_in_one_step() {
     }
 }
 
+#[test]
+fn runtime_environment_executes_rtd_formula_through_typed_query_bundle() {
+    let locale = oxfunc_core::locale_format::en_us_context();
+    let request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new("runtime:rtd", 1, "=RTD(\"prog\",\"server\",\"topic\")"),
+        TypedContextQueryBundle::new(None, Some(&ValueRtdProvider), Some(&locale), None, None),
+    );
+
+    let result = RuntimeEnvironment::new()
+        .execute(request)
+        .expect("runtime RTD execution should succeed");
+
+    assert!(
+        result
+            .typed_query_bundle_spec
+            .families
+            .contains(&TypedContextQueryFamily::Rtd)
+    );
+    assert_eq!(result.published_worksheet_value, EvalValue::Number(7.0));
+}
+
+#[test]
+fn runtime_environment_executes_registered_external_formula_through_typed_query_bundle() {
+    let provider = RecordingRegisteredExternalProvider::default();
+    let request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new("runtime:call-register", 1, "=CALL(4242,6,7,3)"),
+        TypedContextQueryBundle::default().with_registered_external_provider(Some(&provider)),
+    );
+
+    let result = RuntimeEnvironment::new()
+        .execute(request)
+        .expect("runtime registered-external execution should succeed");
+
+    assert!(
+        result
+            .typed_query_bundle_spec
+            .families
+            .contains(&TypedContextQueryFamily::RegisteredExternal)
+    );
+    assert_eq!(result.published_worksheet_value, EvalValue::Number(14.0));
+    assert_eq!(provider.last_lookup.borrow().as_ref(), Some(&4242.0));
+    match result.evaluation.trace.prepared_calls[0]
+        .registered_external_call_request
+        .as_ref()
+        .expect("normalized call request")
+    {
+        oxfml_core::RegisteredExternalCallRequest {
+            target: RegisteredExternalTarget::RegisterId(register_id),
+            invocation_args,
+        } => {
+            assert_eq!(*register_id, 4242.0);
+            assert_eq!(
+                *invocation_args,
+                vec![
+                    CallArgValue::Eval(EvalValue::Number(6.0)),
+                    CallArgValue::Eval(EvalValue::Number(7.0)),
+                    CallArgValue::Eval(EvalValue::Number(3.0)),
+                ]
+            );
+        }
+        other => panic!("unexpected normalized call request: {other:?}"),
+    }
+}
+
+#[test]
+fn runtime_environment_applies_registered_external_catalog_mutation() {
+    let controller = RecordingCatalogController::default();
+    let environment = RuntimeEnvironment::new();
+    let request = RegisteredExternalCatalogMutationRequest::Register(
+        RegisteredExternalHostRegistrationRequest {
+            registration_channel: RegisteredExternalRegistrationChannel::HostApiRegistration,
+            register_id_request: sample_register_id_request("User32", "MessageBoxW", Some("JJCCJ")),
+            stable_registration_id_hint: Some("REG.messagebox".to_string()),
+            display_name_hint: Some("MessageBoxW".to_string()),
+            help_text_hint: Some("Displays a modal message box.".to_string()),
+            source_project_ref: None,
+            source_module_ref: None,
+            source_procedure_ref: None,
+            host_execution_profile: Some("desktop-trusted".to_string()),
+        },
+    );
+
+    let result = environment
+        .apply_registered_external_catalog_mutation(&controller, &request)
+        .expect("runtime mutation should succeed");
+
+    assert_eq!(controller.recorded.borrow().len(), 1);
+    match result {
+        RegisteredExternalCatalogMutationResult::RegisterApplied {
+            descriptor,
+            host_execution_profile,
+        } => {
+            assert_eq!(
+                descriptor.origin_kind,
+                RegisteredExternalOriginKind::HostRegisteredExternal
+            );
+            assert_eq!(host_execution_profile.as_deref(), Some("desktop-trusted"));
+        }
+        other => panic!("unexpected runtime mutation result: {other:?}"),
+    }
+}
+
+#[test]
+fn runtime_session_facade_reports_managed_diagnostics_for_overlay_and_claim_owner() {
+    let environment = RuntimeEnvironment::new();
+    let mut session = RuntimeSessionFacade::new(environment);
+    let locale = oxfunc_core::locale_format::en_us_context();
+    let request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new("runtime:managed-diagnostics", 1, "=INFO(\"directory\")"),
+        TypedContextQueryBundle::new(
+            Some(&ClaimingHostInfoProvider),
+            None,
+            Some(&locale),
+            None,
+            None,
+        ),
+    );
+
+    let execution = session
+        .execute_managed(request)
+        .expect("managed execute should succeed");
+    let diagnostics = session
+        .managed_session_diagnostics()
+        .expect("managed diagnostics should exist");
+
+    assert_eq!(diagnostics.phase, RuntimeManagedSessionPhase::Executed);
+    assert_eq!(
+        diagnostics.active_locus_claim_owner.as_deref(),
+        Some(diagnostics.session_id.as_str())
+    );
+    assert!(!diagnostics.overlay_entries.is_empty());
+    assert!(
+        diagnostics
+            .overlay_entries
+            .iter()
+            .all(|entry| entry.formula_stable_id == "runtime:managed-diagnostics")
+    );
+    assert_eq!(
+        session
+            .managed_session_snapshot()
+            .expect("managed snapshot")
+            .candidate_result_id,
+        Some(execution.candidate_result.candidate_result_id)
+    );
+}
+
 fn runtime_snapshot_v1() -> LibraryContextSnapshot {
     LibraryContextSnapshot {
         snapshot_id: "runtime-consumer".to_string(),
@@ -371,6 +529,162 @@ fn runtime_snapshot_v1() -> LibraryContextSnapshot {
             runtime_capability_state: Some(LibraryAvailabilityState::CatalogKnown),
             post_dispatch_state: None,
         }],
+    }
+}
+
+struct ValueRtdProvider;
+
+impl RtdProvider for ValueRtdProvider {
+    fn resolve_rtd(&self, _request: &RtdRequest) -> RtdProviderResult {
+        RtdProviderResult::Value(EvalValue::Number(7.0))
+    }
+}
+
+struct ClaimingHostInfoProvider;
+
+impl HostInfoProvider for ClaimingHostInfoProvider {
+    fn query_cell_info(
+        &self,
+        query: CellInfoQuery,
+        _reference: Option<&oxfunc_core::value::ReferenceLike>,
+    ) -> Result<EvalValue, HostInfoError> {
+        Err(HostInfoError::UnsupportedCellInfoQuery(query))
+    }
+
+    fn query_info(&self, query: InfoQuery) -> Result<EvalValue, HostInfoError> {
+        match query {
+            InfoQuery::Directory => Ok(EvalValue::Text(ExcelText::from_interop_assignment(
+                "C:\\Work",
+            ))),
+            _ => Err(HostInfoError::UnsupportedInfoQuery(query)),
+        }
+    }
+}
+
+#[derive(Default)]
+struct RecordingRegisteredExternalProvider {
+    last_lookup: RefCell<Option<f64>>,
+}
+
+impl RegisteredExternalProvider for RecordingRegisteredExternalProvider {
+    fn resolve_register_id(
+        &self,
+        request: &RegisterIdRequest,
+    ) -> Result<RegisteredExternalDescriptor, RegisteredExternalProviderError> {
+        Ok(RegisteredExternalDescriptor {
+            stable_registration_id: format!(
+                "REG.{}",
+                request.library_name.to_string_lossy().to_ascii_lowercase()
+            ),
+            register_id: 4242.0,
+            origin_kind: RegisteredExternalOriginKind::WorksheetRegisterId,
+            display_name: Some(ExcelText::from_interop_assignment(
+                &request_procedure_display_name(request),
+            )),
+            library_name: request.library_name.clone(),
+            procedure: request.procedure.clone(),
+            declared_type_text: request.declared_type_text.clone(),
+        })
+    }
+
+    fn lookup_registered_external(
+        &self,
+        register_id: f64,
+    ) -> Result<RegisteredExternalDescriptor, RegisteredExternalProviderError> {
+        self.last_lookup.replace(Some(register_id));
+        Ok(RegisteredExternalDescriptor {
+            stable_registration_id: "REG.by-id".to_string(),
+            register_id,
+            origin_kind: RegisteredExternalOriginKind::WorksheetRegisterId,
+            display_name: Some(ExcelText::from_interop_assignment("LookupById")),
+            library_name: ExcelText::from_interop_assignment("Kernel32"),
+            procedure: RegisteredProcedureSpec::Name(ExcelText::from_interop_assignment("MulDiv")),
+            declared_type_text: Some(ExcelText::from_interop_assignment("JJJJ")),
+        })
+    }
+
+    fn invoke_registered_external(
+        &self,
+        descriptor: &RegisteredExternalDescriptor,
+        args: &[CallArgValue],
+    ) -> Result<EvalValue, RegisteredExternalProviderError> {
+        match &descriptor.procedure {
+            RegisteredProcedureSpec::Name(name) if name.to_string_lossy() == "MulDiv" => match args
+            {
+                [
+                    CallArgValue::Eval(EvalValue::Number(a)),
+                    CallArgValue::Eval(EvalValue::Number(b)),
+                    CallArgValue::Eval(EvalValue::Number(c)),
+                ] => Ok(EvalValue::Number((a * b) / c)),
+                _ => Err(RegisteredExternalProviderError::WorksheetError(
+                    oxfunc_core::value::WorksheetErrorCode::Value,
+                )),
+            },
+            _ => Ok(EvalValue::Number(descriptor.register_id)),
+        }
+    }
+}
+
+#[derive(Default)]
+struct RecordingCatalogController {
+    recorded: RefCell<Vec<RegisteredExternalCatalogMutationRequest>>,
+}
+
+impl RegisteredExternalCatalogController for RecordingCatalogController {
+    fn apply_mutation(
+        &self,
+        request: &RegisteredExternalCatalogMutationRequest,
+    ) -> Result<RegisteredExternalCatalogMutationResult, RegisteredExternalProviderError> {
+        self.recorded.borrow_mut().push(request.clone());
+        match request {
+            RegisteredExternalCatalogMutationRequest::Register(register) => {
+                Ok(RegisteredExternalCatalogMutationResult::RegisterApplied {
+                    descriptor: RegisteredExternalDescriptor {
+                        stable_registration_id: register
+                            .stable_registration_id_hint
+                            .clone()
+                            .unwrap_or_else(|| "REG.synthetic".to_string()),
+                        register_id: 5000.0,
+                        origin_kind: RegisteredExternalOriginKind::HostRegisteredExternal,
+                        display_name: register
+                            .display_name_hint
+                            .as_ref()
+                            .map(|text| ExcelText::from_interop_assignment(text)),
+                        library_name: register.register_id_request.library_name.clone(),
+                        procedure: register.register_id_request.procedure.clone(),
+                        declared_type_text: register.register_id_request.declared_type_text.clone(),
+                    },
+                    host_execution_profile: register.host_execution_profile.clone(),
+                })
+            }
+            RegisteredExternalCatalogMutationRequest::Unregister(unregister) => {
+                Ok(RegisteredExternalCatalogMutationResult::UnregisterApplied {
+                    stable_registration_id: unregister.stable_registration_id.clone(),
+                    host_execution_profile: unregister.host_execution_profile.clone(),
+                })
+            }
+        }
+    }
+}
+
+fn request_procedure_display_name(request: &RegisterIdRequest) -> String {
+    match &request.procedure {
+        RegisteredProcedureSpec::Name(name) => name.to_string_lossy(),
+        RegisteredProcedureSpec::Ordinal(ordinal) => ordinal.to_string(),
+    }
+}
+
+fn sample_register_id_request(
+    library_name: &str,
+    procedure_name: &str,
+    type_text: Option<&str>,
+) -> RegisterIdRequest {
+    RegisterIdRequest {
+        library_name: ExcelText::from_interop_assignment(library_name),
+        procedure: RegisteredProcedureSpec::Name(ExcelText::from_interop_assignment(
+            procedure_name,
+        )),
+        declared_type_text: type_text.map(ExcelText::from_interop_assignment),
     }
 }
 

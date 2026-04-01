@@ -214,10 +214,12 @@ Working rule:
     includes a helper-by-helper migration matrix and a complete substrate
     demotion map, so the remaining work can be driven as a full refactor rather
     than as incremental discovery
-  - Wave 1 now has a stronger managed-session floor:
-    facade-native open / execute / commit / abort-expire packets plus one-step
-    execute-to-commit, so ordinary consumers no longer need to model raw
-    session substrate results for the first repeated-execution lane
+  - Wave 1 runtime is now at the planned `R1` parity floor:
+    facade-native one-shot execution, repeated execution with reuse, managed
+    open / execute / commit / abort-expire, one-step execute-to-commit,
+    provider-plus-pin library-context selection, typed query bundle carriage,
+    registered-external execution, runtime-owned registration/catalog mutation,
+    and bounded managed diagnostics for overlay/locus-claim state
   - Wave 4 has now materially advanced in code: flat crate-root facade
     re-exports are gone, direct top-level `host` / `session` /
     `language_service` / `oxfunc_adapter` exposure is demoted, ordinary
@@ -225,7 +227,9 @@ Working rule:
     and Epic E1 has now removed public `substrate::language_service` reach
   - advanced substrate still exists in the codebase under the remaining hidden
     `substrate::...` namespacing and still exerts some architectural gravity,
-    even though it is no longer the intended consumer contract
+    even though it is no longer the intended consumer contract; its later
+    removal/demotion belongs to the remaining replay closure plus final Wave 4
+    packaging cut rather than to runtime parity itself
   - temporary transition helpers still need tighter cleanup rules and later
     removal once facade-native paths are strong enough
   - Wave 2 editor coverage is now at the planned E1 floor: editor payload

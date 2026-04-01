@@ -9,8 +9,10 @@ use crate::host::{
     ArtifactReuseReport, FirstHostReplayCapturePacket, HostRecalcOutput, SingleFormulaHost,
 };
 use crate::interface::{
-    LibraryContextProvider, LibraryContextSnapshotRef, ReturnedValueSurface, TableCallerRegion,
-    TableDescriptor, TableRef, TypedContextQueryBundle, TypedContextQueryBundleSpec,
+    LibraryContextProvider, LibraryContextSnapshotRef, RegisteredExternalCatalogController,
+    RegisteredExternalCatalogMutationRequest, RegisteredExternalCatalogMutationResult,
+    ReturnedValueSurface, TableCallerRegion, TableDescriptor, TableRef, TypedContextQueryBundle,
+    TypedContextQueryBundleSpec,
 };
 use crate::red::project_red_view;
 use crate::scheduler::ExecutionContract;
@@ -21,11 +23,13 @@ use crate::semantics::{
     CompileSemanticPlanRequest, LibraryContextSnapshot, SemanticPlan, compile_semantic_plan,
 };
 use crate::session::{
-    CapabilityViewSpec, ExecuteRequest, PrepareRequest, SessionPhase, SessionRecord, SessionService,
+    CapabilityViewSpec, ExecuteRequest, OverlayEntry, PrepareRequest, SessionPhase, SessionRecord,
+    SessionService,
 };
 use crate::source::{FormulaSourceRecord, StructureContextVersion};
 use crate::syntax::parser::{ParseRequest, parse_formula};
 use crate::syntax::token::SyntaxDiagnostic;
+use oxfunc_core::functions::call_register_id_family::RegisteredExternalProviderError;
 
 pub struct RuntimeEnvironment<'a> {
     structure_context_version: StructureContextVersion,
@@ -70,6 +74,14 @@ impl<'a> RuntimeEnvironment<'a> {
 
     pub fn open_session(self) -> RuntimeSessionFacade<'a> {
         RuntimeSessionFacade::new(self)
+    }
+
+    pub fn apply_registered_external_catalog_mutation(
+        &self,
+        controller: &dyn RegisteredExternalCatalogController,
+        request: &RegisteredExternalCatalogMutationRequest,
+    ) -> Result<RegisteredExternalCatalogMutationResult, RegisteredExternalProviderError> {
+        controller.apply_mutation(request)
     }
 
     pub fn with_structure_context_version(
@@ -351,6 +363,24 @@ pub struct RuntimeManagedSessionSnapshot {
     pub trace_events: Vec<TraceEvent>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeManagedOverlaySummary {
+    pub overlay_entry_id: String,
+    pub overlay_scope_key: String,
+    pub overlay_family: String,
+    pub formula_stable_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeManagedSessionDiagnostics {
+    pub session_id: String,
+    pub formula_stable_id: String,
+    pub phase: RuntimeManagedSessionPhase,
+    pub capability_view_key: Option<String>,
+    pub overlay_entries: Vec<RuntimeManagedOverlaySummary>,
+    pub active_locus_claim_owner: Option<String>,
+}
+
 pub struct RuntimeSessionFacade<'a> {
     environment: RuntimeEnvironment<'a>,
     host: Option<SingleFormulaHost>,
@@ -521,6 +551,30 @@ impl<'a> RuntimeSessionFacade<'a> {
         Some(runtime_managed_session_snapshot(record))
     }
 
+    pub fn managed_session_diagnostics(&self) -> Option<RuntimeManagedSessionDiagnostics> {
+        let session_id = self.managed_session_id.as_ref()?;
+        let record = self.managed_service.session(session_id)?;
+        Some(RuntimeManagedSessionDiagnostics {
+            session_id: record.session_id.clone(),
+            formula_stable_id: record.prepared.source.formula_stable_id.0.clone(),
+            phase: runtime_managed_phase(record.phase.clone()),
+            capability_view_key: record
+                .capability_view
+                .as_ref()
+                .map(|view| view.capability_view_key.clone()),
+            overlay_entries: self
+                .managed_service
+                .overlay_entries(session_id)
+                .iter()
+                .map(runtime_overlay_summary)
+                .collect(),
+            active_locus_claim_owner: self
+                .managed_service
+                .active_locus_claim_owner(&record.prepared.primary_locus)
+                .map(ToString::to_string),
+        })
+    }
+
     fn ensure_managed_session_for<'q>(
         &mut self,
         request: &RuntimeFormulaRequest<'q>,
@@ -660,17 +714,7 @@ fn runtime_managed_session_snapshot(record: &SessionRecord) -> RuntimeManagedSes
     RuntimeManagedSessionSnapshot {
         formula_stable_id: record.prepared.source.formula_stable_id.0.clone(),
         session_id: record.session_id.clone(),
-        phase: match record.phase {
-            SessionPhase::Open => RuntimeManagedSessionPhase::Open,
-            SessionPhase::CapabilityViewEstablished => {
-                RuntimeManagedSessionPhase::CapabilityViewEstablished
-            }
-            SessionPhase::Executed => RuntimeManagedSessionPhase::Executed,
-            SessionPhase::Committed => RuntimeManagedSessionPhase::Committed,
-            SessionPhase::Rejected => RuntimeManagedSessionPhase::Rejected,
-            SessionPhase::Aborted => RuntimeManagedSessionPhase::Aborted,
-            SessionPhase::Expired => RuntimeManagedSessionPhase::Expired,
-        },
+        phase: runtime_managed_phase(record.phase.clone()),
         library_context_snapshot_ref: record.prepared.library_context_snapshot_ref.clone(),
         typed_query_bundle_spec: record.typed_query_bundle_spec.clone(),
         candidate_result_id: record
@@ -679,5 +723,28 @@ fn runtime_managed_session_snapshot(record: &SessionRecord) -> RuntimeManagedSes
             .map(|candidate| candidate.candidate_result_id.clone()),
         last_reject: record.last_reject.clone(),
         trace_events: record.trace_events.clone(),
+    }
+}
+
+fn runtime_managed_phase(phase: SessionPhase) -> RuntimeManagedSessionPhase {
+    match phase {
+        SessionPhase::Open => RuntimeManagedSessionPhase::Open,
+        SessionPhase::CapabilityViewEstablished => {
+            RuntimeManagedSessionPhase::CapabilityViewEstablished
+        }
+        SessionPhase::Executed => RuntimeManagedSessionPhase::Executed,
+        SessionPhase::Committed => RuntimeManagedSessionPhase::Committed,
+        SessionPhase::Rejected => RuntimeManagedSessionPhase::Rejected,
+        SessionPhase::Aborted => RuntimeManagedSessionPhase::Aborted,
+        SessionPhase::Expired => RuntimeManagedSessionPhase::Expired,
+    }
+}
+
+fn runtime_overlay_summary(overlay: &OverlayEntry) -> RuntimeManagedOverlaySummary {
+    RuntimeManagedOverlaySummary {
+        overlay_entry_id: overlay.overlay_entry_id.clone(),
+        overlay_scope_key: overlay.overlay_scope_key.clone(),
+        overlay_family: overlay.overlay_family.clone(),
+        formula_stable_id: overlay.formula_stable_id.clone(),
     }
 }

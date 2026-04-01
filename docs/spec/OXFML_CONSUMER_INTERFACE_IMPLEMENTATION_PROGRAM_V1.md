@@ -557,15 +557,33 @@ Current public substrate host packets and their target fate:
    -> test/support only
    -> final state: internal test support
 
-Additional runtime work still required before full subsumption:
-1. add a runtime-owned external registration/catalog mutation surface so
-   ordinary consumers never need `substrate::host` for registration mutation
-2. decide whether overlay/locus-claim inspection becomes a bounded runtime
-   diagnostics packet or stays fully internal
-3. migrate remaining direct host/session-oriented tests to runtime facade
-   entrypoints where the goal is consumer behavior rather than substrate detail
-4. once parity is reached, make `host` and `session` private implementation
-   substrate rather than public hidden substrate
+Current runtime parity floor:
+1. `consumer::runtime` now owns ordinary one-shot execution, repeated execution
+   with reuse, managed open/execute/commit/abort/expire, one-step
+   execute-to-commit, provider-plus-pin library-context selection, typed query
+   bundle carriage, returned-value surface and candidate/commit/reject truth,
+   registered-external runtime mutation, registered-external runtime execution,
+   `RTD` runtime execution, and bounded managed-session diagnostics.
+2. ordinary consumer-facing evidence now exists through
+   `crates/oxfml_core/tests/runtime_consumer_facade_tests.rs` for:
+   - pinned and inline library-context execution,
+   - unresolved snapshot rejection,
+   - repeated-execution reuse,
+   - managed open/execute/commit/abort and execute-to-commit,
+   - caller-context carriage,
+   - `RTD` execution through typed query bundle,
+   - registered-external execution through typed query bundle,
+   - runtime-owned registration/catalog mutation,
+   - bounded managed diagnostics for overlay and locus-claim state.
+3. direct `host` and `session` tests still remain for advanced substrate,
+   replay, seam, and proving-host detail, but they no longer define ordinary
+   consumer-facing runtime parity.
+
+Remaining runtime work after `R1`:
+1. keep `host` and `session` available only as advanced substrate until the
+   later public-packaging and replay closure work lands
+2. complete the later Wave 4 removal/demotion cut once replay parity and final
+   substrate cleanup are strong enough
 
 ### 10.2 Editor Facade: Full Subsumption Plan
 The editor facade must fully own ordinary consumer behavior for:
