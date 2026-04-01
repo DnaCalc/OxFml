@@ -8,7 +8,9 @@ use oxfml_core::semantics::{
     LibraryAvailabilityState, LibraryContextSnapshot, LibraryContextSnapshotEntry,
     RegistrationSourceKind,
 };
-use oxfml_core::substrate::oxfunc_adapter::{OxFuncAdapterRequest, run_oxfunc_preparation_adapter};
+use oxfml_core::test_support::oxfunc_adapter::{
+    OxFuncAdapterRequest, run_oxfunc_preparation_adapter,
+};
 use oxfunc_core::value::{EvalValue, ExcelText, WorksheetErrorCode};
 use serde::Deserialize;
 

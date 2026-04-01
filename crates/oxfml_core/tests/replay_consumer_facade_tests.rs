@@ -3,8 +3,8 @@ use oxfml_core::consumer::editor::{
     EditorAnalysisStage, EditorEditService, EditorEnvironment, EditorPlanOptions,
 };
 use oxfml_core::consumer::replay::{
-    ReplayFixtureFamilySource, ReplayProjectionRequest, ReplayProjectionService,
-    ReplayRetainedWitnessSource,
+    ReplayFirstHostCaptureSource, ReplayFixtureFamilySource, ReplayProjectionRequest,
+    ReplayProjectionService, ReplayRetainedWitnessSource,
 };
 use oxfml_core::consumer::runtime::{
     RuntimeEnvironment, RuntimeFormulaRequest, RuntimeSessionFacade,
@@ -17,8 +17,7 @@ use oxfml_core::semantics::{
     RegistrationSourceKind,
 };
 use oxfml_core::source::FormulaSourceRecord;
-use oxfml_core::substrate::host::SingleFormulaHost;
-use oxfml_core::{EvaluationBackend, FormulaChannelKind, TypedContextQueryBundle};
+use oxfml_core::{FormulaChannelKind, TypedContextQueryBundle};
 
 #[test]
 fn editor_edit_service_applies_completion_proposal_through_facade() {
@@ -158,24 +157,25 @@ fn replay_projection_service_projects_runtime_and_host_outputs() {
             .is_some()
     );
 
-    let mut host = SingleFormulaHost::new("replay:host", "=SUM(1,2)");
-    let host_output = host
-        .recalc_with_interfaces(
-            EvaluationBackend::OxFuncBacked,
-            TypedContextQueryBundle::default(),
-            None,
-        )
-        .expect("host output should execute");
-    let host_projection =
-        ReplayProjectionService::project(ReplayProjectionRequest::host_result(&host_output));
+    let first_host_capture = ReplayFirstHostCaptureSource {
+        source_artifact_family: "first_host_capture_packet".to_string(),
+        session_id: runtime_result.candidate_result.session_id.clone(),
+        packet: runtime_result.first_host_replay_capture_packet.clone(),
+    };
+    let host_projection = ReplayProjectionService::project(
+        ReplayProjectionRequest::first_host_capture(&first_host_capture),
+    );
 
-    assert_eq!(host_projection.source_artifact_family, "host_recalc_output");
+    assert_eq!(
+        host_projection.source_artifact_family,
+        "first_host_capture_packet"
+    );
     assert_eq!(
         host_projection
             .first_host_replay_capture_packet
             .as_ref()
             .map(|packet| packet.formula_stable_id.as_str()),
-        Some("replay:host")
+        Some("replay:runtime")
     );
 }
 

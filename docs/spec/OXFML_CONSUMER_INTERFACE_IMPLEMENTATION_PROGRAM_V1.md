@@ -98,8 +98,8 @@ These modules stay real, but change role:
    remains private editor substrate backing the editor facade
 4. `interface`
    remains the packet and provider substrate used by all three facades
-5. `substrate::oxfunc_adapter`
-   remains advanced/integration-test-oriented, not a mainstream consumer entry
+5. `test_support::oxfunc_adapter`
+   remains explicit integration-test support, not a mainstream consumer entry
 6. `seam`, `semantics`, `binding`, `eval`, `syntax`
    remain canonical substrate and advanced-entry modules
 
@@ -702,54 +702,57 @@ The replay facade must fully own ordinary consumer behavior for:
 5. alias, pin, fence, registry, and lifecycle metadata publication,
 6. bounded replay-facing capture for downstream hosts.
 
-Current replay facade constructors that still expose substrate-shaped access:
-1. `ReplayProjectionRequest::host_result`
-   -> transitional only
-   -> ordinary consumers should prefer `runtime_result` or managed runtime
-      lifecycle projection
-   -> final state: remove from public consumer contract after parity
-2. `ReplayProjectionRequest::session_record`
-   -> transitional only
-   -> ordinary consumers should prefer managed runtime session packets
-   -> final state: remove from public consumer contract after parity
+Current replay parity floor:
+1. ordinary replay consumers now project:
+   - `RuntimeFormulaResult`
+   - managed runtime-session open / execute / commit / termination packets
+   - managed runtime-session snapshots
+   - bounded first-host capture packets
+   - fixture-family metadata
+   - retained-witness metadata
+2. `ReplayProjectionRequest::host_result` and
+   `ReplayProjectionRequest::session_record` are no longer part of the public
+   replay contract.
+3. bounded host capture now flows through `ReplayFirstHostCaptureSource`
+   instead of raw `HostRecalcOutput`.
 
 Current substrate replay/adapter surfaces and their target fate:
 1. `HostRecalcOutput::to_first_host_replay_capture_packet`
-   -> replay-internal projection helper only
+   -> replay-internal packet builder only
    -> final state: substrate-internal
 2. `SessionRecord`-based replay projection
-   -> replay-internal transition path only
+   -> no longer part of the public replay contract
    -> final state: substrate-internal
 3. `OxFuncAdapterRequest`
    -> not part of the consumer contract
-   -> final state: move to internal test/support module
+   -> final state: explicit `test_support` module only
 4. `OxFuncPreparationArtifact`
    -> not part of the consumer contract
-   -> final state: move to internal test/support module
+   -> final state: explicit `test_support` module only
 5. `OxFuncEvaluationArtifact`
    -> not part of the consumer contract
-   -> final state: move to internal test/support module
+   -> final state: explicit `test_support` module only
 6. `OxFuncMismatchOwnerGuess`
    -> not part of the consumer contract
-   -> final state: move to internal test/support module
+   -> final state: explicit `test_support` module only
 7. `OxFuncMismatchArtifact`
    -> not part of the consumer contract
-   -> final state: move to internal test/support module
+   -> final state: explicit `test_support` module only
 8. `OxFuncAdapterRun`
    -> not part of the consumer contract
-   -> final state: move to internal test/support module
+   -> final state: explicit `test_support` module only
 9. `run_oxfunc_preparation_adapter`
    -> not part of the consumer contract
-   -> final state: move to internal test/support module
+   -> final state: explicit `test_support` module only
 
-Additional replay work still required before full subsumption:
-1. remove ordinary consumer need for host-result and session-record replay
-   constructors
-2. decide whether first-host capture remains a replay-internal compatibility
-   layer or is folded entirely into replay result packets
-3. move OxFunc adapter evidence helpers out of the public library surface
-4. once parity is reached, make replay substrate helpers private or test-support
-   only
+Remaining replay work after `P1`:
+1. keep first-host packet construction and other replay substrate helpers as
+   advanced internal/test-support implementation while wider replay-family
+   breadth lands
+2. complete broader registry/lifecycle/promotion breadth beyond the current
+   replay floor
+3. finish the later Wave 4 cleanup once replay parity and final substrate
+   removal are strong enough
 
 ### 10.4 Full Public Substrate Demotion Map
 Final public-packaging target:
@@ -769,8 +772,8 @@ Every currently reachable substrate family to demote:
    -> demote fully after runtime parity
 3. private `language_service` implementation helpers
    -> keep private after editor parity
-4. `substrate::oxfunc_adapter::*`
-   -> demote fully into internal test/support after replay/test parity
+4. `test_support::oxfunc_adapter::*`
+   -> keep only as explicit test/support surface after replay/test parity
 
 Demotion classes:
 1. `internalize`
@@ -796,10 +799,11 @@ Phase B: Editor parity and language-service collapse
 4. keep `language_service` private once parity is reached
 
 Phase C: Replay parity and adapter collapse
-1. remove ordinary consumer need for `host_result` and `session_record`
-   projection constructors
-2. move OxFunc adapter artifacts into internal test/support
-3. internalize replay substrate helpers once parity is reached
+1. keep ordinary consumer replay projection on runtime-first and bounded
+   first-host-capture sources only
+2. keep OxFunc adapter artifacts in explicit test-support
+3. internalize replay substrate helpers further once broader replay parity is
+   reached
 
 Phase D: Final packaging cut
 1. remove public `substrate::...` access entirely
@@ -826,7 +830,8 @@ Phase D: Final packaging cut
     exercise the facade contract, public `substrate::language_service` access
     has been removed, and `language_service` now acts as private editor
     substrate
-  - replay projection now carries retained-witness, fixture-family, and first
-    managed-session lifecycle metadata, but broader registry and lifecycle
-    breadth is still outside the current Wave 3 floor
+  - replay projection now carries retained-witness, fixture-family, bounded
+    first-host-capture, and managed-session lifecycle metadata, while raw
+    host-result and session-record constructors are no longer part of the
+    public replay contract
   - full-suite validation is green again after the E1 pass

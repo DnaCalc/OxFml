@@ -237,11 +237,13 @@ Working rule:
     `consumer::editor`, public `substrate::language_service` access is gone,
     and facade-owned `EditorPlanOptions` plus `EditorAnalysisStage` now
     replace the last substrate-shaped public editor config
-  - Wave 3 replay coverage is still narrow relative to the broader replay
-    helper and projection families, although first fixture-family and
-    retained-witness metadata projection now exists together with first managed
-    runtime-session lifecycle projection
-  - full-suite validation is green after the E1 pass
+  - Wave 3 replay is now at the planned `P1` parity floor: ordinary replay
+    projection is runtime-first, bounded first-host capture now flows through
+    `ReplayFirstHostCaptureSource`, managed runtime-session lifecycle packets
+    remain first-class replay sources, raw `host_result` and `session_record`
+    constructors are no longer part of the public replay contract, and OxFunc
+    adapter evidence helpers now live under explicit `test_support`
+  - full-suite validation is green after the current runtime/editor/replay pass
   - any future reopen should be bounded to implementation-driven clarifications
     rather than broad redesign
 - claim_confidence: draft

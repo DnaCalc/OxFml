@@ -20,12 +20,15 @@ pub mod substrate {
         pub use crate::host::*;
     }
 
-    pub mod oxfunc_adapter {
-        pub use crate::oxfunc_adapter::*;
-    }
-
     pub mod session {
         pub use crate::session::*;
+    }
+}
+
+#[doc(hidden)]
+pub mod test_support {
+    pub mod oxfunc_adapter {
+        pub use crate::oxfunc_adapter::*;
     }
 }
 

@@ -2,9 +2,8 @@ use crate::consumer::runtime::{
     RuntimeFormulaResult, RuntimeManagedCommitResult, RuntimeManagedExecutionResult,
     RuntimeManagedOpenResult, RuntimeManagedSessionSnapshot, RuntimeManagedTerminationResult,
 };
-use crate::host::{FirstHostReplayCapturePacket, HostRecalcOutput};
+use crate::host::FirstHostReplayCapturePacket;
 use crate::interface::{LibraryContextSnapshotRef, TypedContextQueryBundleSpec};
-use crate::session::{SessionPhase, SessionRecord};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReplayProjectionFamily {
@@ -34,15 +33,21 @@ pub struct ReplayRetainedWitnessSource {
     pub reduction_manifest_ref: Option<String>,
 }
 
-pub enum ReplayProjectionSource<'a> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplayFirstHostCaptureSource {
+    pub source_artifact_family: String,
+    pub session_id: Option<String>,
+    pub packet: FirstHostReplayCapturePacket,
+}
+
+enum ReplayProjectionSource<'a> {
     RuntimeResult(&'a RuntimeFormulaResult),
     RuntimeManagedOpen(&'a RuntimeManagedOpenResult),
     RuntimeManagedExecution(&'a RuntimeManagedExecutionResult),
     RuntimeManagedCommit(&'a RuntimeManagedCommitResult),
     RuntimeManagedTermination(&'a RuntimeManagedTerminationResult),
     RuntimeManagedSession(&'a RuntimeManagedSessionSnapshot),
-    HostResult(&'a HostRecalcOutput),
-    SessionRecord(&'a SessionRecord),
+    FirstHostCapture(&'a ReplayFirstHostCaptureSource),
     FixtureFamily(&'a ReplayFixtureFamilySource),
     RetainedWitness(&'a ReplayRetainedWitnessSource),
 }
@@ -64,9 +69,9 @@ impl<'a> ReplayProjectionRequest<'a> {
         }
     }
 
-    pub fn host_result(result: &'a HostRecalcOutput) -> Self {
+    pub fn first_host_capture(source: &'a ReplayFirstHostCaptureSource) -> Self {
         Self {
-            source: ReplayProjectionSource::HostResult(result),
+            source: ReplayProjectionSource::FirstHostCapture(source),
             projection_family: ReplayProjectionFamily::FirstHostCapture,
             source_case_id: None,
             shared_scenario_alias: None,
@@ -112,15 +117,6 @@ impl<'a> ReplayProjectionRequest<'a> {
     pub fn runtime_managed_session(result: &'a RuntimeManagedSessionSnapshot) -> Self {
         Self {
             source: ReplayProjectionSource::RuntimeManagedSession(result),
-            projection_family: ReplayProjectionFamily::SessionLifecycle,
-            source_case_id: None,
-            shared_scenario_alias: None,
-        }
-    }
-
-    pub fn session_record(record: &'a SessionRecord) -> Self {
-        Self {
-            source: ReplayProjectionSource::SessionRecord(record),
             projection_family: ReplayProjectionFamily::SessionLifecycle,
             source_case_id: None,
             shared_scenario_alias: None,
@@ -227,14 +223,8 @@ impl ReplayProjectionService {
                     request.shared_scenario_alias,
                 )
             }
-            ReplayProjectionSource::HostResult(result) => project_host_result(
-                result,
-                request.source_case_id,
-                request.shared_scenario_alias,
-            ),
-            ReplayProjectionSource::SessionRecord(record) => project_session_record(
-                record,
-                request.projection_family,
+            ReplayProjectionSource::FirstHostCapture(source) => project_first_host_capture(
+                source,
                 request.source_case_id,
                 request.shared_scenario_alias,
             ),
@@ -289,23 +279,22 @@ fn project_runtime_result(
     }
 }
 
-fn project_host_result(
-    result: &HostRecalcOutput,
+fn project_first_host_capture(
+    source: &ReplayFirstHostCaptureSource,
     source_case_id: Option<String>,
     shared_scenario_alias: Option<String>,
 ) -> ReplayProjectionResult {
-    let packet = result.to_first_host_replay_capture_packet();
     ReplayProjectionResult {
-        source_artifact_family: "host_recalc_output".to_string(),
+        source_artifact_family: source.source_artifact_family.clone(),
         source_schema_id: None,
         source_fixture_family: None,
         source_case_id,
         source_case_ids: Vec::new(),
         shared_scenario_alias,
-        formula_stable_id: result.source.formula_stable_id.0.clone(),
-        session_id: result.candidate_result.session_id.clone(),
-        library_context_snapshot_ref: result.library_context_snapshot_ref.clone(),
-        typed_query_bundle_spec: Some(result.typed_query_bundle_spec.clone()),
+        formula_stable_id: source.packet.formula_stable_id.clone(),
+        session_id: source.session_id.clone(),
+        library_context_snapshot_ref: source.packet.library_context_snapshot_ref.clone(),
+        typed_query_bundle_spec: Some(source.packet.typed_query_bundle_spec.clone()),
         registry_pin: None,
         witness_id: None,
         witness_lifecycle_state: None,
@@ -313,17 +302,10 @@ fn project_host_result(
         source_bundle_ref: None,
         reduction_manifest_ref: None,
         phase: Some("CommittedOrRejected".to_string()),
-        candidate_result_id: Some(result.candidate_result.candidate_result_id.clone()),
-        commit_decision_kind: Some(match result.commit_decision {
-            crate::seam::AcceptDecision::Accepted(_) => "accepted".to_string(),
-            crate::seam::AcceptDecision::Rejected(_) => "rejected".to_string(),
-        }),
-        trace_event_kinds: result
-            .trace_events
-            .iter()
-            .map(|event| format!("{:?}", event.event_kind))
-            .collect(),
-        first_host_replay_capture_packet: Some(packet),
+        candidate_result_id: Some(source.packet.candidate_result_id.clone()),
+        commit_decision_kind: Some(source.packet.commit_decision_kind.clone()),
+        trace_event_kinds: source.packet.trace_event_kinds.clone(),
+        first_host_replay_capture_packet: Some(source.packet.clone()),
     }
 }
 
@@ -526,51 +508,6 @@ fn project_runtime_managed_termination(
     }
 }
 
-fn project_session_record(
-    record: &SessionRecord,
-    _projection_family: ReplayProjectionFamily,
-    source_case_id: Option<String>,
-    shared_scenario_alias: Option<String>,
-) -> ReplayProjectionResult {
-    ReplayProjectionResult {
-        source_artifact_family: "session_record".to_string(),
-        source_schema_id: None,
-        source_fixture_family: None,
-        source_case_id,
-        source_case_ids: Vec::new(),
-        shared_scenario_alias,
-        formula_stable_id: record.prepared.source.formula_stable_id.0.clone(),
-        session_id: Some(record.session_id.clone()),
-        library_context_snapshot_ref: record.prepared.library_context_snapshot_ref.clone(),
-        typed_query_bundle_spec: record.typed_query_bundle_spec.clone(),
-        registry_pin: None,
-        witness_id: None,
-        witness_lifecycle_state: None,
-        retention_policy_id: None,
-        source_bundle_ref: None,
-        reduction_manifest_ref: None,
-        phase: Some(session_phase_name(&record.phase).to_string()),
-        candidate_result_id: record
-            .candidate_result
-            .as_ref()
-            .map(|candidate| candidate.candidate_result_id.clone()),
-        commit_decision_kind: record
-            .candidate_result
-            .as_ref()
-            .map(|_| match record.phase {
-                SessionPhase::Committed => "accepted".to_string(),
-                SessionPhase::Rejected => "rejected".to_string(),
-                _ => "pending".to_string(),
-            }),
-        trace_event_kinds: record
-            .trace_events
-            .iter()
-            .map(|event| format!("{:?}", event.event_kind))
-            .collect(),
-        first_host_replay_capture_packet: None,
-    }
-}
-
 fn project_fixture_family(
     source: &ReplayFixtureFamilySource,
     source_case_id: Option<String>,
@@ -628,17 +565,5 @@ fn project_retained_witness(
         commit_decision_kind: None,
         trace_event_kinds: Vec::new(),
         first_host_replay_capture_packet: None,
-    }
-}
-
-fn session_phase_name(phase: &SessionPhase) -> &'static str {
-    match phase {
-        SessionPhase::Open => "Open",
-        SessionPhase::CapabilityViewEstablished => "CapabilityViewEstablished",
-        SessionPhase::Executed => "Executed",
-        SessionPhase::Committed => "Committed",
-        SessionPhase::Rejected => "Rejected",
-        SessionPhase::Aborted => "Aborted",
-        SessionPhase::Expired => "Expired",
     }
 }
