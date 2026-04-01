@@ -15,7 +15,7 @@ pub mod source;
 pub mod syntax;
 
 #[doc(hidden)]
-pub mod substrate {
+pub mod test_support {
     pub mod host {
         pub use crate::host::*;
     }
@@ -23,10 +23,7 @@ pub mod substrate {
     pub mod session {
         pub use crate::session::*;
     }
-}
 
-#[doc(hidden)]
-pub mod test_support {
     pub mod oxfunc_adapter {
         pub use crate::oxfunc_adapter::*;
     }

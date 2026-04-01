@@ -823,3 +823,14 @@ Current working rule after this residual round:
 1. continue TreeCalc intake work on the current converged host/runtime, table-context, immutable-edit, stand-in, and registered-external packet floor,
 2. keep the three residual sequences as note-level narrowing lanes under `W026`,
 3. promote a narrower handoff only if live TreeCalc evidence exposes a concrete insufficiency in one of those carried families.
+
+## 23. Current Public Surface Update
+After the latest Wave 4 packaging cut, OxFml's current public consumer read is:
+1. ordinary downstream use should target:
+   - `consumer::runtime`
+   - `consumer::editor`
+   - `consumer::replay`
+2. public `substrate::...` access is gone from the library surface,
+3. any remaining host/session/adapter reach that still exists is explicit
+   `test_support` support surface for bounded internal or integration-test use,
+   not ordinary downstream integration contract.

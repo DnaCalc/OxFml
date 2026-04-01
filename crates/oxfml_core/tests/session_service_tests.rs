@@ -11,10 +11,10 @@ use oxfml_core::interface::{
 use oxfml_core::red::project_red_view;
 use oxfml_core::semantics::LibraryContextSnapshot;
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
-use oxfml_core::substrate::session::{
+use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
+use oxfml_core::test_support::session::{
     CapabilityViewSpec, ExecuteRequest, PrepareRequest, SessionPhase, SessionService,
 };
-use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
 use oxfml_core::{
     AcceptDecision, DefinedNameBinding, EvaluationBackend, LibraryAvailabilityState, Locus,
     RegistrationSourceKind, RejectCode, TraceEventKind, compile_semantic_plan,

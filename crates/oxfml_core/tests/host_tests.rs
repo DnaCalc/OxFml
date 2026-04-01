@@ -17,7 +17,7 @@ use oxfml_core::semantics::{
     LibraryAvailabilityState, LibraryContextSnapshot, LibraryContextSnapshotEntry,
     RegistrationSourceKind,
 };
-use oxfml_core::substrate::host::{EmpiricalOracleScenario, SingleFormulaHost};
+use oxfml_core::test_support::host::{EmpiricalOracleScenario, SingleFormulaHost};
 use oxfml_core::{
     EvaluationBackend, FenceSnapshot, InMemoryLibraryContextProvider, LibraryContextSnapshotRef,
     ReturnedValueSurfaceKind,

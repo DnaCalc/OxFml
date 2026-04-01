@@ -127,7 +127,7 @@ canonical transforms as implementation substrate.
    - `language_service` is now private editor substrate rather than a public
      hidden transition path
    - advanced public substrate use now goes through the remaining explicit
-     `substrate::...` namespacing
+     explicit `test_support::...` support namespacing
    - flat crate-root facade re-exports have been removed, so ordinary consumer
      discovery now goes through explicit `consumer::runtime`,
      `consumer::editor`, and `consumer::replay`
@@ -225,11 +225,9 @@ Working rule:
     `language_service` / `oxfunc_adapter` exposure is demoted, ordinary
     consumer discovery now runs through explicit `consumer::...` module paths,
     and Epic E1 has now removed public `substrate::language_service` reach
-  - advanced substrate still exists in the codebase under the remaining hidden
-    `substrate::...` namespacing and still exerts some architectural gravity,
-    even though it is no longer the intended consumer contract; its later
-    removal/demotion belongs to the remaining replay closure plus final Wave 4
-    packaging cut rather than to runtime parity itself
+  - public `substrate::...` reach is now gone; the remaining advanced access
+    has been narrowed to explicit `test_support::{host,session,oxfunc_adapter}`
+    support surfaces and private implementation substrate
   - temporary transition helpers still need tighter cleanup rules and later
     removal once facade-native paths are strong enough
   - Wave 2 editor coverage is now at the planned E1 floor: editor payload

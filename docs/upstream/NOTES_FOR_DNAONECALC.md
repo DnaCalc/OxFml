@@ -176,3 +176,14 @@ The following invariants should stay true through the migration:
 3. OneCalc host policy remains above OxFml semantic meaning,
 4. OneCalc UI and persistence concerns remain host-owned, not pushed back into OxFml,
 5. the migration remains staged and reversible until facade uptake is real.
+
+## 9. Current Public Surface Update
+After the latest Wave 4 packaging cut, OxFml's current public consumer read is:
+1. ordinary downstream use should target:
+   - `consumer::runtime`
+   - `consumer::editor`
+   - `consumer::replay`
+2. public `substrate::...` access is gone from the library surface,
+3. any remaining host/session/adapter reach that still exists is explicit
+   `test_support` support surface for bounded internal or integration-test use,
+   not ordinary downstream integration contract.

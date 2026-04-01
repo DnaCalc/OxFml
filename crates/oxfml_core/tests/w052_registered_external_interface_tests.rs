@@ -12,7 +12,7 @@ use oxfml_core::interface::{
     RegisteredExternalCatalogMutationResult, RegisteredExternalHostRegistrationRequest,
     RegisteredExternalRegistrationChannel, TypedContextQueryBundle, TypedContextQueryFamily,
 };
-use oxfml_core::substrate::host::SingleFormulaHost;
+use oxfml_core::test_support::host::SingleFormulaHost;
 
 #[test]
 fn typed_query_bundle_includes_registered_external_family_when_provider_present() {

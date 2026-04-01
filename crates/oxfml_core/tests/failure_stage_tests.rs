@@ -10,8 +10,8 @@ use oxfml_core::semantics::{
     LibraryContextSnapshotEntry, RegistrationSourceKind, compile_semantic_plan,
 };
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
-use oxfml_core::substrate::session::{CapabilityViewSpec, PrepareRequest, SessionService};
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
+use oxfml_core::test_support::session::{CapabilityViewSpec, PrepareRequest, SessionService};
 use serde::Deserialize;
 
 mod common;

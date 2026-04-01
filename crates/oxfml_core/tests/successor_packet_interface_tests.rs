@@ -12,7 +12,7 @@ use oxfml_core::semantics::{
     LibraryAvailabilityState, LibraryContextSnapshot, LibraryContextSnapshotEntry,
     RegistrationSourceKind,
 };
-use oxfml_core::substrate::host::SingleFormulaHost;
+use oxfml_core::test_support::host::SingleFormulaHost;
 use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult};
 use oxfunc_core::host_info::{
     CellInfoQuery, HostInfoError, HostInfoProvider, ImageProviderResult, ImageRequest, InfoQuery,

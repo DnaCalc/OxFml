@@ -9,7 +9,9 @@ use serde::Deserialize;
 
 use oxfml_core::EvaluationBackend;
 use oxfml_core::seam::AcceptDecision;
-use oxfml_core::substrate::host::{EmpiricalOracleScenario, HostRecalcOutput, SingleFormulaHost};
+use oxfml_core::test_support::host::{
+    EmpiricalOracleScenario, HostRecalcOutput, SingleFormulaHost,
+};
 
 #[derive(Debug, Deserialize)]
 struct ReductionManifest {

@@ -40,7 +40,7 @@ Hard rules:
 The current user-visible Rust surface is now intentionally split between:
 1. top-level consumer facades
 2. canonical packet/capability substrate
-3. a narrower advanced substrate escape hatch under `substrate::...`
+3. a narrower explicit support surface under `test_support::...`
 
 Current packaging rule:
 1. ordinary consumer code should use explicit `consumer::runtime`,
@@ -49,7 +49,8 @@ Current packaging rule:
    re-export scanning,
 3. `language_service` is now private editor substrate rather than a reachable
    public transition path,
-4. remaining `substrate::...` access is temporary advanced transition surface
+4. remaining `test_support::...` access is explicit bounded support surface,
+   not ordinary consumer contract
    and is hidden from ordinary documentation.
 
 That surface already contains important building blocks for the rearchitecture:
@@ -90,16 +91,18 @@ The preferred long-term package tree is:
 
 ### 4.2 Existing modules after the reset
 These modules stay real, but change role:
-1. `substrate::host`
-   becomes runtime substrate, not the preferred consumer entry
-2. `substrate::session`
-   remains the lifecycle substrate backing the runtime facade
+1. `host`
+   becomes runtime substrate, not a reachable public consumer entry
+2. `session`
+   remains the lifecycle substrate backing the runtime facade, not a reachable
+   public consumer entry
 3. `language_service`
    remains private editor substrate backing the editor facade
 4. `interface`
    remains the packet and provider substrate used by all three facades
-5. `test_support::oxfunc_adapter`
-   remains explicit integration-test support, not a mainstream consumer entry
+5. `test_support::{host,session,oxfunc_adapter}`
+   remains explicit support and integration-test surface, not a mainstream
+   consumer entry
 6. `seam`, `semantics`, `binding`, `eval`, `syntax`
    remain canonical substrate and advanced-entry modules
 
@@ -551,7 +554,7 @@ Current public substrate host packets and their target fate:
    -> final state: substrate-internal
 3. `ArtifactReuseReport`
    -> may stay embedded on `RuntimeFormulaResult`, but ordinary consumers should
-      not import it through `substrate::host`
+      not import it through support-only host internals
    -> final state: re-home under runtime-facing result metadata or internalize
 4. `EmpiricalOracleScenario`
    -> test/support only
@@ -762,17 +765,22 @@ Final public-packaging target:
    - `consumer::replay`
 2. canonical frozen seam packets remain available through their existing
    canonical modules and root exports where appropriate
-3. `substrate::...` disappears from the endorsed public contract and is
-   reduced to internal or test-support-only use
+3. `substrate::...` disappears from the public library surface entirely and is
+   reduced to explicit `test_support::...` re-exports plus private
+   implementation substrate
 
-Every currently reachable substrate family to demote:
-1. `substrate::host::*`
-   -> demote fully after runtime parity
-2. `substrate::session::*`
-   -> demote fully after runtime parity
+Every currently reachable advanced substrate family to demote or narrow:
+1. public `host` substrate reach
+   -> remove from public library surface after runtime parity
+2. public `session` substrate reach
+   -> remove from public library surface after runtime parity
 3. private `language_service` implementation helpers
    -> keep private after editor parity
-4. `test_support::oxfunc_adapter::*`
+4. `test_support::host::*`
+   -> keep only as explicit test/support surface
+5. `test_support::session::*`
+   -> keep only as explicit test/support surface
+6. `test_support::oxfunc_adapter::*`
    -> keep only as explicit test/support surface after replay/test parity
 
 Demotion classes:

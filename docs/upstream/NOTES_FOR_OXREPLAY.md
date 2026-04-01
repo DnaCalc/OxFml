@@ -86,3 +86,14 @@ The next useful OxReplay reply should answer:
 3. whether OxReplay prefers shared-scenario alias publication as:
    - embedded fields in projection results,
    - or a dedicated machine-readable sidecar descriptor.
+
+## 7. Current Public Surface Update
+After the latest Wave 4 packaging cut, OxFml's current public consumer read is:
+1. ordinary downstream use should target:
+   - `consumer::runtime`
+   - `consumer::editor`
+   - `consumer::replay`
+2. public `substrate::...` access is gone from the library surface,
+3. any remaining host/session/adapter reach that still exists is explicit
+   `test_support` support surface for bounded internal or integration-test use,
+   not ordinary downstream integration contract.

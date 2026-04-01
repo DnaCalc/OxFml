@@ -19,8 +19,8 @@ use oxfml_core::semantics::{
     RegistrationSourceKind,
 };
 use oxfml_core::source::{FormulaChannelKind, FormulaSourceRecord, StructureContextVersion};
-use oxfml_core::substrate::host::SingleFormulaHost;
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
+use oxfml_core::test_support::host::SingleFormulaHost;
 use oxfml_core::{EvaluationBackend, LibraryContextSnapshotRef};
 
 #[test]
