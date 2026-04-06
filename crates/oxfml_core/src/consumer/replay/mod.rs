@@ -603,57 +603,113 @@ fn project_retained_witness(
 }
 
 fn build_comparison_views(surface: &VerificationPublicationSurface) -> Vec<ReplayComparisonView> {
-    vec![
-        ReplayComparisonView {
-            view_family: "visible_value".to_string(),
-            value: Value::String(surface.visible_value_text.clone()),
-        },
+    let mut views = vec![ReplayComparisonView {
+        view_family: "visible_value".to_string(),
+        value: Value::String(surface.visible_value_text.clone()),
+    }];
+
+    if !surface.has_publication_context {
+        return views;
+    }
+
+    views.extend([
         ReplayComparisonView {
             view_family: "effective_display_text".to_string(),
             value: Value::String(surface.effective_display_text.clone()),
         },
         ReplayComparisonView {
             view_family: "formatting_view".to_string(),
-            value: json!({
-                "format_profile": surface.format_profile,
-                "locale_format_context": surface.locale_format_context.as_ref().map(locale_format_context_json),
-                "date1904": surface.date1904,
-                "number_format_code": surface.number_format_code,
-                "style_id": surface.style_id,
-                "style_hierarchy": surface.style_hierarchy,
-                "format_dependency_facts": surface
-                    .format_dependency_facts
-                    .iter()
-                    .map(format_dependency_fact_json)
-                    .collect::<Vec<_>>(),
-                "format_delta": surface.format_delta.as_ref().map(format_delta_json),
-                "display_delta": surface.display_delta.as_ref().map(display_delta_json),
-                "presentation_hint": surface.presentation_hint.as_ref().map(presentation_hint_json),
-                "font_color": surface.font_color,
-                "fill_color": surface.fill_color,
-                "effective_font_color": surface.effective_font_color,
-                "effective_fill_color": surface.effective_fill_color
-            }),
+            value: formatting_view_json(surface),
         },
         ReplayComparisonView {
             view_family: "conditional_formatting_view".to_string(),
-            value: json!({
-                "rules": surface
-                    .conditional_formatting_rules
-                    .iter()
-                    .map(conditional_formatting_rule_json)
-                    .collect::<Vec<_>>(),
-                "target_ranges": surface.conditional_formatting_target_ranges,
-                "rule_kind": surface.conditional_formatting_rule_kind,
-                "operator": surface.conditional_formatting_operator,
-                "thresholds": surface.conditional_formatting_thresholds,
-                "applies": surface.conditional_formatting_applies,
-                "effective_font_color": surface.conditional_formatting_effective_font_color,
-                "effective_fill_color": surface.conditional_formatting_effective_fill_color,
-                "effective_display": surface.conditional_formatting_effective_display
-            }),
+            value: conditional_formatting_view_json(surface),
         },
-    ]
+    ]);
+    views
+}
+
+fn formatting_view_json(surface: &VerificationPublicationSurface) -> Value {
+    if is_spreadsheetml_xml_verification(surface) {
+        return json!({
+            "number_format_code": surface.number_format_code,
+            "style_id": surface.style_id,
+            "font_color": surface.font_color,
+            "fill_color": surface.fill_color
+        });
+    }
+
+    json!({
+        "format_profile": surface.format_profile,
+        "locale_format_context": surface.locale_format_context.as_ref().map(locale_format_context_json),
+        "date1904": surface.date1904,
+        "number_format_code": surface.number_format_code,
+        "style_id": surface.style_id,
+        "style_hierarchy": surface.style_hierarchy,
+        "format_dependency_facts": surface
+            .format_dependency_facts
+            .iter()
+            .map(format_dependency_fact_json)
+            .collect::<Vec<_>>(),
+        "format_delta": surface.format_delta.as_ref().map(format_delta_json),
+        "display_delta": surface.display_delta.as_ref().map(display_delta_json),
+        "presentation_hint": surface.presentation_hint.as_ref().map(presentation_hint_json),
+        "font_color": surface.font_color,
+        "fill_color": surface.fill_color,
+        "effective_font_color": surface.effective_font_color,
+        "effective_fill_color": surface.effective_fill_color
+    })
+}
+
+fn conditional_formatting_view_json(surface: &VerificationPublicationSurface) -> Value {
+    if is_spreadsheetml_xml_verification(surface) {
+        let rules = surface
+            .conditional_formatting_rules
+            .iter()
+            .map(spreadsheetml_conditional_formatting_rule_json)
+            .collect::<Vec<_>>();
+        let applied_rule_indexes = surface
+            .conditional_formatting_applies
+            .iter()
+            .enumerate()
+            .filter_map(|(index, applies)| applies.and_then(|value| value.then_some(index + 1)))
+            .collect::<Vec<_>>();
+
+        return json!({
+            "rules": rules,
+            "effective_style": {
+                "number_format_code": surface.number_format_code,
+                "font_color": surface.effective_font_color,
+                "fill_color": surface.effective_fill_color,
+                "effective_display_text": surface.effective_display_text,
+                "applied_rule_indexes": applied_rule_indexes,
+                "source_projection": "spreadsheetml_expression_rules_v1"
+            }
+        });
+    }
+
+    json!({
+        "rules": surface
+            .conditional_formatting_rules
+            .iter()
+            .map(conditional_formatting_rule_json)
+            .collect::<Vec<_>>(),
+        "target_ranges": surface.conditional_formatting_target_ranges,
+        "rule_kind": surface.conditional_formatting_rule_kind,
+        "operator": surface.conditional_formatting_operator,
+        "thresholds": surface.conditional_formatting_thresholds,
+        "applies": surface.conditional_formatting_applies,
+        "effective_font_color": surface.conditional_formatting_effective_font_color,
+        "effective_fill_color": surface.conditional_formatting_effective_fill_color,
+        "effective_display": surface.conditional_formatting_effective_display
+    })
+}
+
+fn is_spreadsheetml_xml_verification(surface: &VerificationPublicationSurface) -> bool {
+    matches!(
+        surface.format_profile.as_deref(),
+        Some("excel-spreadsheetml-2003-default")
+    )
 }
 
 fn locale_format_context_json(surface: &crate::publication::LocaleFormatContextSurface) -> Value {
@@ -724,5 +780,32 @@ fn conditional_formatting_rule_json(
         "applies": rule.applies,
         "effective_font_color": rule.effective_font_color,
         "effective_fill_color": rule.effective_fill_color
+    })
+}
+
+fn spreadsheetml_conditional_formatting_rule_json(
+    rule: &crate::publication::VerificationConditionalFormattingRule,
+) -> Value {
+    let range = rule.target_ranges.first().cloned();
+    let is_expression = rule.rule_kind.eq_ignore_ascii_case("expression");
+    let formula = is_expression
+        .then(|| rule.thresholds.first().cloned())
+        .flatten();
+    let value1 = (!is_expression)
+        .then(|| rule.thresholds.first().cloned())
+        .flatten();
+    let value2 = (!is_expression)
+        .then(|| rule.thresholds.get(1).cloned())
+        .flatten();
+
+    json!({
+        "range": range,
+        "formula": formula,
+        "value1": value1,
+        "value2": value2,
+        "operator": rule.operator,
+        "rule_kind": rule.rule_kind.to_ascii_lowercase(),
+        "font_color": rule.font_color,
+        "fill_color": rule.fill_color
     })
 }

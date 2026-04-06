@@ -68,6 +68,7 @@ impl LocaleFormatContextSurface {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerificationPublicationSurface {
+    pub has_publication_context: bool,
     pub entered_cell_text: String,
     pub typed_value: VerificationTypedValueSurface,
     pub visible_value_text: String,
@@ -155,6 +156,7 @@ pub fn build_verification_publication_surface(
         .or_else(|| base_fill_color.clone());
 
     VerificationPublicationSurface {
+        has_publication_context: context.is_some(),
         entered_cell_text: source.entered_formula_text.clone(),
         typed_value: typed_value_surface(published_worksheet_value),
         visible_value_text,
@@ -439,6 +441,19 @@ fn parse_numeric_section(section: &str) -> Option<ParsedNumericSection> {
 }
 
 fn apply_numeric_affixes(base: String, numeric: &ParsedNumericSection) -> String {
+    if numeric.is_currency
+        && numeric.suffix.is_empty()
+        && base.starts_with(&numeric.prefix)
+        && !numeric.prefix.is_empty()
+    {
+        return if numeric.negative_parentheses && base.starts_with('-') {
+            let unsigned = base.trim_start_matches('-');
+            format!("{}{}{}", numeric.prefix, unsigned, numeric.suffix)
+        } else {
+            base
+        };
+    }
+
     if numeric.negative_parentheses && base.starts_with('-') {
         let unsigned = base.trim_start_matches('-');
         format!("{}{}{}", numeric.prefix, unsigned, numeric.suffix)
@@ -741,6 +756,10 @@ mod tests {
     #[test]
     fn number_format_code_heuristics_cover_grouping_percent_date_and_negative_sections() {
         let locale = en_us_context();
+        assert_eq!(
+            render_with_number_format_code(&locale, 6.0, "$#,##0.00"),
+            Some("$6.00".to_string())
+        );
         assert_eq!(
             render_with_number_format_code(&locale, 1234.567, "#,##0.000"),
             Some("1,234.567".to_string())

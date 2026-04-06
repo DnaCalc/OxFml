@@ -346,7 +346,8 @@ DNA OneCalc must handle each value class as follows.
    - `formatting_view`
    - `conditional_formatting_view`
 6. current best-effort OxFml-owned widening now includes grouped/fixed numeric codes, percent formats, sectioned negative formats, date-token formats such as `m/d/yyyy`, and conditional-formatting applicability/effective-style evaluation for operator rules plus simple current-cell expression rules such as `=A1>0`,
-7. do not over-read the current first slice as full display-code parity or broad OxFml-owned conditional-formatting evaluation.
+7. for the admitted SpreadsheetML XML verification lane, `comparison_views` may use a narrower comparison-oriented envelope than the richer `VerificationPublicationSurface`; this is an OxFml-owned projection choice for family comparison, not downstream synthesis,
+8. do not over-read the current first slice as full display-code parity or broad OxFml-owned conditional-formatting evaluation.
 
 ---
 

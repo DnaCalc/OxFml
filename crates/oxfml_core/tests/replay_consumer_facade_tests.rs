@@ -139,7 +139,7 @@ fn replay_projection_service_projects_runtime_and_host_outputs() {
         format_profile: Some("excel-spreadsheetml-2003-default".to_string()),
         number_format_code: Some("$#,##0.00".to_string()),
         style_id: Some("calc".to_string()),
-        style_hierarchy: vec!["workbook-default".to_string(), "calc".to_string()],
+        style_hierarchy: vec!["calcBase".to_string(), "calc".to_string()],
         font_color: Some("#112233".to_string()),
         fill_color: Some("#445566".to_string()),
         conditional_formatting_rules: vec![VerificationConditionalFormattingRule {
@@ -149,7 +149,7 @@ fn replay_projection_service_projects_runtime_and_host_outputs() {
             thresholds: vec!["=A1>0".to_string()],
             font_color: Some("#FF0000".to_string()),
             fill_color: Some("#00FF00".to_string()),
-            effective_display_text: Some("$3.00".to_string()),
+            effective_display_text: None,
             applies: None,
             effective_font_color: None,
             effective_fill_color: None,
@@ -158,7 +158,7 @@ fn replay_projection_service_projects_runtime_and_host_outputs() {
     let runtime_result = environment
         .execute(
             RuntimeFormulaRequest::new(
-                FormulaSourceRecord::new("replay:runtime", 1, "=SUM(1,2)"),
+                FormulaSourceRecord::new("replay:runtime", 1, "=SUM(1,2,3)"),
                 TypedContextQueryBundle::new(None, None, Some(&locale_ctx), None, None),
             )
             .with_verification_publication_context(verification_context),
@@ -187,7 +187,7 @@ fn replay_projection_service_projects_runtime_and_host_outputs() {
         runtime_result
             .verification_publication_surface
             .effective_display_text,
-        "$3.00"
+        "$6.00"
     );
     assert_eq!(
         runtime_projection
@@ -206,7 +206,7 @@ fn replay_projection_service_projects_runtime_and_host_outputs() {
                     .find(|view| view.view_family == "effective_display_text")
                     .map(|view| view.value.clone())
             }),
-        Some(Value::String("$3.00".to_string()))
+        Some(Value::String("$6.00".to_string()))
     );
     assert_eq!(
         runtime_projection
@@ -220,7 +220,7 @@ fn replay_projection_service_projects_runtime_and_host_outputs() {
             .verification_publication_surface
             .as_ref()
             .map(|surface| surface.effective_display_text.as_str()),
-        Some("$3.00")
+        Some("$6.00")
     );
     assert_eq!(
         runtime_projection
@@ -262,7 +262,7 @@ fn replay_projection_service_projects_runtime_and_host_outputs() {
             .verification_publication_surface
             .as_ref()
             .map(|surface| surface.conditional_formatting_effective_display.clone()),
-        Some(vec![Some("$3.00".to_string())])
+        Some(vec![Some("$6.00".to_string())])
     );
     assert_eq!(
         runtime_projection
@@ -316,7 +316,66 @@ fn replay_projection_service_projects_runtime_and_host_outputs() {
             .verification_publication_surface
             .as_ref()
             .map(|surface| surface.effective_display_text.as_str()),
-        Some("$3.00")
+        Some("$6.00")
+    );
+}
+
+#[test]
+fn replay_projection_service_emits_only_visible_value_without_publication_context() {
+    let environment = RuntimeEnvironment::new();
+    let runtime_result = environment
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new("replay:no-publication-context", 1, "=1+2+3"),
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("runtime result should execute");
+
+    let runtime_projection = ReplayProjectionService::project(
+        ReplayProjectionRequest::runtime_result(&runtime_result)
+            .with_source_case_id("case:no-publication-context")
+            .with_shared_scenario_alias("alias.no-publication-context"),
+    );
+
+    assert_eq!(
+        runtime_projection
+            .comparison_views
+            .as_ref()
+            .map(|views| comparison_views_json(views)),
+        Some(serde_json::json!([
+            {
+                "view_family": "visible_value",
+                "value": "6"
+            }
+        ]))
+    );
+    assert_eq!(
+        runtime_projection
+            .verification_publication_surface
+            .as_ref()
+            .map(|surface| surface.has_publication_context),
+        Some(false)
+    );
+
+    let first_host_capture = ReplayFirstHostCaptureSource {
+        source_artifact_family: "first_host_capture_packet".to_string(),
+        session_id: runtime_result.candidate_result.session_id.clone(),
+        packet: runtime_result.first_host_replay_capture_packet.clone(),
+    };
+    let host_projection = ReplayProjectionService::project(
+        ReplayProjectionRequest::first_host_capture(&first_host_capture),
+    );
+
+    assert_eq!(
+        host_projection
+            .comparison_views
+            .as_ref()
+            .map(|views| comparison_views_json(views)),
+        Some(serde_json::json!([
+            {
+                "view_family": "visible_value",
+                "value": "6"
+            }
+        ]))
     );
 }
 

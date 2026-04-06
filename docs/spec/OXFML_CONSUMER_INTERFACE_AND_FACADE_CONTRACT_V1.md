@@ -389,6 +389,7 @@ Current floor note:
    - `formatting_view`
    - `conditional_formatting_view`
 4. these families are additive replay-facing views over OxFml-owned publication truth; they do not replace `verification_publication_surface` and they do not widen replay capability claims by themselves.
+5. the admitted SpreadsheetML XML verification lane may publish comparison-oriented `formatting_view` and `conditional_formatting_view` envelopes that are narrower than the underlying `VerificationPublicationSurface`, provided OxFml can state those envelopes directly from its own publication facts.
 
 Working rule:
 1. replay packaging is additive over OxFml meaning,
@@ -400,7 +401,8 @@ Working rule:
    alias data directly in projection results, with optional dedicated sidecars
    later only if batching or corpus tooling needs them,
 5. `comparison_views` must remain adapter-declared facts rather than downstream convenience strings,
-6. the first post-FEC family targeted for preferred replay-facade projection
+6. comparison-oriented family envelopes may be profile-specific where that keeps cross-lane comparison honest without widening semantic claims,
+7. the first post-FEC family targeted for preferred replay-facade projection
    should be session lifecycle.
 
 ## 9. Current-Surface To Target-Surface Migration

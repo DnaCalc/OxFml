@@ -283,7 +283,8 @@ Consumer-facing packaging rule:
    - `effective_display_text`
    - `formatting_view`
    - `conditional_formatting_view`
-7. replay packaging work must not rename or reinterpret frozen OxFml/OxFunc shared packet families.
+7. for the admitted SpreadsheetML XML verification lane, `formatting_view` and `conditional_formatting_view` may be published in a narrower comparison-oriented envelope while `verification_publication_surface` retains the richer OxFml packet.
+8. replay packaging work must not rename or reinterpret frozen OxFml/OxFunc shared packet families.
 
 Current migration sequence:
 1. keep existing replay helper and adapter projection surfaces active,

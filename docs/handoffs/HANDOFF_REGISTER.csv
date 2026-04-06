@@ -3,4 +3,5 @@ HANDOFF-CALC-001,inbound,Coordinator-Facing Seam Hardening for Accepted Results 
 HO-FN-002,inbound,Host-Query Active Selection and CELL INFO Seam Pressure,acknowledged,OxFunc/W015,W003/W006,2026-03-15,2026-03-15
 HANDOFF-FML-001,outbound,Minimum Seam Schema Tightening for Candidate Commit Reject and Trace Payloads,filed,W001,OxCalc-TBD,2026-03-15,
 HANDOFF-DNAONECALC-001,outbound,XML Verification Publication and Replay Export First Slice,filed,W056,DnaOneCalc-TBD,2026-04-06,
+HANDOFF-DNAONECALC-002,outbound,Effective Display XML Follow-On Response,filed,W056,DnaOneCalc-TBD,2026-04-06,
 HANDOFF_OXREPLAY_001,outbound,XML Comparison Views Response,filed,W056,OxReplay-TBD,2026-04-06,
