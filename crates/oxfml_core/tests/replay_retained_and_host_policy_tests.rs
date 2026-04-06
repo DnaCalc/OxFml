@@ -181,12 +181,12 @@ fn retained_witness_set_index_spans_host_and_oracle_families() {
     assert_eq!(index.lane_id, "oxfml");
     assert_eq!(index.adapter_id, "oxfml.replay_adapter.v1");
     assert_eq!(index.index_state, "retained_local_floor");
-    assert_eq!(index.retained_witness_refs.len(), 6);
+    assert_eq!(index.retained_witness_refs.len(), 7);
     assert_eq!(index.quarantined_witness_refs.len(), 1);
     assert_eq!(index.family_counts.get("fec_commit"), Some(&2));
     assert_eq!(index.family_counts.get("session_lifecycle"), Some(&1));
     assert_eq!(index.family_counts.get("execution_contract"), Some(&1));
-    assert_eq!(index.family_counts.get("single_formula_host"), Some(&1));
+    assert_eq!(index.family_counts.get("single_formula_host"), Some(&2));
     assert_eq!(index.family_counts.get("empirical_oracle"), Some(&1));
     assert!(
         index
@@ -219,6 +219,7 @@ fn retained_witness_set_index_spans_host_and_oracle_families() {
     }
 
     validate_reduced_host_scalarization_witness();
+    validate_reduced_host_array_arithmetic_witness();
     validate_reduced_empirical_oracle_host_query_witness();
 }
 
@@ -495,6 +496,95 @@ fn validate_reduced_host_scalarization_witness() {
         &witness_bundle.witness_id,
         &manifest.source_bundle_ref,
         "crates/oxfml_core/tests/fixtures/witness_distillation/single_formula_host_scalarization_reduction_manifest.json",
+    );
+
+    let run = replay_host_case(&witness_bundle.scenario_cases[0]);
+    assert_eq!(
+        run.evaluation.result.payload_summary,
+        witness_bundle.scenario_cases[0].expected.payload_summary
+    );
+    assert_eq!(
+        witness_bundle.scenario_cases[0].expected.commit_decision,
+        "accepted"
+    );
+    assert_commit_accepted(&run.commit_decision);
+    assert_host_trace_and_effects(&run, &witness_bundle.scenario_cases[0].expected);
+}
+
+fn validate_reduced_host_array_arithmetic_witness() {
+    let manifest: ReductionManifest = load_json_fixture(
+        "witness_distillation/single_formula_host_array_arithmetic_reduction_manifest.json",
+    );
+    let witness_bundle: WitnessBundle<HostReplayFixture> = load_json_fixture(
+        "witness_distillation/single_formula_host_array_arithmetic_witness_bundle.json",
+    );
+    let lifecycle: WitnessLifecycleRecord = load_json_fixture(
+        "witness_distillation/single_formula_host_array_arithmetic_lifecycle.json",
+    );
+    let source_cases: Vec<HostReplayFixture> =
+        load_json_fixture("single_formula_host_replay_cases.json");
+
+    assert_eq!(
+        manifest.reduction_id,
+        "oxfml.local.reduction.single_formula_host_array_arithmetic.v1"
+    );
+    assert_eq!(
+        manifest.source_scope_ref,
+        "fixture_family:single_formula_host_replay_cases"
+    );
+    assert_eq!(
+        manifest.predicate_ref.predicate_kind,
+        "pred.publication.accepted_payload_present"
+    );
+    assert_eq!(
+        manifest.predicate_ref.predicate_id,
+        "oxfml.local.predicate.single_formula_host_array_arithmetic.v1"
+    );
+    assert_eq!(
+        manifest
+            .predicate_ref
+            .required_publication_value_class
+            .as_deref(),
+        Some("Array")
+    );
+    assert_eq!(manifest.strategy_id, "hierarchy_first");
+    assert_eq!(
+        manifest.unit_kinds,
+        vec!["oxfml.local.reduction_unit.fixture_case"]
+    );
+    assert_eq!(
+        manifest.retained_units,
+        vec!["host_011_array_arithmetic_local_bootstrap"]
+    );
+    assert_eq!(manifest.removed_units.len(), 10);
+    assert!(manifest.rewritten_units.is_empty());
+    assert_eq!(manifest.iteration_count, 1);
+    assert_eq!(manifest.final_status, "red.preserved");
+    assert!(
+        manifest
+            .closure_rules_applied
+            .iter()
+            .any(|rule| rule == "host_formula_shape_closure")
+    );
+    assert_existing_manifest_refs(&manifest);
+
+    assert_eq!(
+        witness_bundle.source_fixture_family,
+        "single_formula_host_replay_cases"
+    );
+    assert_eq!(witness_bundle.reduced_role, "replay_closed_witness");
+    assert_eq!(witness_bundle.bundle_state, "replay_valid");
+    assert_eq!(
+        witness_bundle.source_case_ids,
+        vec!["host_011_array_arithmetic_local_bootstrap"]
+    );
+    assert_eq!(witness_bundle.scenario_cases.len(), 1);
+    assert!(witness_bundle.scenario_cases.len() < source_cases.len());
+    assert_retained_local_lifecycle(
+        &lifecycle,
+        &witness_bundle.witness_id,
+        &manifest.source_bundle_ref,
+        "crates/oxfml_core/tests/fixtures/witness_distillation/single_formula_host_array_arithmetic_reduction_manifest.json",
     );
 
     let run = replay_host_case(&witness_bundle.scenario_cases[0]);

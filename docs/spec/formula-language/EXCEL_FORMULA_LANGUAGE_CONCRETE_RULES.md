@@ -37,6 +37,7 @@ Working interpretation rule:
 | FML-R-014 | `R1C1` formulas are a distinct formula channel and must use `R1C1`-style references rather than being treated only as an A1 display mode. | XLS-CF-FL-006 | CONF-discovered-ms-oe376-220816-823374c7-1434;SPEC-discovered-ms-oe376-88e93023-48474;SPEC-discovered-ms-oe376-88e93023-48487 | provisional |
 | FML-R-015 | Name formulas and external-name formulas are distinct formula-bearing carriers; external-name formulas are narrower than generic external references and require explicit external-book identity. | XLS-CF-FL-008 | CONF-discovered-ms-oe376-220816-823374c7-0362;CONF-discovered-ms-oe376-220816-823374c7-0363;SPEC-discovered-ms-oe376-88e93023-48443;SPEC-discovered-ms-oe376-88e93023-48448;SPEC-discovered-ms-oe376-88e93023-48451 | provisional |
 | FML-R-016 | Conditional-formatting and data-validation formulas are restricted formula-bearing sublanguages; they are similar but not safely identical, and their rule-host fields remain formula-semantic rather than display-only metadata. | XLS-CF-FL-006 | CONF-discovered-ms-oe376-220816-823374c7-1427;CONF-discovered-ms-oe376-220816-823374c7-1428;CONF-discovered-ms-oe376-220816-823374c7-1429;CONF-discovered-ms-oe376-220816-823374c7-1430;CONF-discovered-ms-oe376-220816-823374c7-1431 | provisional |
+| FML-R-018 | Ordinary arithmetic operators must preserve array payloads and apply numeric coercion/error mapping elementwise for admitted array-lifted shapes rather than collapsing arrays to a single scalar before evaluation. | XLS-CF-FL-012 | evaluator_tests.rs;replay_fixture_tests.rs;replay_retained_and_host_policy_tests.rs | provisional |
 
 ## 3. Current Local Floors For Newer Rule Families
 
@@ -132,6 +133,7 @@ Several formula-language rules have direct OxFunc-boundary consequences:
 1. `FML-R-003`, `FML-R-004`, and `FML-R-005` affect how `@`, `#`, and spill-linked results survive into prepared evaluation structures,
 2. `FML-R-008` and `FML-R-009` affect bind outputs and reference identity,
 3. `FML-R-012` affects argument preparation and admission-vs-runtime-error classification.
+4. `FML-R-018` affects whether ordinary arithmetic operators preserve array structure honestly before result publication and replay capture.
 
 These cross-lane effects must remain explicit during future tightening passes.
 
@@ -157,6 +159,7 @@ Evidence posture:
 4. Expand `P2-FML-008` spill-blocking/update scenarios to support `FML-R-005` promotion from `draft`.
 5. Replicate argument-gap and normalization lanes across additional target builds/channels for status promotion to validated.
 6. Execute `P2-FML-011` function-admission/coercion edge matrix (`SIN`/`ASIN` seeds), then split stable sub-rules from remaining provisional rows.
+7. Execute `P2-FML-012` operator array-lift matrix, then confirm ordinary arithmetic elementwise semantics across targeted channels/builds.
 
 ## 8. Conformance Matrix And Archive Evidence
 This rule set is operationalized by:

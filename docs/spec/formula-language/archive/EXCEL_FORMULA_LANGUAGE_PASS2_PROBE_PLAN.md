@@ -41,9 +41,10 @@ Execution prerequisites:
 | P2-FML-009 | Broaden normalization corpus beyond current two rows. | FML-R-007 | ECM-Q-001 | function case, name case, structured refs, helper forms, external refs, whitespace variants | input-vs-stored formula normalization table |
 | P2-FML-010 | Validate precedence checksum corpus for full operator tiers. | FML-R-001;FML-R-002 | ECM-Q-001 | formulas combining reference ops, arithmetic, `%`, exponentiation, concat, comparison | expected-result checksum table and precedence decision traces |
 | P2-FML-011 | Resolve function-call admission vs runtime error boundaries for canonical non-interesting trig seeds. | FML-R-012 | ECM-Q-012 | `SIN`/`ASIN` required-arg omission, scalar coercion failure, mixed-type array-lift behavior, numeric-domain errors | parse-admission matrix + runtime error/result-shape matrix by build/channel |
+| P2-FML-012 | Resolve ordinary arithmetic operator array-lift semantics for scalar-array, array-array, internal-error, and mismatched-shape cases. | FML-R-018 | ECM-Q-012 | `+`, `-`, `*`, `/` over rectangular array literals with scalar operands, same-shape arrays, internal divide-by-zero, and mismatched-shape operands | result-shape matrix, per-element error matrix, and mismatched-shape outcome table by build/channel |
 
 Execution seed artifact:
-1. `EXCEL_FORMULA_LANGUAGE_PASS2_SCENARIO_SEED.csv` contains initial scenario rows (`FMLP2-001`..`FMLP2-041`).
+1. `EXCEL_FORMULA_LANGUAGE_PASS2_SCENARIO_SEED.csv` contains initial scenario rows (`FMLP2-001`..`FMLP2-045`).
 2. Seed rows marked `probe` require outcome capture before status decisions.
 
 ## 4. Status Upgrade Rules
@@ -92,6 +93,7 @@ Remaining unresolved lanes after execution:
 3. `P2-FML-006` now has workbook-present/open-state baseline evidence (`EMP-0011`); remaining work is link-update/open-state policy expansion and cross-build replay.
 4. `P2-FML-008` spill-blocking/update lane still needs expansion before `FML-R-005` can leave `draft`.
 5. `P2-FML-011` has been seeded but not executed; this lane is required to resolve parse-admission vs runtime-error boundaries for non-interesting functions.
+6. `P2-FML-012` has been seeded but not executed; this lane is required to resolve ordinary operator array-lift behavior across targeted channels/builds.
 
 ## 7. Post Pass-2 Parallel Lanes (2026-03-02)
 Pass-2 execution is complete. Follow-up is split into two independent lanes:

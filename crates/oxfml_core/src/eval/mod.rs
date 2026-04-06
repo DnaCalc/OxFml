@@ -544,33 +544,23 @@ fn evaluate_expr_value(
             ),
         }),
         BoundExpr::Binary { op, left, right } => {
-            let lhs = coerce_to_number(evaluate_expr_value(
+            let lhs = evaluate_expr_value(
                 left,
                 context,
                 resolver,
                 helper_bindings,
                 callable_registry,
                 trace,
-            )?)?;
-            let rhs = coerce_to_number(evaluate_expr_value(
+            )?;
+            let rhs = evaluate_expr_value(
                 right,
                 context,
                 resolver,
                 helper_bindings,
                 callable_registry,
                 trace,
-            )?)?;
-            Ok(EvalValue::Number(match op {
-                crate::binding::BinaryOp::Add => lhs + rhs,
-                crate::binding::BinaryOp::Subtract => lhs - rhs,
-                crate::binding::BinaryOp::Multiply => lhs * rhs,
-                crate::binding::BinaryOp::Divide => {
-                    if rhs == 0.0 {
-                        return Ok(EvalValue::Error(WorksheetErrorCode::Div0));
-                    }
-                    lhs / rhs
-                }
-            }))
+            )?;
+            evaluate_binary_numeric_op(*op, lhs, rhs)
         }
         BoundExpr::FunctionCall {
             function_name,
@@ -1027,6 +1017,153 @@ fn evaluate_array_literal(
         .ok_or_else(|| EvaluationError {
             message: "array literal produced an invalid rectangular shape".to_string(),
         })
+}
+
+fn evaluate_binary_numeric_op(
+    op: crate::binding::BinaryOp,
+    lhs: EvalValue,
+    rhs: EvalValue,
+) -> Result<EvalValue, EvaluationError> {
+    match (&lhs, &rhs) {
+        (EvalValue::Array(lhs_array), EvalValue::Array(rhs_array)) => {
+            if lhs_array.shape() != rhs_array.shape() {
+                return Ok(EvalValue::Error(WorksheetErrorCode::Value));
+            }
+            Ok(EvalValue::Array(map_binary_numeric_arrays(
+                lhs_array, rhs_array, op,
+            )))
+        }
+        (EvalValue::Array(array), _) => Ok(EvalValue::Array(map_binary_numeric_array_scalar(
+            array, &rhs, op, false,
+        ))),
+        (_, EvalValue::Array(array)) => Ok(EvalValue::Array(map_binary_numeric_array_scalar(
+            array, &lhs, op, true,
+        ))),
+        _ => {
+            let lhs = coerce_to_number(lhs)?;
+            let rhs = coerce_to_number(rhs)?;
+            eval_binary_numeric_scalars(op, lhs, rhs)
+        }
+    }
+}
+
+fn map_binary_numeric_arrays(
+    lhs: &EvalArray,
+    rhs: &EvalArray,
+    op: crate::binding::BinaryOp,
+) -> EvalArray {
+    let cells = lhs
+        .iter_row_major()
+        .zip(rhs.iter_row_major())
+        .map(|(lhs, rhs)| eval_binary_numeric_cells(lhs, rhs, op))
+        .collect::<Vec<_>>();
+    EvalArray::new(lhs.shape(), cells).expect("validated array shapes should match")
+}
+
+fn map_binary_numeric_array_scalar(
+    array: &EvalArray,
+    scalar: &EvalValue,
+    op: crate::binding::BinaryOp,
+    scalar_on_left: bool,
+) -> EvalArray {
+    let scalar = coerce_eval_value_to_number_for_array_math(scalar);
+    let cells = array
+        .iter_row_major()
+        .map(|cell| {
+            let cell = coerce_array_cell_to_number_for_array_math(cell);
+            match (scalar_on_left, scalar, cell) {
+                (true, Ok(lhs), Ok(rhs)) => eval_binary_numeric_cell_numbers(op, lhs, rhs),
+                (false, Ok(rhs), Ok(lhs)) => eval_binary_numeric_cell_numbers(op, lhs, rhs),
+                (_, Err(code), _) | (_, _, Err(code)) => ArrayCellValue::Error(code),
+            }
+        })
+        .collect::<Vec<_>>();
+    EvalArray::new(array.shape(), cells).expect("shape preserved")
+}
+
+fn eval_binary_numeric_cells(
+    lhs: &ArrayCellValue,
+    rhs: &ArrayCellValue,
+    op: crate::binding::BinaryOp,
+) -> ArrayCellValue {
+    let lhs = coerce_array_cell_to_number_for_array_math(lhs);
+    let rhs = coerce_array_cell_to_number_for_array_math(rhs);
+    match (lhs, rhs) {
+        (Ok(lhs), Ok(rhs)) => eval_binary_numeric_cell_numbers(op, lhs, rhs),
+        (Err(code), _) | (_, Err(code)) => ArrayCellValue::Error(code),
+    }
+}
+
+fn eval_binary_numeric_cell_numbers(
+    op: crate::binding::BinaryOp,
+    lhs: f64,
+    rhs: f64,
+) -> ArrayCellValue {
+    match op {
+        crate::binding::BinaryOp::Add => ArrayCellValue::Number(lhs + rhs),
+        crate::binding::BinaryOp::Subtract => ArrayCellValue::Number(lhs - rhs),
+        crate::binding::BinaryOp::Multiply => ArrayCellValue::Number(lhs * rhs),
+        crate::binding::BinaryOp::Divide => {
+            if rhs == 0.0 {
+                ArrayCellValue::Error(WorksheetErrorCode::Div0)
+            } else {
+                ArrayCellValue::Number(lhs / rhs)
+            }
+        }
+    }
+}
+
+fn eval_binary_numeric_scalars(
+    op: crate::binding::BinaryOp,
+    lhs: f64,
+    rhs: f64,
+) -> Result<EvalValue, EvaluationError> {
+    Ok(match op {
+        crate::binding::BinaryOp::Add => EvalValue::Number(lhs + rhs),
+        crate::binding::BinaryOp::Subtract => EvalValue::Number(lhs - rhs),
+        crate::binding::BinaryOp::Multiply => EvalValue::Number(lhs * rhs),
+        crate::binding::BinaryOp::Divide => {
+            if rhs == 0.0 {
+                EvalValue::Error(WorksheetErrorCode::Div0)
+            } else {
+                EvalValue::Number(lhs / rhs)
+            }
+        }
+    })
+}
+
+fn coerce_eval_value_to_number_for_array_math(
+    value: &EvalValue,
+) -> Result<f64, WorksheetErrorCode> {
+    match value {
+        EvalValue::Number(number) => Ok(*number),
+        EvalValue::Logical(value) => Ok(if *value { 1.0 } else { 0.0 }),
+        EvalValue::Text(text) => text
+            .to_string_lossy()
+            .trim()
+            .parse::<f64>()
+            .map_err(|_| WorksheetErrorCode::Value),
+        EvalValue::Error(code) => Err(*code),
+        EvalValue::Array(_) | EvalValue::Reference(_) | EvalValue::Lambda(_) => {
+            Err(WorksheetErrorCode::Value)
+        }
+    }
+}
+
+fn coerce_array_cell_to_number_for_array_math(
+    value: &ArrayCellValue,
+) -> Result<f64, WorksheetErrorCode> {
+    match value {
+        ArrayCellValue::Number(number) => Ok(*number),
+        ArrayCellValue::Logical(value) => Ok(if *value { 1.0 } else { 0.0 }),
+        ArrayCellValue::Text(text) => text
+            .to_string_lossy()
+            .trim()
+            .parse::<f64>()
+            .map_err(|_| WorksheetErrorCode::Value),
+        ArrayCellValue::Error(code) => Err(*code),
+        ArrayCellValue::EmptyCell => Ok(0.0),
+    }
 }
 
 fn call_arg_for_name(

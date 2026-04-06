@@ -1,4 +1,6 @@
 use std::collections::BTreeMap;
+use std::fs;
+use std::path::PathBuf;
 
 mod common;
 
@@ -12,6 +14,7 @@ use oxfunc_core::value::{
     ArrayCellValue, CellStyleHint, EvalValue, ExcelText, NumberFormatHint, PresentationHint,
     ReferenceKind, ReferenceLike,
 };
+use serde::Deserialize;
 
 use oxfml_core::binding::{
     BinaryOp, BoundExpr, NameKind, NameRef, NormalizedReference, ReferenceExpr,
@@ -311,6 +314,88 @@ fn evaluator_runs_unary_negative_literal_through_function_calls() {
     match fv_output.oxfunc_value {
         EvalValue::Number(value) => assert!((value - 1257.789253554884).abs() < 1e-9),
         other => panic!("expected numeric FV result, got {other:?}"),
+    }
+}
+
+#[test]
+fn evaluator_lifts_binary_arithmetic_over_array_literals_and_scalar_negation() {
+    let output = evaluate("={1,2,3;2,3,4}*-1", None, None, Some(&en_us_context()));
+    assert_eq!(output.result.payload_summary, "Array(2x3)");
+    assert_eq!(
+        array_numbers(&output.oxfunc_value),
+        vec![-1.0, -2.0, -3.0, -2.0, -3.0, -4.0]
+    );
+}
+
+#[test]
+fn evaluator_lifts_unary_minus_over_array_literals_via_binary_lowering() {
+    let output = evaluate("=-{1,2,3;2,3,4}", None, None, Some(&en_us_context()));
+    assert_eq!(output.result.payload_summary, "Array(2x3)");
+    assert_eq!(
+        array_numbers(&output.oxfunc_value),
+        vec![-1.0, -2.0, -3.0, -2.0, -3.0, -4.0]
+    );
+}
+
+#[test]
+fn evaluator_lifts_binary_arithmetic_over_same_shape_arrays() {
+    let output = evaluate(
+        "={1,2;3,4}+{10,20;30,40}",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.result.payload_summary, "Array(2x2)");
+    assert_eq!(
+        array_numbers(&output.oxfunc_value),
+        vec![11.0, 22.0, 33.0, 44.0]
+    );
+}
+
+#[test]
+fn evaluator_lifts_division_over_arrays_and_preserves_element_errors() {
+    let output = evaluate("={8,6;4,2}/{2,0;1,2}", None, None, Some(&en_us_context()));
+    let EvalValue::Array(array) = &output.oxfunc_value else {
+        panic!("expected array result, got {:?}", output.oxfunc_value);
+    };
+    assert_eq!(output.result.payload_summary, "Array(2x2)");
+    assert_eq!(array.get(0, 0), Some(&ArrayCellValue::Number(4.0)));
+    assert_eq!(
+        array.get(0, 1),
+        Some(&ArrayCellValue::Error(
+            oxfunc_core::value::WorksheetErrorCode::Div0
+        ))
+    );
+    assert_eq!(array.get(1, 0), Some(&ArrayCellValue::Number(4.0)));
+    assert_eq!(array.get(1, 1), Some(&ArrayCellValue::Number(1.0)));
+}
+
+#[derive(Debug, Deserialize)]
+struct OperatorArrayArithmeticFixture {
+    case_id: String,
+    formula: String,
+    expected_payload_summary: String,
+    expected_value_summary: String,
+}
+
+#[test]
+fn evaluator_operator_array_arithmetic_fixture_corpus_matches_expected_values() {
+    let fixtures: Vec<OperatorArrayArithmeticFixture> =
+        load_json_fixture("operator_array_arithmetic_cases.json");
+
+    for fixture in fixtures {
+        let output = evaluate(&fixture.formula, None, None, Some(&en_us_context()));
+        assert_eq!(
+            output.result.payload_summary, fixture.expected_payload_summary,
+            "payload summary mismatch for {}",
+            fixture.case_id
+        );
+        assert_eq!(
+            eval_value_summary(&output.oxfunc_value),
+            fixture.expected_value_summary,
+            "value summary mismatch for {}",
+            fixture.case_id
+        );
     }
 }
 
@@ -1035,6 +1120,52 @@ fn split_profile_list(value: &str) -> Vec<String> {
         value.split('|').map(|item| item.to_string()).collect()
     } else {
         value.split(',').map(|item| item.to_string()).collect()
+    }
+}
+
+fn load_json_fixture<T: for<'de> Deserialize<'de>>(file_name: &str) -> T {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("tests");
+    path.push("fixtures");
+    path.push(file_name);
+    let content = fs::read_to_string(path).expect("fixture file should exist");
+    serde_json::from_str(&content).expect("fixture file should deserialize")
+}
+
+fn eval_value_summary(value: &EvalValue) -> String {
+    match value {
+        EvalValue::Number(number) => format!("Number({})", number_summary(*number)),
+        EvalValue::Text(text) => format!("Text({})", text.to_string_lossy()),
+        EvalValue::Logical(value) => format!("Logical({value})"),
+        EvalValue::Error(code) => format!("Error({code:?})"),
+        EvalValue::Array(array) => {
+            let cells = array
+                .iter_row_major()
+                .map(array_cell_summary)
+                .collect::<Vec<_>>()
+                .join(",");
+            format!("Array({cells})")
+        }
+        EvalValue::Reference(reference) => format!("Reference({})", reference.target),
+        EvalValue::Lambda(lambda) => format!("Lambda({})", lambda.callable_token),
+    }
+}
+
+fn array_cell_summary(cell: &ArrayCellValue) -> String {
+    match cell {
+        ArrayCellValue::Number(number) => format!("Number({})", number_summary(*number)),
+        ArrayCellValue::Text(text) => format!("Text({})", text.to_string_lossy()),
+        ArrayCellValue::Logical(value) => format!("Logical({value})"),
+        ArrayCellValue::Error(code) => format!("Error({code:?})"),
+        ArrayCellValue::EmptyCell => "EmptyCell".to_string(),
+    }
+}
+
+fn number_summary(number: f64) -> String {
+    if number.fract() == 0.0 {
+        format!("{number:.0}")
+    } else {
+        format!("{number:?}")
     }
 }
 

@@ -40,3 +40,7 @@
 "P2-FML-011","FMLP2-039","FML-R-012","no setup","=SIN(""asd"")","Sheet1!D1","probe","","Accepted formula with runtime coercion/error outcome."
 "P2-FML-011","FMLP2-040","FML-R-012","no setup","=SIN({1,""asd"",3})","Sheet1!D1","probe","","Array-lifted mixed-type input; determine scalar error vs elementwise error array."
 "P2-FML-011","FMLP2-041","FML-R-012","no setup","=ASIN(2)","Sheet1!D1","probe","","Numeric-domain error mapping baseline (common expectation #NUM!)."
+"P2-FML-012","FMLP2-042","FML-R-018","no setup","={1,2,3;2,3,4}*-1","Sheet1!D1","probe","","Array literal multiplied by unary-negative scalar; confirms operator-side array-lift."
+"P2-FML-012","FMLP2-043","FML-R-018","no setup","=10-{1,2;3,4}","Sheet1!D1","probe","","Scalar-left subtraction over array literal."
+"P2-FML-012","FMLP2-044","FML-R-018","no setup","={8,6;4,2}/{2,0;1,2}","Sheet1!D1","probe","","Elementwise divide with internal zero; confirms per-element error propagation."
+"P2-FML-012","FMLP2-045","FML-R-018","no setup","={1,2;3,4}+{10,20,30}","Sheet1!D1","probe","","Mismatched-shape array arithmetic; confirms shape incompatibility outcome."

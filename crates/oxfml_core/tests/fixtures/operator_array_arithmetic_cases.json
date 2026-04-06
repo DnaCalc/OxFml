@@ -1,0 +1,50 @@
+[
+  {
+    "case_id": "arr_op_001_array_times_negative_scalar",
+    "formula": "={1,2,3;2,3,4}*-1",
+    "expected_payload_summary": "Array(2x3)",
+    "expected_value_summary": "Array(Number(-1),Number(-2),Number(-3),Number(-2),Number(-3),Number(-4))"
+  },
+  {
+    "case_id": "arr_op_002_scalar_times_array",
+    "formula": "=2*{1,2;3,4}",
+    "expected_payload_summary": "Array(2x2)",
+    "expected_value_summary": "Array(Number(2),Number(4),Number(6),Number(8))"
+  },
+  {
+    "case_id": "arr_op_003_scalar_minus_array",
+    "formula": "=10-{1,2;3,4}",
+    "expected_payload_summary": "Array(2x2)",
+    "expected_value_summary": "Array(Number(9),Number(8),Number(7),Number(6))"
+  },
+  {
+    "case_id": "arr_op_004_same_shape_array_add",
+    "formula": "={1,2;3,4}+{10,20;30,40}",
+    "expected_payload_summary": "Array(2x2)",
+    "expected_value_summary": "Array(Number(11),Number(22),Number(33),Number(44))"
+  },
+  {
+    "case_id": "arr_op_005_array_division_internal_error",
+    "formula": "={8,6;4,2}/{2,0;1,2}",
+    "expected_payload_summary": "Array(2x2)",
+    "expected_value_summary": "Array(Number(4),Error(Div0),Number(4),Number(1))"
+  },
+  {
+    "case_id": "arr_op_006_mismatched_shape_rejected",
+    "formula": "={1,2;3,4}+{10,20,30}",
+    "expected_payload_summary": "Error(Value)",
+    "expected_value_summary": "Error(Value)"
+  },
+  {
+    "case_id": "arr_op_007_numeric_text_array_coerces_elementwise",
+    "formula": "={\"2\",3;\"4\",\"5\"}+1",
+    "expected_payload_summary": "Array(2x2)",
+    "expected_value_summary": "Array(Number(3),Number(4),Number(5),Number(6))"
+  },
+  {
+    "case_id": "arr_op_008_bad_text_stays_local_to_element",
+    "formula": "={1,\"bad\"}+1",
+    "expected_payload_summary": "Array(1x2)",
+    "expected_value_summary": "Array(Number(2),Error(Value))"
+  }
+]

@@ -218,5 +218,26 @@
       "format_dependency_tokens": [],
       "spill_event_kinds": []
     }
+  },
+  {
+    "case_id": "host_011_array_arithmetic_local_bootstrap",
+    "formula": "={1,2,3;2,3,4}*-1",
+    "backend": "LocalBootstrap",
+    "defined_names": {},
+    "cell_bindings": {},
+    "host_query_profile": null,
+    "expected": {
+      "payload_summary": "Array(2x3)",
+      "commit_decision": "accepted",
+      "trace_event_kinds": [
+        "AcceptedCandidateResultBuilt",
+        "CommitAccepted"
+      ],
+      "capability_effect_kinds": [],
+      "format_dependency_tokens": [],
+      "spill_event_kinds": [
+        "SpillTakeover"
+      ]
+    }
   }
 ]

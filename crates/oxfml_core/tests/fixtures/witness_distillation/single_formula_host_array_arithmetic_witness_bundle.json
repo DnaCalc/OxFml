@@ -1,0 +1,32 @@
+{
+  "witness_id": "oxfml.local.witness.single_formula_host_array_arithmetic.v1",
+  "source_fixture_family": "single_formula_host_replay_cases",
+  "reduced_role": "replay_closed_witness",
+  "bundle_state": "replay_valid",
+  "source_case_ids": [
+    "host_011_array_arithmetic_local_bootstrap"
+  ],
+  "scenario_cases": [
+    {
+      "case_id": "host_011_array_arithmetic_local_bootstrap",
+      "formula": "={1,2,3;2,3,4}*-1",
+      "backend": "LocalBootstrap",
+      "defined_names": {},
+      "cell_bindings": {},
+      "host_query_profile": null,
+      "expected": {
+        "payload_summary": "Array(2x3)",
+        "commit_decision": "accepted",
+        "trace_event_kinds": [
+          "AcceptedCandidateResultBuilt",
+          "CommitAccepted"
+        ],
+        "capability_effect_kinds": [],
+        "format_dependency_tokens": [],
+        "spill_event_kinds": [
+          "SpillTakeover"
+        ]
+      }
+    }
+  ]
+}
