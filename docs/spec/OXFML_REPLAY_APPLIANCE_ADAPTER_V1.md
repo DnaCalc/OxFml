@@ -92,7 +92,8 @@ Projection rules:
 1. the normalized replay model is additive transport, not replacement semantics,
 2. source schema ids and source artifact refs remain mandatory,
 3. if a payload body is too large for inline replay transport, the adapter must preserve a sidecar ref plus content fingerprint,
-4. explicit missing or opaque markers must be used where a normalized field cannot be populated honestly.
+4. explicit missing or opaque markers must be used where a normalized field cannot be populated honestly,
+5. replay-facing `comparison_views` may be published only when the adapter can state those families directly from OxFml-owned facts rather than from downstream reinterpretation.
 
 ## 5. Preserved Identity Categories And Fence-Related Keys
 The adapter must preserve the OxFml identity categories from `OXFML_ARTIFACT_IDENTITIES_AND_VERSION_KEYS.md`:
@@ -275,8 +276,14 @@ Consumer-facing packaging rule:
    - session-lifecycle projection,
    - fixture-family metadata projection,
    - retained-witness metadata projection,
+   - additive `comparison_views` publication for the current XML verification lane when `verification_publication_surface` facts are available,
 5. broader registry/lifecycle/promotion breadth remains outside that current first floor.
-4. replay packaging work must not rename or reinterpret frozen OxFml/OxFunc shared packet families.
+6. the current admitted comparison-view family set is:
+   - `visible_value`
+   - `effective_display_text`
+   - `formatting_view`
+   - `conditional_formatting_view`
+7. replay packaging work must not rename or reinterpret frozen OxFml/OxFunc shared packet families.
 
 Current migration sequence:
 1. keep existing replay helper and adapter projection surfaces active,

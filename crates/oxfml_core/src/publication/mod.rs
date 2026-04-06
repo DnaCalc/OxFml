@@ -1,0 +1,1125 @@
+use oxfunc_core::locale_format::{LocaleFormatContext, WorkbookDateSystem};
+use oxfunc_core::value::{EvalValue, PresentationHint, WorksheetErrorCode};
+
+use crate::interface::ReturnedValueSurface;
+use crate::seam::{
+    DisplayDelta, FormatDelta, FormatDependencyFact, TopologyDelta, ValuePayload,
+    WorksheetValueClass,
+};
+use crate::source::FormulaSourceRecord;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerificationTypedValueSurface {
+    pub value_kind: String,
+    pub worksheet_value_class: WorksheetValueClass,
+    pub payload: ValuePayload,
+    pub error_kind: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct VerificationConditionalFormattingRule {
+    pub target_ranges: Vec<String>,
+    pub rule_kind: String,
+    pub operator: Option<String>,
+    pub thresholds: Vec<String>,
+    pub font_color: Option<String>,
+    pub fill_color: Option<String>,
+    pub effective_display_text: Option<String>,
+    pub applies: Option<bool>,
+    pub effective_font_color: Option<String>,
+    pub effective_fill_color: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct VerificationPublicationContext {
+    pub format_profile: Option<String>,
+    pub number_format_code: Option<String>,
+    pub style_id: Option<String>,
+    pub style_hierarchy: Vec<String>,
+    pub font_color: Option<String>,
+    pub fill_color: Option<String>,
+    pub conditional_formatting_rules: Vec<VerificationConditionalFormattingRule>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocaleFormatContextSurface {
+    pub locale_profile_id: String,
+    pub date_system: String,
+    pub decimal_separator: String,
+    pub thousands_separator: String,
+    pub currency_symbol: String,
+    pub date_separator: String,
+    pub time_separator: String,
+}
+
+impl LocaleFormatContextSurface {
+    pub fn from_context(locale_ctx: &LocaleFormatContext<'_>) -> Self {
+        Self {
+            locale_profile_id: format!("{:?}", locale_ctx.profile.id),
+            date_system: format!("{:?}", locale_ctx.date_system),
+            decimal_separator: locale_ctx.profile.decimal_separator.to_string(),
+            thousands_separator: locale_ctx.profile.thousands_separator.to_string(),
+            currency_symbol: locale_ctx.profile.currency_symbol.to_string(),
+            date_separator: locale_ctx.profile.date_separator.to_string(),
+            time_separator: locale_ctx.profile.time_separator.to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerificationPublicationSurface {
+    pub entered_cell_text: String,
+    pub typed_value: VerificationTypedValueSurface,
+    pub visible_value_text: String,
+    pub effective_display_text: String,
+    pub format_profile: Option<String>,
+    pub locale_format_context: Option<LocaleFormatContextSurface>,
+    pub date1904: Option<bool>,
+    pub number_format_code: Option<String>,
+    pub style_id: Option<String>,
+    pub style_hierarchy: Vec<String>,
+    pub format_dependency_facts: Vec<FormatDependencyFact>,
+    pub format_delta: Option<FormatDelta>,
+    pub display_delta: Option<DisplayDelta>,
+    pub returned_value_surface: ReturnedValueSurface,
+    pub presentation_hint: Option<PresentationHint>,
+    pub font_color: Option<String>,
+    pub fill_color: Option<String>,
+    pub effective_font_color: Option<String>,
+    pub effective_fill_color: Option<String>,
+    pub conditional_formatting_rules: Vec<VerificationConditionalFormattingRule>,
+    pub conditional_formatting_target_ranges: Vec<Vec<String>>,
+    pub conditional_formatting_rule_kind: Vec<String>,
+    pub conditional_formatting_operator: Vec<Option<String>>,
+    pub conditional_formatting_thresholds: Vec<Vec<String>>,
+    pub conditional_formatting_applies: Vec<Option<bool>>,
+    pub conditional_formatting_effective_font_color: Vec<Option<String>>,
+    pub conditional_formatting_effective_fill_color: Vec<Option<String>>,
+    pub conditional_formatting_effective_display: Vec<Option<String>>,
+}
+
+pub fn build_verification_publication_surface(
+    source: &FormulaSourceRecord,
+    published_worksheet_value: &EvalValue,
+    returned_value_surface: &ReturnedValueSurface,
+    topology_delta: &TopologyDelta,
+    format_delta: Option<&FormatDelta>,
+    display_delta: Option<&DisplayDelta>,
+    locale_ctx: Option<&LocaleFormatContext<'_>>,
+    context: Option<&VerificationPublicationContext>,
+) -> VerificationPublicationSurface {
+    let visible_value_text = render_visible_value_text(published_worksheet_value);
+    let base_effective_display_text = render_effective_display_text(
+        published_worksheet_value,
+        returned_value_surface.presentation_hint.as_ref(),
+        locale_ctx,
+        context.and_then(|value| value.number_format_code.as_deref()),
+    )
+    .unwrap_or_else(|| visible_value_text.clone());
+    let base_font_color = context.and_then(|value| value.font_color.clone());
+    let base_fill_color = context.and_then(|value| value.fill_color.clone());
+    let conditional_formatting_rules = context
+        .map(|value| {
+            value
+                .conditional_formatting_rules
+                .iter()
+                .map(|rule| {
+                    evaluate_conditional_formatting_rule(
+                        rule,
+                        published_worksheet_value,
+                        &visible_value_text,
+                        &base_effective_display_text,
+                        locale_ctx,
+                    )
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let effective_display_text = conditional_formatting_rules
+        .iter()
+        .rev()
+        .find(|rule| rule.applies == Some(true))
+        .and_then(|rule| rule.effective_display_text.clone())
+        .unwrap_or_else(|| base_effective_display_text.clone());
+    let effective_font_color = conditional_formatting_rules
+        .iter()
+        .rev()
+        .find(|rule| rule.applies == Some(true))
+        .and_then(|rule| rule.effective_font_color.clone())
+        .or_else(|| base_font_color.clone());
+    let effective_fill_color = conditional_formatting_rules
+        .iter()
+        .rev()
+        .find(|rule| rule.applies == Some(true))
+        .and_then(|rule| rule.effective_fill_color.clone())
+        .or_else(|| base_fill_color.clone());
+
+    VerificationPublicationSurface {
+        entered_cell_text: source.entered_formula_text.clone(),
+        typed_value: typed_value_surface(published_worksheet_value),
+        visible_value_text,
+        effective_display_text,
+        format_profile: context
+            .and_then(|value| value.format_profile.clone())
+            .or_else(|| locale_ctx.map(|_| "locale-format-context".to_string())),
+        locale_format_context: locale_ctx.map(LocaleFormatContextSurface::from_context),
+        date1904: locale_ctx
+            .map(|value| matches!(value.date_system, WorkbookDateSystem::System1904)),
+        number_format_code: context.and_then(|value| value.number_format_code.clone()),
+        style_id: context.and_then(|value| value.style_id.clone()),
+        style_hierarchy: context
+            .map(|value| value.style_hierarchy.clone())
+            .unwrap_or_default(),
+        format_dependency_facts: topology_delta.format_dependency_facts.clone(),
+        format_delta: format_delta.cloned(),
+        display_delta: display_delta.cloned(),
+        returned_value_surface: returned_value_surface.clone(),
+        presentation_hint: returned_value_surface.presentation_hint,
+        font_color: base_font_color,
+        fill_color: base_fill_color,
+        effective_font_color,
+        effective_fill_color,
+        conditional_formatting_target_ranges: conditional_formatting_rules
+            .iter()
+            .map(|rule| rule.target_ranges.clone())
+            .collect(),
+        conditional_formatting_rule_kind: conditional_formatting_rules
+            .iter()
+            .map(|rule| rule.rule_kind.clone())
+            .collect(),
+        conditional_formatting_operator: conditional_formatting_rules
+            .iter()
+            .map(|rule| rule.operator.clone())
+            .collect(),
+        conditional_formatting_thresholds: conditional_formatting_rules
+            .iter()
+            .map(|rule| rule.thresholds.clone())
+            .collect(),
+        conditional_formatting_applies: conditional_formatting_rules
+            .iter()
+            .map(|rule| rule.applies)
+            .collect(),
+        conditional_formatting_effective_font_color: conditional_formatting_rules
+            .iter()
+            .map(|rule| rule.effective_font_color.clone())
+            .collect(),
+        conditional_formatting_effective_fill_color: conditional_formatting_rules
+            .iter()
+            .map(|rule| rule.effective_fill_color.clone())
+            .collect(),
+        conditional_formatting_effective_display: conditional_formatting_rules
+            .iter()
+            .map(|rule| {
+                if rule.applies == Some(true) {
+                    rule.effective_display_text.clone()
+                } else {
+                    None
+                }
+            })
+            .collect(),
+        conditional_formatting_rules,
+    }
+}
+
+fn typed_value_surface(value: &EvalValue) -> VerificationTypedValueSurface {
+    match value {
+        EvalValue::Number(number) => VerificationTypedValueSurface {
+            value_kind: "number".to_string(),
+            worksheet_value_class: WorksheetValueClass::Scalar,
+            payload: ValuePayload::Number(number.to_string()),
+            error_kind: None,
+        },
+        EvalValue::Text(text) => VerificationTypedValueSurface {
+            value_kind: "text".to_string(),
+            worksheet_value_class: WorksheetValueClass::Scalar,
+            payload: ValuePayload::Text(text.to_string_lossy()),
+            error_kind: None,
+        },
+        EvalValue::Logical(value) => VerificationTypedValueSurface {
+            value_kind: "logical".to_string(),
+            worksheet_value_class: WorksheetValueClass::Scalar,
+            payload: ValuePayload::Logical(*value),
+            error_kind: None,
+        },
+        EvalValue::Error(code) => VerificationTypedValueSurface {
+            value_kind: "error".to_string(),
+            worksheet_value_class: WorksheetValueClass::Error,
+            payload: ValuePayload::ErrorCode(format!("{code:?}")),
+            error_kind: Some(worksheet_error_text(*code).to_string()),
+        },
+        EvalValue::Array(array) => VerificationTypedValueSurface {
+            value_kind: "array".to_string(),
+            worksheet_value_class: WorksheetValueClass::ArrayAnchor,
+            payload: ValuePayload::Text(format!(
+                "Array({}x{})",
+                array.shape().rows,
+                array.shape().cols
+            )),
+            error_kind: None,
+        },
+        EvalValue::Reference(reference) => VerificationTypedValueSurface {
+            value_kind: "reference".to_string(),
+            worksheet_value_class: WorksheetValueClass::Scalar,
+            payload: ValuePayload::Text(reference.target.clone()),
+            error_kind: None,
+        },
+        EvalValue::Lambda(lambda) => VerificationTypedValueSurface {
+            value_kind: "lambda".to_string(),
+            worksheet_value_class: WorksheetValueClass::Scalar,
+            payload: ValuePayload::Text(format!("Lambda({})", lambda.callable_token)),
+            error_kind: None,
+        },
+    }
+}
+
+fn render_effective_display_text(
+    value: &EvalValue,
+    presentation_hint: Option<&PresentationHint>,
+    locale_ctx: Option<&LocaleFormatContext<'_>>,
+    number_format_code: Option<&str>,
+) -> Option<String> {
+    let EvalValue::Number(number) = value else {
+        return Some(render_visible_value_text(value));
+    };
+
+    let locale_ctx = locale_ctx?;
+    if let Some(code) = number_format_code {
+        if let Some(rendered) = render_with_number_format_code(locale_ctx, *number, code) {
+            return Some(rendered);
+        }
+    }
+
+    let hint = presentation_hint.and_then(|value| value.number_format)?;
+    match hint {
+        oxfunc_core::value::NumberFormatHint::Currency => locale_ctx
+            .formatter
+            .render_currency(
+                &locale_ctx.profile,
+                *number,
+                locale_ctx.profile.currency_decimals.into(),
+            )
+            .ok()
+            .map(|value| value.to_string_lossy()),
+        oxfunc_core::value::NumberFormatHint::Percentage => locale_ctx
+            .formatter
+            .render_with_code(&locale_ctx.profile, locale_ctx.date_system, *number, "0%")
+            .ok()
+            .map(|value| value.to_string_lossy()),
+        oxfunc_core::value::NumberFormatHint::DateLike => locale_ctx
+            .formatter
+            .render_with_code(
+                &locale_ctx.profile,
+                locale_ctx.date_system,
+                *number,
+                "yyyy-mm-dd",
+            )
+            .ok()
+            .map(|value| value.to_string_lossy()),
+        oxfunc_core::value::NumberFormatHint::General
+        | oxfunc_core::value::NumberFormatHint::Scientific
+        | oxfunc_core::value::NumberFormatHint::Fraction
+        | oxfunc_core::value::NumberFormatHint::Custom => Some(render_visible_number(*number)),
+    }
+}
+
+fn render_with_number_format_code(
+    locale_ctx: &LocaleFormatContext<'_>,
+    value: f64,
+    number_format_code: &str,
+) -> Option<String> {
+    if let Ok(rendered) = locale_ctx.formatter.render_with_code(
+        &locale_ctx.profile,
+        locale_ctx.date_system,
+        value,
+        number_format_code,
+    ) {
+        return Some(rendered.to_string_lossy());
+    }
+
+    if let Some(rendered) =
+        render_with_custom_number_format_code(locale_ctx, value, number_format_code)
+    {
+        return Some(rendered);
+    }
+
+    None
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ParsedNumericSection {
+    prefix: String,
+    suffix: String,
+    decimals: i32,
+    use_grouping: bool,
+    percent_count: i32,
+    negative_parentheses: bool,
+    is_currency: bool,
+}
+
+fn render_with_custom_number_format_code(
+    locale_ctx: &LocaleFormatContext<'_>,
+    value: f64,
+    number_format_code: &str,
+) -> Option<String> {
+    let section = select_number_format_section(number_format_code, value)?;
+    let stripped = strip_condition_and_color_tokens(&section);
+    if looks_like_date_format(&stripped) {
+        return render_with_date_tokens(locale_ctx, value, &stripped);
+    }
+
+    let numeric = parse_numeric_section(&stripped)?;
+    let scaled_value = value * 100f64.powi(numeric.percent_count);
+    let base = if numeric.is_currency
+        && numeric.prefix == locale_ctx.profile.currency_symbol
+        && numeric.suffix.is_empty()
+    {
+        locale_ctx
+            .formatter
+            .render_currency(&locale_ctx.profile, scaled_value, numeric.decimals)
+            .ok()
+            .map(|rendered| rendered.to_string_lossy())?
+    } else {
+        locale_ctx
+            .formatter
+            .render_fixed(
+                &locale_ctx.profile,
+                scaled_value.abs(),
+                numeric.decimals,
+                !numeric.use_grouping,
+            )
+            .ok()
+            .map(|rendered| rendered.to_string_lossy())?
+    };
+
+    let body = if scaled_value.is_sign_negative() && !base.starts_with('-') {
+        format!("-{base}")
+    } else {
+        base
+    };
+    Some(apply_numeric_affixes(body, &numeric))
+}
+
+fn parse_numeric_section(section: &str) -> Option<ParsedNumericSection> {
+    let cleaned = expand_literal_tokens(section);
+    let first_placeholder = cleaned.find(['#', '0', '?'])?;
+    let last_placeholder = cleaned.rfind(['#', '0', '?'])?;
+    let prefix = cleaned[..first_placeholder].replace('*', "");
+    let suffix = cleaned[last_placeholder + 1..].replace('*', "");
+    let placeholder_region = &cleaned[first_placeholder..=last_placeholder];
+    let decimals = placeholder_region
+        .split_once('.')
+        .map(|(_, fractional)| {
+            fractional
+                .chars()
+                .filter(|ch| matches!(ch, '0' | '#' | '?'))
+                .count() as i32
+        })
+        .unwrap_or(0);
+    let integer_region = placeholder_region
+        .split_once('.')
+        .map(|(integer, _)| integer)
+        .unwrap_or(placeholder_region);
+    let use_grouping = integer_region.contains(',');
+    let percent_count = prefix.matches('%').count() as i32 + suffix.matches('%').count() as i32;
+    let negative_parentheses = prefix.contains('(') && suffix.contains(')');
+    let is_currency = prefix.contains('$')
+        || prefix.contains('R')
+        || suffix.contains('$')
+        || suffix.contains('R');
+
+    Some(ParsedNumericSection {
+        prefix,
+        suffix,
+        decimals,
+        use_grouping,
+        percent_count,
+        negative_parentheses,
+        is_currency,
+    })
+}
+
+fn apply_numeric_affixes(base: String, numeric: &ParsedNumericSection) -> String {
+    if numeric.negative_parentheses && base.starts_with('-') {
+        let unsigned = base.trim_start_matches('-');
+        format!("{}{}{}", numeric.prefix, unsigned, numeric.suffix)
+    } else {
+        format!("{}{}{}", numeric.prefix, base, numeric.suffix)
+    }
+}
+
+fn select_number_format_section(code: &str, value: f64) -> Option<String> {
+    let sections = split_format_sections(code);
+    if sections.is_empty() {
+        return None;
+    }
+
+    for section in &sections {
+        if let Some(condition) = extract_condition(section) {
+            if condition_matches(&condition, value) {
+                return Some(section.clone());
+            }
+        }
+    }
+
+    match sections.len() {
+        1 => sections.first().cloned(),
+        2 => {
+            if value < 0.0 {
+                sections
+                    .get(1)
+                    .cloned()
+                    .or_else(|| sections.first().cloned())
+            } else {
+                sections.first().cloned()
+            }
+        }
+        _ => {
+            if value > 0.0 {
+                sections.first().cloned()
+            } else if value < 0.0 {
+                sections
+                    .get(1)
+                    .cloned()
+                    .or_else(|| sections.first().cloned())
+            } else {
+                sections
+                    .get(2)
+                    .cloned()
+                    .or_else(|| sections.first().cloned())
+            }
+        }
+    }
+}
+
+fn split_format_sections(code: &str) -> Vec<String> {
+    let mut sections = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    let mut escaped = false;
+
+    for ch in code.chars() {
+        if escaped {
+            current.push(ch);
+            escaped = false;
+            continue;
+        }
+        match ch {
+            '\\' => {
+                current.push(ch);
+                escaped = true;
+            }
+            '"' => {
+                current.push(ch);
+                in_quotes = !in_quotes;
+            }
+            ';' if !in_quotes => {
+                sections.push(current.trim().to_string());
+                current.clear();
+            }
+            _ => current.push(ch),
+        }
+    }
+    if !current.is_empty() || code.ends_with(';') {
+        sections.push(current.trim().to_string());
+    }
+    sections
+        .into_iter()
+        .filter(|section| !section.is_empty())
+        .collect()
+}
+
+fn strip_condition_and_color_tokens(section: &str) -> String {
+    let mut stripped = String::new();
+    let mut chars = section.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '[' {
+            let mut token = String::new();
+            for next in chars.by_ref() {
+                if next == ']' {
+                    break;
+                }
+                token.push(next);
+            }
+            if token.starts_with('>')
+                || token.starts_with('<')
+                || token.starts_with('=')
+                || token.chars().all(|c| c.is_ascii_alphabetic())
+            {
+                continue;
+            }
+            stripped.push('[');
+            stripped.push_str(&token);
+            stripped.push(']');
+        } else {
+            stripped.push(ch);
+        }
+    }
+    stripped.trim().to_string()
+}
+
+fn expand_literal_tokens(section: &str) -> String {
+    let mut result = String::new();
+    let mut chars = section.chars().peekable();
+    let mut in_quotes = false;
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            '"' => in_quotes = !in_quotes,
+            '\\' => {
+                if let Some(next) = chars.next() {
+                    result.push(next);
+                }
+            }
+            '_' => {
+                let _ = chars.next();
+                result.push(' ');
+            }
+            '*' => {}
+            _ if in_quotes => result.push(ch),
+            _ => result.push(ch),
+        }
+    }
+
+    result
+}
+
+fn extract_condition(section: &str) -> Option<String> {
+    let trimmed = section.trim_start();
+    let remaining = trimmed.strip_prefix('[')?;
+    let token = remaining.split(']').next()?;
+    if token.starts_with('>') || token.starts_with('<') || token.starts_with('=') {
+        Some(token.to_string())
+    } else {
+        None
+    }
+}
+
+fn condition_matches(condition: &str, value: f64) -> bool {
+    let operator = if let Some(rest) = condition.strip_prefix(">=") {
+        (">=", rest)
+    } else if let Some(rest) = condition.strip_prefix("<=") {
+        ("<=", rest)
+    } else if let Some(rest) = condition.strip_prefix("<>") {
+        ("<>", rest)
+    } else if let Some(rest) = condition.strip_prefix('>') {
+        (">", rest)
+    } else if let Some(rest) = condition.strip_prefix('<') {
+        ("<", rest)
+    } else if let Some(rest) = condition.strip_prefix('=') {
+        ("=", rest)
+    } else {
+        return false;
+    };
+    let Ok(threshold) = operator.1.trim().parse::<f64>() else {
+        return false;
+    };
+    match operator.0 {
+        ">" => value > threshold,
+        ">=" => value >= threshold,
+        "<" => value < threshold,
+        "<=" => value <= threshold,
+        "=" => (value - threshold).abs() < f64::EPSILON,
+        "<>" => (value - threshold).abs() >= f64::EPSILON,
+        _ => false,
+    }
+}
+
+fn looks_like_date_format(section: &str) -> bool {
+    let lower = section.to_ascii_lowercase();
+    (lower.contains('y') && lower.contains('d') && lower.contains('m'))
+        && !lower.contains('#')
+        && !lower.contains('0')
+}
+
+fn render_with_date_tokens(
+    locale_ctx: &LocaleFormatContext<'_>,
+    value: f64,
+    section: &str,
+) -> Option<String> {
+    let (year, month, day) =
+        oxfunc_core::locale_format::ymd_from_excel_serial(locale_ctx.date_system, value)?;
+    let mut rendered = expand_literal_tokens(section);
+    rendered = rendered.replace("yyyy", &format!("{year:04}"));
+    rendered = rendered.replace("yy", &format!("{:02}", year.rem_euclid(100)));
+    rendered = rendered.replace("mmmm", month_name(month, false));
+    rendered = rendered.replace("mmm", month_name(month, true));
+    rendered = rendered.replace("mm", &format!("{month:02}"));
+    rendered = rendered.replace("dd", &format!("{day:02}"));
+    rendered = rendered.replace("m", &month.to_string());
+    rendered = rendered.replace("d", &day.to_string());
+    Some(rendered)
+}
+
+fn month_name(month: i64, abbreviated: bool) -> &'static str {
+    match (month, abbreviated) {
+        (1, true) => "Jan",
+        (2, true) => "Feb",
+        (3, true) => "Mar",
+        (4, true) => "Apr",
+        (5, true) => "May",
+        (6, true) => "Jun",
+        (7, true) => "Jul",
+        (8, true) => "Aug",
+        (9, true) => "Sep",
+        (10, true) => "Oct",
+        (11, true) => "Nov",
+        (12, true) => "Dec",
+        (1, false) => "January",
+        (2, false) => "February",
+        (3, false) => "March",
+        (4, false) => "April",
+        (5, false) => "May",
+        (6, false) => "June",
+        (7, false) => "July",
+        (8, false) => "August",
+        (9, false) => "September",
+        (10, false) => "October",
+        (11, false) => "November",
+        (12, false) => "December",
+        _ => "",
+    }
+}
+
+fn render_visible_value_text(value: &EvalValue) -> String {
+    match value {
+        EvalValue::Number(number) => render_visible_number(*number),
+        EvalValue::Text(text) => text.to_string_lossy(),
+        EvalValue::Logical(value) => {
+            if *value {
+                "TRUE".to_string()
+            } else {
+                "FALSE".to_string()
+            }
+        }
+        EvalValue::Error(code) => worksheet_error_text(*code).to_string(),
+        EvalValue::Array(array) => format!("Array({}x{})", array.shape().rows, array.shape().cols),
+        EvalValue::Reference(reference) => reference.target.clone(),
+        EvalValue::Lambda(lambda) => format!("Lambda({})", lambda.callable_token),
+    }
+}
+
+fn render_visible_number(number: f64) -> String {
+    if number.fract() == 0.0 {
+        format!("{number:.0}")
+    } else {
+        number.to_string()
+    }
+}
+
+fn worksheet_error_text(code: WorksheetErrorCode) -> &'static str {
+    match code {
+        WorksheetErrorCode::Null => "#NULL!",
+        WorksheetErrorCode::Div0 => "#DIV/0!",
+        WorksheetErrorCode::Value => "#VALUE!",
+        WorksheetErrorCode::Ref => "#REF!",
+        WorksheetErrorCode::Name => "#NAME?",
+        WorksheetErrorCode::Num => "#NUM!",
+        WorksheetErrorCode::NA => "#N/A",
+        WorksheetErrorCode::Busy => "#BUSY!",
+        WorksheetErrorCode::GettingData => "#GETTING_DATA",
+        WorksheetErrorCode::Spill => "#SPILL!",
+        WorksheetErrorCode::Calc => "#CALC!",
+        WorksheetErrorCode::Field => "#FIELD!",
+        WorksheetErrorCode::Blocked => "#BLOCKED!",
+        WorksheetErrorCode::Connect => "#CONNECT!",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use oxfunc_core::locale_format::en_us_context;
+    use oxfunc_core::value::{EvalValue, ExtendedValue};
+
+    use super::{
+        VerificationConditionalFormattingRule, VerificationPublicationContext,
+        build_verification_publication_surface, render_with_number_format_code,
+    };
+    use crate::interface::ReturnedValueSurface;
+    use crate::seam::TopologyDelta;
+    use crate::source::FormulaSourceRecord;
+
+    #[test]
+    fn number_format_code_heuristics_cover_grouping_percent_date_and_negative_sections() {
+        let locale = en_us_context();
+        assert_eq!(
+            render_with_number_format_code(&locale, 1234.567, "#,##0.000"),
+            Some("1,234.567".to_string())
+        );
+        assert_eq!(
+            render_with_number_format_code(&locale, 0.125, "0.0%"),
+            Some("12.5%".to_string())
+        );
+        assert_eq!(
+            render_with_number_format_code(&locale, -1234.5, "($#,##0.00)"),
+            Some("($1,234.50)".to_string())
+        );
+        assert_eq!(
+            render_with_number_format_code(&locale, 45293.0, "m/d/yyyy"),
+            Some("1/2/2024".to_string())
+        );
+    }
+
+    #[test]
+    fn verification_publication_surface_applies_evaluable_conditional_formatting() {
+        let locale = en_us_context();
+        let source = FormulaSourceRecord::new("publication:test", 1, "=SUM(1,2,3)");
+        let returned_value_surface =
+            ReturnedValueSurface::from_extended_value(&ExtendedValue::Core(EvalValue::Number(6.0)));
+        let context = VerificationPublicationContext {
+            format_profile: Some("excel-spreadsheetml-2003-default".to_string()),
+            number_format_code: Some("$#,##0.00".to_string()),
+            style_id: Some("calc".to_string()),
+            style_hierarchy: vec!["calc".to_string()],
+            font_color: Some("#112233".to_string()),
+            fill_color: Some("#445566".to_string()),
+            conditional_formatting_rules: vec![
+                VerificationConditionalFormattingRule {
+                    target_ranges: vec!["A1".to_string()],
+                    rule_kind: "Expression".to_string(),
+                    operator: None,
+                    thresholds: vec!["=A1>0".to_string()],
+                    font_color: Some("#FF0000".to_string()),
+                    fill_color: Some("#00FF00".to_string()),
+                    effective_display_text: Some("[POS] $6.00".to_string()),
+                    applies: None,
+                    effective_font_color: None,
+                    effective_fill_color: None,
+                },
+                VerificationConditionalFormattingRule {
+                    target_ranges: vec!["A1".to_string()],
+                    rule_kind: "CellIs".to_string(),
+                    operator: Some("LessThan".to_string()),
+                    thresholds: vec!["0".to_string()],
+                    font_color: Some("#999999".to_string()),
+                    fill_color: Some("#EEEEEE".to_string()),
+                    effective_display_text: Some("[NEG] $6.00".to_string()),
+                    applies: None,
+                    effective_font_color: None,
+                    effective_fill_color: None,
+                },
+            ],
+        };
+
+        let surface = build_verification_publication_surface(
+            &source,
+            &EvalValue::Number(6.0),
+            &returned_value_surface,
+            &TopologyDelta {
+                formula_stable_id: "publication:test".to_string(),
+                dependency_additions: Vec::new(),
+                dependency_removals: Vec::new(),
+                dependency_reclassifications: Vec::new(),
+                dependency_consequence_facts: Vec::new(),
+                dynamic_reference_facts: Vec::new(),
+                spill_facts: Vec::new(),
+                format_dependency_facts: Vec::new(),
+                capability_effect_facts: Vec::new(),
+                candidate_result_id: None,
+            },
+            None,
+            None,
+            Some(&locale),
+            Some(&context),
+        );
+
+        assert_eq!(surface.effective_display_text, "[POS] $6.00");
+        assert_eq!(surface.effective_font_color.as_deref(), Some("#FF0000"));
+        assert_eq!(surface.effective_fill_color.as_deref(), Some("#00FF00"));
+        assert_eq!(
+            surface.conditional_formatting_applies,
+            vec![Some(true), Some(false)]
+        );
+        assert_eq!(
+            surface.conditional_formatting_effective_display,
+            vec![Some("[POS] $6.00".to_string()), None]
+        );
+        assert_eq!(
+            surface.conditional_formatting_effective_font_color,
+            vec![Some("#FF0000".to_string()), None]
+        );
+        assert_eq!(
+            surface.conditional_formatting_effective_fill_color,
+            vec![Some("#00FF00".to_string()), None]
+        );
+    }
+}
+
+fn evaluate_conditional_formatting_rule(
+    rule: &VerificationConditionalFormattingRule,
+    value: &EvalValue,
+    visible_value_text: &str,
+    effective_display_text: &str,
+    locale_ctx: Option<&LocaleFormatContext<'_>>,
+) -> VerificationConditionalFormattingRule {
+    let applies = if let Some(operator) = rule.operator.as_deref() {
+        evaluate_operator_rule(
+            operator,
+            &rule.thresholds,
+            value,
+            visible_value_text,
+            locale_ctx,
+        )
+    } else if rule.rule_kind.eq_ignore_ascii_case("expression") {
+        rule.thresholds.first().and_then(|formula| {
+            evaluate_expression_rule(formula, value, visible_value_text, locale_ctx)
+        })
+    } else {
+        None
+    };
+
+    let effective_font_color = if applies == Some(true) {
+        rule.font_color.clone()
+    } else {
+        None
+    };
+    let effective_fill_color = if applies == Some(true) {
+        rule.fill_color.clone()
+    } else {
+        None
+    };
+    let effective_display_text = if applies == Some(true) {
+        rule.effective_display_text
+            .clone()
+            .or_else(|| Some(effective_display_text.to_string()))
+    } else {
+        None
+    };
+
+    VerificationConditionalFormattingRule {
+        target_ranges: rule.target_ranges.clone(),
+        rule_kind: rule.rule_kind.clone(),
+        operator: rule.operator.clone(),
+        thresholds: rule.thresholds.clone(),
+        font_color: rule.font_color.clone(),
+        fill_color: rule.fill_color.clone(),
+        effective_display_text,
+        applies,
+        effective_font_color,
+        effective_fill_color,
+    }
+}
+
+fn evaluate_operator_rule(
+    operator: &str,
+    thresholds: &[String],
+    value: &EvalValue,
+    visible_value_text: &str,
+    locale_ctx: Option<&LocaleFormatContext<'_>>,
+) -> Option<bool> {
+    let normalized = operator
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .collect::<String>()
+        .to_ascii_lowercase();
+    match normalized.as_str() {
+        "greater" | "greaterthan" => {
+            compare_threshold(value, visible_value_text, thresholds.first()?, locale_ctx)
+                .map(|ordering| ordering.is_gt())
+        }
+        "greaterorequal" | "greaterthanorequal" | "greaterequal" => {
+            compare_threshold(value, visible_value_text, thresholds.first()?, locale_ctx)
+                .map(|ordering| ordering.is_gt() || ordering.is_eq())
+        }
+        "less" | "lessthan" => {
+            compare_threshold(value, visible_value_text, thresholds.first()?, locale_ctx)
+                .map(|ordering| ordering.is_lt())
+        }
+        "lessorequal" | "lessthanorequal" | "lessequal" => {
+            compare_threshold(value, visible_value_text, thresholds.first()?, locale_ctx)
+                .map(|ordering| ordering.is_lt() || ordering.is_eq())
+        }
+        "equal" => compare_threshold(value, visible_value_text, thresholds.first()?, locale_ctx)
+            .map(|ordering| ordering.is_eq()),
+        "notequal" => compare_threshold(value, visible_value_text, thresholds.first()?, locale_ctx)
+            .map(|ordering| !ordering.is_eq()),
+        "between" => {
+            let lower =
+                compare_threshold(value, visible_value_text, thresholds.first()?, locale_ctx)?;
+            let upper =
+                compare_threshold(value, visible_value_text, thresholds.get(1)?, locale_ctx)?;
+            Some((lower.is_gt() || lower.is_eq()) && (upper.is_lt() || upper.is_eq()))
+        }
+        "notbetween" => {
+            let lower =
+                compare_threshold(value, visible_value_text, thresholds.first()?, locale_ctx)?;
+            let upper =
+                compare_threshold(value, visible_value_text, thresholds.get(1)?, locale_ctx)?;
+            Some(!(lower.is_gt() || lower.is_eq()) || !(upper.is_lt() || upper.is_eq()))
+        }
+        "containstext" => Some(
+            visible_value_text
+                .to_ascii_lowercase()
+                .contains(&thresholds.first()?.to_ascii_lowercase()),
+        ),
+        "notcontainstext" => Some(
+            !visible_value_text
+                .to_ascii_lowercase()
+                .contains(&thresholds.first()?.to_ascii_lowercase()),
+        ),
+        "beginswith" => Some(
+            visible_value_text
+                .to_ascii_lowercase()
+                .starts_with(&thresholds.first()?.to_ascii_lowercase()),
+        ),
+        "endswith" => Some(
+            visible_value_text
+                .to_ascii_lowercase()
+                .ends_with(&thresholds.first()?.to_ascii_lowercase()),
+        ),
+        _ => None,
+    }
+}
+
+fn evaluate_expression_rule(
+    formula: &str,
+    value: &EvalValue,
+    visible_value_text: &str,
+    locale_ctx: Option<&LocaleFormatContext<'_>>,
+) -> Option<bool> {
+    let trimmed = formula.trim().trim_start_matches('=').trim();
+    let lower = trimmed.to_ascii_lowercase();
+    if lower.starts_with("and(") && trimmed.ends_with(')') {
+        return split_formula_arguments(&trimmed[4..trimmed.len() - 1])
+            .into_iter()
+            .map(|arg| {
+                evaluate_expression_rule(&format!("={arg}"), value, visible_value_text, locale_ctx)
+            })
+            .try_fold(true, |acc, next| Some(acc && next?));
+    }
+    if lower.starts_with("or(") && trimmed.ends_with(')') {
+        return split_formula_arguments(&trimmed[3..trimmed.len() - 1])
+            .into_iter()
+            .map(|arg| {
+                evaluate_expression_rule(&format!("={arg}"), value, visible_value_text, locale_ctx)
+            })
+            .try_fold(false, |acc, next| Some(acc || next?));
+    }
+
+    let (lhs, operator, rhs) = split_binary_expression(trimmed)?;
+    if !is_current_cell_reference(lhs.trim()) {
+        return None;
+    }
+    let threshold = if is_current_cell_reference(rhs.trim()) {
+        visible_value_text.to_string()
+    } else {
+        rhs.trim().to_string()
+    };
+    let ordering = compare_threshold(value, visible_value_text, &threshold, locale_ctx)?;
+    Some(match operator {
+        ">" => ordering.is_gt(),
+        ">=" => ordering.is_gt() || ordering.is_eq(),
+        "<" => ordering.is_lt(),
+        "<=" => ordering.is_lt() || ordering.is_eq(),
+        "=" => ordering.is_eq(),
+        "<>" => !ordering.is_eq(),
+        _ => return None,
+    })
+}
+
+fn split_formula_arguments(args: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut depth = 0i32;
+    for ch in args.chars() {
+        match ch {
+            '(' => {
+                depth += 1;
+                current.push(ch);
+            }
+            ')' => {
+                depth -= 1;
+                current.push(ch);
+            }
+            ',' if depth == 0 => {
+                parts.push(current.trim().to_string());
+                current.clear();
+            }
+            _ => current.push(ch),
+        }
+    }
+    if !current.trim().is_empty() {
+        parts.push(current.trim().to_string());
+    }
+    parts
+}
+
+fn split_binary_expression(expression: &str) -> Option<(&str, &str, &str)> {
+    for operator in [">=", "<=", "<>", ">", "<", "="] {
+        if let Some(index) = expression.find(operator) {
+            let lhs = &expression[..index];
+            let rhs = &expression[index + operator.len()..];
+            return Some((lhs, operator, rhs));
+        }
+    }
+    None
+}
+
+fn is_current_cell_reference(token: &str) -> bool {
+    let trimmed = token.trim().trim_matches('$');
+    if trimmed.is_empty() {
+        return false;
+    }
+    let letters = trimmed
+        .chars()
+        .take_while(|ch| ch.is_ascii_alphabetic())
+        .count();
+    letters > 0
+        && letters < trimmed.len()
+        && trimmed[letters..].chars().all(|ch| ch.is_ascii_digit())
+}
+
+fn compare_threshold(
+    value: &EvalValue,
+    visible_value_text: &str,
+    threshold: &str,
+    locale_ctx: Option<&LocaleFormatContext<'_>>,
+) -> Option<std::cmp::Ordering> {
+    match value {
+        EvalValue::Number(number) => {
+            let threshold_value = parse_threshold_number(threshold, locale_ctx)?;
+            number.partial_cmp(&threshold_value)
+        }
+        EvalValue::Text(text) => Some(
+            text.to_string_lossy()
+                .to_ascii_lowercase()
+                .cmp(&strip_threshold_quotes(threshold).to_ascii_lowercase()),
+        ),
+        EvalValue::Logical(logical) => {
+            let threshold_value = parse_threshold_bool(threshold)?;
+            Some(logical.cmp(&threshold_value))
+        }
+        EvalValue::Error(code) => {
+            Some(worksheet_error_text(*code).cmp(strip_threshold_quotes(threshold)))
+        }
+        _ => Some(visible_value_text.cmp(strip_threshold_quotes(threshold))),
+    }
+}
+
+fn parse_threshold_number(
+    threshold: &str,
+    locale_ctx: Option<&LocaleFormatContext<'_>>,
+) -> Option<f64> {
+    let stripped = strip_threshold_quotes(threshold);
+    stripped.parse::<f64>().ok().or_else(|| {
+        locale_ctx.and_then(|ctx| {
+            ctx.parser
+                .parse_value_text(&ctx.profile, ctx.date_system, stripped)
+                .ok()
+        })
+    })
+}
+
+fn parse_threshold_bool(threshold: &str) -> Option<bool> {
+    match strip_threshold_quotes(threshold)
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "true" => Some(true),
+        "false" => Some(false),
+        _ => None,
+    }
+}
+
+fn strip_threshold_quotes(threshold: &str) -> &str {
+    threshold.trim().trim_matches('"')
+}

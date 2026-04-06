@@ -52,7 +52,14 @@ Current OxFml refinement after the latest OneCalc input:
 4. the editor contract now names canonical function-help results at the OxFml
    consumer boundary,
 5. carrier-validation placement is now treated as an intentional part of the
-   consumer contract rather than unresolved spillover.
+   consumer contract rather than unresolved spillover,
+6. `RuntimeFormulaRequest` now also carries optional `VerificationPublicationContext`
+   for XML-backed or other comparison-heavy verification lanes,
+7. `RuntimeFormulaResult`, the first-host replay capture packet, and
+   `ReplayProjectionResult` now carry `VerificationPublicationSurface` as the
+   current comparison-friendly export packet for visible value, effective
+   display, format/style context, and host-supplied conditional-formatting
+   context.
 
 ## 3. Frozen Seam Constraint
 The consumer-facing redesign does not reopen the OxFml <-> OxFunc seam.
@@ -91,7 +98,8 @@ Required discipline:
 3. avoid introducing a second runtime/editor/replay naming layer that would have to be unwound later.
 
 Immediate DNA OneCalc-side expectation:
-1. continue using `FormulaSourceRecord`, `TypedContextQueryBundle`, `LibraryContextProvider`, `LibraryContextSnapshotRef`, `ReturnedValueSurface`, `AcceptedCandidateResult`, `CommitBundle`, `RejectRecord`, `FormulaEditRequest`, `FormulaEditResult`, and related current upstream names directly.
+1. continue using `FormulaSourceRecord`, `TypedContextQueryBundle`, `LibraryContextProvider`, `LibraryContextSnapshotRef`, `ReturnedValueSurface`, `AcceptedCandidateResult`, `CommitBundle`, `RejectRecord`, `FormulaEditRequest`, `FormulaEditResult`, and related current upstream names directly,
+2. for XML-backed verification, also use `VerificationPublicationContext` and `VerificationPublicationSurface` directly rather than introducing a OneCalc-local comparison wrapper over raw runtime/replay artifacts.
 
 ### Phase B: Runtime Facade Uptake
 When the first runtime facade lands in OxFml, DNA OneCalc should migrate execution entrypoints in this order:
@@ -106,7 +114,10 @@ Runtime migration goals:
 3. preserve current host-specific policy above the OxFml runtime environment rather than inside it,
 4. eliminate routine manual assembly of `SingleFormulaHost`,
    `InMemoryLibraryContextProvider`, and `TypedContextQueryBundle` in ordinary
-   consumer flows.
+   consumer flows,
+5. feed XML-backed verification through `VerificationPublicationContext` on the
+   runtime request rather than treating formatting/style comparison as a
+   downstream-only reconstruction problem.
 
 Expected OxFml runtime facade shape:
 1. `RuntimeEnvironment`
@@ -145,7 +156,9 @@ Replay migration goals:
 2. preserve the same semantic artifact truth under a narrower replay projection service,
 3. keep replay packaging additive rather than semantic,
 4. make replay-meaningful provenance such as source-case aliases, snapshot pins,
-   and registry metadata explicit in machine-readable projection results.
+   and registry metadata explicit in machine-readable projection results,
+5. consume `verification_publication_surface` from replay projection instead of
+   inferring effective display or formatting view from raw visible-value output.
 
 Expected OxFml replay facade shape:
 1. `ReplayProjectionRequest`
@@ -175,7 +188,11 @@ OxFml's current answer to the DNA OneCalc note is:
 6. yes, the current packet now explicitly responds to the main OneCalc asks
    around provider-pin explicitness, per-request volatile/query inputs,
    incremental edit truth, canonical function help, and replay-projection
-   provenance.
+   provenance,
+7. yes, the current first `W056` slice now gives OneCalc an OxFml-owned
+   `VerificationPublicationSurface` through both runtime and replay projection
+   for the admitted locale/number-format/style-context lane, while leaving broad
+   display-code and conditional-formatting closure explicitly open.
 
 ## 8. Minimum Invariants
 The following invariants should stay true through the migration:

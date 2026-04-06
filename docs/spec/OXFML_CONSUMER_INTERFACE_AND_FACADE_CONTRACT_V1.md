@@ -369,6 +369,7 @@ The replay facade is the third implementation priority.
 6. registry bindings and capability floor
 7. lifecycle metadata when applicable
 8. canonical replay envelope refs and sidecar refs
+9. adapter-declared `comparison_views` when OxFml can state family-specific replay comparison facts without downstream reinterpretation
 
 Current floor note:
 1. the first replay-facade slice now explicitly carries:
@@ -381,6 +382,13 @@ Current floor note:
    - retention policy id
    - reduction/source refs
    for fixture-family and retained-witness projection.
+2. the active `W056` follow-on now additionally allows runtime-result and first-host-capture projection to publish machine-readable `comparison_views` for the current XML verification lane.
+3. the currently admitted view families are:
+   - `visible_value`
+   - `effective_display_text`
+   - `formatting_view`
+   - `conditional_formatting_view`
+4. these families are additive replay-facing views over OxFml-owned publication truth; they do not replace `verification_publication_surface` and they do not widen replay capability claims by themselves.
 
 Working rule:
 1. replay packaging is additive over OxFml meaning,
@@ -391,7 +399,8 @@ Working rule:
 4. the current preferred alias-publication rule is to embed shared-scenario
    alias data directly in projection results, with optional dedicated sidecars
    later only if batching or corpus tooling needs them,
-5. the first post-FEC family targeted for preferred replay-facade projection
+5. `comparison_views` must remain adapter-declared facts rather than downstream convenience strings,
+6. the first post-FEC family targeted for preferred replay-facade projection
    should be session lifecycle.
 
 ## 9. Current-Surface To Target-Surface Migration
@@ -495,6 +504,10 @@ Current-to-target mapping:
    -> target:
    - machine-readable alias, pin, fence, registry, and lifecycle fields emitted
      directly by OxFml projection results
+3. current XML verification comparison:
+   - local view-family recovery or partial host-local formatting reinterpretation
+   -> target:
+   - `ReplayProjectionResult.comparison_views` emitted by OxFml when `verification_publication_surface` facts are present
 
 ## 10. Current Implementation Reality
 Historical root exports and older host/editor/replay helper surfaces still

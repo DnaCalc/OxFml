@@ -3,7 +3,7 @@
 Canonical repo-level register of feature areas that are in-progress under workset completion doctrine.
 
 Status: active.
-Last updated: 2026-03-27.
+Last updated: 2026-04-06.
 
 ## Status Vocabulary
 
@@ -48,18 +48,18 @@ Last updated: 2026-03-27.
 ### IP-05: Formula-Semantic Formatting
 
 - **Status**: in-progress
-- **Current floor**: formatting behavior crossing the seam is chartered and exercised through `TEXT`, `VALUE`, `NOW`, `TODAY`, `CELL`, and `INFO` with explicit locale-format and host-query context, prepared-result format/publication hints, locale format-dependency facts surfaced through the proving host, seam-significant `format_delta` and `display_delta` publication artifacts, empirical-oracle scenarios covering formatting and host-query lanes, and a first restricted conditional-formatting/data-validation carrier floor with explicit formula-semantic host fields and restriction profiles.
-- **Remaining gaps**: broader semantic formatting family coverage, fuller display-boundary closure beyond the current seam-significant subset, richer `MS-OE376` carrier parity, and pack-grade proving scenarios.
-- **Why still open**: `W030` and `W039` widened the local semantic-format and non-cell carrier floor, but the repo-level feature remains much broader than the exercised slice.
-- **Canonical owner**: exercised follow-on `W006`, `W014`, `W018`, `W020`, `W021`, `W024`, `W030`, `W031`, and `W039`; explicit next seam-freeze owner `W042`; planned follow-on owner `W036`.
+- **Current floor**: formatting behavior crossing the seam is chartered and exercised through `TEXT`, `VALUE`, `NOW`, `TODAY`, `CELL`, and `INFO` with explicit locale-format and host-query context, prepared-result format/publication hints, locale format-dependency facts surfaced through the proving host, seam-significant `format_delta` and `display_delta` publication artifacts, empirical-oracle scenarios covering formatting and host-query lanes, a first restricted conditional-formatting/data-validation carrier floor with explicit formula-semantic host fields and restriction profiles, and a new first XML-verification publication/export packet carrying `effective_display_text`, style/number-format context, format dependency facts, host-supplied conditional-formatting context, replay-facing `comparison_views` for the admitted XML family set, broader best-effort grouped/percent/date/sectioned number-format rendering, and best-effort conditional-formatting applicability/effective-style evaluation for operator and simple current-cell expression rules through the landed runtime/replay surfaces.
+- **Remaining gaps**: broader semantic formatting family coverage, fuller display-boundary closure beyond the current seam-significant subset, richer `MS-OE376` carrier parity, broad OxFml-owned conditional-formatting display evaluation beyond the current host-supplied verification context, and pack-grade proving scenarios.
+- **Why still open**: `W030`, `W039`, and the first `W056` slice materially widened the local semantic-format and verification-export floor, but the repo-level feature remains much broader than the exercised slice.
+- **Canonical owner**: exercised follow-on `W006`, `W014`, `W018`, `W020`, `W021`, `W024`, `W030`, `W031`, and `W039`; explicit next seam-freeze owner `W042`; active follow-on owner `W056`; planned follow-on owner `W036`.
 
 ### IP-06: Replay Appliance Adapter and Witness Governance
 
 - **Status**: in-progress
-- **Current floor**: OxFml-local replay adapter governance is written into the canonical spec set, including the adapter note, conservative capability manifest through `cap.C3.explain_valid`, additive registry bindings, witness lifecycle usage rules, passing local conformance tests, broadened local reduced-witness artifacts across FEC commit/reject, session lifecycle, execution-contract, host, and empirical-oracle outcome classes, local normalized replay bundle and pack-candidate evidence, and machine-readable promotion-readiness indices.
-- **Remaining gaps**: pack-grade replay promotion, broader reduced-witness breadth beyond the current local families, and any claim toward `cap.C4.distill_valid` or `cap.C5.pack_valid` remain open.
-- **Why still open**: `W025` materially widened the promotion-governance floor, but the replay evidence remains local-only and intentionally non-pack-eligible.
-- **Canonical owner**: exercised follow-on `W009` through `W017`, `W022`, `W023`, and `W025`; planned next owners `W033` and `W035`.
+- **Current floor**: OxFml-local replay adapter governance is written into the canonical spec set, including the adapter note, conservative capability manifest through `cap.C3.explain_valid`, additive registry bindings, witness lifecycle usage rules, passing local conformance tests, broadened local reduced-witness artifacts across FEC commit/reject, session lifecycle, execution-contract, host, and empirical-oracle outcome classes, local normalized replay bundle and pack-candidate evidence, machine-readable promotion-readiness indices, a comparison-friendly verification publication surface projected from both `RuntimeFormulaResult` and the first-host replay capture packet, and additive replay-facing `comparison_views` for `visible_value`, `effective_display_text`, `formatting_view`, and `conditional_formatting_view` when that verification packet is present.
+- **Remaining gaps**: pack-grade replay promotion, broader reduced-witness breadth beyond the current local families, downstream OxReplay retained intake over the newly published family set, and any claim toward `cap.C4.distill_valid` or `cap.C5.pack_valid` remain open.
+- **Why still open**: `W025` widened the promotion-governance floor and `W056` widened the replay-facing export packet and family projection surface, but the replay evidence remains local-only and intentionally non-pack-eligible.
+- **Canonical owner**: exercised follow-on `W009` through `W017`, `W022`, `W023`, and `W025`; active follow-on owner `W056`; planned next owners `W033` and `W035`.
 
 ### IP-09: Host Runtime and External Requirements Freeze
 

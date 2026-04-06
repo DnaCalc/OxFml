@@ -137,6 +137,9 @@ Current baseline sequence after `W001`:
 50. `W052` registered external provider and CALL REGISTER.ID boundary
 51. `W053` grouped aggregation and publication-class adapter expansion
 52. `W054` consumer-facing interface rearchitecture and facade packaging
+53. `W055` operator array arithmetic consolidation and OxFunc seam narrowing
+54. `W056` XML verification publication and replay export
+55. `W057` formatting and conditional-formatting Excel parity
 
 This sequence is the current planning baseline.
 It may be refined, but new worksets should preserve dependency clarity rather than bypass it informally.

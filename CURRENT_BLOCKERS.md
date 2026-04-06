@@ -2,7 +2,7 @@
 
 Status: no active blockers.
 
-Last reviewed: 2026-04-01 after `W054` Epic E1 editor-facade refactor validation.
+Last reviewed: 2026-04-06 after `W056` replay comparison-view projection validation.
 
 ---
 

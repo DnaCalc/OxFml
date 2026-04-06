@@ -14,6 +14,7 @@ use crate::interface::{
     ReturnedValueSurface, TableCallerRegion, TableDescriptor, TableRef, TypedContextQueryBundle,
     TypedContextQueryBundleSpec,
 };
+use crate::publication::{VerificationPublicationContext, VerificationPublicationSurface};
 use crate::red::project_red_view;
 use crate::scheduler::ExecutionContract;
 use crate::seam::{
@@ -185,7 +186,11 @@ impl<'a> RuntimeEnvironment<'a> {
             request.typed_query_bundle,
             self.library_context.pinned_view(),
         )?;
-        Ok(RuntimeFormulaResult::from_host_output(output))
+        Ok(RuntimeFormulaResult::from_host_output(
+            output,
+            request.typed_query_bundle.locale_ctx,
+            request.verification_publication_context(),
+        ))
     }
 
     fn build_host(&self, source: &FormulaSourceRecord) -> SingleFormulaHost {
@@ -222,6 +227,7 @@ pub struct RuntimeFormulaRequest<'a> {
     source: FormulaSourceRecord,
     backend: EvaluationBackend,
     typed_query_bundle: TypedContextQueryBundle<'a>,
+    verification_publication_context: Option<VerificationPublicationContext>,
 }
 
 impl<'a> RuntimeFormulaRequest<'a> {
@@ -233,11 +239,20 @@ impl<'a> RuntimeFormulaRequest<'a> {
             source,
             backend: EvaluationBackend::OxFuncBacked,
             typed_query_bundle,
+            verification_publication_context: None,
         }
     }
 
     pub fn with_backend(mut self, backend: EvaluationBackend) -> Self {
         self.backend = backend;
+        self
+    }
+
+    pub fn with_verification_publication_context(
+        mut self,
+        verification_publication_context: VerificationPublicationContext,
+    ) -> Self {
+        self.verification_publication_context = Some(verification_publication_context);
         self
     }
 
@@ -251,6 +266,10 @@ impl<'a> RuntimeFormulaRequest<'a> {
 
     pub fn typed_query_bundle(&self) -> &TypedContextQueryBundle<'a> {
         &self.typed_query_bundle
+    }
+
+    pub fn verification_publication_context(&self) -> Option<&VerificationPublicationContext> {
+        self.verification_publication_context.as_ref()
     }
 }
 
@@ -266,6 +285,7 @@ pub struct RuntimeFormulaResult {
     pub evaluation: EvaluationOutput,
     pub published_worksheet_value: EvalValue,
     pub returned_value_surface: ReturnedValueSurface,
+    pub verification_publication_surface: VerificationPublicationSurface,
     pub candidate_result: AcceptedCandidateResult,
     pub commit_decision: AcceptDecision,
     pub trace_events: Vec<TraceEvent>,
@@ -274,8 +294,16 @@ pub struct RuntimeFormulaResult {
 }
 
 impl RuntimeFormulaResult {
-    fn from_host_output(host_output: HostRecalcOutput) -> Self {
-        let first_host_replay_capture_packet = host_output.to_first_host_replay_capture_packet();
+    fn from_host_output(
+        host_output: HostRecalcOutput,
+        locale_ctx: Option<&oxfunc_core::locale_format::LocaleFormatContext<'_>>,
+        verification_publication_context: Option<&VerificationPublicationContext>,
+    ) -> Self {
+        let first_host_replay_capture_packet = host_output
+            .to_first_host_replay_capture_packet_with_context(
+                locale_ctx,
+                verification_publication_context,
+            );
         Self {
             source: host_output.source,
             syntax_diagnostics: host_output.syntax_diagnostics,
@@ -287,6 +315,9 @@ impl RuntimeFormulaResult {
             evaluation: host_output.evaluation,
             published_worksheet_value: host_output.published_worksheet_value,
             returned_value_surface: host_output.returned_value_surface,
+            verification_publication_surface: first_host_replay_capture_packet
+                .verification_publication_surface
+                .clone(),
             candidate_result: host_output.candidate_result,
             commit_decision: host_output.commit_decision,
             trace_events: host_output.trace_events,

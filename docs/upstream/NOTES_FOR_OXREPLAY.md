@@ -54,7 +54,10 @@ OxFml's current answer is:
    as source schema, source family, pinned library-context reference, replay
    fence members when present, registry bindings, capability floor, and
    lifecycle metadata,
-4. no, this packaging work does not widen replay capability claims by itself;
+4. yes, runtime-result and first-host-capture projection now publish additive
+   `comparison_views` for the current XML verification lane when
+   `verification_publication_surface` facts are present,
+5. no, this packaging work does not widen replay capability claims by itself;
    current capability stance remains as already documented.
 
 ## 4. Replay-Facade Direction
@@ -72,11 +75,19 @@ Current required result truth is:
 6. registry bindings and capability floor
 7. lifecycle metadata when applicable
 8. canonical replay envelope refs and sidecar refs
+9. additive `comparison_views` entries for any admitted family OxFml can state directly
 
 Current first-wave narrowing:
 1. shared-scenario alias publication should be embedded directly in projection
    results in the first wave,
-2. session lifecycle is the preferred first post-FEC family for broader replay
+2. the current admitted XML verification family set is:
+   - `visible_value`
+   - `effective_display_text`
+   - `formatting_view`
+   - `conditional_formatting_view`
+3. these remain adapter-declared facts built from `VerificationPublicationSurface`
+   rather than host-local convenience strings,
+4. session lifecycle is the preferred first post-FEC family for broader replay
    projection uptake.
 
 ## 5. Current Implementation Reality

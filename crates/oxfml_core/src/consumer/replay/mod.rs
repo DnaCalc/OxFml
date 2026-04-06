@@ -4,6 +4,8 @@ use crate::consumer::runtime::{
 };
 use crate::host::FirstHostReplayCapturePacket;
 use crate::interface::{LibraryContextSnapshotRef, TypedContextQueryBundleSpec};
+use crate::publication::VerificationPublicationSurface;
+use serde_json::{Value, json};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReplayProjectionFamily {
@@ -157,7 +159,13 @@ impl<'a> ReplayProjectionRequest<'a> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReplayComparisonView {
+    pub view_family: String,
+    pub value: Value,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct ReplayProjectionResult {
     pub source_artifact_family: String,
     pub source_schema_id: Option<String>,
@@ -179,6 +187,8 @@ pub struct ReplayProjectionResult {
     pub candidate_result_id: Option<String>,
     pub commit_decision_kind: Option<String>,
     pub trace_event_kinds: Vec<String>,
+    pub comparison_views: Option<Vec<ReplayComparisonView>>,
+    pub verification_publication_surface: Option<VerificationPublicationSurface>,
     pub first_host_replay_capture_packet: Option<FirstHostReplayCapturePacket>,
 }
 
@@ -275,6 +285,10 @@ fn project_runtime_result(
             .iter()
             .map(|event| format!("{:?}", event.event_kind))
             .collect(),
+        comparison_views: Some(build_comparison_views(
+            &result.verification_publication_surface,
+        )),
+        verification_publication_surface: Some(result.verification_publication_surface.clone()),
         first_host_replay_capture_packet: Some(result.first_host_replay_capture_packet.clone()),
     }
 }
@@ -305,6 +319,12 @@ fn project_first_host_capture(
         candidate_result_id: Some(source.packet.candidate_result_id.clone()),
         commit_decision_kind: Some(source.packet.commit_decision_kind.clone()),
         trace_event_kinds: source.packet.trace_event_kinds.clone(),
+        comparison_views: Some(build_comparison_views(
+            &source.packet.verification_publication_surface,
+        )),
+        verification_publication_surface: Some(
+            source.packet.verification_publication_surface.clone(),
+        ),
         first_host_replay_capture_packet: Some(source.packet.clone()),
     }
 }
@@ -335,6 +355,8 @@ fn project_runtime_managed_open(
         candidate_result_id: None,
         commit_decision_kind: None,
         trace_event_kinds: Vec::new(),
+        comparison_views: None,
+        verification_publication_surface: None,
         first_host_replay_capture_packet: None,
     }
 }
@@ -369,6 +391,8 @@ fn project_runtime_managed_execution(
             .iter()
             .map(|event| format!("{:?}", event.event_kind))
             .collect(),
+        comparison_views: None,
+        verification_publication_surface: None,
         first_host_replay_capture_packet: None,
     }
 }
@@ -416,6 +440,8 @@ fn project_runtime_managed_session(
             .iter()
             .map(|event| format!("{:?}", event.event_kind))
             .collect(),
+        comparison_views: None,
+        verification_publication_surface: None,
         first_host_replay_capture_packet: None,
     }
 }
@@ -461,6 +487,8 @@ fn project_runtime_managed_commit(
             .iter()
             .map(|event| format!("{:?}", event.event_kind))
             .collect(),
+        comparison_views: None,
+        verification_publication_surface: None,
         first_host_replay_capture_packet: None,
     }
 }
@@ -504,6 +532,8 @@ fn project_runtime_managed_termination(
             .iter()
             .map(|event| format!("{:?}", event.event_kind))
             .collect(),
+        comparison_views: None,
+        verification_publication_surface: None,
         first_host_replay_capture_packet: None,
     }
 }
@@ -534,6 +564,8 @@ fn project_fixture_family(
         candidate_result_id: None,
         commit_decision_kind: None,
         trace_event_kinds: Vec::new(),
+        comparison_views: None,
+        verification_publication_surface: None,
         first_host_replay_capture_packet: None,
     }
 }
@@ -564,6 +596,133 @@ fn project_retained_witness(
         candidate_result_id: None,
         commit_decision_kind: None,
         trace_event_kinds: Vec::new(),
+        comparison_views: None,
+        verification_publication_surface: None,
         first_host_replay_capture_packet: None,
     }
+}
+
+fn build_comparison_views(surface: &VerificationPublicationSurface) -> Vec<ReplayComparisonView> {
+    vec![
+        ReplayComparisonView {
+            view_family: "visible_value".to_string(),
+            value: Value::String(surface.visible_value_text.clone()),
+        },
+        ReplayComparisonView {
+            view_family: "effective_display_text".to_string(),
+            value: Value::String(surface.effective_display_text.clone()),
+        },
+        ReplayComparisonView {
+            view_family: "formatting_view".to_string(),
+            value: json!({
+                "format_profile": surface.format_profile,
+                "locale_format_context": surface.locale_format_context.as_ref().map(locale_format_context_json),
+                "date1904": surface.date1904,
+                "number_format_code": surface.number_format_code,
+                "style_id": surface.style_id,
+                "style_hierarchy": surface.style_hierarchy,
+                "format_dependency_facts": surface
+                    .format_dependency_facts
+                    .iter()
+                    .map(format_dependency_fact_json)
+                    .collect::<Vec<_>>(),
+                "format_delta": surface.format_delta.as_ref().map(format_delta_json),
+                "display_delta": surface.display_delta.as_ref().map(display_delta_json),
+                "presentation_hint": surface.presentation_hint.as_ref().map(presentation_hint_json),
+                "font_color": surface.font_color,
+                "fill_color": surface.fill_color,
+                "effective_font_color": surface.effective_font_color,
+                "effective_fill_color": surface.effective_fill_color
+            }),
+        },
+        ReplayComparisonView {
+            view_family: "conditional_formatting_view".to_string(),
+            value: json!({
+                "rules": surface
+                    .conditional_formatting_rules
+                    .iter()
+                    .map(conditional_formatting_rule_json)
+                    .collect::<Vec<_>>(),
+                "target_ranges": surface.conditional_formatting_target_ranges,
+                "rule_kind": surface.conditional_formatting_rule_kind,
+                "operator": surface.conditional_formatting_operator,
+                "thresholds": surface.conditional_formatting_thresholds,
+                "applies": surface.conditional_formatting_applies,
+                "effective_font_color": surface.conditional_formatting_effective_font_color,
+                "effective_fill_color": surface.conditional_formatting_effective_fill_color,
+                "effective_display": surface.conditional_formatting_effective_display
+            }),
+        },
+    ]
+}
+
+fn locale_format_context_json(surface: &crate::publication::LocaleFormatContextSurface) -> Value {
+    json!({
+        "locale_profile_id": surface.locale_profile_id,
+        "date_system": surface.date_system,
+        "decimal_separator": surface.decimal_separator,
+        "thousands_separator": surface.thousands_separator,
+        "currency_symbol": surface.currency_symbol,
+        "date_separator": surface.date_separator,
+        "time_separator": surface.time_separator
+    })
+}
+
+fn format_dependency_fact_json(fact: &crate::seam::FormatDependencyFact) -> Value {
+    json!({
+        "formula_stable_id": fact.formula_stable_id,
+        "dependency_token": fact.dependency_token,
+        "dependency_class": fact.dependency_class,
+        "scope": fact.scope
+    })
+}
+
+fn locus_json(locus: &crate::seam::Locus) -> Value {
+    json!({
+        "sheet_id": locus.sheet_id,
+        "row": locus.row,
+        "col": locus.col
+    })
+}
+
+fn format_delta_json(delta: &crate::seam::FormatDelta) -> Value {
+    json!({
+        "formula_stable_id": delta.formula_stable_id,
+        "target_loci": delta.target_loci.iter().map(locus_json).collect::<Vec<_>>(),
+        "format_effect_class": delta.format_effect_class,
+        "format_effect_payload": delta.format_effect_payload
+    })
+}
+
+fn display_delta_json(delta: &crate::seam::DisplayDelta) -> Value {
+    json!({
+        "formula_stable_id": delta.formula_stable_id,
+        "target_loci": delta.target_loci.iter().map(locus_json).collect::<Vec<_>>(),
+        "display_effect_class": delta.display_effect_class,
+        "display_effect_payload": delta.display_effect_payload
+    })
+}
+
+fn presentation_hint_json(hint: &oxfunc_core::value::PresentationHint) -> Value {
+    json!({
+        "number_format": hint.number_format.map(|value| format!("{value:?}")),
+        "style": hint.style.map(|value| format!("{value:?}"))
+    })
+}
+
+fn conditional_formatting_rule_json(
+    rule: &crate::publication::VerificationConditionalFormattingRule,
+) -> Value {
+    json!({
+        "target_ranges": rule.target_ranges,
+        "rule_kind": rule.rule_kind,
+        "operator": rule.operator,
+        "thresholds": rule.thresholds,
+        "font_color": rule.font_color,
+        "fill_color": rule.fill_color,
+        "effective_display_text": rule.effective_display_text,
+        "applies": rule.applies,
+        "effective_font_color": rule.effective_font_color,
+        "effective_fill_color": rule.effective_fill_color
+    })
 }

@@ -77,7 +77,8 @@ OC-H1 adds these fields on top of H0:
 | 2 | `HostInfoProvider` | host | when the formula may use `INFO`, `CELL`, or other host-query functions |
 | 3 | `RtdProvider` | host | when `RTD` is in scope |
 | 4 | display context | host | base formatting state for effective-display projection |
-| 5 | explicit recalc trigger | host | deterministic recalc request |
+| 5 | `VerificationPublicationContext` | host | required when the host needs stable XML-verification or replay-comparison export of number-format, style, and conditional-formatting context |
+| 6 | explicit recalc trigger | host | deterministic recalc request |
 
 OC-H1 still does not require:
 1. caller-anchor or direct cell bindings (those belong to probe packets),
@@ -135,7 +136,8 @@ These are OneCalc-local classification names as defined in `DNA_ONECALC_SCOPE_AN
 8. `HostInfoProvider` (for `INFO`, `CELL`, host-query lanes),
 9. `RtdProvider` (for `RTD` lanes),
 10. display context,
-11. explicit recalc trigger.
+11. `VerificationPublicationContext` when stable verification/replay export is required,
+12. explicit recalc trigger.
 
 **Forbidden fields**:
 1. generic worksheet cell maps,
@@ -307,6 +309,45 @@ DNA OneCalc must handle each value class as follows.
 4. callable values that remain in the return surface (e.g., `LAMBDA` results) should be displayed as typed callable descriptions rather than silently discarded or shown as errors,
 5. the richer value carrier beyond the current first-pass split remains a deferred decision.
 
+### 5.5 Verification Publication Surface
+**What it is**: a comparison-friendly OxFml-owned export packet for verification and replay intake, carried today as `VerificationPublicationSurface` and fed by optional host-supplied `VerificationPublicationContext`.
+
+**Current host obligations**:
+1. when XML-backed or other comparison-heavy verification is required, provide `VerificationPublicationContext` on `RuntimeFormulaRequest` rather than forcing local post-processing over raw runtime artifacts,
+2. treat `VerificationPublicationSurface` as the current OxFml-owned place to read:
+   - `entered_cell_text`
+   - `typed_value`
+   - `visible_value_text`
+   - `effective_display_text`
+   - `format_profile`
+   - `locale_format_context`
+   - `date1904`
+   - `number_format_code`
+   - `style_id`
+   - `style_hierarchy`
+   - `format_dependency_facts`
+   - `format_delta`
+   - `display_delta`
+   - `returned_value_surface`
+   - `presentation_hint`
+   - `font_color`
+   - `fill_color`
+   - `conditional_formatting_rules`
+   - `conditional_formatting_target_ranges`
+   - `conditional_formatting_rule_kind`
+   - `conditional_formatting_operator`
+   - `conditional_formatting_thresholds`
+   - `conditional_formatting_effective_display`,
+3. prefer `VerificationPublicationSurface` from `RuntimeFormulaResult` and `ReplayProjectionResult` over reinterpreting `AcceptedCandidateResult`, `CommitBundle`, or raw JSON fragments locally,
+4. keep `VerificationPublicationContext` host-owned as input context while treating `VerificationPublicationSurface` as OxFml-owned publication/export meaning,
+5. where replay-facing family comparison is needed, prefer `ReplayProjectionResult.comparison_views` for the admitted family set:
+   - `visible_value`
+   - `effective_display_text`
+   - `formatting_view`
+   - `conditional_formatting_view`
+6. current best-effort OxFml-owned widening now includes grouped/fixed numeric codes, percent formats, sectioned negative formats, date-token formats such as `m/d/yyyy`, and conditional-formatting applicability/effective-style evaluation for operator rules plus simple current-cell expression rules such as `=A1>0`,
+7. do not over-read the current first slice as full display-code parity or broad OxFml-owned conditional-formatting evaluation.
+
 ---
 
 ## 6. Not-Authorized List
@@ -362,6 +403,8 @@ Where the canonical OxFml docs already use specific field names, DNA OneCalc sho
 7. `LiveDiagnosticSnapshot`, `SignatureHelpContext`, `FunctionHelpPacket`,
 8. `IntelligentCompletionContext`,
 9. `ReturnedValueSurface`.
+10. `VerificationPublicationContext`,
+11. `VerificationPublicationSurface`.
 
 ### 7.3 Ownership Preservation
 1. OxFml owns parser, binder, semantic-plan, evaluator, editor/language-service substrate, and formula-semantic formatting meaning.

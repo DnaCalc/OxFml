@@ -22,6 +22,10 @@ use crate::interface::{
     TableCallerRegion, TableDescriptor, TableRef, TypedContextQueryBundle,
     TypedContextQueryBundleSpec,
 };
+use crate::publication::{
+    VerificationPublicationContext, VerificationPublicationSurface,
+    build_verification_publication_surface,
+};
 use crate::red::{RedProjection, project_red_view_incremental};
 use crate::scheduler::{ExecutionContract, build_execution_contract};
 use crate::seam::{
@@ -107,6 +111,7 @@ pub struct FirstHostReplayCapturePacket {
     pub library_context_snapshot_ref: Option<LibraryContextSnapshotRef>,
     pub typed_query_bundle_spec: TypedContextQueryBundleSpec,
     pub returned_value_surface: ReturnedValueSurface,
+    pub verification_publication_surface: VerificationPublicationSurface,
     pub candidate_result_id: String,
     pub commit_decision_kind: String,
     pub trace_event_kinds: Vec<String>,
@@ -114,6 +119,14 @@ pub struct FirstHostReplayCapturePacket {
 
 impl HostRecalcOutput {
     pub fn to_first_host_replay_capture_packet(&self) -> FirstHostReplayCapturePacket {
+        self.to_first_host_replay_capture_packet_with_context(None, None)
+    }
+
+    pub fn to_first_host_replay_capture_packet_with_context(
+        &self,
+        locale_ctx: Option<&LocaleFormatContext<'_>>,
+        verification_publication_context: Option<&VerificationPublicationContext>,
+    ) -> FirstHostReplayCapturePacket {
         FirstHostReplayCapturePacket {
             adapter_id: "oxfml.replay_adapter.v1".to_string(),
             formula_stable_id: self.source.formula_stable_id.0.clone(),
@@ -122,6 +135,16 @@ impl HostRecalcOutput {
             library_context_snapshot_ref: self.library_context_snapshot_ref.clone(),
             typed_query_bundle_spec: self.typed_query_bundle_spec.clone(),
             returned_value_surface: self.returned_value_surface.clone(),
+            verification_publication_surface: build_verification_publication_surface(
+                &self.source,
+                &self.published_worksheet_value,
+                &self.returned_value_surface,
+                &self.candidate_result.topology_delta,
+                self.candidate_result.format_delta.as_ref(),
+                self.candidate_result.display_delta.as_ref(),
+                locale_ctx,
+                verification_publication_context,
+            ),
             candidate_result_id: self.candidate_result.candidate_result_id.clone(),
             commit_decision_kind: match &self.commit_decision {
                 AcceptDecision::Accepted(_) => "accepted".to_string(),

@@ -6,6 +6,7 @@ mod host;
 pub mod interface;
 mod language_service;
 mod oxfunc_adapter;
+pub mod publication;
 pub mod red;
 pub mod scheduler;
 pub mod seam;
@@ -62,6 +63,11 @@ pub use interface::{
     TableCallerRegion, TableColumnDescriptor, TableDescriptor, TableRef, TableRegionKind,
     TypedContextQueryBundle, TypedContextQueryBundleSpec, TypedContextQueryFamily,
     classify_library_context_field,
+};
+pub use publication::{
+    LocaleFormatContextSurface, VerificationConditionalFormattingRule,
+    VerificationPublicationContext, VerificationPublicationSurface, VerificationTypedValueSurface,
+    build_verification_publication_surface,
 };
 pub use red::{
     IncrementalRedProjectionResult, RedNode, RedProjection, project_red_view,

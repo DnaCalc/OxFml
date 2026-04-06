@@ -1,0 +1,95 @@
+{
+  "source_case_id": "case:runtime",
+  "shared_scenario_alias": "alias.runtime",
+  "comparison_views": [
+    {
+      "view_family": "visible_value",
+      "value": "3"
+    },
+    {
+      "view_family": "effective_display_text",
+      "value": "$3.00"
+    },
+    {
+      "view_family": "formatting_view",
+      "value": {
+        "format_profile": "excel-spreadsheetml-2003-default",
+        "locale_format_context": {
+          "locale_profile_id": "EnUs",
+          "date_system": "System1900",
+          "decimal_separator": ".",
+          "thousands_separator": ",",
+          "currency_symbol": "$",
+          "date_separator": "/",
+          "time_separator": ":"
+        },
+        "date1904": false,
+        "number_format_code": "$#,##0.00",
+        "style_id": "calc",
+        "style_hierarchy": [
+          "workbook-default",
+          "calc"
+        ],
+        "format_dependency_facts": [],
+        "format_delta": null,
+        "display_delta": null,
+        "presentation_hint": null,
+        "font_color": "#112233",
+        "fill_color": "#445566",
+        "effective_font_color": "#FF0000",
+        "effective_fill_color": "#00FF00"
+      }
+    },
+    {
+      "view_family": "conditional_formatting_view",
+      "value": {
+        "rules": [
+          {
+            "target_ranges": [
+              "A1"
+            ],
+            "rule_kind": "Expression",
+            "operator": null,
+            "thresholds": [
+              "=A1>0"
+            ],
+            "font_color": "#FF0000",
+            "fill_color": "#00FF00",
+            "effective_display_text": "$3.00",
+            "applies": true,
+            "effective_font_color": "#FF0000",
+            "effective_fill_color": "#00FF00"
+          }
+        ],
+        "target_ranges": [
+          [
+            "A1"
+          ]
+        ],
+        "rule_kind": [
+          "Expression"
+        ],
+        "operator": [
+          null
+        ],
+        "thresholds": [
+          [
+            "=A1>0"
+          ]
+        ],
+        "applies": [
+          true
+        ],
+        "effective_font_color": [
+          "#FF0000"
+        ],
+        "effective_fill_color": [
+          "#00FF00"
+        ],
+        "effective_display": [
+          "$3.00"
+        ]
+      }
+    }
+  ]
+}

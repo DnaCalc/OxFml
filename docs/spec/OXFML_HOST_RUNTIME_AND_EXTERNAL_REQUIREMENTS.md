@@ -161,6 +161,9 @@ For the currently covered local scope, a host must be able to supply the first t
    - `random_value`
    - `LocaleFormatContext`
    - date-system context
+7. when stable verification or replay-comparison export is required:
+   - `VerificationPublicationContext`
+   - host-supplied number-format, style, and conditional-formatting context carried without redefining OxFml-owned publication meaning
 
 Deferred-provider rule:
 1. provider families explicitly deferred in OxFml or OxFunc remain outside this host contract,
@@ -209,6 +212,9 @@ The host-visible return surface must preserve the first three-way split:
 1. ordinary value,
 2. `ValueWithPresentation`,
 3. typed host/provider outcome projection.
+
+When a host requires stable verification or comparison export, the host-visible output must also preserve:
+4. `VerificationPublicationSurface` as the comparison-friendly packet carrying visible value, effective display, format/style context, and conditional-formatting context for the current admitted slice.
 
 ### 6.3 Coordinator-Relevant Outputs
 An OxCalc-integrated host must preserve:
@@ -424,9 +430,10 @@ For the current local floor, a host should retain and project:
 4. `SemanticPlan` identity and execution contract summary,
 5. `EvaluationOutput`,
 6. `ReturnedValueSurface`,
-7. `AcceptedCandidateResult`,
-8. `CommitBundle` or `RejectRecord`,
-9. `trace_events`.
+7. `VerificationPublicationSurface`,
+8. `AcceptedCandidateResult`,
+9. `CommitBundle` or `RejectRecord`,
+10. `trace_events`.
 
 The direct-host packet already exposes the needed raw surfaces through `HostRecalcOutput`.
 For the current local floor, hosts may project that output through the first helper packet:
@@ -436,12 +443,14 @@ Current replay-integration rule:
 1. the host may project `HostRecalcOutput` into the replay appliance using the existing adapter and canonical artifact families,
 2. the host must preserve candidate-versus-commit distinction and typed reject meaning when doing so,
 3. the host must preserve direct-binding-sensitive and host-query-sensitive truth where the replay witness depends on it,
-4. the host must not treat replay projection as permission to rewrite formula text, bind payloads, fence tuples, or capability views.
+4. the host must preserve `VerificationPublicationSurface` when the runtime request supplied `VerificationPublicationContext`,
+5. the host must not treat replay projection as permission to rewrite formula text, bind payloads, fence tuples, or capability views.
 
 Current limitation:
 1. the helper packet is a first-host capture projection, not a pack-grade replay bundle builder,
 2. hosts still need to map that packet into the wider replay appliance import families,
-3. replay evidence remains local-witness-tier rather than pack-grade.
+3. current `VerificationPublicationSurface` support is a first slice and does not imply broad display-code or conditional-formatting closure,
+4. replay evidence remains local-witness-tier rather than pack-grade.
 
 ## 17. Relationship To Fixture Hosts And Stand-In Coordinator Packets
 The current host/runtime contract is also the source packet family for deterministic fixture hosts used in integration artifacts such as the OxFunc adapter wave.

@@ -1,3 +1,6 @@
+use std::fs;
+use std::path::PathBuf;
+
 use oxfml_core::binding::BindContext;
 use oxfml_core::consumer::editor::{
     EditorAnalysisStage, EditorEditService, EditorEnvironment, EditorPlanOptions,
@@ -12,12 +15,17 @@ use oxfml_core::consumer::runtime::{
 use oxfml_core::interface::{
     InMemoryLibraryContextProvider, LibraryContextProvider, LibraryContextSnapshotRef,
 };
+use oxfml_core::publication::{
+    VerificationConditionalFormattingRule, VerificationPublicationContext,
+};
 use oxfml_core::semantics::{
     LibraryAvailabilityState, LibraryContextSnapshot, LibraryContextSnapshotEntry,
     RegistrationSourceKind,
 };
 use oxfml_core::source::FormulaSourceRecord;
 use oxfml_core::{FormulaChannelKind, TypedContextQueryBundle};
+use oxfunc_core::locale_format::en_us_context;
+use serde_json::Value;
 
 #[test]
 fn editor_edit_service_applies_completion_proposal_through_facade() {
@@ -126,11 +134,35 @@ fn editor_edit_service_validates_manual_completion_text_through_facade() {
 #[test]
 fn replay_projection_service_projects_runtime_and_host_outputs() {
     let environment = RuntimeEnvironment::new();
+    let locale_ctx = en_us_context();
+    let verification_context = VerificationPublicationContext {
+        format_profile: Some("excel-spreadsheetml-2003-default".to_string()),
+        number_format_code: Some("$#,##0.00".to_string()),
+        style_id: Some("calc".to_string()),
+        style_hierarchy: vec!["workbook-default".to_string(), "calc".to_string()],
+        font_color: Some("#112233".to_string()),
+        fill_color: Some("#445566".to_string()),
+        conditional_formatting_rules: vec![VerificationConditionalFormattingRule {
+            target_ranges: vec!["A1".to_string()],
+            rule_kind: "Expression".to_string(),
+            operator: None,
+            thresholds: vec!["=A1>0".to_string()],
+            font_color: Some("#FF0000".to_string()),
+            fill_color: Some("#00FF00".to_string()),
+            effective_display_text: Some("$3.00".to_string()),
+            applies: None,
+            effective_font_color: None,
+            effective_fill_color: None,
+        }],
+    };
     let runtime_result = environment
-        .execute(RuntimeFormulaRequest::new(
-            FormulaSourceRecord::new("replay:runtime", 1, "=SUM(1,2)"),
-            TypedContextQueryBundle::default(),
-        ))
+        .execute(
+            RuntimeFormulaRequest::new(
+                FormulaSourceRecord::new("replay:runtime", 1, "=SUM(1,2)"),
+                TypedContextQueryBundle::new(None, None, Some(&locale_ctx), None, None),
+            )
+            .with_verification_publication_context(verification_context),
+        )
         .expect("runtime result should execute");
 
     let runtime_projection = ReplayProjectionService::project(
@@ -150,6 +182,101 @@ fn replay_projection_service_projects_runtime_and_host_outputs() {
     assert_eq!(
         runtime_projection.shared_scenario_alias.as_deref(),
         Some("alias.runtime")
+    );
+    assert_eq!(
+        runtime_result
+            .verification_publication_surface
+            .effective_display_text,
+        "$3.00"
+    );
+    assert_eq!(
+        runtime_projection
+            .comparison_views
+            .as_ref()
+            .map(|views| views.len()),
+        Some(4)
+    );
+    assert_eq!(
+        runtime_projection
+            .comparison_views
+            .as_ref()
+            .and_then(|views| {
+                views
+                    .iter()
+                    .find(|view| view.view_family == "effective_display_text")
+                    .map(|view| view.value.clone())
+            }),
+        Some(Value::String("$3.00".to_string()))
+    );
+    assert_eq!(
+        runtime_projection
+            .comparison_views
+            .as_ref()
+            .map(|views| comparison_views_json(views)),
+        Some(load_expected_comparison_views_fixture())
+    );
+    assert_eq!(
+        runtime_projection
+            .verification_publication_surface
+            .as_ref()
+            .map(|surface| surface.effective_display_text.as_str()),
+        Some("$3.00")
+    );
+    assert_eq!(
+        runtime_projection
+            .verification_publication_surface
+            .as_ref()
+            .and_then(|surface| surface.number_format_code.as_deref()),
+        Some("$#,##0.00")
+    );
+    assert_eq!(
+        runtime_projection
+            .verification_publication_surface
+            .as_ref()
+            .map(|surface| surface.typed_value.value_kind.as_str()),
+        Some("number")
+    );
+    assert_eq!(
+        runtime_projection
+            .verification_publication_surface
+            .as_ref()
+            .map(|surface| surface.conditional_formatting_rule_kind.clone()),
+        Some(vec!["Expression".to_string()])
+    );
+    assert_eq!(
+        runtime_projection
+            .verification_publication_surface
+            .as_ref()
+            .map(|surface| surface.conditional_formatting_target_ranges.clone()),
+        Some(vec![vec!["A1".to_string()]])
+    );
+    assert_eq!(
+        runtime_projection
+            .verification_publication_surface
+            .as_ref()
+            .map(|surface| surface.conditional_formatting_thresholds.clone()),
+        Some(vec![vec!["=A1>0".to_string()]])
+    );
+    assert_eq!(
+        runtime_projection
+            .verification_publication_surface
+            .as_ref()
+            .map(|surface| surface.conditional_formatting_effective_display.clone()),
+        Some(vec![Some("$3.00".to_string())])
+    );
+    assert_eq!(
+        runtime_projection
+            .verification_publication_surface
+            .as_ref()
+            .map(|surface| surface.conditional_formatting_applies.clone()),
+        Some(vec![Some(true)])
+    );
+    assert_eq!(
+        runtime_projection
+            .verification_publication_surface
+            .as_ref()
+            .and_then(|surface| surface.effective_font_color.as_deref()),
+        Some("#FF0000")
     );
     assert!(
         runtime_projection
@@ -177,6 +304,45 @@ fn replay_projection_service_projects_runtime_and_host_outputs() {
             .map(|packet| packet.formula_stable_id.as_str()),
         Some("replay:runtime")
     );
+    assert_eq!(
+        host_projection
+            .comparison_views
+            .as_ref()
+            .map(|views| comparison_views_json(views)),
+        Some(load_expected_comparison_views_fixture())
+    );
+    assert_eq!(
+        host_projection
+            .verification_publication_surface
+            .as_ref()
+            .map(|surface| surface.effective_display_text.as_str()),
+        Some("$3.00")
+    );
+}
+
+fn comparison_views_json(views: &[oxfml_core::consumer::replay::ReplayComparisonView]) -> Value {
+    Value::Array(
+        views
+            .iter()
+            .map(|view| {
+                serde_json::json!({
+                    "view_family": view.view_family,
+                    "value": view.value
+                })
+            })
+            .collect(),
+    )
+}
+
+fn load_expected_comparison_views_fixture() -> Value {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("xml_verification_comparison_views_projection.json");
+    let content = fs::read_to_string(path).expect("comparison-view fixture file should exist");
+    let fixture: Value =
+        serde_json::from_str(&content).expect("comparison-view fixture should deserialize");
+    fixture["comparison_views"].clone()
 }
 
 #[test]
