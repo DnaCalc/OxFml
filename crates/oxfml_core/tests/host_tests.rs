@@ -256,6 +256,17 @@ fn single_formula_host_supports_local_bootstrap_backend_for_basic_formulae() {
 }
 
 #[test]
+fn single_formula_host_rejects_execution_when_syntax_diagnostics_exist() {
+    let mut host = SingleFormulaHost::new("host:syntax-reject", "=1~2");
+    let error = host
+        .recalc(None, Some(&en_us_context()))
+        .expect_err("unsupported syntax should reject execution");
+
+    assert!(error.contains("syntax diagnostics"));
+    assert!(error.contains("Unknown"));
+}
+
+#[test]
 fn single_formula_host_can_capture_commit_reject_trace() {
     let mut host = SingleFormulaHost::new("host:reject", "=SUM(InputValue,2)");
     host.set_defined_name_value("InputValue", EvalValue::Number(5.0));

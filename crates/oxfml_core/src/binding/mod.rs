@@ -40,6 +40,10 @@ pub enum BoundExpr {
         left: Box<BoundExpr>,
         right: Box<BoundExpr>,
     },
+    Unary {
+        op: UnaryOp,
+        expr: Box<BoundExpr>,
+    },
     FunctionCall {
         function_name: String,
         args: Vec<BoundExpr>,
@@ -56,8 +60,23 @@ pub enum BoundExpr {
 pub enum BinaryOp {
     Add,
     Subtract,
+    Power,
     Multiply,
     Divide,
+    Concat,
+    Equal,
+    NotEqual,
+    LessThan,
+    LessEqual,
+    GreaterThan,
+    GreaterEqual,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnaryOp {
+    Plus,
+    Negate,
+    Percent,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -265,12 +284,14 @@ impl Binder {
                 let bound_child = self.bind_expr(child);
                 match token_text(node, "@") {
                     Some(_) => BoundExpr::ImplicitIntersection(Box::new(bound_child)),
-                    None if token_text(node, "-").is_some() => BoundExpr::Binary {
-                        op: BinaryOp::Subtract,
-                        left: Box::new(BoundExpr::NumberLiteral("0".to_string())),
-                        right: Box::new(bound_child),
+                    None if token_text(node, "-").is_some() => BoundExpr::Unary {
+                        op: UnaryOp::Negate,
+                        expr: Box::new(bound_child),
                     },
-                    None if token_text(node, "+").is_some() => bound_child,
+                    None if token_text(node, "+").is_some() => BoundExpr::Unary {
+                        op: UnaryOp::Plus,
+                        expr: Box::new(bound_child),
+                    },
                     None => {
                         self.diagnostics.push(BindDiagnostic {
                             message: "unsupported prefix operator".to_string(),
@@ -284,17 +305,31 @@ impl Binder {
                 let child = self
                     .first_child_node(node)
                     .expect("postfix should have child");
-                match self.bind_expr(child) {
-                    BoundExpr::Reference(reference) => BoundExpr::Reference(ReferenceExpr::Spill {
-                        anchor: Box::new(reference),
-                    }),
-                    other => {
-                        self.diagnostics.push(BindDiagnostic {
-                            message: "spill suffix applied to non-reference expression".to_string(),
-                            span: node.span,
-                        });
-                        other
+                let bound_child = self.bind_expr(child);
+                if token_text(node, "#").is_some() {
+                    match bound_child {
+                        BoundExpr::Reference(reference) => BoundExpr::Reference(ReferenceExpr::Spill {
+                            anchor: Box::new(reference),
+                        }),
+                        other => {
+                            self.diagnostics.push(BindDiagnostic {
+                                message: "spill suffix applied to non-reference expression".to_string(),
+                                span: node.span,
+                            });
+                            other
+                        }
                     }
+                } else if token_text(node, "%").is_some() {
+                    BoundExpr::Unary {
+                        op: UnaryOp::Percent,
+                        expr: Box::new(bound_child),
+                    }
+                } else {
+                    self.diagnostics.push(BindDiagnostic {
+                        message: "unsupported postfix operator".to_string(),
+                        span: node.span,
+                    });
+                    bound_child
                 }
             }
             SyntaxKind::BinaryExpr => {
@@ -308,8 +343,24 @@ impl Binder {
                     BinaryOp::Add
                 } else if token_text(node, "-").is_some() {
                     BinaryOp::Subtract
+                } else if token_text(node, "^").is_some() {
+                    BinaryOp::Power
                 } else if token_text(node, "*").is_some() {
                     BinaryOp::Multiply
+                } else if token_text(node, "&").is_some() {
+                    BinaryOp::Concat
+                } else if token_text(node, "<>").is_some() {
+                    BinaryOp::NotEqual
+                } else if token_text(node, "<=").is_some() {
+                    BinaryOp::LessEqual
+                } else if token_text(node, ">=").is_some() {
+                    BinaryOp::GreaterEqual
+                } else if token_text(node, "<").is_some() {
+                    BinaryOp::LessThan
+                } else if token_text(node, ">").is_some() {
+                    BinaryOp::GreaterThan
+                } else if token_text(node, "=").is_some() {
+                    BinaryOp::Equal
                 } else {
                     BinaryOp::Divide
                 };
@@ -533,7 +584,7 @@ impl Binder {
         let left_node = child_nodes.next().expect("range left");
         let right_node = child_nodes.next().expect("range right");
 
-        if let Some(normalized) = self.try_bind_whole_row_or_column_range(left_node, right_node) {
+        if let Some(normalized) = self.try_bind_simple_reference_range(left_node, right_node) {
             self.push_reference_seed(&normalized);
             return BoundExpr::Reference(ReferenceExpr::Atom(normalized));
         }
@@ -586,19 +637,13 @@ impl Binder {
         }
     }
 
-    fn try_bind_whole_row_or_column_range(
+    fn try_bind_simple_reference_range(
         &mut self,
         left_node: &GreenNode,
         right_node: &GreenNode,
     ) -> Option<NormalizedReference> {
-        let left_simple = try_parse_simple_reference_fragment(left_node, &self.context)?;
-        let right_simple = try_parse_simple_reference_fragment(right_node, &self.context)?;
-        if left_simple.qualifier.raw != right_simple.qualifier.raw
-            || left_simple.qualifier.is_external
-            || right_simple.qualifier.is_external
-        {
-            return None;
-        }
+        let (left_simple, right_simple) =
+            harmonize_simple_reference_fragments(left_node, right_node, &self.context)?;
 
         if let (Some(start_row), Some(end_row)) = (
             parse_row_reference(&left_simple.target_text, self.formula_channel_kind),
@@ -628,6 +673,40 @@ impl Binder {
                 col_count: right_col - left_col + 1,
                 address_mode: AddressMode::default(),
             }));
+        }
+
+        if let (Some(start), Some(end)) = (
+            parse_cell_reference(
+                &left_simple.target_text,
+                &left_simple.qualifier.sheet_id,
+                &self.context,
+                self.formula_channel_kind,
+            ),
+            parse_cell_reference(
+                &right_simple.target_text,
+                &right_simple.qualifier.sheet_id,
+                &self.context,
+                self.formula_channel_kind,
+            ),
+        ) {
+            if start.workbook_id == end.workbook_id && start.sheet_id == end.sheet_id {
+                let top_row = start.coord.row.min(end.coord.row);
+                let left_col = start.coord.col.min(end.coord.col);
+                let bottom_row = start.coord.row.max(end.coord.row);
+                let right_col = start.coord.col.max(end.coord.col);
+                return Some(NormalizedReference::Area(AreaRef {
+                    workbook_id: start.workbook_id,
+                    sheet_id: start.sheet_id,
+                    top_left: CellCoord {
+                        row: top_row,
+                        col: left_col,
+                    },
+                    height: bottom_row - top_row + 1,
+                    width: right_col - left_col + 1,
+                    address_mode: AddressMode::default(),
+                    caller_anchor_used: start.caller_anchor_used || end.caller_anchor_used,
+                }));
+            }
         }
 
         None
@@ -957,6 +1036,7 @@ struct ParsedQualifier {
     sheet_id: String,
     external_target_id: Option<String>,
     is_external: bool,
+    explicit: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -1691,6 +1771,7 @@ fn try_parse_simple_reference_fragment(
                 sheet_id: context.sheet_id.clone(),
                 external_target_id: None,
                 is_external: false,
+                explicit: false,
             },
             target_text: first_token_text_free(node)?,
         }),
@@ -1738,6 +1819,7 @@ fn parse_reference_qualifier(text: &str) -> ParsedQualifier {
                 },
                 external_target_id: Some(external_target_id),
                 is_external: true,
+                explicit: true,
             };
         }
     }
@@ -1753,6 +1835,42 @@ fn parse_reference_qualifier(text: &str) -> ParsedQualifier {
         sheet_id,
         external_target_id: None,
         is_external: false,
+        explicit: true,
+    }
+}
+
+fn harmonize_simple_reference_fragments(
+    left_node: &GreenNode,
+    right_node: &GreenNode,
+    context: &BindContext,
+) -> Option<(SimpleReferenceFragment, SimpleReferenceFragment)> {
+    let mut left_simple = try_parse_simple_reference_fragment(left_node, context)?;
+    let mut right_simple = try_parse_simple_reference_fragment(right_node, context)?;
+
+    if left_simple.qualifier.is_external || right_simple.qualifier.is_external {
+        if left_simple.qualifier.raw == right_simple.qualifier.raw {
+            return Some((left_simple, right_simple));
+        }
+        return None;
+    }
+
+    if left_simple.qualifier.raw == right_simple.qualifier.raw {
+        return Some((left_simple, right_simple));
+    }
+
+    match (
+        left_simple.qualifier.explicit,
+        right_simple.qualifier.explicit,
+    ) {
+        (true, false) => {
+            right_simple.qualifier = left_simple.qualifier.clone();
+            Some((left_simple, right_simple))
+        }
+        (false, true) => {
+            left_simple.qualifier = right_simple.qualifier.clone();
+            Some((left_simple, right_simple))
+        }
+        _ => None,
     }
 }
 

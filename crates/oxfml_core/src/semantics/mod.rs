@@ -326,6 +326,9 @@ impl SemanticCompiler {
             | BoundExpr::ArrayLiteral(_)
             | BoundExpr::OmittedArgument
             | BoundExpr::HelperParameterName(_) => {}
+            BoundExpr::Unary { expr, .. } => {
+                self.visit_expr(expr);
+            }
             BoundExpr::Binary { left, right, .. } => {
                 self.visit_expr(left);
                 self.visit_expr(right);
@@ -843,6 +846,9 @@ fn collect_helper_capture_names<'a>(
         | BoundExpr::ArrayLiteral(_)
         | BoundExpr::OmittedArgument
         | BoundExpr::HelperParameterName(_) => {}
+        BoundExpr::Unary { expr, .. } => {
+            collect_helper_capture_names(expr, params, captures);
+        }
         BoundExpr::Binary { left, right, .. } => {
             collect_helper_capture_names(left, params, captures);
             collect_helper_capture_names(right, params, captures);

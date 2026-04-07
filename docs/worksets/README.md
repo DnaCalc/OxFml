@@ -140,6 +140,8 @@ Current baseline sequence after `W001`:
 53. `W055` operator array arithmetic consolidation and OxFunc seam narrowing
 54. `W056` XML verification publication and replay export
 55. `W057` formatting and conditional-formatting Excel parity
+56. `W058` bug intake root-cause and regression stream protocol
+57. `W059` operator semantic dispatch boundary correction
 
 This sequence is the current planning baseline.
 It may be refined, but new worksets should preserve dependency clarity rather than bypass it informally.

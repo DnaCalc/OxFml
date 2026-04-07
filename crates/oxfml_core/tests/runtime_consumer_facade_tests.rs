@@ -310,6 +310,21 @@ fn runtime_environment_builder_applies_caller_context() {
 }
 
 #[test]
+fn runtime_environment_rejects_execution_when_syntax_diagnostics_exist() {
+    let request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new("runtime:syntax-reject", 1, "=1~2"),
+        TypedContextQueryBundle::default(),
+    );
+
+    let error = RuntimeEnvironment::new()
+        .execute(request)
+        .expect_err("runtime execution should reject unsupported syntax");
+
+    assert!(error.contains("syntax diagnostics"));
+    assert!(error.contains("Unknown"));
+}
+
+#[test]
 fn runtime_session_facade_reports_missing_managed_snapshot_as_structured_error() {
     let environment = RuntimeEnvironment::new().with_library_context_snapshot_ref(
         LibraryContextSnapshotRef::new("runtime-consumer", "missing"),
@@ -329,6 +344,33 @@ fn runtime_session_facade_reports_missing_managed_snapshot_as_structured_error()
             assert!(message.contains("requested library context snapshot"));
         }
         other => panic!("unexpected error: {other:?}"),
+    }
+}
+
+#[test]
+fn runtime_session_facade_rejects_managed_execute_when_syntax_diagnostics_exist() {
+    let environment = RuntimeEnvironment::new();
+    let mut session = RuntimeSessionFacade::new(environment);
+    let request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new("runtime:managed-syntax-reject", 1, "=1~2"),
+        TypedContextQueryBundle::default(),
+    );
+
+    let open = session
+        .open_managed_session(&request)
+        .expect("managed open should preserve diagnostics for analysis");
+    assert!(!open.syntax_diagnostics.is_empty());
+
+    let error = session
+        .execute_managed(request)
+        .expect_err("managed execute should reject unsupported syntax");
+
+    match error {
+        RuntimeManagedSessionError::Preparation(message) => {
+            assert!(message.contains("syntax diagnostics"));
+            assert!(message.contains("Unknown"));
+        }
+        other => panic!("unexpected error kind: {other:?}"),
     }
 }
 

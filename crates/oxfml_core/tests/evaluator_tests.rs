@@ -318,6 +318,278 @@ fn evaluator_runs_unary_negative_literal_through_function_calls() {
 }
 
 #[test]
+fn evaluator_matches_current_exponentiation_empirical_baseline() {
+    let chained = evaluate("=2^3^2", None, None, Some(&en_us_context()));
+    assert_eq!(chained.oxfunc_value, EvalValue::Number(64.0));
+    assert_eq!(
+        chained
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec!["FUNC.OP_POWER", "FUNC.OP_POWER"]
+    );
+
+    let unary = evaluate("=-2^2", None, None, Some(&en_us_context()));
+    assert_eq!(unary.oxfunc_value, EvalValue::Number(4.0));
+    assert_eq!(
+        unary
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec!["FUNC.OP_NEGATE", "FUNC.OP_POWER"]
+    );
+
+    let multiplied = evaluate("=2^2*3", None, None, Some(&en_us_context()));
+    assert_eq!(multiplied.oxfunc_value, EvalValue::Number(12.0));
+    assert_eq!(
+        multiplied
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec!["FUNC.OP_POWER", "FUNC.OP_MULTIPLY"]
+    );
+
+    let additive = evaluate("=1+2*3^2", None, None, Some(&en_us_context()));
+    assert_eq!(additive.oxfunc_value, EvalValue::Number(19.0));
+    assert_eq!(
+        additive
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec!["FUNC.OP_POWER", "FUNC.OP_MULTIPLY", "FUNC.OP_ADD"]
+    );
+}
+
+#[test]
+fn evaluator_dispatches_percent_concat_and_comparison_operators_to_oxfunc() {
+    let percent = evaluate("=50%", None, None, Some(&en_us_context()));
+    assert_eq!(percent.oxfunc_value, EvalValue::Number(0.5));
+    assert_eq!(
+        percent
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec!["FUNC.OP_PERCENT"]
+    );
+
+    let concat = evaluate("=1&2", None, None, Some(&en_us_context()));
+    assert_eq!(
+        concat.oxfunc_value,
+        EvalValue::Text(ExcelText::from_interop_assignment("12"))
+    );
+    assert_eq!(
+        concat
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec!["FUNC.OP_CONCAT"]
+    );
+
+    let compared = evaluate("=\"1\"&\"2\"=\"12\"", None, None, Some(&en_us_context()));
+    assert_eq!(compared.oxfunc_value, EvalValue::Logical(true));
+    assert_eq!(
+        compared
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec!["FUNC.OP_CONCAT", "FUNC.OP_EQUAL"]
+    );
+
+    let ordered = evaluate("=1<2", None, None, Some(&en_us_context()));
+    assert_eq!(ordered.oxfunc_value, EvalValue::Logical(true));
+    assert_eq!(
+        ordered
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec!["FUNC.OP_LESS_THAN"]
+    );
+}
+
+#[test]
+fn evaluator_dispatches_range_and_intersection_reference_operators_to_oxfunc() {
+    let range = evaluate("=SUM(A1:B2)", None, None, Some(&en_us_context()));
+    assert_eq!(range.oxfunc_value, EvalValue::Number(31.0));
+    assert_eq!(
+        range
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec!["FUNC.SUM"]
+    );
+
+    let intersection = evaluate("=SUM((A1:B2 A2:B2))", None, None, Some(&en_us_context()));
+    assert_eq!(intersection.oxfunc_value, EvalValue::Number(24.0));
+    assert_eq!(
+        intersection
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec!["FUNC.OP_INTERSECTION_REF", "FUNC.SUM"]
+    );
+
+    let union = evaluate("=SUM((A1:A2,B2))", None, None, Some(&en_us_context()));
+    assert_eq!(union.oxfunc_value, EvalValue::Number(31.0));
+    assert_eq!(
+        union
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec!["FUNC.OP_UNION_REF", "FUNC.SUM"]
+    );
+}
+
+#[test]
+fn evaluator_materializes_same_sheet_prefixed_multi_area_references() {
+    let mut extra_cells = BTreeMap::new();
+    extra_cells.insert("Alpha!A1".to_string(), EvalValue::Number(7.0));
+    extra_cells.insert("Alpha!A2".to_string(), EvalValue::Number(11.0));
+    extra_cells.insert("Alpha!B2".to_string(), EvalValue::Number(13.0));
+
+    let output = evaluate_with_cells("=SUM((Alpha!A1:A2,Alpha!B2))", extra_cells);
+    assert_eq!(output.oxfunc_value, EvalValue::Number(31.0));
+    assert_eq!(
+        output
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec!["FUNC.OP_UNION_REF", "FUNC.SUM"]
+    );
+}
+
+#[test]
+fn evaluator_resolves_direct_sheet_qualified_cell_reference_end_to_end() {
+    let mut extra_cells = BTreeMap::new();
+    extra_cells.insert("Alpha!A1".to_string(), EvalValue::Number(17.0));
+
+    let output = evaluate_with_cells("=Alpha!A1", extra_cells);
+    assert_eq!(output.oxfunc_value, EvalValue::Number(17.0));
+}
+
+#[test]
+fn evaluator_resolves_direct_sheet_qualified_area_reference_end_to_end() {
+    let mut extra_cells = BTreeMap::new();
+    extra_cells.insert("Alpha!A1".to_string(), EvalValue::Number(7.0));
+    extra_cells.insert("Alpha!A2".to_string(), EvalValue::Number(11.0));
+
+    let output = evaluate_with_cells("=SUM(Alpha!A1:A2)", extra_cells);
+    assert_eq!(output.oxfunc_value, EvalValue::Number(18.0));
+    assert_eq!(
+        output
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec!["FUNC.SUM"]
+    );
+}
+
+#[test]
+fn evaluator_rejects_mixed_sheet_multi_area_end_to_end() {
+    let mut extra_cells = BTreeMap::new();
+    extra_cells.insert("Alpha!A1".to_string(), EvalValue::Number(7.0));
+    extra_cells.insert("Alpha!A2".to_string(), EvalValue::Number(11.0));
+    extra_cells.insert("Beta!B2".to_string(), EvalValue::Number(13.0));
+
+    let got = evaluate_with_cells_result("=SUM((Alpha!A1:A2,Beta!B2))", extra_cells);
+    let err = got.expect_err("mixed-sheet multi-area should reject");
+    assert!(
+        err.message.contains("mixed_sheet_multi_area"),
+        "expected mixed-sheet multi-area failure, got {}",
+        err.message
+    );
+}
+
+#[test]
+fn evaluator_preserves_sheet_qualified_whole_row_reference_for_reference_visible_function() {
+    let mut extra_cells = BTreeMap::new();
+    extra_cells.insert("Alpha!A1".to_string(), EvalValue::Number(7.0));
+    extra_cells.insert("Alpha!B2".to_string(), EvalValue::Number(13.0));
+    extra_cells.insert("Alpha!C3".to_string(), EvalValue::Number(17.0));
+
+    let output = evaluate_with_cells("=ROWS(Alpha!1:3)", extra_cells);
+    assert_eq!(output.oxfunc_value, EvalValue::Number(3.0));
+    assert_eq!(output.trace.prepared_calls[0].function_id, "FUNC.ROWS");
+    assert_eq!(
+        output.trace.prepared_calls[0].prepared_arguments[0].evaluation_mode,
+        oxfml_core::PreparedEvaluationMode::ReferencePreserved
+    );
+}
+
+#[test]
+fn evaluator_preserves_sheet_qualified_whole_column_reference_for_reference_visible_function() {
+    let mut extra_cells = BTreeMap::new();
+    extra_cells.insert("Alpha!A1".to_string(), EvalValue::Number(7.0));
+    extra_cells.insert("Alpha!A2".to_string(), EvalValue::Number(11.0));
+    extra_cells.insert("Alpha!B2".to_string(), EvalValue::Number(13.0));
+
+    let output = evaluate_with_cells("=COLUMNS(Alpha!A:B)", extra_cells);
+    assert_eq!(output.oxfunc_value, EvalValue::Number(2.0));
+    assert_eq!(output.trace.prepared_calls[0].function_id, "FUNC.COLUMNS");
+    assert_eq!(
+        output.trace.prepared_calls[0].prepared_arguments[0].evaluation_mode,
+        oxfml_core::PreparedEvaluationMode::ReferencePreserved
+    );
+}
+
+#[test]
+fn evaluator_rejects_sheet_qualified_whole_row_reference_in_local_value_only_lane() {
+    let mut extra_cells = BTreeMap::new();
+    extra_cells.insert("Alpha!A1".to_string(), EvalValue::Number(7.0));
+    extra_cells.insert("Alpha!B2".to_string(), EvalValue::Number(13.0));
+    extra_cells.insert("Alpha!C3".to_string(), EvalValue::Number(17.0));
+
+    let got = evaluate_with_cells_result("=SUM(Alpha!1:3)", extra_cells);
+    let err = got.expect_err("whole-row local value-only deref should reject honestly");
+    assert!(
+        err.message.contains("UnresolvedReference") && err.message.contains("Alpha!1:3"),
+        "expected unresolved whole-row reference failure, got {}",
+        err.message
+    );
+}
+
+#[test]
+fn evaluator_rejects_sheet_qualified_whole_column_reference_in_local_value_only_lane() {
+    let mut extra_cells = BTreeMap::new();
+    extra_cells.insert("Alpha!A1".to_string(), EvalValue::Number(7.0));
+    extra_cells.insert("Alpha!A2".to_string(), EvalValue::Number(11.0));
+    extra_cells.insert("Alpha!B2".to_string(), EvalValue::Number(13.0));
+
+    let got = evaluate_with_cells_result("=SUM(Alpha!A:B)", extra_cells);
+    let err = got.expect_err("whole-column local value-only deref should reject honestly");
+    assert!(
+        err.message.contains("UnresolvedReference") && err.message.contains("Alpha!A:B"),
+        "expected unresolved whole-column reference failure, got {}",
+        err.message
+    );
+}
+
+#[test]
 fn evaluator_lifts_binary_arithmetic_over_array_literals_and_scalar_negation() {
     let output = evaluate("={1,2,3;2,3,4}*-1", None, None, Some(&en_us_context()));
     assert_eq!(output.result.payload_summary, "Array(2x3)");
@@ -325,10 +597,19 @@ fn evaluator_lifts_binary_arithmetic_over_array_literals_and_scalar_negation() {
         array_numbers(&output.oxfunc_value),
         vec![-1.0, -2.0, -3.0, -2.0, -3.0, -4.0]
     );
+    assert_eq!(
+        output
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec!["FUNC.OP_NEGATE", "FUNC.OP_MULTIPLY"]
+    );
 }
 
 #[test]
-fn evaluator_lifts_unary_minus_over_array_literals_via_binary_lowering() {
+fn evaluator_lifts_unary_minus_over_array_literals_via_unary_dispatch() {
     let output = evaluate("=-{1,2,3;2,3,4}", None, None, Some(&en_us_context()));
     assert_eq!(output.result.payload_summary, "Array(2x3)");
     assert_eq!(
@@ -592,10 +873,14 @@ fn evaluator_returns_lambda_value_summary_with_lexical_capture_metadata() {
 fn evaluator_runs_immediate_lambda_invocation() {
     let output = evaluate("=LAMBDA(x,x+1)(2)", None, None, Some(&en_us_context()));
     assert_eq!(output.result.payload_summary, "Number(3)");
-    assert_eq!(output.trace.prepared_calls.len(), 1);
     assert_eq!(
-        output.trace.prepared_calls[0].function_id,
-        "SPECIAL.LAMBDA_INVOKE"
+        output
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec!["SPECIAL.LAMBDA_INVOKE", "FUNC.OP_ADD"]
     );
 }
 
@@ -616,7 +901,12 @@ fn evaluator_runs_helper_bound_lambda_invocation() {
         .collect::<Vec<_>>();
     assert_eq!(
         function_ids,
-        vec!["SPECIAL.LAMBDA", "SPECIAL.LAMBDA_INVOKE", "SPECIAL.LET"]
+        vec![
+            "SPECIAL.LAMBDA",
+            "SPECIAL.LAMBDA_INVOKE",
+            "FUNC.OP_ADD",
+            "SPECIAL.LET"
+        ]
     );
 }
 
@@ -655,10 +945,14 @@ fn evaluator_invokes_defined_name_callable_binding() {
         Some(&en_us_context()),
     );
     assert_eq!(output.result.payload_summary, "Number(3)");
-    assert_eq!(output.trace.prepared_calls.len(), 1);
     assert_eq!(
-        output.trace.prepared_calls[0].function_id,
-        "SPECIAL.LAMBDA_INVOKE"
+        output
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec!["SPECIAL.LAMBDA_INVOKE", "FUNC.OP_ADD"]
     );
 }
 
@@ -1007,6 +1301,48 @@ fn evaluate(
 ) -> oxfml_core::EvaluationOutput {
     evaluate_with_rtd_provider(formula, defined_names, host_info, None, locale_ctx)
         .expect("evaluation should succeed")
+}
+
+fn evaluate_with_cells(
+    formula: &str,
+    extra_cells: BTreeMap<String, EvalValue>,
+) -> oxfml_core::EvaluationOutput {
+    evaluate_with_cells_result(formula, extra_cells).expect("evaluation should succeed")
+}
+
+fn evaluate_with_cells_result(
+    formula: &str,
+    extra_cells: BTreeMap<String, EvalValue>,
+) -> Result<oxfml_core::EvaluationOutput, oxfml_core::eval::EvaluationError> {
+    let compiled = common::compile_formula(
+        "eval-fixture",
+        formula,
+        BTreeMap::new(),
+        "eval-struct-v1",
+        "oxfunc:test",
+    );
+
+    let mut context = EvaluationContext::new(&compiled.bound_formula, &compiled.semantic_plan);
+    context
+        .cell_values
+        .insert("A1".to_string(), EvalValue::Number(7.0));
+    context
+        .cell_values
+        .insert("A2".to_string(), EvalValue::Number(11.0));
+    context
+        .cell_values
+        .insert("B2".to_string(), EvalValue::Number(13.0));
+    context.cell_values.extend(extra_cells);
+    let locale = en_us_context();
+    context.apply_typed_context_query_bundle(TypedContextQueryBundle::new(
+        None,
+        None,
+        Some(&locale),
+        Some(46000.0),
+        Some(0.25),
+    ));
+
+    evaluate_formula(context)
 }
 
 fn evaluate_with_rtd_provider(

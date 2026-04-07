@@ -186,6 +186,27 @@ When host or seam artifacts gain new coordinator-relevant facts such as capabili
 Otherwise the spec surface outruns the deterministic witness surface.
 *Source: OxFml W018 host/oracle fixture expansion.*
 
+### Lesson 13: Bug Fixes Must Repair Ownership Boundaries, Not Bypass Them
+Bug reports are one of the highest-value chances to discover misplaced logic, unfinished seams, and drift between intended architecture and actual code. They must not be resolved with the easiest patch in the wrong repo, wrong library, or wrong module merely because that makes the immediate test pass.
+
+Required rule:
+1. when a bug exposes logic living on the wrong side of a repo or module boundary, the fix plan must explicitly say so,
+2. do not land an expedient semantic patch in the wrong ownership layer just to clear the reported symptom,
+3. use the bug to revisit the intended boundary, move or re-express the logic in the correct owner, and then check adjacent family members for the same structural mistake,
+4. if an emergency containment patch is unavoidable, it must be labeled containment-only and must open the ownership-correction follow-on in the same execution wave,
+5. a bug is not fully learned from until the root ownership mistake and the nearby-risk family scan are both recorded.
+
+Typical warning signs:
+1. a half-built local evaluator where the charter says semantics belong to a sibling repo,
+2. duplicate semantic implementations across OxFml and OxFunc,
+3. operator or function fixes that patch one case locally instead of repairing the semantic dispatch path,
+4. tests that pass only because code was added to the easiest execution point rather than the correct owner.
+
+Rationale:
+1. expedient bug patches can harden architectural mistakes into the codebase,
+2. they hide the real lesson the bug is offering,
+3. they turn bug fixing into local symptom suppression rather than program improvement.
+
 ## 11A. Artifact Construction Discipline
 
 For tests and local proving artifacts:

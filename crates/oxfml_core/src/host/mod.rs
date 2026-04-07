@@ -378,6 +378,9 @@ impl SingleFormulaHost {
             cached_artifacts.map(|artifacts| &artifacts.red_projection),
         );
         let syntax_diagnostics = parse.green_tree.diagnostics.clone();
+        if !syntax_diagnostics.is_empty() {
+            return Err(syntax_diagnostic_execution_error(&syntax_diagnostics));
+        }
         let bind = bind_formula_incremental(
             BindRequest {
                 source: source.clone(),
@@ -953,6 +956,16 @@ fn bind_mismatch_detail(diagnostics: &[BindDiagnostic]) -> Option<String> {
                 || diagnostic.message == "LAMBDA parameter did not bind as helper parameter"
         })
         .map(|diagnostic| diagnostic.message.clone())
+}
+
+fn syntax_diagnostic_execution_error(diagnostics: &[SyntaxDiagnostic]) -> String {
+    let first = diagnostics
+        .first()
+        .expect("syntax diagnostics should be non-empty");
+    format!(
+        "formula execution rejected due to syntax diagnostics: {} at {}:{}",
+        first.message, first.span.start, first.span.len
+    )
 }
 
 fn synthetic_bind_mismatch_evaluation(

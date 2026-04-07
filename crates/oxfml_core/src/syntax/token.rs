@@ -27,6 +27,11 @@ pub enum SyntaxTriviaKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TokenKind {
     Equals,
+    NotEqual,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
     Number,
     Identifier,
     QuotedIdentifier,
@@ -36,8 +41,11 @@ pub enum TokenKind {
     RParen,
     Comma,
     Colon,
+    Ampersand,
     Plus,
     Minus,
+    Percent,
+    Caret,
     Star,
     Slash,
     At,

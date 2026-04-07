@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 
 use oxfunc_core::function::ArgPreparationProfile;
+use oxfunc_core::functions::a1_refs::{A1Reference, A1ReferenceNotation, format_relative_target, parse_a1_reference};
 use oxfunc_core::functions::adapters::PreparedArgValue;
 use oxfunc_core::functions::call_register_id_family::{
     RegisterIdRequest, RegisteredExternalCallRequest, RegisteredExternalProvider,
@@ -16,6 +17,11 @@ use oxfunc_core::functions::op_implicit_intersection::{
 use oxfunc_core::functions::rtd_fn::RtdProvider;
 use oxfunc_core::functions::surface_dispatch::{
     eval_surface_extended_call, eval_surface_value_call_with_callable,
+    FUNC_ID_OP_ADD, FUNC_ID_OP_CONCAT, FUNC_ID_OP_DIVIDE, FUNC_ID_OP_EQUAL,
+    FUNC_ID_OP_GREATER_EQUAL, FUNC_ID_OP_GREATER_THAN, FUNC_ID_OP_LESS_EQUAL,
+    FUNC_ID_OP_INTERSECTION_REF, FUNC_ID_OP_LESS_THAN, FUNC_ID_OP_MULTIPLY, FUNC_ID_OP_NEGATE,
+    FUNC_ID_OP_NOT_EQUAL, FUNC_ID_OP_PERCENT, FUNC_ID_OP_POWER, FUNC_ID_OP_RANGE_REF,
+    FUNC_ID_OP_SPILL_REF, FUNC_ID_OP_SUBTRACT, FUNC_ID_OP_UNARY_PLUS, FUNC_ID_OP_UNION_REF,
 };
 use oxfunc_core::host_info::HostInfoProvider;
 use oxfunc_core::locale_format::LocaleFormatContext;
@@ -544,24 +550,26 @@ fn evaluate_expr_value(
             ),
         }),
         BoundExpr::Binary { op, left, right } => {
-            let lhs = evaluate_expr_value(
+            evaluate_binary_operator_call(
+                *op,
                 left,
-                context,
-                resolver,
-                helper_bindings,
-                callable_registry,
-                trace,
-            )?;
-            let rhs = evaluate_expr_value(
                 right,
                 context,
                 resolver,
                 helper_bindings,
                 callable_registry,
                 trace,
-            )?;
-            evaluate_binary_numeric_op(*op, lhs, rhs)
+            )
         }
+        BoundExpr::Unary { op, expr } => evaluate_unary_operator_call(
+            *op,
+            expr,
+            context,
+            resolver,
+            helper_bindings,
+            callable_registry,
+            trace,
+        ),
         BoundExpr::FunctionCall {
             function_name,
             args,
@@ -939,32 +947,127 @@ fn evaluate_reference_as_call_arg(
             EvalValue::Error(error_code_for_error_ref(error)),
         )),
         ReferenceExpr::Spill { anchor } => {
-            let anchor_target = reference_target_string(anchor)?;
-            let reference = ReferenceLike {
-                kind: ReferenceKind::SpillAnchor,
-                target: format!("{anchor_target}#"),
-            };
-            call_arg_for_reference_like(reference, preserve_reference, resolver)
-        }
-        ReferenceExpr::Range { start, end } => {
-            let start_target = reference_target_string(start)?;
-            let end_target = reference_target_string(end)?;
-            call_arg_for_reference_like(
-                ReferenceLike {
-                    kind: ReferenceKind::Area,
-                    target: format!("{start_target}:{end_target}"),
-                },
-                preserve_reference,
+            evaluate_reference_operator_call(
+                "OP_SPILL_REF",
+                FUNC_ID_OP_SPILL_REF,
+                vec![anchor.as_ref()],
+                context,
                 resolver,
+                helper_bindings,
+                callable_registry,
+                preserve_reference,
+                trace,
             )
         }
-        ReferenceExpr::Union { .. } => Err(EvaluationError {
-            message: "union references are not yet evaluatable in the OxFunc bridge".to_string(),
-        }),
-        ReferenceExpr::Intersection { .. } => Err(EvaluationError {
-            message: "intersection references are not yet evaluatable in the OxFunc bridge"
-                .to_string(),
-        }),
+        ReferenceExpr::Range { start, end } => evaluate_reference_operator_call(
+            "OP_RANGE_REF",
+            FUNC_ID_OP_RANGE_REF,
+            vec![start.as_ref(), end.as_ref()],
+            context,
+            resolver,
+            helper_bindings,
+            callable_registry,
+            preserve_reference,
+            trace,
+        ),
+        ReferenceExpr::Union { left, right } => evaluate_reference_operator_call(
+            "OP_UNION_REF",
+            FUNC_ID_OP_UNION_REF,
+            vec![left.as_ref(), right.as_ref()],
+            context,
+            resolver,
+            helper_bindings,
+            callable_registry,
+            preserve_reference,
+            trace,
+        ),
+        ReferenceExpr::Intersection { left, right } => evaluate_reference_operator_call(
+            "OP_INTERSECTION_REF",
+            FUNC_ID_OP_INTERSECTION_REF,
+            vec![left.as_ref(), right.as_ref()],
+            context,
+            resolver,
+            helper_bindings,
+            callable_registry,
+            preserve_reference,
+            trace,
+        ),
+    }
+}
+
+fn evaluate_reference_operator_call(
+    function_name: &'static str,
+    function_id: &'static str,
+    operands: Vec<&ReferenceExpr>,
+    context: &EvaluationContext<'_>,
+    resolver: &mut LocalReferenceResolver<'_>,
+    helper_bindings: &BTreeMap<String, HelperBinding>,
+    callable_registry: &RefCell<CallableRegistry>,
+    preserve_reference: bool,
+    trace: &mut EvaluationTrace,
+) -> Result<CallArgValue, EvaluationError> {
+    let mut args = Vec::with_capacity(operands.len());
+    let mut prepared_arguments = Vec::with_capacity(operands.len());
+    for (ordinal, operand) in operands.into_iter().enumerate() {
+        let arg = evaluate_reference_as_call_arg(
+            operand,
+            context,
+            resolver,
+            helper_bindings,
+            callable_registry,
+            true,
+            false,
+            trace,
+        )?;
+        let expr = BoundExpr::Reference(operand.clone());
+        prepared_arguments.push(prepared_argument_for_call_arg(ordinal, &expr, &arg, true));
+        args.push(arg);
+    }
+
+    push_special_prepared_call(
+        trace,
+        function_name,
+        function_id,
+        ArgPreparationProfile::RefsVisibleInAdapter,
+        prepared_arguments,
+        context,
+    );
+
+    let callable_invoker = OxFmlCallableInvoker {
+        context,
+        callable_registry,
+    };
+    let result = eval_surface_value_call_with_callable(
+        function_id,
+        &args,
+        resolver,
+        context.now_serial,
+        context.random_value,
+        context.locale_ctx,
+        context.host_info,
+        Some(&callable_invoker),
+        context.rtd_provider,
+        context.registered_external_provider,
+    );
+    let value = match result {
+        Ok(value) => value,
+        Err(code) => EvalValue::Error(code),
+    };
+    call_arg_from_reference_operator_value(value, preserve_reference, resolver)
+}
+
+fn call_arg_from_reference_operator_value(
+    value: EvalValue,
+    preserve_reference: bool,
+    resolver: &mut LocalReferenceResolver<'_>,
+) -> Result<CallArgValue, EvaluationError> {
+    match value {
+        EvalValue::Reference(reference) if preserve_reference => Ok(CallArgValue::Reference(reference)),
+        EvalValue::Reference(reference) => resolver
+            .resolve_reference(&reference)
+            .map(call_arg_from_resolved_reference_value)
+            .map_err(map_resolution_error),
+        other => Ok(CallArgValue::Eval(other)),
     }
 }
 
@@ -1019,150 +1122,146 @@ fn evaluate_array_literal(
         })
 }
 
-fn evaluate_binary_numeric_op(
+fn evaluate_binary_operator_call(
     op: crate::binding::BinaryOp,
-    lhs: EvalValue,
-    rhs: EvalValue,
+    left: &BoundExpr,
+    right: &BoundExpr,
+    context: &EvaluationContext<'_>,
+    resolver: &mut LocalReferenceResolver<'_>,
+    helper_bindings: &BTreeMap<String, HelperBinding>,
+    callable_registry: &RefCell<CallableRegistry>,
+    trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
-    match (&lhs, &rhs) {
-        (EvalValue::Array(lhs_array), EvalValue::Array(rhs_array)) => {
-            if lhs_array.shape() != rhs_array.shape() {
-                return Ok(EvalValue::Error(WorksheetErrorCode::Value));
-            }
-            Ok(EvalValue::Array(map_binary_numeric_arrays(
-                lhs_array, rhs_array, op,
-            )))
-        }
-        (EvalValue::Array(array), _) => Ok(EvalValue::Array(map_binary_numeric_array_scalar(
-            array, &rhs, op, false,
-        ))),
-        (_, EvalValue::Array(array)) => Ok(EvalValue::Array(map_binary_numeric_array_scalar(
-            array, &lhs, op, true,
-        ))),
-        _ => {
-            let lhs = coerce_to_number(lhs)?;
-            let rhs = coerce_to_number(rhs)?;
-            eval_binary_numeric_scalars(op, lhs, rhs)
-        }
+    let (function_name, function_id) = binary_operator_identity(op);
+    let lhs = evaluate_expr_as_call_arg(
+        left,
+        context,
+        resolver,
+        helper_bindings,
+        callable_registry,
+        false,
+        false,
+        trace,
+    )?;
+    let rhs = evaluate_expr_as_call_arg(
+        right,
+        context,
+        resolver,
+        helper_bindings,
+        callable_registry,
+        false,
+        false,
+        trace,
+    )?;
+
+    push_special_prepared_call(
+        trace,
+        function_name,
+        function_id,
+        ArgPreparationProfile::ValuesOnlyPreAdapter,
+        vec![
+            prepared_argument_for_call_arg(0, left, &lhs, false),
+            prepared_argument_for_call_arg(1, right, &rhs, false),
+        ],
+        context,
+    );
+
+    let callable_invoker = OxFmlCallableInvoker {
+        context,
+        callable_registry,
+    };
+    let result = eval_surface_value_call_with_callable(
+        function_id,
+        &[lhs, rhs],
+        resolver,
+        context.now_serial,
+        context.random_value,
+        context.locale_ctx,
+        context.host_info,
+        Some(&callable_invoker),
+        context.rtd_provider,
+        context.registered_external_provider,
+    );
+    match result {
+        Ok(value) => Ok(value),
+        Err(code) => Ok(EvalValue::Error(code)),
     }
 }
 
-fn map_binary_numeric_arrays(
-    lhs: &EvalArray,
-    rhs: &EvalArray,
-    op: crate::binding::BinaryOp,
-) -> EvalArray {
-    let cells = lhs
-        .iter_row_major()
-        .zip(rhs.iter_row_major())
-        .map(|(lhs, rhs)| eval_binary_numeric_cells(lhs, rhs, op))
-        .collect::<Vec<_>>();
-    EvalArray::new(lhs.shape(), cells).expect("validated array shapes should match")
-}
+fn evaluate_unary_operator_call(
+    op: crate::binding::UnaryOp,
+    expr: &BoundExpr,
+    context: &EvaluationContext<'_>,
+    resolver: &mut LocalReferenceResolver<'_>,
+    helper_bindings: &BTreeMap<String, HelperBinding>,
+    callable_registry: &RefCell<CallableRegistry>,
+    trace: &mut EvaluationTrace,
+) -> Result<EvalValue, EvaluationError> {
+    let (function_name, function_id) = unary_operator_identity(op);
+    let arg = evaluate_expr_as_call_arg(
+        expr,
+        context,
+        resolver,
+        helper_bindings,
+        callable_registry,
+        false,
+        false,
+        trace,
+    )?;
 
-fn map_binary_numeric_array_scalar(
-    array: &EvalArray,
-    scalar: &EvalValue,
-    op: crate::binding::BinaryOp,
-    scalar_on_left: bool,
-) -> EvalArray {
-    let scalar = coerce_eval_value_to_number_for_array_math(scalar);
-    let cells = array
-        .iter_row_major()
-        .map(|cell| {
-            let cell = coerce_array_cell_to_number_for_array_math(cell);
-            match (scalar_on_left, scalar, cell) {
-                (true, Ok(lhs), Ok(rhs)) => eval_binary_numeric_cell_numbers(op, lhs, rhs),
-                (false, Ok(rhs), Ok(lhs)) => eval_binary_numeric_cell_numbers(op, lhs, rhs),
-                (_, Err(code), _) | (_, _, Err(code)) => ArrayCellValue::Error(code),
-            }
-        })
-        .collect::<Vec<_>>();
-    EvalArray::new(array.shape(), cells).expect("shape preserved")
-}
+    push_special_prepared_call(
+        trace,
+        function_name,
+        function_id,
+        ArgPreparationProfile::ValuesOnlyPreAdapter,
+        vec![prepared_argument_for_call_arg(0, expr, &arg, false)],
+        context,
+    );
 
-fn eval_binary_numeric_cells(
-    lhs: &ArrayCellValue,
-    rhs: &ArrayCellValue,
-    op: crate::binding::BinaryOp,
-) -> ArrayCellValue {
-    let lhs = coerce_array_cell_to_number_for_array_math(lhs);
-    let rhs = coerce_array_cell_to_number_for_array_math(rhs);
-    match (lhs, rhs) {
-        (Ok(lhs), Ok(rhs)) => eval_binary_numeric_cell_numbers(op, lhs, rhs),
-        (Err(code), _) | (_, Err(code)) => ArrayCellValue::Error(code),
+    let callable_invoker = OxFmlCallableInvoker {
+        context,
+        callable_registry,
+    };
+    let result = eval_surface_value_call_with_callable(
+        function_id,
+        &[arg],
+        resolver,
+        context.now_serial,
+        context.random_value,
+        context.locale_ctx,
+        context.host_info,
+        Some(&callable_invoker),
+        context.rtd_provider,
+        context.registered_external_provider,
+    );
+    match result {
+        Ok(value) => Ok(value),
+        Err(code) => Ok(EvalValue::Error(code)),
     }
 }
 
-fn eval_binary_numeric_cell_numbers(
-    op: crate::binding::BinaryOp,
-    lhs: f64,
-    rhs: f64,
-) -> ArrayCellValue {
+fn binary_operator_identity(op: crate::binding::BinaryOp) -> (&'static str, &'static str) {
     match op {
-        crate::binding::BinaryOp::Add => ArrayCellValue::Number(lhs + rhs),
-        crate::binding::BinaryOp::Subtract => ArrayCellValue::Number(lhs - rhs),
-        crate::binding::BinaryOp::Multiply => ArrayCellValue::Number(lhs * rhs),
-        crate::binding::BinaryOp::Divide => {
-            if rhs == 0.0 {
-                ArrayCellValue::Error(WorksheetErrorCode::Div0)
-            } else {
-                ArrayCellValue::Number(lhs / rhs)
-            }
-        }
+        crate::binding::BinaryOp::Add => ("OP_ADD", FUNC_ID_OP_ADD),
+        crate::binding::BinaryOp::Subtract => ("OP_SUBTRACT", FUNC_ID_OP_SUBTRACT),
+        crate::binding::BinaryOp::Power => ("OP_POWER", FUNC_ID_OP_POWER),
+        crate::binding::BinaryOp::Multiply => ("OP_MULTIPLY", FUNC_ID_OP_MULTIPLY),
+        crate::binding::BinaryOp::Divide => ("OP_DIVIDE", FUNC_ID_OP_DIVIDE),
+        crate::binding::BinaryOp::Concat => ("OP_CONCAT", FUNC_ID_OP_CONCAT),
+        crate::binding::BinaryOp::Equal => ("OP_EQUAL", FUNC_ID_OP_EQUAL),
+        crate::binding::BinaryOp::NotEqual => ("OP_NOT_EQUAL", FUNC_ID_OP_NOT_EQUAL),
+        crate::binding::BinaryOp::LessThan => ("OP_LESS_THAN", FUNC_ID_OP_LESS_THAN),
+        crate::binding::BinaryOp::LessEqual => ("OP_LESS_EQUAL", FUNC_ID_OP_LESS_EQUAL),
+        crate::binding::BinaryOp::GreaterThan => ("OP_GREATER_THAN", FUNC_ID_OP_GREATER_THAN),
+        crate::binding::BinaryOp::GreaterEqual => ("OP_GREATER_EQUAL", FUNC_ID_OP_GREATER_EQUAL),
     }
 }
 
-fn eval_binary_numeric_scalars(
-    op: crate::binding::BinaryOp,
-    lhs: f64,
-    rhs: f64,
-) -> Result<EvalValue, EvaluationError> {
-    Ok(match op {
-        crate::binding::BinaryOp::Add => EvalValue::Number(lhs + rhs),
-        crate::binding::BinaryOp::Subtract => EvalValue::Number(lhs - rhs),
-        crate::binding::BinaryOp::Multiply => EvalValue::Number(lhs * rhs),
-        crate::binding::BinaryOp::Divide => {
-            if rhs == 0.0 {
-                EvalValue::Error(WorksheetErrorCode::Div0)
-            } else {
-                EvalValue::Number(lhs / rhs)
-            }
-        }
-    })
-}
-
-fn coerce_eval_value_to_number_for_array_math(
-    value: &EvalValue,
-) -> Result<f64, WorksheetErrorCode> {
-    match value {
-        EvalValue::Number(number) => Ok(*number),
-        EvalValue::Logical(value) => Ok(if *value { 1.0 } else { 0.0 }),
-        EvalValue::Text(text) => text
-            .to_string_lossy()
-            .trim()
-            .parse::<f64>()
-            .map_err(|_| WorksheetErrorCode::Value),
-        EvalValue::Error(code) => Err(*code),
-        EvalValue::Array(_) | EvalValue::Reference(_) | EvalValue::Lambda(_) => {
-            Err(WorksheetErrorCode::Value)
-        }
-    }
-}
-
-fn coerce_array_cell_to_number_for_array_math(
-    value: &ArrayCellValue,
-) -> Result<f64, WorksheetErrorCode> {
-    match value {
-        ArrayCellValue::Number(number) => Ok(*number),
-        ArrayCellValue::Logical(value) => Ok(if *value { 1.0 } else { 0.0 }),
-        ArrayCellValue::Text(text) => text
-            .to_string_lossy()
-            .trim()
-            .parse::<f64>()
-            .map_err(|_| WorksheetErrorCode::Value),
-        ArrayCellValue::Error(code) => Err(*code),
-        ArrayCellValue::EmptyCell => Ok(0.0),
+fn unary_operator_identity(op: crate::binding::UnaryOp) -> (&'static str, &'static str) {
+    match op {
+        crate::binding::UnaryOp::Plus => ("OP_UNARY_PLUS", FUNC_ID_OP_UNARY_PLUS),
+        crate::binding::UnaryOp::Negate => ("OP_NEGATE", FUNC_ID_OP_NEGATE),
+        crate::binding::UnaryOp::Percent => ("OP_PERCENT", FUNC_ID_OP_PERCENT),
     }
 }
 
@@ -1668,6 +1767,7 @@ fn lambda_body_kind(body: &BoundExpr) -> &'static str {
         BoundExpr::OmittedArgument => "OmittedArgument",
         BoundExpr::HelperParameterName(_) => "HelperParameter",
         BoundExpr::Binary { .. } => "Binary",
+        BoundExpr::Unary { .. } => "Unary",
         BoundExpr::FunctionCall { .. } => "FunctionCall",
         BoundExpr::Invocation { .. } => "Invocation",
         BoundExpr::Reference(_) => "Reference",
@@ -1696,6 +1796,7 @@ fn helper_free_names_in_expr(
         | BoundExpr::ArrayLiteral(_)
         | BoundExpr::OmittedArgument
         | BoundExpr::HelperParameterName(_) => BTreeSet::new(),
+        BoundExpr::Unary { expr, .. } => helper_free_names_in_expr(expr, bound_names, helper_bindings),
         BoundExpr::Binary { left, right, .. } => {
             let mut names = helper_free_names_in_expr(left, bound_names, helper_bindings);
             names.extend(helper_free_names_in_expr(
@@ -1928,7 +2029,7 @@ fn prepared_source_class(expr: &BoundExpr) -> PreparedSourceClass {
         BoundExpr::FunctionCall { .. } | BoundExpr::Invocation { .. } => {
             PreparedSourceClass::FunctionCall
         }
-        BoundExpr::Binary { .. } => PreparedSourceClass::BinaryExpression,
+        BoundExpr::Binary { .. } | BoundExpr::Unary { .. } => PreparedSourceClass::BinaryExpression,
         BoundExpr::ImplicitIntersection(_) => PreparedSourceClass::ImplicitIntersection,
         BoundExpr::Reference(reference) => match reference {
             ReferenceExpr::Atom(NormalizedReference::Cell(_)) => PreparedSourceClass::CellReference,
@@ -2241,27 +2342,6 @@ fn decode_string_literal(text: &str) -> String {
     text.trim_matches('"').replace("\"\"", "\"")
 }
 
-fn coerce_to_number(value: EvalValue) -> Result<f64, EvaluationError> {
-    match value {
-        EvalValue::Number(number) => Ok(number),
-        EvalValue::Logical(value) => Ok(if value { 1.0 } else { 0.0 }),
-        EvalValue::Text(text) => {
-            text.to_string_lossy()
-                .trim()
-                .parse::<f64>()
-                .map_err(|_| EvaluationError {
-                    message: "text could not be coerced to number".to_string(),
-                })
-        }
-        EvalValue::Error(code) => Err(EvaluationError {
-            message: format!("encountered worksheet error {code:?}"),
-        }),
-        _ => Err(EvaluationError {
-            message: "value could not be coerced to number".to_string(),
-        }),
-    }
-}
-
 fn map_resolution_error(error: RefResolutionError) -> EvaluationError {
     EvaluationError {
         message: format!("reference resolution failed: {error:?}"),
@@ -2278,43 +2358,11 @@ fn error_code_for_error_ref(error: &ErrorRef) -> WorksheetErrorCode {
     }
 }
 
-fn reference_target_string(reference: &ReferenceExpr) -> Result<String, EvaluationError> {
-    match reference {
-        ReferenceExpr::Atom(NormalizedReference::Cell(cell)) => Ok(a1_for_cell(cell)),
-        ReferenceExpr::Atom(NormalizedReference::Area(area)) => Ok(a1_for_area(area)),
-        ReferenceExpr::Atom(NormalizedReference::WholeRow(rows)) => Ok(whole_row_target(rows)),
-        ReferenceExpr::Atom(NormalizedReference::WholeColumn(columns)) => {
-            Ok(whole_column_target(columns))
-        }
-        ReferenceExpr::Atom(NormalizedReference::Name(name)) => Ok(name.name.clone()),
-        ReferenceExpr::Atom(NormalizedReference::Structured(structured)) => Ok(format!(
-            "structured:{}:{}",
-            structured.table_id,
-            structured.selected_column_ids.join("|")
-        )),
-        ReferenceExpr::Atom(NormalizedReference::External(external)) => Err(EvaluationError {
-            message: format!(
-                "cannot create executable reference target for {}",
-                external.target_summary
-            ),
-        }),
-        ReferenceExpr::Atom(NormalizedReference::Error(error)) => Err(EvaluationError {
-            message: format!("cannot create reference target for {}", error.error_class),
-        }),
-        ReferenceExpr::Spill { anchor } => Ok(format!("{}#", reference_target_string(anchor)?)),
-        ReferenceExpr::Range { start, end } => Ok(format!(
-            "{}:{}",
-            reference_target_string(start)?,
-            reference_target_string(end)?
-        )),
-        ReferenceExpr::Union { .. } | ReferenceExpr::Intersection { .. } => Err(EvaluationError {
-            message: "union and intersection reference targets are not supported".to_string(),
-        }),
-    }
-}
-
 fn a1_for_cell(cell: &CellRef) -> String {
-    format!("{}{}", column_letters(cell.coord.col), cell.coord.row)
+    qualified_reference_target(
+        &cell.sheet_id,
+        format!("{}{}", column_letters(cell.coord.col), cell.coord.row),
+    )
 }
 
 fn a1_for_area(area: &AreaRef) -> String {
@@ -2322,20 +2370,23 @@ fn a1_for_area(area: &AreaRef) -> String {
     let end_col = area.top_left.col + area.width - 1;
     let end_row = area.top_left.row + area.height - 1;
     let end = format!("{}{}", column_letters(end_col), end_row);
-    format!("{start}:{end}")
+    qualified_reference_target(&area.sheet_id, format!("{start}:{end}"))
 }
 
 fn whole_row_target(rows: &crate::binding::WholeRowRef) -> String {
     let row_end = rows.row_start + rows.row_count - 1;
-    format!("{}:{}", rows.row_start, row_end)
+    qualified_reference_target(&rows.sheet_id, format!("{}:{}", rows.row_start, row_end))
 }
 
 fn whole_column_target(columns: &crate::binding::WholeColumnRef) -> String {
     let end_col = columns.col_start + columns.col_count - 1;
-    format!(
+    qualified_reference_target(
+        &columns.sheet_id,
+        format!(
         "{}:{}",
         column_letters(columns.col_start),
         column_letters(end_col)
+    ),
     )
 }
 
@@ -2370,12 +2421,80 @@ fn column_letters(mut col: u32) -> String {
     letters
 }
 
+fn qualified_reference_target(sheet_id: &str, local_target: String) -> String {
+    if should_emit_sheet_prefix(sheet_id) {
+        format!("{sheet_id}!{local_target}")
+    } else {
+        local_target
+    }
+}
+
+fn should_emit_sheet_prefix(sheet_id: &str) -> bool {
+    !(sheet_id.is_empty() || sheet_id.starts_with("sheet:"))
+}
+
 struct LocalReferenceResolver<'a> {
     cell_values: &'a BTreeMap<String, EvalValue>,
     defined_names: &'a BTreeMap<String, DefinedNameBinding>,
     caller_row: usize,
     caller_col: usize,
     callable_registry: &'a RefCell<CallableRegistry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LocalMultiAreaReferenceCarrier {
+    shared_prefix: Option<String>,
+    areas: Vec<A1Reference>,
+}
+
+impl LocalMultiAreaReferenceCarrier {
+    fn parse(reference: &ReferenceLike) -> Result<Option<Self>, RefResolutionError> {
+        let parts = match reference.kind {
+            ReferenceKind::MultiArea => reference.multi_area_targets(),
+            ReferenceKind::Area => split_union_reference_targets(&reference.target),
+            _ => None,
+        };
+
+        let Some(parts) = parts else {
+            return Ok(None);
+        };
+
+        let mut shared_prefix = None;
+        let mut areas = Vec::new();
+        for part in parts {
+            collect_multi_area_parts(&part, &mut shared_prefix, &mut areas)?;
+        }
+
+        if areas.is_empty() {
+            return Err(RefResolutionError::ProviderFailure {
+                detail: "multi_area_reference_empty".to_string(),
+            });
+        }
+
+        Ok(Some(Self {
+            shared_prefix,
+            areas,
+        }))
+    }
+
+    fn materialize(
+        &self,
+        resolver: &LocalReferenceResolver<'_>,
+    ) -> Result<EvalValue, RefResolutionError> {
+        let mut cells = Vec::new();
+        for area in &self.areas {
+            let reference = reference_like_for_multi_area_part(area)?;
+            let value = resolver.resolve_reference(&reference)?;
+            append_union_cells_from_value(&mut cells, value);
+        }
+
+        let array = EvalArray::from_rows(vec![cells]).ok_or_else(|| {
+            RefResolutionError::ProviderFailure {
+                detail: "multi_area_reference_shape_invalid".to_string(),
+            }
+        })?;
+        Ok(EvalValue::Array(array))
+    }
 }
 
 impl ReferenceResolver for LocalReferenceResolver<'_> {
@@ -2389,6 +2508,10 @@ impl ReferenceResolver for LocalReferenceResolver<'_> {
     ) -> Result<EvalValue, RefResolutionError> {
         if let Some(value) = self.cell_values.get(&reference.target) {
             return Ok(value.clone());
+        }
+
+        if let Some(value) = self.resolve_local_union_reference(reference)? {
+            return Ok(value);
         }
 
         if let Some(array) = resolve_local_area_reference(self.cell_values, reference) {
@@ -2424,6 +2547,18 @@ impl ReferenceResolver for LocalReferenceResolver<'_> {
             row: self.caller_row,
             col: self.caller_col,
         })
+    }
+}
+
+impl LocalReferenceResolver<'_> {
+    fn resolve_local_union_reference(
+        &self,
+        reference: &ReferenceLike,
+    ) -> Result<Option<EvalValue>, RefResolutionError> {
+        let Some(carrier) = LocalMultiAreaReferenceCarrier::parse(reference)? else {
+            return Ok(None);
+        };
+        Ok(Some(carrier.materialize(self)?))
     }
 }
 
@@ -2524,7 +2659,7 @@ fn resolve_local_area_reference(
 
     let (start, end) = reference.target.split_once(':')?;
     let (start_sheet, start_row, start_col) = parse_a1_target(start)?;
-    let (end_sheet, end_row, end_col) = parse_a1_target(end)?;
+    let (end_sheet, end_row, end_col) = parse_a1_target_with_default_sheet(end, start_sheet.as_deref())?;
     if start_sheet != end_sheet {
         return None;
     }
@@ -2548,6 +2683,125 @@ fn resolve_local_area_reference(
         .collect::<Vec<_>>();
 
     EvalArray::from_rows(rows)
+}
+
+fn split_union_reference_targets(target: &str) -> Option<Vec<String>> {
+    ReferenceLike::new(ReferenceKind::MultiArea, target).multi_area_targets()
+}
+
+fn split_legacy_parenthesized_union_reference_targets(target: &str) -> Option<Vec<String>> {
+    let trimmed = target.trim();
+    if !(trimmed.starts_with('(') && trimmed.ends_with(')')) {
+        return None;
+    }
+
+    let inner = &trimmed[1..trimmed.len() - 1];
+    let mut parts = Vec::new();
+    let mut depth = 0usize;
+    let mut start = 0usize;
+    for (index, ch) in inner.char_indices() {
+        match ch {
+            '(' => depth += 1,
+            ')' => depth = depth.checked_sub(1)?,
+            ',' if depth == 0 => {
+                let part = inner[start..index].trim();
+                if part.is_empty() {
+                    return None;
+                }
+                parts.push(part.to_string());
+                start = index + ch.len_utf8();
+            }
+            _ => {}
+        }
+    }
+
+    if depth != 0 {
+        return None;
+    }
+
+    let tail = inner[start..].trim();
+    if tail.is_empty() {
+        return None;
+    }
+    parts.push(tail.to_string());
+    Some(parts)
+}
+
+fn collect_multi_area_parts(
+    target: &str,
+    shared_prefix: &mut Option<String>,
+    areas: &mut Vec<A1Reference>,
+) -> Result<(), RefResolutionError> {
+    if let Some(parts) = split_union_reference_targets(target) {
+        for part in parts {
+            collect_multi_area_parts(&part, shared_prefix, areas)?;
+        }
+        return Ok(());
+    }
+
+    if let Some(parts) = split_legacy_parenthesized_union_reference_targets(target) {
+        for part in parts {
+            collect_multi_area_parts(&part, shared_prefix, areas)?;
+        }
+        return Ok(());
+    }
+
+    let parsed = parse_a1_reference(target).ok_or_else(|| RefResolutionError::ProviderFailure {
+        detail: "unsupported_multi_area_reference_part".to_string(),
+    })?;
+
+    if !matches!(parsed.notation, A1ReferenceNotation::Rect) {
+        return Err(RefResolutionError::ProviderFailure {
+            detail: "unsupported_multi_area_reference_part".to_string(),
+        });
+    }
+
+    match shared_prefix {
+        Some(existing) if parsed.prefix.as_ref() != Some(existing) => {
+            return Err(RefResolutionError::ProviderFailure {
+                detail: "mixed_sheet_multi_area".to_string(),
+            });
+        }
+        None => *shared_prefix = parsed.prefix.clone(),
+        _ => {}
+    }
+
+    areas.push(parsed);
+    Ok(())
+}
+
+fn reference_like_for_multi_area_part(
+    area: &A1Reference,
+) -> Result<ReferenceLike, RefResolutionError> {
+    let target = format_relative_target(area).ok_or_else(|| RefResolutionError::ProviderFailure {
+        detail: "unsupported_multi_area_reference_part".to_string(),
+    })?;
+    Ok(ReferenceLike {
+        kind: if area.width() == 1 && area.height() == 1 {
+            ReferenceKind::A1
+        } else {
+            ReferenceKind::Area
+        },
+        target,
+    })
+}
+
+fn append_union_cells_from_value(cells: &mut Vec<ArrayCellValue>, value: EvalValue) {
+    match value {
+        EvalValue::Array(array) => cells.extend(array.iter_row_major().cloned()),
+        EvalValue::Number(number) => cells.push(ArrayCellValue::Number(number)),
+        EvalValue::Text(text) => cells.push(ArrayCellValue::Text(text)),
+        EvalValue::Logical(value) => cells.push(ArrayCellValue::Logical(value)),
+        EvalValue::Error(code) => cells.push(ArrayCellValue::Error(code)),
+        EvalValue::Reference(reference) => {
+            cells.push(ArrayCellValue::Error(if reference.target.is_empty() {
+                WorksheetErrorCode::Ref
+            } else {
+                WorksheetErrorCode::Value
+            }));
+        }
+        EvalValue::Lambda(_) => cells.push(ArrayCellValue::Error(WorksheetErrorCode::Value)),
+    }
 }
 
 fn array_cell_value_from_eval_value(value: Option<EvalValue>) -> ArrayCellValue {
@@ -2589,9 +2843,16 @@ fn is_absent_single_cell_reference(reference: &ReferenceLike) -> bool {
 }
 
 fn parse_a1_target(text: &str) -> Option<(Option<String>, u32, u32)> {
+    parse_a1_target_with_default_sheet(text, None)
+}
+
+fn parse_a1_target_with_default_sheet(
+    text: &str,
+    default_sheet: Option<&str>,
+) -> Option<(Option<String>, u32, u32)> {
     let (sheet, address) = match text.rsplit_once('!') {
         Some((sheet, address)) => (Some(sheet.to_string()), address),
-        None => (None, text),
+        None => (default_sheet.map(|sheet| sheet.to_string()), text),
     };
 
     let col_len = address
@@ -2622,4 +2883,58 @@ fn column_number(text: &str) -> Option<u32> {
 
 fn callable_token(id: usize, summary: &str) -> String {
     format!("oxfml.callable.{id}::{summary}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn local_multi_area_reference_carrier_flattens_nested_same_sheet_targets() {
+        let carrier = LocalMultiAreaReferenceCarrier::parse(&ReferenceLike {
+            kind: ReferenceKind::MultiArea,
+            target: "((Alpha!A1:A2,Alpha!B2),Alpha!C3)".to_string(),
+        })
+        .expect("carrier parsing should succeed")
+        .expect("target should parse as multi-area");
+
+        assert_eq!(carrier.shared_prefix.as_deref(), Some("Alpha"));
+        assert_eq!(carrier.areas.len(), 3);
+        assert_eq!(
+            carrier
+                .areas
+                .iter()
+                .map(|area| format_relative_target(area).expect("area should format"))
+                .collect::<Vec<_>>(),
+            vec!["Alpha!A1:A2", "Alpha!B2", "Alpha!C3"]
+        );
+    }
+
+    #[test]
+    fn local_multi_area_reference_carrier_rejects_mixed_sheet_targets() {
+        let got = LocalMultiAreaReferenceCarrier::parse(&ReferenceLike {
+            kind: ReferenceKind::MultiArea,
+            target: "(Alpha!A1:A2,Beta!B2)".to_string(),
+        });
+
+        assert_eq!(
+            got,
+            Err(RefResolutionError::ProviderFailure {
+                detail: "mixed_sheet_multi_area".to_string(),
+            })
+        );
+    }
+
+    #[test]
+    fn local_multi_area_reference_carrier_accepts_legacy_parenthesized_area_shape() {
+        let carrier = LocalMultiAreaReferenceCarrier::parse(&ReferenceLike {
+            kind: ReferenceKind::Area,
+            target: "(A1:A2,C1:C2)".to_string(),
+        })
+        .expect("carrier parsing should succeed")
+        .expect("legacy parenthesized area should parse as multi-area");
+
+        assert_eq!(carrier.shared_prefix, None);
+        assert_eq!(carrier.areas.len(), 2);
+    }
 }

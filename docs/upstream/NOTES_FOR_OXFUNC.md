@@ -157,15 +157,215 @@ The topics OxFml still considers open and worth active coordination are:
 7. the smallest honest shared runtime library-context shape,
 8. the split between library-context availability truth and runtime capability/provider-failure truth,
 9. publication-sensitive result-class preservation for `HYPERLINK` / `IMAGE`,
-10. the remaining shared packet and invalidation questions under `W052`.
+10. the remaining shared packet and invalidation questions under `W052`,
+11. the ordinary-operator execution seam, especially array-lifted operator transport beyond the current scalar binary arithmetic slice.
+
+### 7.1 Current operator-seam read
+Current OxFml read:
+1. OxFml now treats ordinary operator semantics as OxFunc-owned rather than as a valid long-term OxFml-local evaluator lane,
+2. OxFml has filed a formal outbound packet:
+   - `docs/handoffs/HANDOFF_OXFUNC_001_OPERATOR_VALUE_SURFACE_AND_ARRAY_LIFT_EXPANSION.md`
+3. OxFml wants the broader ordinary-operator family treated coherently rather than one operator row at a time:
+   - unary arithmetic
+   - postfix percent
+   - concat
+   - comparisons
+   - reference operators where the shared seam admits them.
+
+### 7.2 Current multi-area reference read
+Current OxFml read:
+1. simple lexical ranges such as `A1:B2` do not need to survive as runtime `cell : cell` operator traces,
+2. it is honest to normalize those as a single range reference object,
+3. same-sheet multi-area references are different from 3D sheet spans,
+4. OxFunc now exposes a real same-sheet `ReferenceKind::MultiArea` seam shape plus normalization/splitting helpers,
+5. OxFml currently still keeps a local same-sheet multi-area materialization helper for value-required lanes, but that helper no longer stands in for a missing shared seam type.
+
+Current OxFml-side evidence and pressure points:
+1. `crates/oxfml_core/src/eval/mod.rs`
+2. `crates/oxfml_core/tests/evaluator_tests.rs`
+3. `docs/spec/formula-language/OXFML_OXFUNC_SEMANTIC_BOUNDARY.md`
+4. `docs/worksets/W059_operator_semantic_dispatch_boundary_correction.md`
+
+Current OxFunc-side references OxFml is reading:
+1. `../OxFunc/crates/oxfunc_core/src/value.rs`
+2. `../OxFunc/crates/oxfunc_core/src/resolver.rs`
+3. `../OxFunc/crates/oxfunc_core/src/functions/operator_reference_family.rs`
+4. `../OxFunc/docs/function-lane/FUNCTION_SLICE_OPERATOR_REFERENCE_FAMILY_CONTRACT_PRELIM.md`
+5. `../OxFunc/docs/function-lane/FUNCTION_SLICE_INDEX_CONTRACT_PRELIM.md`
+6. `../OxFunc/docs/function-lane/FUNCTION_SLICE_REFERENCE_METADATA_AND_FORMULA_VISIBILITY_CONTRACT_PRELIM.md`
+
+Current shared-seam direction from OxFml:
+1. `ReferenceLike` now has a first-class same-sheet `MultiArea` representation,
+2. `OP_UNION_REF` should continue to publish `ReferenceKind::MultiArea`, not regress to overloading `ReferenceKind::Area` with a parenthesized multi-target string,
+3. multi-area structure should remain consumable by:
+   - `AREAS`
+   - `INDEX(..., area_num)`
+   - resolver normalization and capability checks
+   - OxFml local/runtime reference transport
+4. mixed-sheet multi-area should be classified distinctly from same-sheet multi-area and should not be silently flattened into one reference string,
+5. 3D sheet-span references must remain a separate construct from same-sheet multi-area.
+
+### 7.3 Requested OxFunc type shape
+OxFml wants the OxFunc seam to carry the following conceptual distinction:
+1. single-area A1-like reference,
+2. normalized rectangular/whole-row/whole-column area,
+3. same-sheet multi-area,
+4. 3D sheet span,
+5. structured reference,
+6. spill anchor.
+
+The current OxFml-preferred shape is:
+
+```rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReferenceKind {
+    A1,
+    Area,
+    MultiArea,
+    ThreeD,
+    Structured,
+    SpillAnchor,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceLike {
+    pub kind: ReferenceKind,
+    pub target: String,
+}
+```
+
+OxFml also wants helper APIs at this seam so downstream consumers do not have to reinterpret raw `target` strings ad hoc:
+
+```rust
+impl ReferenceLike {
+    pub fn new(kind: ReferenceKind, target: impl Into<String>) -> Self { ... }
+
+    pub fn multi_area(targets: Vec<String>) -> Option<Self> { ... }
+
+    pub fn normalized(self) -> Self { ... }
+
+    pub fn multi_area_targets(&self) -> Option<Vec<String>> { ... }
+
+    pub fn area_count(&self) -> usize { ... }
+}
+```
+
+The intended behavior of those helpers is:
+1. `multi_area(...)` rejects empty inputs and single-target pseudo-multi-area construction,
+2. `normalized()` trims and canonicalizes while preserving `MultiArea` identity,
+3. `multi_area_targets()` returns the parsed member targets only for `ReferenceKind::MultiArea`,
+4. `area_count()` returns the member count for multi-area and `1` otherwise.
+
+### 7.4 Target semantics OxFml wants OxFunc to enforce
+OxFml wants the following semantic split made explicit:
+1. same-sheet multi-area example:
+   - `(A1:A2,G1:G2)`
+   - same prefix / same sheet identity
+   - valid `ReferenceKind::MultiArea`
+2. mixed-sheet multi-area example:
+   - `(Sheet1!A1:A2,Sheet2!G1:G2)`
+   - not the same thing as same-sheet multi-area
+   - should not be silently normalized into one same-sheet carrier
+   - current OxFml expectation is rejection as unsupported source for local materialization lanes
+3. 3D span example:
+   - `Sheet1:Sheet3!A1`
+   - separate `ReferenceKind::ThreeD`
+   - consumed by sheet-topology-sensitive functions such as `SHEETS`
+   - not interchangeable with multi-area membership.
+
+### 7.5 Current OxFunc implementation points OxFml depends on
+OxFml now depends on OxFunc continuing to:
+1. keep the type-level `ReferenceKind::MultiArea` distinction real end-to-end,
+2. preserve and pass through multi-area references in `normalize_reference(...)` and `resolve_eval_value(...)`,
+3. keep `eval_op_union_ref_surface(...)` returning `ReferenceKind::MultiArea`,
+4. keep adapter mappings and reference-sensitive functions `MultiArea`-aware rather than treating union as only a raw parenthesized string convention,
+5. keep mixed-sheet multi-area rejection explicit where the slice only admits same-sheet multi-area,
+6. keep 3D sheet spans distinct from multi-area.
+
+Concrete OxFunc files OxFml expects to matter:
+1. `../OxFunc/crates/oxfunc_core/src/value.rs`
+2. `../OxFunc/crates/oxfunc_core/src/resolver.rs`
+3. `../OxFunc/crates/oxfunc_core/src/functions/operator_reference_family.rs`
+4. `../OxFunc/crates/oxfunc_core/src/functions/adapters.rs`
+5. `../OxFunc/crates/oxfunc_core/src/functions/index.rs`
+6. `../OxFunc/crates/oxfunc_core/src/functions/reference_metadata_family.rs`
+
+### 7.6 Suggested implementation sketch
+OxFml is not prescribing the exact final code, but the minimum intended behavior is approximately:
+
+```rust
+pub fn eval_op_union_ref_surface(
+    args: &[CallArgValue],
+    _resolver: &impl ReferenceResolver,
+) -> Result<EvalValue, OperatorReferenceError> {
+    if args.len() != 2 {
+        return Err(OperatorReferenceError::ArityMismatch {
+            expected: 2,
+            actual: args.len(),
+        });
+    }
+
+    let lhs = reference_arg(&args[0])?;
+    let rhs = reference_arg(&args[1])?;
+
+    let targets = match (&lhs.kind, &rhs.kind) {
+        (ReferenceKind::MultiArea, ReferenceKind::MultiArea) => {
+            let mut parts = lhs.multi_area_targets().ok_or(
+                OperatorReferenceError::UnsupportedReferenceSource("invalid_multi_area_reference"),
+            )?;
+            parts.extend(
+                rhs.multi_area_targets().ok_or(
+                    OperatorReferenceError::UnsupportedReferenceSource("invalid_multi_area_reference"),
+                )?,
+            );
+            parts
+        }
+        (ReferenceKind::MultiArea, _) => {
+            let mut parts = lhs.multi_area_targets().ok_or(
+                OperatorReferenceError::UnsupportedReferenceSource("invalid_multi_area_reference"),
+            )?;
+            parts.push(rhs.target.trim().to_string());
+            parts
+        }
+        (_, ReferenceKind::MultiArea) => {
+            let mut parts = vec![lhs.target.trim().to_string()];
+            parts.extend(
+                rhs.multi_area_targets().ok_or(
+                    OperatorReferenceError::UnsupportedReferenceSource("invalid_multi_area_reference"),
+                )?,
+            );
+            parts
+        }
+        _ => vec![lhs.target.trim().to_string(), rhs.target.trim().to_string()],
+    };
+
+    let multi = ReferenceLike::multi_area(targets).ok_or(
+        OperatorReferenceError::UnsupportedReferenceSource("invalid_multi_area_reference"),
+    )?;
+
+    Ok(EvalValue::Reference(multi))
+}
+```
+
+OxFml expects any final OxFunc implementation to preserve the same core outcomes even if the code shape differs.
+
+### 7.7 Why OxFml still calls this out
+Current OxFml reason:
+1. ordinary operator dispatch is now being pushed toward the proper OxFml/OxFunc boundary,
+2. union/reference operators cannot stay honest if `MultiArea` regresses back into only a string convention,
+3. `AREAS`, `INDEX`, and related reference-sensitive lanes already treat same-sheet multi-area as a real semantic shape,
+4. OxFml still has a local same-sheet multi-area materialization helper for value-required lanes and therefore wants the shared seam contract to stay explicit,
+5. OxFml wants to keep reducing local reinterpretation pressure rather than deepen it.
 
 ## 8. Current Requests To OxFunc
 
-The next useful OxFunc-side outputs for OxFml are now narrow:
+The next useful OxFunc-side outputs for OxFml are now:
 1. keep the current library-context export stable enough for bounded OxFml-side consumption until the runtime interface replaces it,
-2. flag only concrete wording corrections against the mirrored freeze packet or `HO-FN-004`,
-3. flag only concrete packet or carrier mismatches that block promotion,
-4. otherwise treat the mirrored packet plus `HO-FN-004` as the shared freeze floor for current owner-packet promotion.
+2. keep the multi-area `ReferenceLike` distinction explicit and consumable across reference operators, `INDEX`, `AREAS`, and resolver normalization,
+3. keep same-sheet multi-area distinct from 3D sheet spans and from mixed-sheet unsupported-source cases,
+4. flag only concrete wording corrections against the mirrored freeze packet or `HO-FN-004`,
+5. flag only concrete packet or carrier mismatches that block promotion,
+6. otherwise treat the mirrored packet plus `HO-FN-004` as the shared freeze floor for current owner-packet promotion.
 
 ## 9. Current Summary
 

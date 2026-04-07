@@ -70,6 +70,15 @@ The originating item remains `in_progress` until the receiving repo acknowledges
 ### Rule 7: Default to In-Progress
 When uncertain whether work meets completion criteria, report `in_progress`.
 
+### Rule 8: Bug Fixes Must Respect Intended Ownership
+Do not fix a bug by placing semantic logic in the easiest local module when the architecture says that logic belongs elsewhere.
+
+Required behavior:
+1. when a bug reveals a repo or module ownership mistake, say so explicitly before fixing it,
+2. prefer repairing the ownership boundary over landing an expedient local patch,
+3. treat bug work as a chance to inspect adjacent families for the same structural defect,
+4. if a temporary containment patch is truly necessary, label it as containment-only and open the ownership-correction follow-on immediately.
+
 ## 4. Continuation Behavior
 
 Mode: **checkpoint-at-gates** (conservative).

@@ -39,7 +39,7 @@
     },
     "expected": {
       "payload_summary": "Number(12)",
-      "prepared_call_functions": ["SPECIAL.LAMBDA_INVOKE"],
+      "prepared_call_functions": ["SPECIAL.LAMBDA_INVOKE", "FUNC.OP_ADD"],
       "callable_carrier": null,
       "callable_profile": null,
       "callable_profile_detail": null

@@ -93,7 +93,47 @@ impl Parser {
     }
 
     fn parse_expression(&mut self, allow_union_comma: bool) -> GreenNode {
-        self.parse_additive(allow_union_comma)
+        self.parse_comparison(allow_union_comma)
+    }
+
+    fn parse_comparison(&mut self, allow_union_comma: bool) -> GreenNode {
+        let mut left = self.parse_concat(allow_union_comma);
+        while self.at(TokenKind::Equals)
+            || self.at(TokenKind::NotEqual)
+            || self.at(TokenKind::Less)
+            || self.at(TokenKind::LessEqual)
+            || self.at(TokenKind::Greater)
+            || self.at(TokenKind::GreaterEqual)
+        {
+            let op = self.bump();
+            let right = self.parse_concat(allow_union_comma);
+            left = GreenNode::new(
+                SyntaxKind::BinaryExpr,
+                vec![
+                    GreenChild::Node(Box::new(left)),
+                    GreenChild::Token(op),
+                    GreenChild::Node(Box::new(right)),
+                ],
+            );
+        }
+        left
+    }
+
+    fn parse_concat(&mut self, allow_union_comma: bool) -> GreenNode {
+        let mut left = self.parse_additive(allow_union_comma);
+        while self.at(TokenKind::Ampersand) {
+            let op = self.bump();
+            let right = self.parse_additive(allow_union_comma);
+            left = GreenNode::new(
+                SyntaxKind::BinaryExpr,
+                vec![
+                    GreenChild::Node(Box::new(left)),
+                    GreenChild::Token(op),
+                    GreenChild::Node(Box::new(right)),
+                ],
+            );
+        }
+        left
     }
 
     fn parse_additive(&mut self, allow_union_comma: bool) -> GreenNode {
@@ -114,10 +154,10 @@ impl Parser {
     }
 
     fn parse_multiplicative(&mut self, allow_union_comma: bool) -> GreenNode {
-        let mut left = self.parse_union(allow_union_comma);
+        let mut left = self.parse_power(allow_union_comma);
         while self.at(TokenKind::Star) || self.at(TokenKind::Slash) {
             let op = self.bump();
-            let right = self.parse_union(allow_union_comma);
+            let right = self.parse_power(allow_union_comma);
             left = GreenNode::new(
                 SyntaxKind::BinaryExpr,
                 vec![
@@ -128,6 +168,35 @@ impl Parser {
             );
         }
         left
+    }
+
+    fn parse_power(&mut self, allow_union_comma: bool) -> GreenNode {
+        let mut left = self.parse_percent(allow_union_comma);
+        while self.at(TokenKind::Caret) {
+            let op = self.bump();
+            let right = self.parse_percent(allow_union_comma);
+            left = GreenNode::new(
+                SyntaxKind::BinaryExpr,
+                vec![
+                    GreenChild::Node(Box::new(left)),
+                    GreenChild::Token(op),
+                    GreenChild::Node(Box::new(right)),
+                ],
+            );
+        }
+        left
+    }
+
+    fn parse_percent(&mut self, allow_union_comma: bool) -> GreenNode {
+        let mut node = self.parse_prefix(allow_union_comma);
+        while self.at(TokenKind::Percent) {
+            let percent = self.bump();
+            node = GreenNode::new(
+                SyntaxKind::PostfixExpr,
+                vec![GreenChild::Node(Box::new(node)), GreenChild::Token(percent)],
+            );
+        }
+        node
     }
 
     fn parse_union(&mut self, allow_union_comma: bool) -> GreenNode {
@@ -153,14 +222,14 @@ impl Parser {
     }
 
     fn parse_intersection(&mut self, allow_union_comma: bool) -> GreenNode {
-        let mut left = self.parse_range();
+        let mut left = self.parse_range(allow_union_comma);
         loop {
             let spaces = self.take_whitespace_tokens();
             if spaces.is_empty() || !self.starts_reference_expr() {
                 return left;
             }
 
-            let right = self.parse_range();
+            let right = self.parse_range(allow_union_comma);
             let mut children = vec![GreenChild::Node(Box::new(left))];
             children.extend(spaces.into_iter().map(GreenChild::Token));
             children.push(GreenChild::Node(Box::new(right)));
@@ -172,23 +241,23 @@ impl Parser {
         }
     }
 
-    fn parse_range(&mut self) -> GreenNode {
+    fn parse_range(&mut self, allow_union_comma: bool) -> GreenNode {
         self.skip_whitespace();
         if self.at(TokenKind::At) {
             let at = self.bump();
-            let expr = self.parse_range();
+            let expr = self.parse_range(allow_union_comma);
             return GreenNode::new(
                 SyntaxKind::PrefixExpr,
                 vec![GreenChild::Token(at), GreenChild::Node(Box::new(expr))],
             );
         }
 
-        let mut left = self.parse_prefix();
+        let mut left = self.parse_postfix();
         loop {
             if self.at(TokenKind::Colon) {
                 let colon = self.bump();
                 self.skip_whitespace();
-                let right = self.parse_prefix();
+                let right = self.parse_postfix();
                 left = GreenNode::new(
                     SyntaxKind::RangeExpr,
                     vec![
@@ -228,17 +297,17 @@ impl Parser {
         node
     }
 
-    fn parse_prefix(&mut self) -> GreenNode {
+    fn parse_prefix(&mut self, allow_union_comma: bool) -> GreenNode {
         self.skip_whitespace();
         if self.at(TokenKind::Plus) || self.at(TokenKind::Minus) {
             let op = self.bump();
-            let expr = self.parse_range();
+            let expr = self.parse_prefix(allow_union_comma);
             GreenNode::new(
                 SyntaxKind::PrefixExpr,
                 vec![GreenChild::Token(op), GreenChild::Node(Box::new(expr))],
             )
         } else {
-            self.parse_postfix()
+            self.parse_union(allow_union_comma)
         }
     }
 

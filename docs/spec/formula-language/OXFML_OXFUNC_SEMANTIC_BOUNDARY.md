@@ -118,6 +118,24 @@ Current intended split:
 2. OxFunc owns semantic value-universe meaning, canonical operator identities, operator/function semantics, coercion policy, and result-class behavior,
 3. catalog/profile availability may influence which operators or functions are admitted semantically, but that does not move raw lexical parsing ownership out of OxFml.
 
+Current local operator floor:
+1. OxFml now admits and binds the current ordinary operator family across:
+   - unary `+`, unary `-`, postfix `%`
+   - `^`, `*`, `/`, `+`, `-`
+   - `&`
+   - `=`, `<>`, `<`, `<=`, `>`, `>=`
+   - explicit reference operators `:`, union-comma, intersection-whitespace, `@`, `#`
+2. OxFml now dispatches admitted ordinary operator semantics through OxFunc `FUNC.OP_*` rows rather than computing those semantics locally.
+3. Binder normalization may still collapse simple cell-to-cell `:` ranges into area atoms before evaluation, so explicit `FUNC.OP_RANGE_REF` trace evidence is currently guaranteed only where the explicit range operator survives binding.
+4. Multi-area union materialization in value contexts now consumes the shared `ReferenceKind::MultiArea` seam shape first, with legacy parenthesized-`Area` parsing retained only as a compatibility fallback.
+5. Same-sheet multi-area and 3D sheet-span identity are different constructs:
+   - same-sheet multi-area remains a union-style reference carrier,
+   - 3D sheet spans remain a separate reference/topology construct consumed by lanes such as `SHEETS`.
+6. Mixed-sheet multi-area is not admitted as the same construct in the current local seam; when sheet identity is preserved it must reject rather than silently flatten across sheets.
+7. The shared `ReferenceLike` seam now exposes a first-class multi-area value shape, so OxFml’s remaining local carrier logic is a local materialization/helper layer rather than a substitute transport contract.
+8. Whole-row and whole-column references must remain first-class references in admitted reference-visible lanes. OxFml must not reinterpret them as an implicit occupied-extent array.
+9. When a local value-only lane cannot honestly dereference a whole-row or whole-column reference without a fuller sheet model, OxFml must reject that lane rather than silently trimming to locally occupied cells.
+
 Current examples:
 1. decimal, group, currency, and localized literal spelling are lexical and locale-sensitive on the OxFml side,
 2. operator meaning and result-class behavior are semantic and catalog-owned on the OxFunc side,

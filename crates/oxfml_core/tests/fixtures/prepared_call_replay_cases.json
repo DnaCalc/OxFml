@@ -153,6 +153,25 @@
     "expected": {
       "prepared_calls": [
         {
+          "function_id": "FUNC.OP_ADD",
+          "prepared_arguments": [
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "NameReference",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "Literal",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        },
+        {
           "function_id": "SPECIAL.LET",
           "prepared_arguments": [
             {
@@ -293,6 +312,25 @@
               "caller_context_sensitive": false
             }
           ]
+        },
+        {
+          "function_id": "FUNC.OP_ADD",
+          "prepared_arguments": [
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "NameReference",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "Literal",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
         }
       ],
       "result_class": "Scalar",
@@ -335,6 +373,25 @@
         {
           "function_id": "SPECIAL.LAMBDA_INVOKE",
           "prepared_arguments": [
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "Literal",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        },
+        {
+          "function_id": "FUNC.OP_ADD",
+          "prepared_arguments": [
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "NameReference",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
             {
               "structure_class": "DirectScalar",
               "source_class": "Literal",

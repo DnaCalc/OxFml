@@ -32,8 +32,8 @@
   {
     "case_id": "arr_op_006_mismatched_shape_rejected",
     "formula": "={1,2;3,4}+{10,20,30}",
-    "expected_payload_summary": "Error(Value)",
-    "expected_value_summary": "Error(Value)"
+    "expected_payload_summary": "Array(2x3)",
+    "expected_value_summary": "Array(Number(11),Number(22),Error(NA),Number(13),Number(24),Error(NA))"
   },
   {
     "case_id": "arr_op_007_numeric_text_array_coerces_elementwise",

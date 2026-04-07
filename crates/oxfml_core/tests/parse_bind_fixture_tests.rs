@@ -4,7 +4,8 @@ use std::path::PathBuf;
 use serde::Deserialize;
 
 use oxfml_core::binding::{
-    BinaryOp, BindContext, BindRequest, BoundExpr, bind_formula, bind_formula_incremental,
+    BinaryOp, BindContext, BindRequest, BoundExpr, NormalizedReference, UnaryOp, bind_formula,
+    bind_formula_incremental,
 };
 use oxfml_core::red::{project_red_view, project_red_view_incremental};
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
@@ -277,7 +278,39 @@ fn incremental_bind_invalidates_when_bind_context_changes() {
 }
 
 #[test]
-fn bind_preserves_array_literal_multiplied_by_lowered_unary_negative_literal_shape() {
+fn bind_inherits_explicit_sheet_qualifier_across_simple_a1_range() {
+    let source = FormulaSourceRecord::new("fixture-sheet-qualified-range", 1, "=SUM(Alpha!A1:A2)");
+    let parse = parse_formula(ParseRequest {
+        source: source.clone(),
+    });
+    let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
+    let bind = bind_formula(BindRequest {
+        source: source.clone(),
+        green_tree: parse.green_tree,
+        red_projection: red,
+        context: BindContext {
+            structure_context_version: StructureContextVersion("fixture-struct-v1".to_string()),
+            formula_token: source.formula_token(),
+            ..BindContext::default()
+        },
+    });
+
+    assert!(bind.bound_formula.diagnostics.is_empty());
+    assert_eq!(bind.bound_formula.normalized_references.len(), 1);
+    match &bind.bound_formula.normalized_references[0] {
+        NormalizedReference::Area(area) => {
+            assert_eq!(area.sheet_id, "Alpha");
+            assert_eq!(area.top_left.row, 1);
+            assert_eq!(area.top_left.col, 1);
+            assert_eq!(area.height, 2);
+            assert_eq!(area.width, 1);
+        }
+        other => panic!("expected normalized area reference, got {other:?}"),
+    }
+}
+
+#[test]
+fn bind_preserves_array_literal_multiplied_by_unary_negative_literal_shape() {
     let source = FormulaSourceRecord::new("fixture-array-negation", 1, "={1,2,3;2,3,4}*-1");
     let parse = parse_formula(ParseRequest {
         source: source.clone(),
@@ -300,23 +333,15 @@ fn bind_preserves_array_literal_multiplied_by_lowered_unary_negative_literal_sha
     assert_eq!(*op, BinaryOp::Multiply);
     assert!(matches!(left.as_ref(), BoundExpr::ArrayLiteral(_)));
 
-    let BoundExpr::Binary {
+    let BoundExpr::Unary {
         op: right_op,
-        left: unary_left,
-        right: unary_right,
+        expr: unary_expr,
     } = right.as_ref()
     else {
-        panic!("expected lowered unary negative literal, got {:?}", right);
+        panic!("expected unary negative literal, got {:?}", right);
     };
-    assert_eq!(*right_op, BinaryOp::Subtract);
-    assert_eq!(
-        unary_left.as_ref(),
-        &BoundExpr::NumberLiteral("0".to_string())
-    );
-    assert_eq!(
-        unary_right.as_ref(),
-        &BoundExpr::NumberLiteral("1".to_string())
-    );
+    assert_eq!(*right_op, UnaryOp::Negate);
+    assert_eq!(unary_expr.as_ref(), &BoundExpr::NumberLiteral("1".to_string()));
 }
 
 fn load_fixtures() -> Vec<ParseBindFixture> {
@@ -361,6 +386,7 @@ fn bound_expr_name(expr: &BoundExpr) -> &'static str {
         BoundExpr::OmittedArgument => "OmittedArgument",
         BoundExpr::HelperParameterName(_) => "HelperParameterName",
         BoundExpr::Binary { .. } => "Binary",
+        BoundExpr::Unary { .. } => "Unary",
         BoundExpr::FunctionCall { .. } => "FunctionCall",
         BoundExpr::Invocation { .. } => "Invocation",
         BoundExpr::Reference(_) => "Reference",

@@ -418,6 +418,7 @@ pub struct RuntimeSessionFacade<'a> {
     managed_service: SessionService,
     managed_session_id: Option<String>,
     managed_formula_token: Option<String>,
+    managed_syntax_diagnostics: Vec<SyntaxDiagnostic>,
 }
 
 impl<'a> RuntimeSessionFacade<'a> {
@@ -428,6 +429,7 @@ impl<'a> RuntimeSessionFacade<'a> {
             managed_service: SessionService::new(),
             managed_session_id: None,
             managed_formula_token: None,
+            managed_syntax_diagnostics: Vec::new(),
         }
     }
 
@@ -458,6 +460,7 @@ impl<'a> RuntimeSessionFacade<'a> {
         let open = self.managed_service.open_session(prepared_session);
         self.managed_formula_token = Some(request.source().formula_token().0);
         self.managed_session_id = Some(open.session_id.clone());
+        self.managed_syntax_diagnostics = syntax_diagnostics.clone();
         Ok(RuntimeManagedOpenResult {
             session_id: open.session_id,
             fence_snapshot: open.fence_snapshot,
@@ -473,6 +476,11 @@ impl<'a> RuntimeSessionFacade<'a> {
         request: RuntimeFormulaRequest<'q>,
     ) -> Result<RuntimeManagedExecutionResult, RuntimeManagedSessionError> {
         self.ensure_managed_session_for(&request)?;
+        if !self.managed_syntax_diagnostics.is_empty() {
+            return Err(RuntimeManagedSessionError::Preparation(
+                syntax_diagnostic_execution_error(&self.managed_syntax_diagnostics),
+            ));
+        }
         let session_id = self.managed_session_id.clone().ok_or_else(|| {
             RuntimeManagedSessionError::Preparation("managed session not open".to_string())
         })?;
@@ -778,4 +786,14 @@ fn runtime_overlay_summary(overlay: &OverlayEntry) -> RuntimeManagedOverlaySumma
         overlay_family: overlay.overlay_family.clone(),
         formula_stable_id: overlay.formula_stable_id.clone(),
     }
+}
+
+fn syntax_diagnostic_execution_error(diagnostics: &[SyntaxDiagnostic]) -> String {
+    let first = diagnostics
+        .first()
+        .expect("syntax diagnostics should be non-empty");
+    format!(
+        "formula execution rejected due to syntax diagnostics: {} at {}:{}",
+        first.message, first.span.start, first.span.len
+    )
 }

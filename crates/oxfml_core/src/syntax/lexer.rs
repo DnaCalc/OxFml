@@ -11,12 +11,33 @@ pub fn lex(input: &str) -> Vec<Token> {
 
         let token = match ch {
             '=' => simple(TokenKind::Equals, ch, start),
+            '<' => match chars.get(index + 1).copied() {
+                Some('=') => {
+                    index += 1;
+                    Token::new(TokenKind::LessEqual, "<=", TextSpan::new(start, 2))
+                }
+                Some('>') => {
+                    index += 1;
+                    Token::new(TokenKind::NotEqual, "<>", TextSpan::new(start, 2))
+                }
+                _ => simple(TokenKind::Less, ch, start),
+            },
+            '>' => match chars.get(index + 1).copied() {
+                Some('=') => {
+                    index += 1;
+                    Token::new(TokenKind::GreaterEqual, ">=", TextSpan::new(start, 2))
+                }
+                _ => simple(TokenKind::Greater, ch, start),
+            },
             '(' => simple(TokenKind::LParen, ch, start),
             ')' => simple(TokenKind::RParen, ch, start),
             ',' => simple(TokenKind::Comma, ch, start),
             ':' => simple(TokenKind::Colon, ch, start),
+            '&' => simple(TokenKind::Ampersand, ch, start),
             '+' => simple(TokenKind::Plus, ch, start),
             '-' => simple(TokenKind::Minus, ch, start),
+            '%' => simple(TokenKind::Percent, ch, start),
+            '^' => simple(TokenKind::Caret, ch, start),
             '*' => simple(TokenKind::Star, ch, start),
             '/' => simple(TokenKind::Slash, ch, start),
             '@' => simple(TokenKind::At, ch, start),

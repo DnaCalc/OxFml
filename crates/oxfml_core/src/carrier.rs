@@ -123,6 +123,9 @@ fn collect_restrictions(bound_formula: &BoundFormula) -> Vec<CarrierRestrictionC
 
 fn collect_expr_restrictions(expr: &BoundExpr, restrictions: &mut Vec<CarrierRestrictionCode>) {
     match expr {
+        BoundExpr::Unary { expr, .. } => {
+            collect_expr_restrictions(expr, restrictions);
+        }
         BoundExpr::Binary { left, right, .. } => {
             collect_expr_restrictions(left, restrictions);
             collect_expr_restrictions(right, restrictions);
