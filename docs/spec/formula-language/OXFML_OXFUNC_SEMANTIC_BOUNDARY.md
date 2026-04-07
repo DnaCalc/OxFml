@@ -132,7 +132,7 @@ Current local operator floor:
    - same-sheet multi-area remains a union-style reference carrier,
    - 3D sheet spans remain a separate reference/topology construct consumed by lanes such as `SHEETS`.
 6. Mixed-sheet multi-area is not admitted as the same construct in the current local seam; when sheet identity is preserved it must reject rather than silently flatten across sheets.
-7. The shared `ReferenceLike` seam now exposes a first-class multi-area value shape, so OxFml’s remaining local carrier logic is a local materialization/helper layer rather than a substitute transport contract.
+7. The shared `ReferenceLike` seam now exposes a first-class multi-area value shape, and same-sheet `MultiArea` value-required materialization flows through OxFunc-owned resolver-driven combination semantics rather than an OxFml-local aggregation helper.
 8. Whole-row and whole-column references must remain first-class references in admitted reference-visible lanes. OxFml must not reinterpret them as an implicit occupied-extent array.
 9. When a local value-only lane cannot honestly dereference a whole-row or whole-column reference without a fuller sheet model, OxFml must reject that lane rather than silently trimming to locally occupied cells.
 

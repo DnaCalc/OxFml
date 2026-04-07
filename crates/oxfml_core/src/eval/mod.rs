@@ -2,7 +2,6 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 
 use oxfunc_core::function::ArgPreparationProfile;
-use oxfunc_core::functions::a1_refs::{A1Reference, A1ReferenceNotation, format_relative_target, parse_a1_reference};
 use oxfunc_core::functions::adapters::PreparedArgValue;
 use oxfunc_core::functions::call_register_id_family::{
     RegisterIdRequest, RegisteredExternalCallRequest, RegisteredExternalProvider,
@@ -25,6 +24,7 @@ use oxfunc_core::functions::surface_dispatch::{
 };
 use oxfunc_core::host_info::HostInfoProvider;
 use oxfunc_core::locale_format::LocaleFormatContext;
+use oxfunc_core::resolver::resolve_eval_value as resolve_oxfunc_eval_value;
 use oxfunc_core::resolver::{
     CallerContext as OxFuncCallerContext, RefResolutionError, ReferenceResolver,
     ResolverCapabilities,
@@ -1063,8 +1063,7 @@ fn call_arg_from_reference_operator_value(
 ) -> Result<CallArgValue, EvaluationError> {
     match value {
         EvalValue::Reference(reference) if preserve_reference => Ok(CallArgValue::Reference(reference)),
-        EvalValue::Reference(reference) => resolver
-            .resolve_reference(&reference)
+        EvalValue::Reference(reference) => resolve_oxfunc_eval_value(resolver, &reference)
             .map(call_arg_from_resolved_reference_value)
             .map_err(map_resolution_error),
         other => Ok(CallArgValue::Eval(other)),
@@ -1079,8 +1078,7 @@ fn call_arg_for_reference_like(
     if preserve_reference {
         Ok(CallArgValue::Reference(reference))
     } else {
-        resolver
-            .resolve_reference(&reference)
+        resolve_oxfunc_eval_value(resolver, &reference)
             .map(call_arg_from_resolved_reference_value)
             .map_err(map_resolution_error)
     }
@@ -1954,9 +1952,9 @@ fn materialize_call_arg(
         CallArgValue::Eval(value) => Ok(value),
         CallArgValue::MissingArg => Ok(EvalValue::Error(WorksheetErrorCode::Value)),
         CallArgValue::EmptyCell => Ok(EvalValue::Number(0.0)),
-        CallArgValue::Reference(reference) => resolver
-            .resolve_reference(&reference)
-            .map_err(map_resolution_error),
+        CallArgValue::Reference(reference) => {
+            resolve_oxfunc_eval_value(resolver, &reference).map_err(map_resolution_error)
+        }
     }
 }
 
@@ -2441,62 +2439,6 @@ struct LocalReferenceResolver<'a> {
     callable_registry: &'a RefCell<CallableRegistry>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct LocalMultiAreaReferenceCarrier {
-    shared_prefix: Option<String>,
-    areas: Vec<A1Reference>,
-}
-
-impl LocalMultiAreaReferenceCarrier {
-    fn parse(reference: &ReferenceLike) -> Result<Option<Self>, RefResolutionError> {
-        let parts = match reference.kind {
-            ReferenceKind::MultiArea => reference.multi_area_targets(),
-            ReferenceKind::Area => split_union_reference_targets(&reference.target),
-            _ => None,
-        };
-
-        let Some(parts) = parts else {
-            return Ok(None);
-        };
-
-        let mut shared_prefix = None;
-        let mut areas = Vec::new();
-        for part in parts {
-            collect_multi_area_parts(&part, &mut shared_prefix, &mut areas)?;
-        }
-
-        if areas.is_empty() {
-            return Err(RefResolutionError::ProviderFailure {
-                detail: "multi_area_reference_empty".to_string(),
-            });
-        }
-
-        Ok(Some(Self {
-            shared_prefix,
-            areas,
-        }))
-    }
-
-    fn materialize(
-        &self,
-        resolver: &LocalReferenceResolver<'_>,
-    ) -> Result<EvalValue, RefResolutionError> {
-        let mut cells = Vec::new();
-        for area in &self.areas {
-            let reference = reference_like_for_multi_area_part(area)?;
-            let value = resolver.resolve_reference(&reference)?;
-            append_union_cells_from_value(&mut cells, value);
-        }
-
-        let array = EvalArray::from_rows(vec![cells]).ok_or_else(|| {
-            RefResolutionError::ProviderFailure {
-                detail: "multi_area_reference_shape_invalid".to_string(),
-            }
-        })?;
-        Ok(EvalValue::Array(array))
-    }
-}
-
 impl ReferenceResolver for LocalReferenceResolver<'_> {
     fn capabilities(&self) -> ResolverCapabilities {
         ResolverCapabilities::permissive_local()
@@ -2508,10 +2450,6 @@ impl ReferenceResolver for LocalReferenceResolver<'_> {
     ) -> Result<EvalValue, RefResolutionError> {
         if let Some(value) = self.cell_values.get(&reference.target) {
             return Ok(value.clone());
-        }
-
-        if let Some(value) = self.resolve_local_union_reference(reference)? {
-            return Ok(value);
         }
 
         if let Some(array) = resolve_local_area_reference(self.cell_values, reference) {
@@ -2547,18 +2485,6 @@ impl ReferenceResolver for LocalReferenceResolver<'_> {
             row: self.caller_row,
             col: self.caller_col,
         })
-    }
-}
-
-impl LocalReferenceResolver<'_> {
-    fn resolve_local_union_reference(
-        &self,
-        reference: &ReferenceLike,
-    ) -> Result<Option<EvalValue>, RefResolutionError> {
-        let Some(carrier) = LocalMultiAreaReferenceCarrier::parse(reference)? else {
-            return Ok(None);
-        };
-        Ok(Some(carrier.materialize(self)?))
     }
 }
 
@@ -2685,125 +2611,6 @@ fn resolve_local_area_reference(
     EvalArray::from_rows(rows)
 }
 
-fn split_union_reference_targets(target: &str) -> Option<Vec<String>> {
-    ReferenceLike::new(ReferenceKind::MultiArea, target).multi_area_targets()
-}
-
-fn split_legacy_parenthesized_union_reference_targets(target: &str) -> Option<Vec<String>> {
-    let trimmed = target.trim();
-    if !(trimmed.starts_with('(') && trimmed.ends_with(')')) {
-        return None;
-    }
-
-    let inner = &trimmed[1..trimmed.len() - 1];
-    let mut parts = Vec::new();
-    let mut depth = 0usize;
-    let mut start = 0usize;
-    for (index, ch) in inner.char_indices() {
-        match ch {
-            '(' => depth += 1,
-            ')' => depth = depth.checked_sub(1)?,
-            ',' if depth == 0 => {
-                let part = inner[start..index].trim();
-                if part.is_empty() {
-                    return None;
-                }
-                parts.push(part.to_string());
-                start = index + ch.len_utf8();
-            }
-            _ => {}
-        }
-    }
-
-    if depth != 0 {
-        return None;
-    }
-
-    let tail = inner[start..].trim();
-    if tail.is_empty() {
-        return None;
-    }
-    parts.push(tail.to_string());
-    Some(parts)
-}
-
-fn collect_multi_area_parts(
-    target: &str,
-    shared_prefix: &mut Option<String>,
-    areas: &mut Vec<A1Reference>,
-) -> Result<(), RefResolutionError> {
-    if let Some(parts) = split_union_reference_targets(target) {
-        for part in parts {
-            collect_multi_area_parts(&part, shared_prefix, areas)?;
-        }
-        return Ok(());
-    }
-
-    if let Some(parts) = split_legacy_parenthesized_union_reference_targets(target) {
-        for part in parts {
-            collect_multi_area_parts(&part, shared_prefix, areas)?;
-        }
-        return Ok(());
-    }
-
-    let parsed = parse_a1_reference(target).ok_or_else(|| RefResolutionError::ProviderFailure {
-        detail: "unsupported_multi_area_reference_part".to_string(),
-    })?;
-
-    if !matches!(parsed.notation, A1ReferenceNotation::Rect) {
-        return Err(RefResolutionError::ProviderFailure {
-            detail: "unsupported_multi_area_reference_part".to_string(),
-        });
-    }
-
-    match shared_prefix {
-        Some(existing) if parsed.prefix.as_ref() != Some(existing) => {
-            return Err(RefResolutionError::ProviderFailure {
-                detail: "mixed_sheet_multi_area".to_string(),
-            });
-        }
-        None => *shared_prefix = parsed.prefix.clone(),
-        _ => {}
-    }
-
-    areas.push(parsed);
-    Ok(())
-}
-
-fn reference_like_for_multi_area_part(
-    area: &A1Reference,
-) -> Result<ReferenceLike, RefResolutionError> {
-    let target = format_relative_target(area).ok_or_else(|| RefResolutionError::ProviderFailure {
-        detail: "unsupported_multi_area_reference_part".to_string(),
-    })?;
-    Ok(ReferenceLike {
-        kind: if area.width() == 1 && area.height() == 1 {
-            ReferenceKind::A1
-        } else {
-            ReferenceKind::Area
-        },
-        target,
-    })
-}
-
-fn append_union_cells_from_value(cells: &mut Vec<ArrayCellValue>, value: EvalValue) {
-    match value {
-        EvalValue::Array(array) => cells.extend(array.iter_row_major().cloned()),
-        EvalValue::Number(number) => cells.push(ArrayCellValue::Number(number)),
-        EvalValue::Text(text) => cells.push(ArrayCellValue::Text(text)),
-        EvalValue::Logical(value) => cells.push(ArrayCellValue::Logical(value)),
-        EvalValue::Error(code) => cells.push(ArrayCellValue::Error(code)),
-        EvalValue::Reference(reference) => {
-            cells.push(ArrayCellValue::Error(if reference.target.is_empty() {
-                WorksheetErrorCode::Ref
-            } else {
-                WorksheetErrorCode::Value
-            }));
-        }
-        EvalValue::Lambda(_) => cells.push(ArrayCellValue::Error(WorksheetErrorCode::Value)),
-    }
-}
-
 fn array_cell_value_from_eval_value(value: Option<EvalValue>) -> ArrayCellValue {
     match value {
         Some(EvalValue::Number(number)) => ArrayCellValue::Number(number),
@@ -2883,58 +2690,4 @@ fn column_number(text: &str) -> Option<u32> {
 
 fn callable_token(id: usize, summary: &str) -> String {
     format!("oxfml.callable.{id}::{summary}")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn local_multi_area_reference_carrier_flattens_nested_same_sheet_targets() {
-        let carrier = LocalMultiAreaReferenceCarrier::parse(&ReferenceLike {
-            kind: ReferenceKind::MultiArea,
-            target: "((Alpha!A1:A2,Alpha!B2),Alpha!C3)".to_string(),
-        })
-        .expect("carrier parsing should succeed")
-        .expect("target should parse as multi-area");
-
-        assert_eq!(carrier.shared_prefix.as_deref(), Some("Alpha"));
-        assert_eq!(carrier.areas.len(), 3);
-        assert_eq!(
-            carrier
-                .areas
-                .iter()
-                .map(|area| format_relative_target(area).expect("area should format"))
-                .collect::<Vec<_>>(),
-            vec!["Alpha!A1:A2", "Alpha!B2", "Alpha!C3"]
-        );
-    }
-
-    #[test]
-    fn local_multi_area_reference_carrier_rejects_mixed_sheet_targets() {
-        let got = LocalMultiAreaReferenceCarrier::parse(&ReferenceLike {
-            kind: ReferenceKind::MultiArea,
-            target: "(Alpha!A1:A2,Beta!B2)".to_string(),
-        });
-
-        assert_eq!(
-            got,
-            Err(RefResolutionError::ProviderFailure {
-                detail: "mixed_sheet_multi_area".to_string(),
-            })
-        );
-    }
-
-    #[test]
-    fn local_multi_area_reference_carrier_accepts_legacy_parenthesized_area_shape() {
-        let carrier = LocalMultiAreaReferenceCarrier::parse(&ReferenceLike {
-            kind: ReferenceKind::Area,
-            target: "(A1:A2,C1:C2)".to_string(),
-        })
-        .expect("carrier parsing should succeed")
-        .expect("legacy parenthesized area should parse as multi-area");
-
-        assert_eq!(carrier.shared_prefix, None);
-        assert_eq!(carrier.areas.len(), 2);
-    }
 }

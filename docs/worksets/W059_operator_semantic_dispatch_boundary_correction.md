@@ -50,7 +50,7 @@ Repair the ordinary-operator ownership split so OxFml continues to own grammar, 
 2. unary prefix arithmetic now binds as explicit unary nodes and dispatches through OxFunc rows
 3. explicit intersection, union, and spill reference operators now dispatch through OxFunc rows
 4. simple cell-to-cell `:` ranges may still normalize earlier to area atoms instead of surviving as an explicit `OP_RANGE_REF` trace
-5. union value-context materialization now consumes `ReferenceKind::MultiArea` first and keeps legacy parenthesized-target parsing only as a compatibility fallback
+5. union value-context materialization now flows through OxFunc-owned `ReferenceKind::MultiArea` resolver-driven combination semantics
 6. mixed-sheet multi-area is a distinct construct from same-sheet multi-area and is intentionally outside the admitted local materialization lane
 7. whole-row and whole-column references are preserved in reference-visible lanes; OxFml no longer applies a local occupied-extent materialization shortcut for value-only lanes
 
@@ -85,6 +85,5 @@ Repair the ordinary-operator ownership split so OxFml continues to own grammar, 
 - open_lanes:
   - conformance-matrix and worklist promotion remain open
   - simple range canonicalization versus explicit operator-provenance policy remains open beyond the completed ordinary-operator seam correction
-  - same-sheet multi-area is now a real shared seam shape, but OxFml still keeps a local materialization/helper layer for value-required lanes
   - whole-row and whole-column local value-only lanes now fail honestly without a fuller sheet model; broader host-backed or model-backed dereference remains open beyond this workset
 - claim_confidence: medium

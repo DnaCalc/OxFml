@@ -178,7 +178,7 @@ Current OxFml read:
 2. it is honest to normalize those as a single range reference object,
 3. same-sheet multi-area references are different from 3D sheet spans,
 4. OxFunc now exposes a real same-sheet `ReferenceKind::MultiArea` seam shape plus normalization/splitting helpers,
-5. OxFml currently still keeps a local same-sheet multi-area materialization helper for value-required lanes, but that helper no longer stands in for a missing shared seam type.
+5. same-sheet multi-area value-required materialization now travels through OxFunc-owned resolver-driven combination semantics rather than an OxFml-local aggregation helper.
 
 Current OxFml-side evidence and pressure points:
 1. `crates/oxfml_core/src/eval/mod.rs`
@@ -349,12 +349,26 @@ pub fn eval_op_union_ref_surface(
 
 OxFml expects any final OxFunc implementation to preserve the same core outcomes even if the code shape differs.
 
+### 7.7 Active follow-on handoff
+The current follow-on handoff for this lane is:
+1. `docs/handoffs/HANDOFF_OXFUNC_002_MULTIAREA_VALUE_MATERIALIZATION_STYLE_A.md`
+
+That handoff narrowed the next step further:
+1. keep `ReferenceKind::MultiArea` as the shared reference carrier,
+2. move same-sheet multi-area value-materialization semantics into OxFunc,
+3. use the existing `ReferenceResolver` in a Style A design where OxFunc resolves member targets one by one and owns the combination rule,
+4. let OxFml remove the remaining local same-sheet multi-area aggregation helper after OxFunc lands the change.
+
+Current state:
+1. OxFunc has now acknowledged and landed that Style A seam in `OxFunc/W076`,
+2. OxFml has now switched its non-reference-preserved lanes over to the OxFunc-owned path and removed the superseded local aggregation helper.
+
 ### 7.7 Why OxFml still calls this out
 Current OxFml reason:
 1. ordinary operator dispatch is now being pushed toward the proper OxFml/OxFunc boundary,
 2. union/reference operators cannot stay honest if `MultiArea` regresses back into only a string convention,
 3. `AREAS`, `INDEX`, and related reference-sensitive lanes already treat same-sheet multi-area as a real semantic shape,
-4. OxFml still has a local same-sheet multi-area materialization helper for value-required lanes and therefore wants the shared seam contract to stay explicit,
+4. OxFml wants the shared seam contract to stay explicit now that value-required lanes also travel through OxFunc-owned materialization,
 5. OxFml wants to keep reducing local reinterpretation pressure rather than deepen it.
 
 ## 8. Current Requests To OxFunc

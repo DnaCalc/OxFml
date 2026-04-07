@@ -142,6 +142,7 @@ Current baseline sequence after `W001`:
 55. `W057` formatting and conditional-formatting Excel parity
 56. `W058` bug intake root-cause and regression stream protocol
 57. `W059` operator semantic dispatch boundary correction
+58. `W060` reference detection, validity, and resolution boundary review
 
 This sequence is the current planning baseline.
 It may be refined, but new worksets should preserve dependency clarity rather than bypass it informally.
