@@ -115,6 +115,9 @@ The currently pinned non-support / partial lanes now include:
 3. broad workbook/name-manager callable parity beyond the adopted defined-name lane,
 4. empirical Excel syntax truth for bracketed optional parameter declaration.
 
+Current additional local finding:
+1. a bounded defined-name recursion probe is not safe to keep in the normal test floor yet, because the current lane falls into unguarded recursion and overflows the process stack rather than producing a typed workbook-visible outcome.
+
 ## 5. Initial Question Set
 
 1. Do we already support returned-lambda invocation end to end?
@@ -157,7 +160,7 @@ At minimum, author or review examples for:
 | `=MAP(SEQUENCE(2),LAMBDA(x,[y],IF(ISOMITTED(y),x*2,x+y)))` | declaration syntax empirically unpinned; helper arity rules documented | supported locally, parity unpinned | callable semantics | `evaluator_executes_map_with_optional_lambda_parameter_omitted_by_helper` | `W062` |
 | `=LET(adder,LAMBDA(n,LAMBDA(x,x+n)),add5,adder(5),add5(10))` | public Excel commentary suggests this should work; no local Excel pin yet | rejected locally | callable semantics | `evaluator_currently_rejects_returned_lambda_invocation` | new follow-on if promoted |
 | complex helper-lambda row using `TAKE(...,,...)` | helper-function semantics dependent | callable plumbing fixed earlier; formula still exposed helper gap until OxFunc lane landed | helper/function semantics | prior `HANDOFF-OXFUNC-004` note | downstream helper owner |
-| recursion candidate via self-reference / named lambda | public Excel commentary suggests support; no current local proof | unpinned | empirical-only callable semantics | not yet exercised | potential new workset/bug after review |
+| recursion candidate via self-reference / named lambda | public Excel commentary suggests support; local Excel pin still absent | local probe currently unsafe: unguarded recursion overflows stack rather than producing a typed outcome | callable semantics | local attempted factorial-style probe showed stack-overflow behavior and was removed from the normal floor | new bounded bug/workset if promoted |
 | workbook named callable through Name Manager semantics | broader than current adopted defined-name lane | partial | mixed | current local floor proves adopted defined-name callable only | potential new review follow-on |
 
 ## 7. Acceptance Gates
@@ -197,7 +200,8 @@ Gate 3: Source Pinning
 Gate 4: Follow-On Ownership
 1. `W062` owns optional omission implementation,
 2. returned-lambda invocation is now explicitly tracked as a callable-layer unsupported row rather than a vague conversational note,
-3. recursion and workbook-level named-callable parity still need a bounded owner if promoted beyond review.
+3. recursion and workbook-level named-callable parity still need a bounded owner if promoted beyond review,
+4. recursion specifically now has evidence of unsafe current behavior, not just absence of review.
 
 ## 8. Status
 
@@ -207,5 +211,6 @@ Gate 4: Follow-On Ownership
 - `integration_completeness`: `partial`
 - `open_lanes`:
   - pin recursion behavior against Excel with a concrete exercised row
+  - decide whether recursion should open a dedicated bug/workset now that the current local probe indicates stack-overflow behavior rather than a typed failure
   - decide whether returned-lambda invocation should become a bounded implementation lane or remain an explicit non-support note
   - refine the workbook/name-manager callable parity boundary beyond the currently adopted defined-name callable lane
