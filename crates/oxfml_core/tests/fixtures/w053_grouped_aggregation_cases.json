@@ -33,12 +33,12 @@
     "caller_row": 1,
     "caller_col": 1,
     "host_query_profile": null,
-    "expected_mode": "adapter_error",
-    "expected_result_payload_summary": null,
-    "expected_surface_kind": null,
+    "expected_mode": "success",
+    "expected_result_payload_summary": "Error(Value)",
+    "expected_surface_kind": "OrdinaryValue",
     "expected_reject_code": null,
     "expected_bind_message": null,
-    "expected_error_contains": "OxFunc surface evaluation failed for GROUPBY: Value",
+    "expected_error_contains": null,
     "expected_rich_value_type_name": null
   },
   {

@@ -22,6 +22,14 @@ The main current points for OxFunc are:
 4. the current OxFml direction is still toward a runtime library-context interface rather than long-term build-time catalog ingestion,
 5. the March 26 unary-negative-literal and blank single-cell issues are no longer open OxFml seam defects,
 6. OxFunc's `docs/function-lane/OXFML_OXFUNC_SHARED_INTERFACE_FREEZE_CANDIDATE_V1.md` plus `docs/handoffs/HANDOFF_SHARED_INTERFACE_FREEZE_PROMOTION_TO_OXFML_V1.md` are now the current shared freeze floor from the OxFml side for the narrowed seam families.
+7. the first Foundation corpus verification batch no longer carries a live `IF("",1,2)` OxFunc bug claim; `HO-FN-008` corrected that intake to current Excel `#VALUE!`,
+8. the current numeric-comparison family split from `HO-FN-008` is now the OxFml read for the sibling workspace:
+   - operators, criteria/database selection, and `SWITCH` use the tolerant lane,
+   - `MATCH`, `XMATCH`, and `DELTA` remain exact.
+
+Current acknowledged follow-on packet:
+1. `docs/handoffs/HANDOFF-OXFUNC-003_CORPUS_IF_EMPTY_TEXT_AND_FLOAT_COMPARE.md`
+2. `../OxFunc/docs/handoffs/HO-FN-008_corpus_if_correction_and_numeric_comparison_tolerance.md`
 
 ## 3. Current Evidence In OxFml
 

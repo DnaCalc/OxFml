@@ -12,7 +12,7 @@ use oxfunc_core::host_info::{
 use oxfunc_core::locale_format::{LocaleFormatContext, en_us_context};
 use oxfunc_core::value::{
     ArrayCellValue, CellStyleHint, EvalValue, ExcelText, NumberFormatHint, PresentationHint,
-    ReferenceKind, ReferenceLike,
+    ReferenceKind, ReferenceLike, WorksheetErrorCode,
 };
 use serde::Deserialize;
 
@@ -420,6 +420,114 @@ fn evaluator_dispatches_percent_concat_and_comparison_operators_to_oxfunc() {
             .collect::<Vec<_>>(),
         vec!["FUNC.OP_LESS_THAN"]
     );
+
+    let not_equal = evaluate("=1<>2", None, None, Some(&en_us_context()));
+    assert_eq!(not_equal.oxfunc_value, EvalValue::Logical(true));
+    assert_eq!(
+        not_equal
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec!["FUNC.OP_NOT_EQUAL"]
+    );
+
+    let greater_equal = evaluate("=2>=1", None, None, Some(&en_us_context()));
+    assert_eq!(greater_equal.oxfunc_value, EvalValue::Logical(true));
+    assert_eq!(
+        greater_equal
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec!["FUNC.OP_GREATER_EQUAL"]
+    );
+
+    let bool_concat = evaluate("=TRUE&FALSE", None, None, Some(&en_us_context()));
+    assert_eq!(
+        bool_concat.oxfunc_value,
+        EvalValue::Text(ExcelText::from_interop_assignment("TRUEFALSE"))
+    );
+}
+
+#[test]
+fn evaluator_supports_scientific_numeric_literals() {
+    let literal = evaluate("=1E+3+2", None, None, Some(&en_us_context()));
+    assert_eq!(literal.oxfunc_value, EvalValue::Number(1002.0));
+    assert_eq!(
+        literal
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec!["FUNC.OP_ADD"]
+    );
+
+    let leading_decimal = evaluate("=.5E+1", None, None, Some(&en_us_context()));
+    assert_eq!(leading_decimal.oxfunc_value, EvalValue::Number(5.0));
+}
+
+#[test]
+fn evaluator_maps_negative_fractional_power_to_num_error() {
+    let output = evaluate("=(-1)^0.5", None, None, Some(&en_us_context()));
+    assert_eq!(output.oxfunc_value, EvalValue::Error(WorksheetErrorCode::Num));
+    assert_eq!(output.result.payload_summary, "Error(Num)");
+}
+
+#[test]
+fn evaluator_projects_ordinary_worksheet_errors_as_values() {
+    let output = evaluate("=ABS(\"x\")", None, None, Some(&en_us_context()));
+    assert_eq!(
+        output.oxfunc_value,
+        EvalValue::Error(WorksheetErrorCode::Value)
+    );
+    assert_eq!(output.result.payload_summary, "Error(Value)");
+    assert_eq!(output.trace.prepared_calls[0].function_id, "FUNC.ABS");
+}
+
+#[test]
+fn evaluator_matches_current_if_empty_text_excel_outcome() {
+    let output = evaluate("=IF(\"\",1,2)", None, None, Some(&en_us_context()));
+    assert_eq!(
+        output.oxfunc_value,
+        EvalValue::Error(WorksheetErrorCode::Value)
+    );
+    assert_eq!(output.result.payload_summary, "Error(Value)");
+    assert_eq!(output.trace.prepared_calls[0].function_id, "FUNC.IF");
+}
+
+#[test]
+fn evaluator_consumes_broader_float_comparison_family_split() {
+    let tolerant_operator = evaluate("=0.1+0.2=0.3", None, None, Some(&en_us_context()));
+    assert_eq!(tolerant_operator.oxfunc_value, EvalValue::Logical(true));
+    assert_eq!(
+        tolerant_operator
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec!["FUNC.OP_ADD", "FUNC.OP_EQUAL"]
+    );
+
+    let tolerant_switch = evaluate(
+        "=SWITCH(((123456789012345*10)+5)/1E25,((123456789012345*10)+4)/1E25,1,0)",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(tolerant_switch.oxfunc_value, EvalValue::Number(1.0));
+
+    let exact_delta = evaluate(
+        "=DELTA(((123456789012345*10)+5)/1E25,((123456789012345*10)+4)/1E25)",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(exact_delta.oxfunc_value, EvalValue::Number(0.0));
 }
 
 #[test]
@@ -789,11 +897,11 @@ fn evaluator_returns_lambda_value_summary() {
     let output = evaluate("=LAMBDA(x,x+1)", None, None, Some(&en_us_context()));
     assert_eq!(
         output.result.payload_summary,
-        "Lambda(arity=1;params=x;captures=-;body=Binary)"
+        "Lambda(arity=1;required_arity=1;params=x;optional_params=-;captures=-;body=Binary)"
     );
     assert_eq!(
         output.result.callable_profile.as_deref(),
-        Some("arity=1;params=x;captures=-;body=Binary")
+        Some("arity=1;required_arity=1;params=x;optional_params=-;captures=-;body=Binary")
     );
     let carrier = output
         .result
@@ -819,7 +927,9 @@ fn evaluator_returns_lambda_value_summary() {
         .as_ref()
         .expect("callable detail should exist");
     assert_eq!(detail.arity, 1);
+    assert_eq!(detail.required_arity, 1);
     assert_eq!(detail.parameter_names, vec!["x".to_string()]);
+    assert!(detail.optional_parameter_names.is_empty());
     assert!(detail.capture_names.is_empty());
     assert_eq!(detail.body_kind, "Binary");
 }
@@ -834,11 +944,11 @@ fn evaluator_returns_lambda_value_summary_with_lexical_capture_metadata() {
     );
     assert_eq!(
         output.result.payload_summary,
-        "Lambda(arity=1;params=y;captures=x;body=Binary)"
+        "Lambda(arity=1;required_arity=1;params=y;optional_params=-;captures=x;body=Binary)"
     );
     assert_eq!(
         output.result.callable_profile.as_deref(),
-        Some("arity=1;params=y;captures=x;body=Binary")
+        Some("arity=1;required_arity=1;params=y;optional_params=-;captures=x;body=Binary")
     );
     let carrier = output
         .result
@@ -864,7 +974,9 @@ fn evaluator_returns_lambda_value_summary_with_lexical_capture_metadata() {
         .as_ref()
         .expect("callable detail should exist");
     assert_eq!(detail.arity, 1);
+    assert_eq!(detail.required_arity, 1);
     assert_eq!(detail.parameter_names, vec!["y".to_string()]);
+    assert!(detail.optional_parameter_names.is_empty());
     assert_eq!(detail.capture_names, vec!["x".to_string()]);
     assert_eq!(detail.body_kind, "Binary");
 }
@@ -905,6 +1017,58 @@ fn evaluator_runs_helper_bound_lambda_invocation() {
             "SPECIAL.LAMBDA",
             "SPECIAL.LAMBDA_INVOKE",
             "FUNC.OP_ADD",
+            "SPECIAL.LET"
+        ]
+    );
+}
+
+#[test]
+fn evaluator_runs_helper_bound_lambda_power_invocation() {
+    let output = evaluate(
+        "=LET(f,LAMBDA(x,x^2),f(3))",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.result.payload_summary, "Number(9)");
+    let function_ids = output
+        .trace
+        .prepared_calls
+        .iter()
+        .map(|call| call.function_id)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        function_ids,
+        vec![
+            "SPECIAL.LAMBDA",
+            "SPECIAL.LAMBDA_INVOKE",
+            "FUNC.OP_POWER",
+            "SPECIAL.LET"
+        ]
+    );
+}
+
+#[test]
+fn evaluator_resolves_helper_bound_lambda_arguments_in_caller_scope() {
+    let output = evaluate(
+        "=LET(a,3,f,LAMBDA(x,x^2),f(a))",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.result.payload_summary, "Number(9)");
+    let function_ids = output
+        .trace
+        .prepared_calls
+        .iter()
+        .map(|call| call.function_id)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        function_ids,
+        vec![
+            "SPECIAL.LAMBDA",
+            "SPECIAL.LAMBDA_INVOKE",
+            "FUNC.OP_POWER",
             "SPECIAL.LET"
         ]
     );
@@ -986,7 +1150,7 @@ fn evaluator_preserves_defined_name_callable_as_first_class_value() {
     );
     assert_eq!(
         value_output.result.payload_summary,
-        "Lambda(arity=1;params=y;captures=x;body=Binary)"
+        "Lambda(arity=1;required_arity=1;params=y;optional_params=-;captures=x;body=Binary)"
     );
     assert_eq!(
         value_output
@@ -1026,7 +1190,7 @@ fn evaluator_lambda_summary_ignores_unused_helper_bindings() {
     );
     assert_eq!(
         output.result.payload_summary,
-        "Lambda(arity=1;params=y;captures=x;body=Binary)"
+        "Lambda(arity=1;required_arity=1;params=y;optional_params=-;captures=x;body=Binary)"
     );
     let detail = output
         .result
@@ -1046,7 +1210,7 @@ fn evaluator_lambda_summary_respects_parameter_shadowing() {
     );
     assert_eq!(
         output.result.payload_summary,
-        "Lambda(arity=1;params=x;captures=-;body=Binary)"
+        "Lambda(arity=1;required_arity=1;params=x;optional_params=-;captures=-;body=Binary)"
     );
     let carrier = output
         .result
@@ -1293,6 +1457,88 @@ fn evaluator_executes_map_with_isomitted_for_present_args() {
     assert_eq!(array_logicals(&output.oxfunc_value), vec![false, false]);
 }
 
+#[test]
+fn evaluator_preserves_explicit_omitted_placeholder_for_plain_lambda_params() {
+    let output = evaluate(
+        "=LAMBDA(a,b,ISOMITTED(b))(1,)",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.result.payload_summary, "Logical(true)");
+}
+
+#[test]
+fn evaluator_executes_direct_lambda_with_optional_bracket_parameter() {
+    let omitted = evaluate(
+        "=LAMBDA(x,[y],IF(ISOMITTED(y),x*2,x+y))(5)",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(omitted.result.payload_summary, "Number(10)");
+    assert_eq!(omitted.oxfunc_value, EvalValue::Number(10.0));
+
+    let present = evaluate(
+        "=LAMBDA(x,[y],IF(ISOMITTED(y),x*2,x+y))(5,3)",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(present.result.payload_summary, "Number(8)");
+    assert_eq!(present.oxfunc_value, EvalValue::Number(8.0));
+}
+
+#[test]
+fn evaluator_executes_helper_bound_lambda_with_optional_bracket_parameter() {
+    let omitted = evaluate(
+        "=LET(f,LAMBDA(x,[y],IF(ISOMITTED(y),x*2,x+y)),f(5))",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(omitted.result.payload_summary, "Number(10)");
+    assert_eq!(omitted.oxfunc_value, EvalValue::Number(10.0));
+
+    let present = evaluate(
+        "=LET(f,LAMBDA(x,[y],IF(ISOMITTED(y),x*2,x+y)),f(5,3))",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(present.result.payload_summary, "Number(8)");
+    assert_eq!(present.oxfunc_value, EvalValue::Number(8.0));
+}
+
+#[test]
+fn evaluator_executes_map_with_optional_lambda_parameter_omitted_by_helper() {
+    let output = evaluate(
+        "=MAP(SEQUENCE(2),LAMBDA(x,[y],IF(ISOMITTED(y),x*2,x+y)))",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.result.payload_summary, "Array(2x1)");
+    assert_eq!(array_numbers(&output.oxfunc_value), vec![2.0, 4.0]);
+}
+
+#[test]
+fn evaluator_currently_rejects_returned_lambda_invocation() {
+    let error = evaluate_with_rtd_provider(
+        "=LET(adder,LAMBDA(n,LAMBDA(x,x+n)),add5,adder(5),add5(10))",
+        None,
+        None,
+        None,
+        Some(&en_us_context()),
+    )
+    .expect_err("returned lambda invocation is not yet admitted");
+    assert!(
+        error
+            .message
+            .contains("only immediate, helper-bound, or defined-name callable invocation is supported")
+    );
+}
+
 fn evaluate(
     formula: &str,
     defined_names: Option<BTreeMap<String, DefinedNameBinding>>,
@@ -1417,6 +1663,7 @@ fn local_callable_binding(
         },
         profile,
         params: params.into_iter().map(|value| value.to_string()).collect(),
+        optional_parameter_names: Vec::new(),
         body,
         closure,
     }
@@ -1424,7 +1671,9 @@ fn local_callable_binding(
 
 fn callable_profile_from_summary(summary: &str) -> CallableValueProfile {
     let mut arity = None;
+    let mut required_arity = None;
     let mut parameter_names = None;
+    let mut optional_parameter_names = None;
     let mut capture_names = None;
     let mut body_kind = None;
 
@@ -1434,16 +1683,23 @@ fn callable_profile_from_summary(summary: &str) -> CallableValueProfile {
             .expect("callable summary entries should be key=value");
         match key {
             "arity" => arity = Some(value.parse::<usize>().expect("callable arity should parse")),
+            "required_arity" => {
+                required_arity = Some(value.parse::<usize>().expect("callable required arity should parse"))
+            }
             "params" => parameter_names = Some(split_profile_list(value)),
+            "optional_params" => optional_parameter_names = Some(split_profile_list(value)),
             "captures" => capture_names = Some(split_profile_list(value)),
             "body" => body_kind = Some(value.to_string()),
             _ => {}
         }
     }
 
+    let arity = arity.expect("callable arity should exist");
     CallableValueProfile {
-        arity: arity.expect("callable arity should exist"),
+        arity,
+        required_arity: required_arity.unwrap_or(arity),
         parameter_names: parameter_names.unwrap_or_default(),
+        optional_parameter_names: optional_parameter_names.unwrap_or_default(),
         capture_names: capture_names.unwrap_or_default(),
         body_kind: body_kind.expect("callable body kind should exist"),
     }

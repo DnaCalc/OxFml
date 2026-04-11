@@ -325,7 +325,8 @@ impl SemanticCompiler {
             | BoundExpr::LogicalLiteral(_)
             | BoundExpr::ArrayLiteral(_)
             | BoundExpr::OmittedArgument
-            | BoundExpr::HelperParameterName(_) => {}
+            | BoundExpr::HelperParameterName(_)
+            | BoundExpr::HelperOptionalParameterName(_) => {}
             BoundExpr::Unary { expr, .. } => {
                 self.visit_expr(expr);
             }
@@ -825,7 +826,8 @@ fn lambda_has_lexical_capture(args: &[BoundExpr]) -> bool {
     let params = args[..body_index]
         .iter()
         .filter_map(|arg| match arg {
-            BoundExpr::HelperParameterName(name) => Some(name.as_str()),
+            BoundExpr::HelperParameterName(name)
+            | BoundExpr::HelperOptionalParameterName(name) => Some(name.as_str()),
             _ => None,
         })
         .collect::<BTreeSet<_>>();
@@ -845,7 +847,8 @@ fn collect_helper_capture_names<'a>(
         | BoundExpr::LogicalLiteral(_)
         | BoundExpr::ArrayLiteral(_)
         | BoundExpr::OmittedArgument
-        | BoundExpr::HelperParameterName(_) => {}
+        | BoundExpr::HelperParameterName(_)
+        | BoundExpr::HelperOptionalParameterName(_) => {}
         BoundExpr::Unary { expr, .. } => {
             collect_helper_capture_names(expr, params, captures);
         }

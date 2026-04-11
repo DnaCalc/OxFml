@@ -270,19 +270,21 @@
       ],
       "result_class": "Scalar",
       "result_structure_class": "DirectScalar",
-      "payload_summary": "Lambda(arity=1;params=x;captures=-;body=Binary)",
+      "payload_summary": "Lambda(arity=1;required_arity=1;params=x;optional_params=-;captures=-;body=Binary)",
       "callable_carrier": {
         "origin_kind": "HelperLambda",
         "invocation_model": "TypedInvocationOnly",
         "capture_mode": "NoCapture",
         "arity": 1
       },
-      "callable_profile": "arity=1;params=x;captures=-;body=Binary",
+      "callable_profile": "arity=1;required_arity=1;params=x;optional_params=-;captures=-;body=Binary",
       "callable_profile_detail": {
         "arity": 1,
+        "required_arity": 1,
         "parameter_names": [
           "x"
         ],
+        "optional_parameter_names": [],
         "capture_names": [],
         "body_kind": "Binary"
       },
@@ -660,19 +662,21 @@
       ],
       "result_class": "Scalar",
       "result_structure_class": "DirectScalar",
-      "payload_summary": "Lambda(arity=1;params=y;captures=x;body=Binary)",
+      "payload_summary": "Lambda(arity=1;required_arity=1;params=y;optional_params=-;captures=x;body=Binary)",
       "callable_carrier": {
         "origin_kind": "HelperLambda",
         "invocation_model": "TypedInvocationOnly",
         "capture_mode": "LexicalCapture",
         "arity": 1
       },
-      "callable_profile": "arity=1;params=y;captures=x;body=Binary",
+      "callable_profile": "arity=1;required_arity=1;params=y;optional_params=-;captures=x;body=Binary",
       "callable_profile_detail": {
         "arity": 1,
+        "required_arity": 1,
         "parameter_names": [
           "y"
         ],
+        "optional_parameter_names": [],
         "capture_names": [
           "x"
         ],
@@ -789,19 +793,21 @@
       ],
       "result_class": "Scalar",
       "result_structure_class": "DirectScalar",
-      "payload_summary": "Lambda(arity=1;params=y;captures=x;body=Binary)",
+      "payload_summary": "Lambda(arity=1;required_arity=1;params=y;optional_params=-;captures=x;body=Binary)",
       "callable_carrier": {
         "origin_kind": "HelperLambda",
         "invocation_model": "TypedInvocationOnly",
         "capture_mode": "LexicalCapture",
         "arity": 1
       },
-      "callable_profile": "arity=1;params=y;captures=x;body=Binary",
+      "callable_profile": "arity=1;required_arity=1;params=y;optional_params=-;captures=x;body=Binary",
       "callable_profile_detail": {
         "arity": 1,
+        "required_arity": 1,
         "parameter_names": [
           "y"
         ],
+        "optional_parameter_names": [],
         "capture_names": [
           "x"
         ],
@@ -870,19 +876,21 @@
       ],
       "result_class": "Scalar",
       "result_structure_class": "DirectScalar",
-      "payload_summary": "Lambda(arity=1;params=x;captures=-;body=Binary)",
+      "payload_summary": "Lambda(arity=1;required_arity=1;params=x;optional_params=-;captures=-;body=Binary)",
       "callable_carrier": {
         "origin_kind": "HelperLambda",
         "invocation_model": "TypedInvocationOnly",
         "capture_mode": "NoCapture",
         "arity": 1
       },
-      "callable_profile": "arity=1;params=x;captures=-;body=Binary",
+      "callable_profile": "arity=1;required_arity=1;params=x;optional_params=-;captures=-;body=Binary",
       "callable_profile_detail": {
         "arity": 1,
+        "required_arity": 1,
         "parameter_names": [
           "x"
         ],
+        "optional_parameter_names": [],
         "capture_names": [],
         "body_kind": "Binary"
       },

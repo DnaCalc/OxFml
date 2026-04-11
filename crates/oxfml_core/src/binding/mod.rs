@@ -35,6 +35,7 @@ pub enum BoundExpr {
     ArrayLiteral(Vec<Vec<BoundExpr>>),
     OmittedArgument,
     HelperParameterName(String),
+    HelperOptionalParameterName(String),
     Binary {
         op: BinaryOp,
         left: Box<BoundExpr>,
@@ -931,12 +932,22 @@ impl Binder {
         let mut pushed_names = 0usize;
         let body_index = arg_nodes.len().saturating_sub(1);
         let mut seen_parameter_names = BTreeSet::new();
+        let mut saw_optional_parameter = false;
 
         for (index, arg_node) in arg_nodes.iter().enumerate() {
             if index < body_index {
-                if let Some(name) = self.try_helper_parameter_name(arg_node) {
+                if let Some((name, optional)) = self.try_lambda_parameter(arg_node) {
                     let normalized_name = name.to_ascii_uppercase();
                     if seen_parameter_names.insert(normalized_name) {
+                        if !optional && saw_optional_parameter {
+                            self.diagnostics.push(BindDiagnostic {
+                                message: format!(
+                                    "required LAMBDA parameter '{name}' cannot follow optional parameter"
+                                ),
+                                span: arg_node.span,
+                            });
+                        }
+                        saw_optional_parameter |= optional;
                         self.helper_local_names.push(name.clone());
                         pushed_names += 1;
                     } else {
@@ -945,7 +956,11 @@ impl Binder {
                             span: arg_node.span,
                         });
                     }
-                    bound_args.push(BoundExpr::HelperParameterName(name));
+                    bound_args.push(if optional {
+                        BoundExpr::HelperOptionalParameterName(name)
+                    } else {
+                        BoundExpr::HelperParameterName(name)
+                    });
                 } else {
                     self.diagnostics.push(BindDiagnostic {
                         message: "LAMBDA parameter did not bind as helper parameter".to_string(),
@@ -971,6 +986,17 @@ impl Binder {
         } else {
             None
         }
+    }
+
+    fn try_lambda_parameter(&self, node: &GreenNode) -> Option<(String, bool)> {
+        if node.kind != SyntaxKind::IdentifierExpr {
+            return None;
+        }
+        let text = self.first_token_text(node)?;
+        if let Some(inner) = strip_optional_lambda_parameter_syntax(&text) {
+            return Some((inner, true));
+        }
+        Some((text, false))
     }
 
     fn bind_identifier_expr_from_name(&mut self, text: &str) -> BoundExpr {
@@ -1027,6 +1053,23 @@ impl Binder {
                 source_text: text.to_string(),
             })))
         }
+    }
+}
+
+fn strip_optional_lambda_parameter_syntax(text: &str) -> Option<String> {
+    let inner = text.strip_prefix('[')?.strip_suffix(']')?;
+    if inner.is_empty() {
+        return None;
+    }
+    let mut chars = inner.chars();
+    let first = chars.next()?;
+    if !(first.is_ascii_alphabetic() || matches!(first, '_' | '$')) {
+        return None;
+    }
+    if chars.all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '.' | '$')) {
+        Some(inner.to_string())
+    } else {
+        None
     }
 }
 

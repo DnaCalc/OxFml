@@ -152,6 +152,7 @@ fn into_callable_binding(fixture: &HigherOrderCallableFixture) -> CallableDefine
         },
         profile,
         params: callable_params.clone(),
+        optional_parameter_names: Vec::new(),
         body: bind_body_formula(&fixture.case_id, callable_body_formula, body_names),
         closure: fixture
             .closure_bindings
@@ -234,7 +235,9 @@ fn parse_eval_value_summary(summary: &str) -> EvalValue {
 
 fn callable_profile_from_summary(summary: &str) -> CallableValueProfile {
     let mut arity = None;
+    let mut required_arity = None;
     let mut parameter_names = None;
+    let mut optional_parameter_names = None;
     let mut capture_names = None;
     let mut body_kind = None;
 
@@ -244,16 +247,23 @@ fn callable_profile_from_summary(summary: &str) -> CallableValueProfile {
             .expect("callable summary entries should be key=value");
         match key {
             "arity" => arity = Some(value.parse::<usize>().expect("callable arity should parse")),
+            "required_arity" => {
+                required_arity = Some(value.parse::<usize>().expect("callable required arity should parse"))
+            }
             "params" => parameter_names = Some(split_profile_list(value)),
+            "optional_params" => optional_parameter_names = Some(split_profile_list(value)),
             "captures" => capture_names = Some(split_profile_list(value)),
             "body" => body_kind = Some(value.to_string()),
             _ => {}
         }
     }
 
+    let arity = arity.expect("callable arity should exist");
     CallableValueProfile {
-        arity: arity.expect("callable arity should exist"),
+        arity,
+        required_arity: required_arity.unwrap_or(arity),
         parameter_names: parameter_names.unwrap_or_default(),
+        optional_parameter_names: optional_parameter_names.unwrap_or_default(),
         capture_names: capture_names.unwrap_or_default(),
         body_kind: body_kind.expect("callable body kind should exist"),
     }

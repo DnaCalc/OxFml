@@ -10,7 +10,7 @@
       "x": "Number(10)"
     },
     "expected": {
-      "payload_summary": "Lambda(arity=1;params=y;captures=x;body=Binary)",
+      "payload_summary": "Lambda(arity=1;required_arity=1;params=y;optional_params=-;captures=x;body=Binary)",
       "prepared_call_functions": [],
       "callable_carrier": {
         "origin_kind": "DefinedNameCallable",
@@ -18,10 +18,12 @@
         "capture_mode": "LexicalCapture",
         "arity": 1
       },
-      "callable_profile": "arity=1;params=y;captures=x;body=Binary",
+      "callable_profile": "arity=1;required_arity=1;params=y;optional_params=-;captures=x;body=Binary",
       "callable_profile_detail": {
         "arity": 1,
+        "required_arity": 1,
         "parameter_names": ["y"],
+        "optional_parameter_names": [],
         "capture_names": ["x"],
         "body_kind": "Binary"
       }
@@ -54,7 +56,7 @@
     "callable_params": ["x"],
     "closure_bindings": {},
     "expected": {
-      "payload_summary": "Lambda(arity=1;params=x;captures=-;body=Binary)",
+      "payload_summary": "Lambda(arity=1;required_arity=1;params=x;optional_params=-;captures=-;body=Binary)",
       "prepared_call_functions": [],
       "callable_carrier": {
         "origin_kind": "DefinedNameCallable",
@@ -62,10 +64,12 @@
         "capture_mode": "NoCapture",
         "arity": 1
       },
-      "callable_profile": "arity=1;params=x;captures=-;body=Binary",
+      "callable_profile": "arity=1;required_arity=1;params=x;optional_params=-;captures=-;body=Binary",
       "callable_profile_detail": {
         "arity": 1,
+        "required_arity": 1,
         "parameter_names": ["x"],
+        "optional_parameter_names": [],
         "capture_names": [],
         "body_kind": "Binary"
       }

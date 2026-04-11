@@ -159,7 +159,9 @@ pub struct CallableValueCarrier {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CallableValueProfile {
     pub arity: usize,
+    pub required_arity: usize,
     pub parameter_names: Vec<String>,
+    pub optional_parameter_names: Vec<String>,
     pub capture_names: Vec<String>,
     pub body_kind: String,
 }
@@ -170,6 +172,7 @@ pub struct CallableDefinedNameBinding {
     pub carrier: CallableValueCarrier,
     pub profile: CallableValueProfile,
     pub params: Vec<String>,
+    pub optional_parameter_names: Vec<String>,
     pub body: BoundExpr,
     pub closure: BTreeMap<String, DefinedNameBinding>,
 }
@@ -216,16 +219,22 @@ pub enum DefinedNameBinding {
 enum HelperBinding {
     Arg(CallArgValue),
     Lambda {
-        params: Vec<String>,
+        params: Vec<LambdaParam>,
         body: BoundExpr,
         closure: BTreeMap<String, HelperBinding>,
     },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LambdaParam {
+    name: String,
+    optional: bool,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 struct LambdaBinding {
     origin_kind: CallableOriginKind,
-    params: Vec<String>,
+    params: Vec<LambdaParam>,
     body: BoundExpr,
     closure: BTreeMap<String, HelperBinding>,
 }
@@ -248,7 +257,10 @@ impl CallableRegistry {
         let oxfunc_value = OxLambdaValue::new(
             token.clone(),
             oxfunc_origin_kind_from_local(lambda.origin_kind),
-            OxCallableArityShape::exact(lambda.params.len()),
+            OxCallableArityShape::range(
+                lambda_required_arity(&lambda.params),
+                lambda.params.len(),
+            ),
             if lambda.closure.is_empty() {
                 OxCallableCaptureMode::NoCapture
             } else {
@@ -544,7 +556,7 @@ fn evaluate_expr_value(
             trace,
         ),
         BoundExpr::OmittedArgument => Ok(EvalValue::Error(WorksheetErrorCode::Value)),
-        BoundExpr::HelperParameterName(name) => Err(EvaluationError {
+        BoundExpr::HelperParameterName(name) | BoundExpr::HelperOptionalParameterName(name) => Err(EvaluationError {
             message: format!(
                 "helper parameter {name} cannot be evaluated without helper-form environment support"
             ),
@@ -745,7 +757,7 @@ fn evaluate_function_call(
         callable_registry,
     };
 
-    eval_surface_value_call_with_callable(
+    match eval_surface_value_call_with_callable(
         meta.function_id,
         &call_args,
         resolver,
@@ -756,22 +768,20 @@ fn evaluate_function_call(
         Some(&callable_invoker),
         context.rtd_provider,
         context.registered_external_provider,
-    )
-    .or_else(|error| {
-        if allow_host_query_worksheet_error_fallback(
-            function_name,
-            &call_args,
-            resolver,
-            context.host_info,
-        ) {
+    ) {
+        Ok(value) => Ok(value),
+        Err(_error)
+            if allow_host_query_worksheet_error_fallback(
+                function_name,
+                &call_args,
+                resolver,
+                context.host_info,
+            ) =>
+        {
             Ok(EvalValue::Error(WorksheetErrorCode::Value))
-        } else {
-            Err(error)
         }
-    })
-    .map_err(|error| EvaluationError {
-        message: format!("OxFunc surface evaluation failed for {function_name}: {error:?}"),
-    })
+        Err(code) => Ok(EvalValue::Error(code)),
+    }
 }
 
 fn allow_host_query_worksheet_error_fallback(
@@ -1455,7 +1465,7 @@ fn evaluate_lambda_call(
 
     let body_index = args.len() - 1;
     let mut prepared_arguments = Vec::with_capacity(args.len());
-    let parameter_names = args[..body_index]
+    let params = args[..body_index]
         .iter()
         .enumerate()
         .map(|(ordinal, arg)| match arg {
@@ -1470,7 +1480,26 @@ fn evaluate_lambda_call(
                     reference_target: None,
                     opaque_reason: None,
                 });
-                Ok(name.clone())
+                Ok(LambdaParam {
+                    name: name.clone(),
+                    optional: false,
+                })
+            }
+            BoundExpr::HelperOptionalParameterName(name) => {
+                prepared_arguments.push(PreparedArgument {
+                    ordinal,
+                    structure_class: PreparedStructureClass::DirectScalar,
+                    source_class: PreparedSourceClass::HelperParameter,
+                    evaluation_mode: PreparedEvaluationMode::EagerValue,
+                    blankness_class: PreparedBlanknessClass::NonBlank,
+                    caller_context_sensitive: false,
+                    reference_target: None,
+                    opaque_reason: None,
+                });
+                Ok(LambdaParam {
+                    name: name.clone(),
+                    optional: true,
+                })
             }
             _ => Err(EvaluationError {
                 message: "LAMBDA parameter did not bind as helper parameter".to_string(),
@@ -1496,11 +1525,12 @@ fn evaluate_lambda_call(
         context,
     );
 
+    let parameter_names = lambda_param_names(&params);
     let capture_names = helper_capture_names(&args[body_index], &parameter_names, helper_bindings);
     Ok(EvalValue::Lambda(callable_registry.borrow_mut().register(
         LambdaBinding {
             origin_kind: CallableOriginKind::HelperLambda,
-            params: parameter_names,
+            params,
             body: args[body_index].clone(),
             closure: helper_closure_from_names(helper_bindings, &capture_names),
         },
@@ -1564,13 +1594,15 @@ fn evaluate_invocation(
             }
         },
     };
-    if lambda.params.len() != args.len() {
-        if args.len() > lambda.params.len() {
-            return Ok(EvalValue::Error(WorksheetErrorCode::Value));
-        }
+    let required_arity = lambda_required_arity(&lambda.params);
+    if args.len() > lambda.params.len() {
+        return Ok(EvalValue::Error(WorksheetErrorCode::Value));
+    }
+    if args.len() < required_arity {
         return Err(EvaluationError {
             message: format!(
-                "lambda invocation arity mismatch: expected {}, got {}",
+                "lambda invocation arity mismatch: expected {}..{}, got {}",
+                required_arity,
                 lambda.params.len(),
                 args.len()
             ),
@@ -1584,7 +1616,7 @@ fn evaluate_invocation(
             arg,
             context,
             resolver,
-            &local_bindings,
+            helper_bindings,
             callable_registry,
             true,
             false,
@@ -1593,7 +1625,13 @@ fn evaluate_invocation(
         prepared_arguments.push(prepared_argument_for_call_arg(
             ordinal, arg, &prepared, true,
         ));
-        local_bindings.insert(param.clone(), HelperBinding::Arg(prepared));
+        local_bindings.insert(param.name.clone(), HelperBinding::Arg(prepared));
+    }
+    for param in lambda.params.iter().skip(args.len()) {
+        local_bindings.insert(
+            param.name.clone(),
+            HelperBinding::Arg(CallArgValue::MissingArg),
+        );
     }
     push_special_prepared_call(
         trace,
@@ -1627,11 +1665,22 @@ fn helper_binding_from_expr(
             let params = args[..body_index]
                 .iter()
                 .filter_map(|arg| match arg {
-                    BoundExpr::HelperParameterName(name) => Some(name.clone()),
+                    BoundExpr::HelperParameterName(name) => Some(LambdaParam {
+                        name: name.clone(),
+                        optional: false,
+                    }),
+                    BoundExpr::HelperOptionalParameterName(name) => Some(LambdaParam {
+                        name: name.clone(),
+                        optional: true,
+                    }),
                     _ => None,
                 })
                 .collect::<Vec<_>>();
-            let capture_names = helper_capture_names(&args[body_index], &params, helper_bindings);
+            let capture_names = helper_capture_names(
+                &args[body_index],
+                &lambda_param_names(&params),
+                helper_bindings,
+            );
             HelperBinding::Lambda {
                 params,
                 body: args[body_index].clone(),
@@ -1655,11 +1704,22 @@ fn lambda_binding_for_callee(
             let params = args[..body_index]
                 .iter()
                 .map(|arg| match arg {
-                    BoundExpr::HelperParameterName(name) => Some(name.clone()),
+                    BoundExpr::HelperParameterName(name) => Some(LambdaParam {
+                        name: name.clone(),
+                        optional: false,
+                    }),
+                    BoundExpr::HelperOptionalParameterName(name) => Some(LambdaParam {
+                        name: name.clone(),
+                        optional: true,
+                    }),
                     _ => None,
                 })
                 .collect::<Option<Vec<_>>>()?;
-            let capture_names = helper_capture_names(&args[body_index], &params, helper_bindings);
+            let capture_names = helper_capture_names(
+                &args[body_index],
+                &lambda_param_names(&params),
+                helper_bindings,
+            );
             Some(LambdaBinding {
                 origin_kind: CallableOriginKind::HelperLambda,
                 params,
@@ -1708,7 +1768,14 @@ fn lambda_binding_for_defined_name_callee(
 fn lambda_binding_from_defined_name_binding(binding: &CallableDefinedNameBinding) -> LambdaBinding {
     LambdaBinding {
         origin_kind: CallableOriginKind::DefinedNameCallable,
-        params: binding.params.clone(),
+        params: binding
+            .params
+            .iter()
+            .map(|name| LambdaParam {
+                name: name.clone(),
+                optional: binding.optional_parameter_names.contains(name),
+            })
+            .collect(),
         body: binding.body.clone(),
         closure: binding
             .closure
@@ -1737,7 +1804,7 @@ fn lambda_value_summary_from_binding(binding: &LambdaBinding) -> String {
 }
 
 fn lambda_value_summary_from_captures(
-    parameter_names: &[String],
+    params: &[LambdaParam],
     mut captures: Vec<String>,
     body: &BoundExpr,
 ) -> String {
@@ -1747,10 +1814,23 @@ fn lambda_value_summary_from_captures(
     } else {
         captures.join("|")
     };
+    let parameter_names = lambda_param_names(params);
+    let optional_parameter_names = params
+        .iter()
+        .filter(|param| param.optional)
+        .map(|param| param.name.clone())
+        .collect::<Vec<_>>();
+    let optional_parameter_names = if optional_parameter_names.is_empty() {
+        "-".to_string()
+    } else {
+        optional_parameter_names.join(",")
+    };
     format!(
-        "arity={};params={};captures={};body={}",
+        "arity={};required_arity={};params={};optional_params={};captures={};body={}",
         parameter_names.len(),
+        lambda_required_arity(params),
         parameter_names.join(","),
+        optional_parameter_names,
         captures,
         lambda_body_kind(body)
     )
@@ -1763,7 +1843,9 @@ fn lambda_body_kind(body: &BoundExpr) -> &'static str {
         BoundExpr::LogicalLiteral(_) => "LogicalLiteral",
         BoundExpr::ArrayLiteral(_) => "ArrayLiteral",
         BoundExpr::OmittedArgument => "OmittedArgument",
-        BoundExpr::HelperParameterName(_) => "HelperParameter",
+        BoundExpr::HelperParameterName(_) | BoundExpr::HelperOptionalParameterName(_) => {
+            "HelperParameter"
+        }
         BoundExpr::Binary { .. } => "Binary",
         BoundExpr::Unary { .. } => "Unary",
         BoundExpr::FunctionCall { .. } => "FunctionCall",
@@ -1782,6 +1864,23 @@ fn helper_capture_names(
     helper_free_names_in_expr(body, &mut bound_names, helper_bindings)
 }
 
+fn lambda_param_names(params: &[LambdaParam]) -> Vec<String> {
+    params.iter().map(|param| param.name.clone()).collect()
+}
+
+fn lambda_required_arity(params: &[LambdaParam]) -> usize {
+    params.iter().filter(|param| !param.optional).count()
+}
+
+fn helper_parameter_name(expr: &BoundExpr) -> Option<String> {
+    match expr {
+        BoundExpr::HelperParameterName(name) | BoundExpr::HelperOptionalParameterName(name) => {
+            Some(name.clone())
+        }
+        _ => None,
+    }
+}
+
 fn helper_free_names_in_expr(
     expr: &BoundExpr,
     bound_names: &mut BTreeSet<String>,
@@ -1793,7 +1892,8 @@ fn helper_free_names_in_expr(
         | BoundExpr::LogicalLiteral(_)
         | BoundExpr::ArrayLiteral(_)
         | BoundExpr::OmittedArgument
-        | BoundExpr::HelperParameterName(_) => BTreeSet::new(),
+        | BoundExpr::HelperParameterName(_)
+        | BoundExpr::HelperOptionalParameterName(_) => BTreeSet::new(),
         BoundExpr::Unary { expr, .. } => helper_free_names_in_expr(expr, bound_names, helper_bindings),
         BoundExpr::Binary { left, right, .. } => {
             let mut names = helper_free_names_in_expr(left, bound_names, helper_bindings);
@@ -1859,8 +1959,8 @@ fn helper_free_names_in_let(
             &mut local_bound,
             helper_bindings,
         ));
-        if let BoundExpr::HelperParameterName(name) = &args[index] {
-            local_bound.insert(name.clone());
+        if let Some(name) = helper_parameter_name(&args[index]) {
+            local_bound.insert(name);
         }
         index += 2;
     }
@@ -1884,8 +1984,8 @@ fn helper_free_names_in_lambda(
     let body_index = args.len() - 1;
     let mut nested_bound = bound_names.clone();
     for arg in &args[..body_index] {
-        if let BoundExpr::HelperParameterName(name) = arg {
-            nested_bound.insert(name.clone());
+        if let Some(name) = helper_parameter_name(arg) {
+            nested_bound.insert(name);
         }
     }
     helper_free_names_in_expr(&args[body_index], &mut nested_bound, helper_bindings)
@@ -2023,7 +2123,9 @@ fn prepared_source_class(expr: &BoundExpr) -> PreparedSourceClass {
         | BoundExpr::LogicalLiteral(_)
         | BoundExpr::ArrayLiteral(_)
         | BoundExpr::OmittedArgument => PreparedSourceClass::Literal,
-        BoundExpr::HelperParameterName(_) => PreparedSourceClass::HelperParameter,
+        BoundExpr::HelperParameterName(_) | BoundExpr::HelperOptionalParameterName(_) => {
+            PreparedSourceClass::HelperParameter
+        }
         BoundExpr::FunctionCall { .. } | BoundExpr::Invocation { .. } => {
             PreparedSourceClass::FunctionCall
         }
@@ -2249,7 +2351,9 @@ fn prepared_result_capability_dependencies(plan: &SemanticPlan) -> Vec<String> {
 
 fn callable_profile_detail_from_summary(summary: &str) -> Option<CallableValueProfile> {
     let mut arity = None;
+    let mut required_arity = None;
     let mut parameter_names = None;
+    let mut optional_parameter_names = None;
     let mut capture_names = None;
     let mut body_kind = None;
 
@@ -2259,8 +2363,14 @@ fn callable_profile_detail_from_summary(summary: &str) -> Option<CallableValuePr
             "arity" => {
                 arity = value.parse::<usize>().ok();
             }
+            "required_arity" => {
+                required_arity = value.parse::<usize>().ok();
+            }
             "params" => {
                 parameter_names = Some(split_profile_list(value));
+            }
+            "optional_params" => {
+                optional_parameter_names = Some(split_profile_list(value));
             }
             "captures" => {
                 capture_names = Some(split_profile_list(value));
@@ -2272,10 +2382,13 @@ fn callable_profile_detail_from_summary(summary: &str) -> Option<CallableValuePr
         }
     }
 
+    let arity = arity?;
     Some(CallableValueProfile {
-        arity: arity?,
+        arity,
         parameter_names: parameter_names.unwrap_or_default(),
+        optional_parameter_names: optional_parameter_names.unwrap_or_default(),
         capture_names: capture_names.unwrap_or_default(),
+        required_arity: required_arity.unwrap_or(arity),
         body_kind: body_kind?,
     })
 }
@@ -2291,7 +2404,7 @@ fn callable_carrier_from_lambda_value(lambda: &OxLambdaValue) -> Option<Callable
         origin_kind: callable_origin_kind_from_oxfunc(lambda.origin_kind),
         invocation_model: CallableInvocationModel::TypedInvocationOnly,
         capture_mode: callable_capture_mode_from_oxfunc(lambda.capture_mode),
-        arity: lambda.arity_shape.min,
+        arity: lambda.arity_shape.max,
     })
 }
 
@@ -2535,8 +2648,14 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
         let mut local_bindings = binding.lambda.closure;
         for (param, arg) in binding.lambda.params.iter().zip(args.iter()) {
             local_bindings.insert(
-                param.clone(),
+                param.name.clone(),
                 HelperBinding::Arg(call_arg_from_prepared(arg)),
+            );
+        }
+        for param in binding.lambda.params.iter().skip(args.len()) {
+            local_bindings.insert(
+                param.name.clone(),
+                HelperBinding::Arg(CallArgValue::MissingArg),
             );
         }
 

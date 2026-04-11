@@ -144,7 +144,8 @@ fn collect_expr_restrictions(expr: &BoundExpr, restrictions: &mut Vec<CarrierRes
         | BoundExpr::LogicalLiteral(_)
         | BoundExpr::ArrayLiteral(_)
         | BoundExpr::OmittedArgument
-        | BoundExpr::HelperParameterName(_) => {}
+        | BoundExpr::HelperParameterName(_)
+        | BoundExpr::HelperOptionalParameterName(_) => {}
     }
 }
 

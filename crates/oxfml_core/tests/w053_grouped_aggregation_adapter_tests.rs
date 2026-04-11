@@ -235,19 +235,20 @@ fn adapter_executes_groupby_filter_and_descending_value_sort_lane() {
 
 #[test]
 fn adapter_rejects_groupby_tabular_subtotals_as_value_error() {
-    let error = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
+    let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
         "groupby-tabular-subtotals-rejected",
         "formula:groupby-tabular-subtotals-rejected",
         "=GROUPBY({\"East\",\"A\";\"East\",\"B\"},{10;20},SUM,,2,,,1)",
         locus(1, 1),
         TypedContextQueryBundle::default(),
     ))
-    .expect_err("groupby tabular subtotals should reject at runtime");
+    .expect("groupby tabular subtotals should now project a worksheet-visible value error");
 
-    assert!(
-        error.contains("OxFunc surface evaluation failed for GROUPBY: Value"),
-        "unexpected groupby tabular subtotal error: {error}"
+    assert_eq!(
+        run.evaluation_artifact.worksheet_value,
+        EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Value)
     );
+    assert_eq!(run.evaluation_artifact.commit_decision_kind, "accepted");
 }
 
 #[test]

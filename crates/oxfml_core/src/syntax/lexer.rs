@@ -101,12 +101,8 @@ pub fn lex(input: &str) -> Vec<Token> {
                     TextSpan::new(start, index - start),
                 )
             }
-            c if c.is_ascii_digit() => {
-                index += 1;
-                while index < chars.len() && (chars[index].is_ascii_digit() || chars[index] == '.')
-                {
-                    index += 1;
-                }
+            c if c.is_ascii_digit() || (c == '.' && peek_is_ascii_digit(&chars, index + 1)) => {
+                index = consume_number_literal(&chars, index);
                 Token::new(
                     TokenKind::Number,
                     chars[start..index].iter().collect::<String>(),
@@ -135,8 +131,8 @@ pub fn lex(input: &str) -> Vec<Token> {
             _ => simple(TokenKind::Unknown, ch, start),
         };
 
-        if token.span.len == 1 && index == start {
-            index += 1;
+        if index < token.span.end() {
+            index = token.span.end();
         }
 
         tokens.push(token);
@@ -152,6 +148,45 @@ pub fn lex(input: &str) -> Vec<Token> {
 
 fn simple(kind: TokenKind, ch: char, start: usize) -> Token {
     Token::new(kind, ch.to_string(), TextSpan::new(start, 1))
+}
+
+fn peek_is_ascii_digit(chars: &[char], index: usize) -> bool {
+    chars.get(index).is_some_and(|ch| ch.is_ascii_digit())
+}
+
+fn consume_number_literal(chars: &[char], mut index: usize) -> usize {
+    let mut saw_digits = false;
+
+    while index < chars.len() && chars[index].is_ascii_digit() {
+        index += 1;
+        saw_digits = true;
+    }
+
+    if index < chars.len() && chars[index] == '.' {
+        index += 1;
+        while index < chars.len() && chars[index].is_ascii_digit() {
+            index += 1;
+            saw_digits = true;
+        }
+    }
+
+    if saw_digits && index < chars.len() && matches!(chars[index], 'E' | 'e') {
+        let exponent_start = index;
+        let mut probe = index + 1;
+        if probe < chars.len() && matches!(chars[probe], '+' | '-') {
+            probe += 1;
+        }
+        if peek_is_ascii_digit(chars, probe) {
+            index = probe + 1;
+            while index < chars.len() && chars[index].is_ascii_digit() {
+                index += 1;
+            }
+        } else {
+            index = exponent_start;
+        }
+    }
+
+    index
 }
 
 fn is_identifier_start(ch: char) -> bool {

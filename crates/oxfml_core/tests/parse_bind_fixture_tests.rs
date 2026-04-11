@@ -385,6 +385,7 @@ fn bound_expr_name(expr: &BoundExpr) -> &'static str {
         BoundExpr::ArrayLiteral(_) => "ArrayLiteral",
         BoundExpr::OmittedArgument => "OmittedArgument",
         BoundExpr::HelperParameterName(_) => "HelperParameterName",
+        BoundExpr::HelperOptionalParameterName(_) => "HelperOptionalParameterName",
         BoundExpr::Binary { .. } => "Binary",
         BoundExpr::Unary { .. } => "Unary",
         BoundExpr::FunctionCall { .. } => "FunctionCall",

@@ -7,3 +7,6 @@ HANDOFF-DNAONECALC-002,outbound,Effective Display XML Follow-On Response,filed,W
 HANDOFF_OXREPLAY_001,outbound,XML Comparison Views Response,filed,W056,OxReplay-TBD,2026-04-06,
 HANDOFF-OXFUNC-001,outbound,Operator Value Surface and Array-Lift Expansion,filed,W059,OxFunc-TBD,2026-04-07,
 HANDOFF-OXFUNC-002,outbound,MultiArea Value Materialization Through OxFunc Resolver-Driven Combination,acknowledged,W059,OxFunc/W076,2026-04-07,2026-04-07
+HANDOFF-OXFUNC-003,outbound,Corpus IF Empty-Text Condition And Floating Comparison Follow-On,acknowledged,W061,OxFunc/W077,2026-04-08,2026-04-08
+HO-FN-008,inbound,Corpus IF Correction And Numeric Comparison Tolerance,acknowledged,OxFunc/W077,W061,2026-04-08,2026-04-08
+HANDOFF-OXFUNC-004,outbound,TAKE Omitted Row Count In Complex Helper Lambda,filed,local-direct-investigation,OxFunc-TBD,2026-04-10,

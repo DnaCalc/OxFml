@@ -143,6 +143,9 @@ Current baseline sequence after `W001`:
 56. `W058` bug intake root-cause and regression stream protocol
 57. `W059` operator semantic dispatch boundary correction
 58. `W060` reference detection, validity, and resolution boundary review
+59. `W061` Foundation corpus verification intake round 001
+60. `W062` optional lambda parameters and omitted argument support
+61. `W063` callable capability review and Excel example matrix
 
 This sequence is the current planning baseline.
 It may be refined, but new worksets should preserve dependency clarity rather than bypass it informally.
