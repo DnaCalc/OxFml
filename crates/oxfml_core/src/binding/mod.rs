@@ -1000,7 +1000,17 @@ impl Binder {
     }
 
     fn bind_identifier_expr_from_name(&mut self, text: &str) -> BoundExpr {
-        if let Some(structured) = bind_structured_reference_text(
+        if self.helper_local_names.iter().any(|name| name == text) {
+            let normalized = NormalizedReference::Name(NameRef {
+                name: text.to_string(),
+                workbook_id: self.context.workbook_id.clone(),
+                sheet_id: self.context.sheet_id.clone(),
+                kind: NameKind::HelperLocal,
+                caller_context_dependent: false,
+            });
+            self.push_reference_seed(&normalized);
+            BoundExpr::Reference(ReferenceExpr::Atom(normalized))
+        } else if let Some(structured) = bind_structured_reference_text(
             text,
             &self.context,
             TextSpan::new(0, 0),
@@ -1017,16 +1027,6 @@ impl Binder {
             self.formula_channel_kind,
         ) {
             let normalized = NormalizedReference::Cell(cell_ref);
-            self.push_reference_seed(&normalized);
-            BoundExpr::Reference(ReferenceExpr::Atom(normalized))
-        } else if self.helper_local_names.iter().any(|name| name == text) {
-            let normalized = NormalizedReference::Name(NameRef {
-                name: text.to_string(),
-                workbook_id: self.context.workbook_id.clone(),
-                sheet_id: self.context.sheet_id.clone(),
-                kind: NameKind::HelperLocal,
-                caller_context_dependent: false,
-            });
             self.push_reference_seed(&normalized);
             BoundExpr::Reference(ReferenceExpr::Atom(normalized))
         } else if let Some(kind) = self.context.names.get(text).cloned() {

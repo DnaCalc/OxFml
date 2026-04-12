@@ -828,6 +828,18 @@ fn evaluator_runs_indirect_offset_and_iferror() {
 }
 
 #[test]
+fn evaluator_preserves_if_branch_laziness_locally() {
+    let output = evaluate("=IF(TRUE,1,1/0)", None, None, Some(&en_us_context()));
+    assert_eq!(output.oxfunc_value, EvalValue::Number(1.0));
+}
+
+#[test]
+fn evaluator_preserves_iferror_fallback_laziness_locally() {
+    let output = evaluate("=IFERROR(1,1/0)", None, None, Some(&en_us_context()));
+    assert_eq!(output.oxfunc_value, EvalValue::Number(1.0));
+}
+
+#[test]
 fn evaluator_runs_now_and_today_with_supplied_serial() {
     let now_output = evaluate("=NOW()", None, None, Some(&en_us_context()));
     assert_eq!(now_output.result.payload_summary, "Number(46000)");
@@ -1523,20 +1535,251 @@ fn evaluator_executes_map_with_optional_lambda_parameter_omitted_by_helper() {
 }
 
 #[test]
-fn evaluator_currently_rejects_returned_lambda_invocation() {
-    let error = evaluate_with_rtd_provider(
+fn evaluator_executes_helper_bound_returned_lambda_invocation() {
+    let output = evaluate(
         "=LET(adder,LAMBDA(n,LAMBDA(x,x+n)),add5,adder(5),add5(10))",
         None,
         None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.oxfunc_value, EvalValue::Number(15.0));
+    assert_eq!(
+        output
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec![
+            "SPECIAL.LAMBDA",
+            "SPECIAL.LAMBDA_INVOKE",
+            "SPECIAL.LAMBDA",
+            "SPECIAL.LAMBDA_INVOKE",
+            "FUNC.OP_ADD",
+            "SPECIAL.LET",
+        ]
+    );
+}
+
+#[test]
+fn evaluator_returns_lambda_value_from_helper_bound_returned_lambda() {
+    let output = evaluate(
+        "=LET(adder,LAMBDA(n,LAMBDA(x,x+n)),adder(5))",
+        None,
         None,
         Some(&en_us_context()),
-    )
-    .expect_err("returned lambda invocation is not yet admitted");
-    assert!(
-        error
-            .message
-            .contains("only immediate, helper-bound, or defined-name callable invocation is supported")
     );
+    assert!(matches!(output.oxfunc_value, EvalValue::Lambda(_)));
+    assert_eq!(
+        output.result.callable_carrier.as_ref().map(|carrier| carrier.arity),
+        Some(1)
+    );
+}
+
+#[test]
+fn evaluator_executes_nested_returned_lambda_invocation() {
+    let output = evaluate(
+        "=LAMBDA(n,LAMBDA(x,x+n))(5)(10)",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.oxfunc_value, EvalValue::Number(15.0));
+    assert_eq!(
+        output
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec![
+            "SPECIAL.LAMBDA_INVOKE",
+            "SPECIAL.LAMBDA",
+            "SPECIAL.LAMBDA_INVOKE",
+            "FUNC.OP_ADD",
+        ]
+    );
+}
+
+#[test]
+fn evaluator_executes_returned_lambda_with_lexical_capture() {
+    let output = evaluate(
+        "=LET(base,100,adder,LAMBDA(n,LAMBDA(x,x+n+base)),add5,adder(5),add5(10))",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.oxfunc_value, EvalValue::Number(115.0));
+}
+
+#[test]
+fn evaluator_projects_runaway_recursive_defined_name_callable_as_num_error() {
+    let mut bindings = BTreeMap::new();
+    bindings.insert(
+        "Loop".to_string(),
+        DefinedNameBinding::Callable(local_callable_binding(
+            "arity=0;params=-;captures=-;body=Invocation",
+            vec![],
+            BoundExpr::Invocation {
+                callee: Box::new(name_ref_expr("Loop", NameKind::ValueLike)),
+                args: vec![],
+            },
+            BTreeMap::new(),
+        )),
+    );
+
+    let output = evaluate("=Loop()", Some(bindings), None, Some(&en_us_context()));
+    assert_eq!(output.oxfunc_value, EvalValue::Error(WorksheetErrorCode::Num));
+}
+
+#[test]
+fn evaluator_executes_bounded_recursive_defined_name_callable() {
+    let mut bindings = BTreeMap::new();
+    bindings.insert(
+        "Fact".to_string(),
+        DefinedNameBinding::Callable(local_callable_binding(
+            "arity=1;params=n;captures=-;body=FunctionCall",
+            vec!["n"],
+            BoundExpr::FunctionCall {
+                function_name: "IF".to_string(),
+                args: vec![
+                    BoundExpr::Binary {
+                        op: BinaryOp::LessEqual,
+                        left: Box::new(name_ref_expr("n", NameKind::HelperLocal)),
+                        right: Box::new(BoundExpr::NumberLiteral("1".to_string())),
+                    },
+                    BoundExpr::NumberLiteral("1".to_string()),
+                    BoundExpr::Binary {
+                        op: BinaryOp::Multiply,
+                        left: Box::new(name_ref_expr("n", NameKind::HelperLocal)),
+                        right: Box::new(BoundExpr::Invocation {
+                            callee: Box::new(name_ref_expr("Fact", NameKind::ValueLike)),
+                            args: vec![BoundExpr::Binary {
+                                op: BinaryOp::Subtract,
+                                left: Box::new(name_ref_expr("n", NameKind::HelperLocal)),
+                                right: Box::new(BoundExpr::NumberLiteral("1".to_string())),
+                            }],
+                        }),
+                    },
+                ],
+            },
+            BTreeMap::new(),
+        )),
+    );
+
+    let output = evaluate("=Fact(5)", Some(bindings), None, Some(&en_us_context()));
+    assert_eq!(output.oxfunc_value, EvalValue::Number(120.0));
+}
+
+#[test]
+fn evaluator_matches_excel_named_recursion_success_boundary() {
+    let mut bindings = BTreeMap::new();
+    bindings.insert(
+        "CountDown".to_string(),
+        DefinedNameBinding::Callable(local_callable_binding(
+            "arity=1;params=n;captures=-;body=FunctionCall",
+            vec!["n"],
+            BoundExpr::FunctionCall {
+                function_name: "IF".to_string(),
+                args: vec![
+                    BoundExpr::Binary {
+                        op: BinaryOp::LessEqual,
+                        left: Box::new(name_ref_expr("n", NameKind::HelperLocal)),
+                        right: Box::new(BoundExpr::NumberLiteral("0".to_string())),
+                    },
+                    BoundExpr::NumberLiteral("0".to_string()),
+                    BoundExpr::Binary {
+                        op: BinaryOp::Add,
+                        left: Box::new(BoundExpr::NumberLiteral("1".to_string())),
+                        right: Box::new(BoundExpr::Invocation {
+                            callee: Box::new(name_ref_expr("CountDown", NameKind::ValueLike)),
+                            args: vec![BoundExpr::Binary {
+                                op: BinaryOp::Subtract,
+                                left: Box::new(name_ref_expr("n", NameKind::HelperLocal)),
+                                right: Box::new(BoundExpr::NumberLiteral("1".to_string())),
+                            }],
+                        }),
+                    },
+                ],
+            },
+            BTreeMap::new(),
+        )),
+    );
+
+    let output = evaluate("=CountDown(5460)", Some(bindings), None, Some(&en_us_context()));
+    assert_eq!(output.oxfunc_value, EvalValue::Number(5460.0));
+}
+
+#[test]
+fn evaluator_matches_excel_named_recursion_failure_boundary() {
+    let mut bindings = BTreeMap::new();
+    bindings.insert(
+        "CountDown".to_string(),
+        DefinedNameBinding::Callable(local_callable_binding(
+            "arity=1;params=n;captures=-;body=FunctionCall",
+            vec!["n"],
+            BoundExpr::FunctionCall {
+                function_name: "IF".to_string(),
+                args: vec![
+                    BoundExpr::Binary {
+                        op: BinaryOp::LessEqual,
+                        left: Box::new(name_ref_expr("n", NameKind::HelperLocal)),
+                        right: Box::new(BoundExpr::NumberLiteral("0".to_string())),
+                    },
+                    BoundExpr::NumberLiteral("0".to_string()),
+                    BoundExpr::Binary {
+                        op: BinaryOp::Add,
+                        left: Box::new(BoundExpr::NumberLiteral("1".to_string())),
+                        right: Box::new(BoundExpr::Invocation {
+                            callee: Box::new(name_ref_expr("CountDown", NameKind::ValueLike)),
+                            args: vec![BoundExpr::Binary {
+                                op: BinaryOp::Subtract,
+                                left: Box::new(name_ref_expr("n", NameKind::HelperLocal)),
+                                right: Box::new(BoundExpr::NumberLiteral("1".to_string())),
+                            }],
+                        }),
+                    },
+                ],
+            },
+            BTreeMap::new(),
+        )),
+    );
+
+    let output = evaluate("=CountDown(5461)", Some(bindings), None, Some(&en_us_context()));
+    assert_eq!(output.oxfunc_value, EvalValue::Error(WorksheetErrorCode::Num));
+}
+
+#[test]
+fn evaluator_matches_excel_let_self_application_recursion_success_boundary() {
+    let output = evaluate(
+        "=LET(F,LAMBDA(self,n,IF(n<=0,0,1+self(self,n-1))),F(F,4094))",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.oxfunc_value, EvalValue::Number(4094.0));
+}
+
+#[test]
+fn evaluator_matches_excel_let_self_application_recursion_failure_boundary() {
+    let output = evaluate(
+        "=LET(F,LAMBDA(self,n,IF(n<=0,0,1+self(self,n-1))),F(F,4095))",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.oxfunc_value, EvalValue::Error(WorksheetErrorCode::Num));
+}
+
+#[test]
+fn evaluator_projects_direct_helper_local_self_recursion_as_name_error() {
+    let output = evaluate(
+        "=LET(F,LAMBDA(n,IF(n<=0,0,1+F(n-1))),F(5))",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.oxfunc_value, EvalValue::Error(WorksheetErrorCode::Name));
 }
 
 fn evaluate(

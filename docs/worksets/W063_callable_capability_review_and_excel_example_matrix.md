@@ -110,13 +110,38 @@ The currently exercised OxFml callable floor now includes:
 10. bounded optional-parameter invocation through the local `W062` slice.
 
 The currently pinned non-support / partial lanes now include:
-1. returned-lambda invocation such as `adder(5)` producing a lambda that is then called through a helper binding,
-2. recursion via self-reference,
-3. broad workbook/name-manager callable parity beyond the adopted defined-name lane,
-4. empirical Excel syntax truth for bracketed optional parameter declaration.
+1. broad workbook/name-manager callable parity beyond the adopted defined-name lane,
+2. empirical Excel syntax truth for bracketed optional parameter declaration,
+3. recursion families beyond the adopted defined-name local lane,
+4. helper-local self-recursion / workbook-local recursion forms that are not yet explicitly exercised.
 
-Current additional local finding:
-1. a bounded defined-name recursion probe is not safe to keep in the normal test floor yet, because the current lane falls into unguarded recursion and overflows the process stack rather than producing a typed workbook-visible outcome.
+## 4.2 Source Notes
+
+Authoritative Microsoft Support guidance currently available:
+1. `LAMBDA`:
+   - syntax is documented as `=LAMBDA([parameter1, parameter2, ...,] calculation)`,
+   - incorrect argument count returns `#VALUE!`,
+   - self-call recursion may return `#NUM!`,
+   - workbook reuse through Name Manager is documented.
+   Source:
+   - <https://support.microsoft.com/en-us/office/lambda-function-bd212d27-1cd1-4321-a34a-ccbf254b8b67>
+2. `ISOMITTED`:
+   - omitted invocation is explicitly documented with `=LAMBDA(x,y,IF(ISOMITTED(y),"Missing second argument",x+y))(1,)`.
+   Source:
+   - <https://support.microsoft.com/en-au/office/isomitted-function-831d6fbc-0f07-40c4-9c5b-9c73fd1d60c1>
+3. Higher-order helper arity:
+   - `MAP` documents that invalid `LAMBDA` shape or incorrect parameter count returns `#VALUE!` / "Incorrect Parameters".
+   Source:
+   - <https://support.microsoft.com/en-gb/office/map-function-48006093-f97c-47c1-bfcc-749263bb1f01>
+4. Name Manager:
+   - workbook-scoped names and formula-backed names are documented, which supports the broader named-callable review lane even though it does not itself prove every callable behavior.
+   Source:
+   - <https://support.microsoft.com/en-gb/office/use-the-name-manager-in-excel-4d8c4c2b-9f7d-44e3-a3b4-9f61bd5c64e4>
+
+Current source limits:
+1. The public `LAMBDA` signature uses bracket notation in documentation, but that does not by itself prove literal worksheet syntax accepts bracketed parameter declarations like `[y]`.
+2. The public `LAMBDA` page supports recursion conceptually and documents `#NUM!` as a possible outcome, but does not pin the exact practical boundary conditions needed for OxFml implementation.
+3. I do not currently have a Microsoft source that explicitly proves returned-lambda invocation examples of the form `adder(5)(10)` or `LET(..., add5, adder(5), add5(10))`.
 
 ## 5. Initial Question Set
 
@@ -158,9 +183,12 @@ At minimum, author or review examples for:
 | `=LAMBDA(a,b,ISOMITTED(b))(1,)` | omitted invocation documented by Microsoft | supported locally | callable semantics | `evaluator_preserves_explicit_omitted_placeholder_for_plain_lambda_params` | none |
 | `=LAMBDA(x,[y],IF(ISOMITTED(y),x*2,x+y))(5)` | declaration syntax empirically unpinned; omission behavior desired | supported locally, parity unpinned | callable semantics | `evaluator_executes_direct_lambda_with_optional_bracket_parameter` | `W062` |
 | `=MAP(SEQUENCE(2),LAMBDA(x,[y],IF(ISOMITTED(y),x*2,x+y)))` | declaration syntax empirically unpinned; helper arity rules documented | supported locally, parity unpinned | callable semantics | `evaluator_executes_map_with_optional_lambda_parameter_omitted_by_helper` | `W062` |
-| `=LET(adder,LAMBDA(n,LAMBDA(x,x+n)),add5,adder(5),add5(10))` | public Excel commentary suggests this should work; no local Excel pin yet | rejected locally | callable semantics | `evaluator_currently_rejects_returned_lambda_invocation` | new follow-on if promoted |
+| `=LET(adder,LAMBDA(n,LAMBDA(x,x+n)),add5,adder(5),add5(10))` | public Excel commentary suggests this should work; no current Microsoft syntax/behavior pin | supported locally | callable semantics | `evaluator_executes_helper_bound_returned_lambda_invocation`; local binder fix also proves helper names like `add5` are not misclassified as cell refs in callable scope | `W064` |
+| `=LAMBDA(n,LAMBDA(x,x+n))(5)(10)` | public Excel commentary suggests this should work; no current Microsoft syntax/behavior pin | supported locally | callable semantics | `evaluator_executes_nested_returned_lambda_invocation` | `W064` |
 | complex helper-lambda row using `TAKE(...,,...)` | helper-function semantics dependent | callable plumbing fixed earlier; formula still exposed helper gap until OxFunc lane landed | helper/function semantics | prior `HANDOFF-OXFUNC-004` note | downstream helper owner |
-| recursion candidate via self-reference / named lambda | public Excel commentary suggests support; local Excel pin still absent | local probe currently unsafe: unguarded recursion overflows stack rather than producing a typed outcome | callable semantics | local attempted factorial-style probe showed stack-overflow behavior and was removed from the normal floor | new bounded bug/workset if promoted |
+| recursion candidate via adopted defined-name callable | Microsoft `LAMBDA` page says self-call recursion can return `#NUM!`; explicit Excel COM probe shows workbook named recursion succeeds through `5460` and fails at `5461` | supported locally and exact exercised boundary now matches the Excel probe | callable semantics | `evaluator_executes_bounded_recursive_defined_name_callable`; `evaluator_projects_runaway_recursive_defined_name_callable_as_num_error`; `evaluator_matches_excel_named_recursion_success_boundary`; `evaluator_matches_excel_named_recursion_failure_boundary`; Excel COM probe 2026-04-11 | `W065` |
+| helper-local self-recursion via `LET`-bound lambda | explicit Excel COM probe shows direct self-reference by helper name returns `#NAME?`, not recursive success | local lane now aligned for the exercised row; direct helper-local self-recursion surfaces worksheet-visible `#NAME?` | callable semantics | `evaluator_projects_direct_helper_local_self_recursion_as_name_error`; Excel COM probe 2026-04-11 | `W065` |
+| `LET` self-application recursion via explicit `self` parameter | explicit Excel COM probe shows success through `4094` and `#NUM!` at `4095` | supported locally and exact exercised boundary now matches the Excel probe | callable semantics | `evaluator_matches_excel_let_self_application_recursion_success_boundary`; `evaluator_matches_excel_let_self_application_recursion_failure_boundary`; Excel COM probe 2026-04-11 | `W065` |
 | workbook named callable through Name Manager semantics | broader than current adopted defined-name lane | partial | mixed | current local floor proves adopted defined-name callable only | potential new review follow-on |
 
 ## 7. Acceptance Gates
@@ -190,18 +218,19 @@ Gate 1: Review Baseline
 Gate 2: Example Matrix
 1. initial matrix now exists,
 2. callable-layer versus helper-layer distinctions are explicit,
-3. matrix still needs more Excel-pinned rows for recursion and workbook-level named callables.
+3. matrix still needs more Excel-pinned rows for workbook-level named callables and broader recursion forms beyond the adopted local lane.
 
 Gate 3: Source Pinning
 1. optional omission is source-backed,
 2. bracketed parameter declaration remains empirical-only,
-3. returned-lambda and recursion examples remain only partially source-backed and need Excel-specific confirmation if we want parity claims.
+3. recursion is now source-backed at the high level (`LAMBDA` self-call may return `#NUM!`),
+4. returned-lambda examples remain only partially source-backed and need Excel-specific confirmation if we want parity claims.
 
 Gate 4: Follow-On Ownership
 1. `W062` owns optional omission implementation,
-2. returned-lambda invocation is now explicitly tracked as a callable-layer unsupported row rather than a vague conversational note,
-3. recursion and workbook-level named-callable parity still need a bounded owner if promoted beyond review,
-4. recursion specifically now has evidence of unsafe current behavior, not just absence of review.
+2. `W064` owns returned-lambda invocation follow-through,
+3. `W065` owns recursion safety and workbook-visible recursion behavior,
+4. workbook-level named-callable parity still needs a bounded owner if promoted beyond review.
 
 ## 8. Status
 
@@ -210,7 +239,5 @@ Gate 4: Follow-On Ownership
 - `target_completeness`: `target_partial`
 - `integration_completeness`: `partial`
 - `open_lanes`:
-  - pin recursion behavior against Excel with a concrete exercised row
-  - decide whether recursion should open a dedicated bug/workset now that the current local probe indicates stack-overflow behavior rather than a typed failure
-  - decide whether returned-lambda invocation should become a bounded implementation lane or remain an explicit non-support note
+  - recursion now needs `W065` follow-through only for broader workbook parity beyond the exercised named-recursion and `LET` rows
   - refine the workbook/name-manager callable parity boundary beyond the currently adopted defined-name callable lane

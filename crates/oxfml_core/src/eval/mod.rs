@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 
 use oxfunc_core::function::ArgPreparationProfile;
-use oxfunc_core::functions::adapters::PreparedArgValue;
+use oxfunc_core::functions::adapters::{PreparedArgValue, prepare_arg_values_only};
 use oxfunc_core::functions::call_register_id_family::{
     RegisterIdRequest, RegisteredExternalCallRequest, RegisteredExternalProvider,
     parse_call_request, parse_register_id_request,
@@ -10,6 +10,8 @@ use oxfunc_core::functions::call_register_id_family::{
 use oxfunc_core::functions::callable_helpers::{CallableInvocationError, CallableInvoker};
 use oxfunc_core::functions::cell::{CellEvalError, eval_cell_surface};
 use oxfunc_core::functions::info_fn::{InfoEvalError, eval_info_surface};
+use oxfunc_core::functions::if_fn::{eval_if_surface, map_if_error_to_ws};
+use oxfunc_core::functions::iferror::{eval_iferror_surface, map_iferror_error_to_ws};
 use oxfunc_core::functions::op_implicit_intersection::{
     eval_op_implicit_intersection_surface, map_op_implicit_intersection_error_to_ws,
 };
@@ -35,10 +37,11 @@ use oxfunc_core::value::{
     EvalArray, EvalValue, ExcelText, ExtendedValue, LambdaValue as OxLambdaValue, ReferenceKind,
     ReferenceLike, WorksheetErrorCode,
 };
+use stacker::maybe_grow;
 
 use crate::binding::{
-    AreaRef, BoundExpr, BoundFormula, CellRef, ErrorRef, NameRef, NormalizedReference,
-    ReferenceExpr, StructuredResolvedRef,
+    AreaRef, BoundExpr, BoundFormula, CellRef, ErrorRef, NameKind, NameRef,
+    NormalizedReference, ReferenceExpr, StructuredResolvedRef,
 };
 use crate::interface::{ReturnedValueSurface, TypedContextQueryBundle};
 use crate::semantics::{SemanticPlan, lookup_function_meta};
@@ -188,6 +191,11 @@ const SPECIAL_LEGACY_SINGLE_FUNCTION_ID: &str = "SPECIAL.LEGACY_SINGLE";
 const SPECIAL_EXTERNAL_REFERENCE_DEFERRED_FUNCTION_ID: &str = "SPECIAL.EXTERNAL_REFERENCE_DEFERRED";
 const HELPER_LAMBDA_INVOCATION_CONTRACT_REF: &str = "oxfml.helper_lambda.invoke.v1";
 const BUILTIN_CALLABLE_INVOCATION_CONTRACT_REF: &str = "oxfml.builtin_callable.invoke.v1";
+const LOCAL_CALLABLE_RECURSION_BUDGET_UNITS: usize = 16_383;
+const LOCAL_CALLABLE_RECURSION_BASE_COST_UNITS: usize = 3;
+const LOCAL_CALLABLE_RECURSION_LAMBDA_ARG_COST_UNITS: usize = 1;
+const LOCAL_CALLABLE_STACK_RED_ZONE_BYTES: usize = 128 * 1024;
+const LOCAL_CALLABLE_STACK_GROW_BYTES: usize = 32 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EvaluationBackend {
@@ -244,6 +252,24 @@ struct RegisteredCallableBinding {
     lambda: LambdaBinding,
 }
 
+#[derive(Debug)]
+struct CallableRecursionState {
+    current_cost_units: usize,
+    max_cost_units: usize,
+}
+
+struct CallableRecursionGuard<'a> {
+    state: &'a RefCell<CallableRecursionState>,
+    cost_units: usize,
+}
+
+impl Drop for CallableRecursionGuard<'_> {
+    fn drop(&mut self) {
+        let mut state = self.state.borrow_mut();
+        state.current_cost_units = state.current_cost_units.saturating_sub(self.cost_units);
+    }
+}
+
 #[derive(Debug, Default)]
 struct CallableRegistry {
     next_id: usize,
@@ -292,6 +318,7 @@ pub struct EvaluationContext<'a> {
     pub registered_external_provider: Option<&'a dyn RegisteredExternalProvider>,
     pub now_serial: Option<f64>,
     pub random_value: Option<f64>,
+    callable_recursion_state: RefCell<CallableRecursionState>,
 }
 
 impl<'a> EvaluationContext<'a> {
@@ -310,6 +337,10 @@ impl<'a> EvaluationContext<'a> {
             registered_external_provider: None,
             now_serial: None,
             random_value: None,
+            callable_recursion_state: RefCell::new(CallableRecursionState {
+                current_cost_units: 0,
+                max_cost_units: LOCAL_CALLABLE_RECURSION_BUDGET_UNITS,
+            }),
         }
     }
 
@@ -658,6 +689,26 @@ fn evaluate_function_call(
         }
         "LAMBDA" => {
             return evaluate_lambda_call(args, helper_bindings, callable_registry, context, trace);
+        }
+        "IF" => {
+            return evaluate_if_call(
+                args,
+                context,
+                resolver,
+                helper_bindings,
+                callable_registry,
+                trace,
+            );
+        }
+        "IFERROR" => {
+            return evaluate_iferror_call(
+                args,
+                context,
+                resolver,
+                helper_bindings,
+                callable_registry,
+                trace,
+            );
         }
         "_XLFN.SINGLE" | "SINGLE" => {
             return evaluate_legacy_single_call(
@@ -1417,8 +1468,12 @@ fn evaluate_let_call(
             &binding_arg,
             true,
         ));
-        let helper_binding =
-            helper_binding_from_expr(&args[index + 1], binding_arg, &local_bindings);
+        let helper_binding = helper_binding_from_expr(
+            &args[index + 1],
+            binding_arg,
+            &local_bindings,
+            callable_registry,
+        );
         local_bindings.insert(name.clone(), helper_binding);
         index += 2;
     }
@@ -1448,6 +1503,172 @@ fn evaluate_let_call(
     );
 
     materialize_call_arg(body_arg, resolver)
+}
+
+fn evaluate_if_call(
+    args: &[BoundExpr],
+    context: &EvaluationContext<'_>,
+    resolver: &mut LocalReferenceResolver<'_>,
+    helper_bindings: &BTreeMap<String, HelperBinding>,
+    callable_registry: &RefCell<CallableRegistry>,
+    trace: &mut EvaluationTrace,
+) -> Result<EvalValue, EvaluationError> {
+    if !(2..=3).contains(&args.len()) {
+        return Ok(EvalValue::Error(WorksheetErrorCode::Value));
+    }
+
+    let condition = evaluate_expr_as_call_arg(
+        &args[0],
+        context,
+        resolver,
+        helper_bindings,
+        callable_registry,
+        true,
+        false,
+        trace,
+    )?;
+    let condition_is_true = if matches!(
+        &condition,
+        CallArgValue::Eval(EvalValue::Text(text)) if text.to_string_lossy().is_empty()
+    ) {
+        false
+    } else {
+        let condition_preview = eval_if_surface(
+            &[
+                condition.clone(),
+                CallArgValue::Eval(EvalValue::Number(1.0)),
+                CallArgValue::Eval(EvalValue::Number(0.0)),
+            ],
+            resolver,
+        )
+        .map_err(|error| EvaluationError {
+            message: format!("IF condition evaluation failed: {error:?}"),
+        })?;
+        matches!(condition_preview, EvalValue::Number(n) if n != 0.0)
+    };
+
+    let mut call_args = vec![condition.clone()];
+    let mut prepared_arguments = vec![prepared_argument_for_call_arg(0, &args[0], &condition, true)];
+    if condition_is_true {
+        let true_arg = evaluate_expr_as_call_arg(
+            &args[1],
+            context,
+            resolver,
+            helper_bindings,
+            callable_registry,
+            true,
+            false,
+            trace,
+        )?;
+        prepared_arguments.push(prepared_argument_for_call_arg(1, &args[1], &true_arg, true));
+        call_args.push(true_arg);
+        if args.len() == 3 {
+            call_args.push(CallArgValue::MissingArg);
+            prepared_arguments.push(lazy_skipped_prepared_argument(
+                2,
+                &args[2],
+                "branch_not_evaluated_lazy",
+            ));
+        }
+    } else {
+        call_args.push(CallArgValue::MissingArg);
+        prepared_arguments.push(lazy_skipped_prepared_argument(
+            1,
+            &args[1],
+            "branch_not_evaluated_lazy",
+        ));
+        if args.len() == 3 {
+            let false_arg = evaluate_expr_as_call_arg(
+                &args[2],
+                context,
+                resolver,
+                helper_bindings,
+                callable_registry,
+                true,
+                false,
+                trace,
+            )?;
+            prepared_arguments.push(prepared_argument_for_call_arg(2, &args[2], &false_arg, true));
+            call_args.push(false_arg);
+        }
+    }
+
+    push_special_prepared_call(
+        trace,
+        "IF",
+        "FUNC.IF",
+        ArgPreparationProfile::RefsVisibleInAdapter,
+        prepared_arguments,
+        context,
+    );
+    Ok(eval_if_surface(&call_args, resolver).unwrap_or_else(|error| {
+        EvalValue::Error(map_if_error_to_ws(&error))
+    }))
+}
+
+fn evaluate_iferror_call(
+    args: &[BoundExpr],
+    context: &EvaluationContext<'_>,
+    resolver: &mut LocalReferenceResolver<'_>,
+    helper_bindings: &BTreeMap<String, HelperBinding>,
+    callable_registry: &RefCell<CallableRegistry>,
+    trace: &mut EvaluationTrace,
+) -> Result<EvalValue, EvaluationError> {
+    if args.len() != 2 {
+        return Ok(EvalValue::Error(WorksheetErrorCode::Value));
+    }
+
+    let primary = evaluate_expr_as_call_arg(
+        &args[0],
+        context,
+        resolver,
+        helper_bindings,
+        callable_registry,
+        true,
+        false,
+        trace,
+    )?;
+
+    let primary_is_error = matches!(
+        prepare_arg_values_only(&primary, resolver),
+        Ok(PreparedArgValue::Eval(EvalValue::Error(_)))
+    );
+
+    let mut prepared_arguments = vec![prepared_argument_for_call_arg(0, &args[0], &primary, true)];
+    let mut call_args = vec![primary];
+    if primary_is_error {
+        let fallback = evaluate_expr_as_call_arg(
+            &args[1],
+            context,
+            resolver,
+            helper_bindings,
+            callable_registry,
+            true,
+            false,
+            trace,
+        )?;
+        prepared_arguments.push(prepared_argument_for_call_arg(1, &args[1], &fallback, true));
+        call_args.push(fallback);
+    } else {
+        prepared_arguments.push(lazy_skipped_prepared_argument(
+            1,
+            &args[1],
+            "fallback_not_evaluated_lazy",
+        ));
+        call_args.push(CallArgValue::MissingArg);
+    }
+
+    push_special_prepared_call(
+        trace,
+        "IFERROR",
+        "FUNC.IFERROR",
+        ArgPreparationProfile::RefsVisibleInAdapter,
+        prepared_arguments,
+        context,
+    );
+    Ok(eval_iferror_surface(&call_args, resolver).unwrap_or_else(|error| {
+        EvalValue::Error(map_iferror_error_to_ws(&error))
+    }))
 }
 
 fn evaluate_lambda_call(
@@ -1582,16 +1803,21 @@ fn evaluate_invocation(
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
-    let lambda = match lambda_binding_for_callee(callee, helper_bindings) {
+    if is_missing_helper_local_callee_name(callee, helper_bindings, &context.defined_names) {
+        return Ok(EvalValue::Error(WorksheetErrorCode::Name));
+    }
+    let lambda = match lambda_binding_for_callee(callee, helper_bindings, callable_registry) {
         Some(binding) => binding,
         None => match lambda_binding_for_defined_name_callee(callee, &context.defined_names) {
             Some(binding) => binding,
-            None => {
-                return Err(EvaluationError {
-                    message: "only immediate, helper-bound, or defined-name callable invocation is supported"
-                        .to_string(),
-                });
-            }
+            None => lambda_binding_for_evaluated_callee(
+                callee,
+                context,
+                resolver,
+                helper_bindings,
+                callable_registry,
+                trace,
+            )?,
         },
     };
     let required_arity = lambda_required_arity(&lambda.params);
@@ -1608,9 +1834,9 @@ fn evaluate_invocation(
             ),
         });
     }
-
     let mut local_bindings = lambda.closure;
     let mut prepared_arguments = Vec::with_capacity(args.len());
+    let mut recursion_cost_units = LOCAL_CALLABLE_RECURSION_BASE_COST_UNITS;
     for (ordinal, (param, arg)) in lambda.params.iter().zip(args.iter()).enumerate() {
         let prepared = evaluate_expr_as_call_arg(
             arg,
@@ -1622,6 +1848,9 @@ fn evaluate_invocation(
             false,
             trace,
         )?;
+        if matches!(prepared, CallArgValue::Eval(EvalValue::Lambda(_))) {
+            recursion_cost_units += LOCAL_CALLABLE_RECURSION_LAMBDA_ARG_COST_UNITS;
+        }
         prepared_arguments.push(prepared_argument_for_call_arg(
             ordinal, arg, &prepared, true,
         ));
@@ -1633,6 +1862,11 @@ fn evaluate_invocation(
             HelperBinding::Arg(CallArgValue::MissingArg),
         );
     }
+    let Some(_recursion_guard) =
+        try_enter_callable_recursion(&context.callable_recursion_state, recursion_cost_units)
+    else {
+        return Ok(EvalValue::Error(WorksheetErrorCode::Num));
+    };
     push_special_prepared_call(
         trace,
         "LAMBDA.INVOKE",
@@ -1641,20 +1875,103 @@ fn evaluate_invocation(
         prepared_arguments,
         context,
     );
-    evaluate_expr_value(
-        &lambda.body,
+    maybe_grow(
+        LOCAL_CALLABLE_STACK_RED_ZONE_BYTES,
+        LOCAL_CALLABLE_STACK_GROW_BYTES,
+        || {
+            evaluate_expr_value(
+                &lambda.body,
+                context,
+                resolver,
+                &local_bindings,
+                callable_registry,
+                trace,
+            )
+        },
+    )
+}
+
+fn is_missing_helper_local_callee_name(
+    callee: &BoundExpr,
+    helper_bindings: &BTreeMap<String, HelperBinding>,
+    defined_names: &BTreeMap<String, DefinedNameBinding>,
+) -> bool {
+    match callee {
+        BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Name(name)))
+            if matches!(name.kind, NameKind::HelperLocal) =>
+        {
+            !helper_bindings.contains_key(&name.name) && !defined_names.contains_key(&name.name)
+        }
+        _ => false,
+    }
+}
+
+fn lambda_binding_for_evaluated_callee(
+    callee: &BoundExpr,
+    context: &EvaluationContext<'_>,
+    resolver: &mut LocalReferenceResolver<'_>,
+    helper_bindings: &BTreeMap<String, HelperBinding>,
+    callable_registry: &RefCell<CallableRegistry>,
+    trace: &mut EvaluationTrace,
+) -> Result<LambdaBinding, EvaluationError> {
+    let value = evaluate_expr_value(
+        callee,
         context,
         resolver,
-        &local_bindings,
+        helper_bindings,
         callable_registry,
         trace,
-    )
+    )?;
+    let EvalValue::Lambda(lambda) = value else {
+        return Err(EvaluationError {
+            message: format!(
+                "only immediate, helper-bound, defined-name, or lambda-valued callable invocation is supported; callee evaluated to {}",
+                eval_value_kind(&value)
+            ),
+        });
+    };
+    callable_registry
+        .borrow()
+        .get(&lambda.callable_token)
+        .map(|binding| binding.lambda.clone())
+        .ok_or_else(|| EvaluationError {
+            message: format!(
+                "no callable binding available for lambda token {}",
+                lambda.callable_token
+            ),
+        })
+}
+
+fn eval_value_kind(value: &EvalValue) -> &'static str {
+    match value {
+        EvalValue::Number(_) => "Number",
+        EvalValue::Text(_) => "Text",
+        EvalValue::Logical(_) => "Logical",
+        EvalValue::Error(_) => "Error",
+        EvalValue::Array(_) => "Array",
+        EvalValue::Reference(_) => "Reference",
+        EvalValue::Lambda(_) => "Lambda",
+    }
+}
+
+fn try_enter_callable_recursion(
+    state: &RefCell<CallableRecursionState>,
+    cost_units: usize,
+) -> Option<CallableRecursionGuard<'_>> {
+    let mut state_ref = state.borrow_mut();
+    if state_ref.current_cost_units.saturating_add(cost_units) > state_ref.max_cost_units {
+        return None;
+    }
+    state_ref.current_cost_units += cost_units;
+    drop(state_ref);
+    Some(CallableRecursionGuard { state, cost_units })
 }
 
 fn helper_binding_from_expr(
     expr: &BoundExpr,
     fallback: CallArgValue,
     helper_bindings: &BTreeMap<String, HelperBinding>,
+    callable_registry: &RefCell<CallableRegistry>,
 ) -> HelperBinding {
     match expr {
         BoundExpr::FunctionCall {
@@ -1687,13 +2004,25 @@ fn helper_binding_from_expr(
                 closure: helper_closure_from_names(helper_bindings, &capture_names),
             }
         }
-        _ => HelperBinding::Arg(fallback),
+        _ => {
+            if let CallArgValue::Eval(EvalValue::Lambda(lambda)) = &fallback {
+                if let Some(binding) = callable_registry.borrow().get(&lambda.callable_token) {
+                    return HelperBinding::Lambda {
+                        params: binding.lambda.params.clone(),
+                        body: binding.lambda.body.clone(),
+                        closure: binding.lambda.closure.clone(),
+                    };
+                }
+            }
+            HelperBinding::Arg(fallback)
+        }
     }
 }
 
 fn lambda_binding_for_callee(
     callee: &BoundExpr,
     helper_bindings: &BTreeMap<String, HelperBinding>,
+    callable_registry: &RefCell<CallableRegistry>,
 ) -> Option<LambdaBinding> {
     match callee {
         BoundExpr::FunctionCall {
@@ -1741,6 +2070,12 @@ fn lambda_binding_for_callee(
                     body: body.clone(),
                     closure: closure.clone(),
                 }),
+                Some(HelperBinding::Arg(CallArgValue::Eval(EvalValue::Lambda(lambda)))) => {
+                    callable_registry
+                        .borrow()
+                        .get(&lambda.callable_token)
+                        .map(|binding| binding.lambda.clone())
+                }
                 _ => None,
             }
         }
@@ -2153,6 +2488,23 @@ fn prepared_source_class(expr: &BoundExpr) -> PreparedSourceClass {
             ReferenceExpr::Spill { .. } => PreparedSourceClass::SpillReference,
             _ => PreparedSourceClass::FunctionCall,
         },
+    }
+}
+
+fn lazy_skipped_prepared_argument(
+    ordinal: usize,
+    expr: &BoundExpr,
+    reason: &str,
+) -> PreparedArgument {
+    PreparedArgument {
+        ordinal,
+        structure_class: PreparedStructureClass::Omitted,
+        source_class: prepared_source_class(expr),
+        evaluation_mode: PreparedEvaluationMode::EagerValue,
+        blankness_class: PreparedBlanknessClass::Omitted,
+        caller_context_sensitive: false,
+        reference_target: None,
+        opaque_reason: Some(reason.to_string()),
     }
 }
 
@@ -2658,6 +3010,20 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
                 HelperBinding::Arg(CallArgValue::MissingArg),
             );
         }
+        let recursion_cost_units = LOCAL_CALLABLE_RECURSION_BASE_COST_UNITS
+            + args
+                .iter()
+                .filter(|arg| matches!(arg, PreparedArgValue::Eval(EvalValue::Lambda(_))))
+                .count()
+                * LOCAL_CALLABLE_RECURSION_LAMBDA_ARG_COST_UNITS;
+        let Some(_recursion_guard) = try_enter_callable_recursion(
+            &self.context.callable_recursion_state,
+            recursion_cost_units,
+        ) else {
+            return Ok(prepared_arg_from_eval_value(EvalValue::Error(
+                WorksheetErrorCode::Num,
+            )));
+        };
 
         let mut trace = EvaluationTrace {
             prepared_calls: Vec::new(),
@@ -2669,13 +3035,19 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
             caller_col: self.context.caller_col,
             callable_registry: self.callable_registry,
         };
-        let value = evaluate_expr_value(
-            &binding.lambda.body,
-            self.context,
-            &mut resolver,
-            &local_bindings,
-            self.callable_registry,
-            &mut trace,
+        let value = maybe_grow(
+            LOCAL_CALLABLE_STACK_RED_ZONE_BYTES,
+            LOCAL_CALLABLE_STACK_GROW_BYTES,
+            || {
+                evaluate_expr_value(
+                    &binding.lambda.body,
+                    self.context,
+                    &mut resolver,
+                    &local_bindings,
+                    self.callable_registry,
+                    &mut trace,
+                )
+            },
         )
         .map_err(|_| CallableInvocationError::Worksheet(WorksheetErrorCode::Value))?;
         Ok(prepared_arg_from_eval_value(value))

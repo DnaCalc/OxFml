@@ -414,6 +414,83 @@ fn adapter_preserves_internal_lambda_but_publishes_calc_for_bare_lambda() {
 }
 
 #[test]
+fn adapter_preserves_internal_lambda_but_publishes_calc_for_helper_bound_returned_lambda() {
+    let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
+        "helper-returned-lambda-publication",
+        "formula:helper-returned-lambda-publication",
+        "=LET(adder,LAMBDA(n,LAMBDA(x,x+n)),adder(5))",
+        locus(1, 1),
+        TypedContextQueryBundle::default(),
+    ))
+    .expect("helper returned lambda adapter run");
+
+    assert_eq!(
+        run.evaluation_artifact.evaluation_result.payload_summary,
+        "Lambda(arity=1;required_arity=1;params=x;optional_params=-;captures=n;body=Binary)"
+    );
+    assert_eq!(
+        run.evaluation_artifact.worksheet_value,
+        EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Calc)
+    );
+    assert_eq!(
+        run.evaluation_artifact.returned_value_surface.kind,
+        ReturnedValueSurfaceKind::OrdinaryValue
+    );
+    assert_eq!(
+        run.evaluation_artifact
+            .returned_value_surface
+            .payload_summary,
+        "Error(Calc)"
+    );
+    assert_eq!(
+        run.preparation_artifact
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec![
+            "SPECIAL.LAMBDA",
+            "SPECIAL.LAMBDA_INVOKE",
+            "SPECIAL.LAMBDA",
+            "SPECIAL.LET",
+        ]
+    );
+}
+
+#[test]
+fn adapter_executes_helper_bound_returned_lambda_invocation() {
+    let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
+        "helper-returned-lambda-invocation",
+        "formula:helper-returned-lambda-invocation",
+        "=LET(adder,LAMBDA(n,LAMBDA(x,x+n)),add5,adder(5),add5(10))",
+        locus(1, 1),
+        TypedContextQueryBundle::default(),
+    ))
+    .expect("helper returned lambda invocation adapter run");
+
+    assert_eq!(
+        run.evaluation_artifact.evaluation_result.payload_summary,
+        "Number(15)"
+    );
+    assert_eq!(run.evaluation_artifact.worksheet_value, EvalValue::Number(15.0));
+    assert_eq!(
+        run.preparation_artifact
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec![
+            "SPECIAL.LAMBDA",
+            "SPECIAL.LAMBDA_INVOKE",
+            "SPECIAL.LAMBDA",
+            "SPECIAL.LAMBDA_INVOKE",
+            "FUNC.OP_ADD",
+            "SPECIAL.LET",
+        ]
+    );
+}
+
+#[test]
 fn adapter_rejects_duplicate_let_binding_names_as_bind_mismatch() {
     let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
         "duplicate-let-binding",

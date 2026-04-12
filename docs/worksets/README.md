@@ -146,6 +146,8 @@ Current baseline sequence after `W001`:
 59. `W061` Foundation corpus verification intake round 001
 60. `W062` optional lambda parameters and omitted argument support
 61. `W063` callable capability review and Excel example matrix
+62. `W064` returned lambda invocation and lambda-valued binding follow-through
+63. `W065` recursive callable safety and workbook-visible behavior
 
 This sequence is the current planning baseline.
 It may be refined, but new worksets should preserve dependency clarity rather than bypass it informally.

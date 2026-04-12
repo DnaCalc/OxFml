@@ -11,6 +11,7 @@ path = "src/lib.rs"
 [dependencies]
 oxfunc_core = { path = "../../../OxFunc/crates/oxfunc_core" }
 serde_json = "1"
+stacker = "0.1"
 
 [dev-dependencies]
 csv = "1"

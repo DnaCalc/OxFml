@@ -4,7 +4,8 @@ use std::path::PathBuf;
 use serde::Deserialize;
 
 use oxfml_core::binding::{
-    BinaryOp, BindContext, BindRequest, BoundExpr, NormalizedReference, UnaryOp, bind_formula,
+    BinaryOp, BindContext, BindRequest, BoundExpr, NameKind, NormalizedReference, ReferenceExpr,
+    UnaryOp, bind_formula,
     bind_formula_incremental,
 };
 use oxfml_core::red::{project_red_view, project_red_view_incremental};
@@ -342,6 +343,45 @@ fn bind_preserves_array_literal_multiplied_by_unary_negative_literal_shape() {
     };
     assert_eq!(*right_op, UnaryOp::Negate);
     assert_eq!(unary_expr.as_ref(), &BoundExpr::NumberLiteral("1".to_string()));
+}
+
+#[test]
+fn bind_prefers_helper_local_name_over_cell_like_reference_text() {
+    let source = FormulaSourceRecord::new(
+        "fixture-returned-lambda-helper-name",
+        1,
+        "=LET(adder,LAMBDA(n,LAMBDA(x,x+n)),add5,adder(5),add5(10))",
+    );
+    let parse = parse_formula(ParseRequest {
+        source: source.clone(),
+    });
+    let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
+    let bind = bind_formula(BindRequest {
+        source: source.clone(),
+        green_tree: parse.green_tree,
+        red_projection: red,
+        context: BindContext {
+            structure_context_version: StructureContextVersion("fixture-struct-v1".to_string()),
+            formula_token: source.formula_token(),
+            ..BindContext::default()
+        },
+    });
+
+    assert!(bind.bound_formula.diagnostics.is_empty());
+    let BoundExpr::FunctionCall { function_name, args } = &bind.bound_formula.root else {
+        panic!("expected LET call root, got {:?}", bind.bound_formula.root);
+    };
+    assert_eq!(function_name, "LET");
+
+    let BoundExpr::Invocation { callee, .. } = &args[4] else {
+        panic!("expected helper invocation body, got {:?}", args[4]);
+    };
+    let BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Name(name))) = callee.as_ref()
+    else {
+        panic!("expected helper-local name callee, got {:?}", callee);
+    };
+    assert_eq!(name.kind, NameKind::HelperLocal);
+    assert_eq!(name.name, "add5");
 }
 
 fn load_fixtures() -> Vec<ParseBindFixture> {
