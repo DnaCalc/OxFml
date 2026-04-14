@@ -1,20 +1,15 @@
 use oxfunc_core::locale_format::{LocaleFormatContext, WorkbookDateSystem};
-use oxfunc_core::value::{EvalValue, PresentationHint, WorksheetErrorCode};
+use oxfunc_core::value::{EvalValue, PresentationHint};
 
+use crate::format::{
+    parse_value_text, render_currency, render_visible_number, render_visible_value_text,
+    render_with_code, worksheet_error_text,
+};
 use crate::interface::ReturnedValueSurface;
 use crate::seam::{
-    DisplayDelta, FormatDelta, FormatDependencyFact, TopologyDelta, ValuePayload,
-    WorksheetValueClass,
+    DisplayDelta, FormatDelta, FormatDependencyFact, TopologyDelta, WorksheetValueClass,
 };
 use crate::source::FormulaSourceRecord;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct VerificationTypedValueSurface {
-    pub value_kind: String,
-    pub worksheet_value_class: WorksheetValueClass,
-    pub payload: ValuePayload,
-    pub error_kind: Option<String>,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct VerificationConditionalFormattingRule {
@@ -66,11 +61,12 @@ impl LocaleFormatContextSurface {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct VerificationPublicationSurface {
     pub has_publication_context: bool,
     pub entered_cell_text: String,
-    pub typed_value: VerificationTypedValueSurface,
+    pub published_value: EvalValue,
+    pub published_value_class: WorksheetValueClass,
     pub visible_value_text: String,
     pub effective_display_text: String,
     pub format_profile: Option<String>,
@@ -158,7 +154,8 @@ pub fn build_verification_publication_surface(
     VerificationPublicationSurface {
         has_publication_context: context.is_some(),
         entered_cell_text: source.entered_formula_text.clone(),
-        typed_value: typed_value_surface(published_worksheet_value),
+        published_value: published_worksheet_value.clone(),
+        published_value_class: published_worksheet_value_class(published_worksheet_value),
         visible_value_text,
         effective_display_text,
         format_profile: context
@@ -223,54 +220,11 @@ pub fn build_verification_publication_surface(
     }
 }
 
-fn typed_value_surface(value: &EvalValue) -> VerificationTypedValueSurface {
+fn published_worksheet_value_class(value: &EvalValue) -> WorksheetValueClass {
     match value {
-        EvalValue::Number(number) => VerificationTypedValueSurface {
-            value_kind: "number".to_string(),
-            worksheet_value_class: WorksheetValueClass::Scalar,
-            payload: ValuePayload::Number(number.to_string()),
-            error_kind: None,
-        },
-        EvalValue::Text(text) => VerificationTypedValueSurface {
-            value_kind: "text".to_string(),
-            worksheet_value_class: WorksheetValueClass::Scalar,
-            payload: ValuePayload::Text(text.to_string_lossy()),
-            error_kind: None,
-        },
-        EvalValue::Logical(value) => VerificationTypedValueSurface {
-            value_kind: "logical".to_string(),
-            worksheet_value_class: WorksheetValueClass::Scalar,
-            payload: ValuePayload::Logical(*value),
-            error_kind: None,
-        },
-        EvalValue::Error(code) => VerificationTypedValueSurface {
-            value_kind: "error".to_string(),
-            worksheet_value_class: WorksheetValueClass::Error,
-            payload: ValuePayload::ErrorCode(format!("{code:?}")),
-            error_kind: Some(worksheet_error_text(*code).to_string()),
-        },
-        EvalValue::Array(array) => VerificationTypedValueSurface {
-            value_kind: "array".to_string(),
-            worksheet_value_class: WorksheetValueClass::ArrayAnchor,
-            payload: ValuePayload::Text(format!(
-                "Array({}x{})",
-                array.shape().rows,
-                array.shape().cols
-            )),
-            error_kind: None,
-        },
-        EvalValue::Reference(reference) => VerificationTypedValueSurface {
-            value_kind: "reference".to_string(),
-            worksheet_value_class: WorksheetValueClass::Scalar,
-            payload: ValuePayload::Text(reference.target.clone()),
-            error_kind: None,
-        },
-        EvalValue::Lambda(lambda) => VerificationTypedValueSurface {
-            value_kind: "lambda".to_string(),
-            worksheet_value_class: WorksheetValueClass::Scalar,
-            payload: ValuePayload::Text(format!("Lambda({})", lambda.callable_token)),
-            error_kind: None,
-        },
+        EvalValue::Error(_) => WorksheetValueClass::Error,
+        EvalValue::Array(_) => WorksheetValueClass::ArrayAnchor,
+        _ => WorksheetValueClass::Scalar,
     }
 }
 
@@ -286,37 +240,29 @@ fn render_effective_display_text(
 
     let locale_ctx = locale_ctx?;
     if let Some(code) = number_format_code {
-        if let Some(rendered) = render_with_number_format_code(locale_ctx, *number, code) {
+        if let Ok(rendered) = render_with_code(&locale_ctx.profile, locale_ctx.date_system, *number, code) {
             return Some(rendered);
         }
     }
 
     let hint = presentation_hint.and_then(|value| value.number_format)?;
     match hint {
-        oxfunc_core::value::NumberFormatHint::Currency => locale_ctx
-            .formatter
-            .render_currency(
-                &locale_ctx.profile,
-                *number,
-                locale_ctx.profile.currency_decimals.into(),
-            )
-            .ok()
-            .map(|value| value.to_string_lossy()),
-        oxfunc_core::value::NumberFormatHint::Percentage => locale_ctx
-            .formatter
-            .render_with_code(&locale_ctx.profile, locale_ctx.date_system, *number, "0%")
-            .ok()
-            .map(|value| value.to_string_lossy()),
-        oxfunc_core::value::NumberFormatHint::DateLike => locale_ctx
-            .formatter
-            .render_with_code(
-                &locale_ctx.profile,
-                locale_ctx.date_system,
-                *number,
-                "yyyy-mm-dd",
-            )
-            .ok()
-            .map(|value| value.to_string_lossy()),
+        oxfunc_core::value::NumberFormatHint::Currency => render_currency(
+            &locale_ctx.profile,
+            *number,
+            locale_ctx.profile.currency_decimals.into(),
+        )
+        .ok(),
+        oxfunc_core::value::NumberFormatHint::Percentage => {
+            render_with_code(&locale_ctx.profile, locale_ctx.date_system, *number, "0%").ok()
+        }
+        oxfunc_core::value::NumberFormatHint::DateLike => render_with_code(
+            &locale_ctx.profile,
+            locale_ctx.date_system,
+            *number,
+            "yyyy-mm-dd",
+        )
+        .ok(),
         oxfunc_core::value::NumberFormatHint::General
         | oxfunc_core::value::NumberFormatHint::Scientific
         | oxfunc_core::value::NumberFormatHint::Fraction
@@ -324,431 +270,15 @@ fn render_effective_display_text(
     }
 }
 
-fn render_with_number_format_code(
-    locale_ctx: &LocaleFormatContext<'_>,
-    value: f64,
-    number_format_code: &str,
-) -> Option<String> {
-    if let Ok(rendered) = locale_ctx.formatter.render_with_code(
-        &locale_ctx.profile,
-        locale_ctx.date_system,
-        value,
-        number_format_code,
-    ) {
-        return Some(rendered.to_string_lossy());
-    }
-
-    if let Some(rendered) =
-        render_with_custom_number_format_code(locale_ctx, value, number_format_code)
-    {
-        return Some(rendered);
-    }
-
-    None
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ParsedNumericSection {
-    prefix: String,
-    suffix: String,
-    decimals: i32,
-    use_grouping: bool,
-    percent_count: i32,
-    negative_parentheses: bool,
-    is_currency: bool,
-}
-
-fn render_with_custom_number_format_code(
-    locale_ctx: &LocaleFormatContext<'_>,
-    value: f64,
-    number_format_code: &str,
-) -> Option<String> {
-    let section = select_number_format_section(number_format_code, value)?;
-    let stripped = strip_condition_and_color_tokens(&section);
-    if looks_like_date_format(&stripped) {
-        return render_with_date_tokens(locale_ctx, value, &stripped);
-    }
-
-    let numeric = parse_numeric_section(&stripped)?;
-    let scaled_value = value * 100f64.powi(numeric.percent_count);
-    let base = if numeric.is_currency
-        && numeric.prefix == locale_ctx.profile.currency_symbol
-        && numeric.suffix.is_empty()
-    {
-        locale_ctx
-            .formatter
-            .render_currency(&locale_ctx.profile, scaled_value, numeric.decimals)
-            .ok()
-            .map(|rendered| rendered.to_string_lossy())?
-    } else {
-        locale_ctx
-            .formatter
-            .render_fixed(
-                &locale_ctx.profile,
-                scaled_value.abs(),
-                numeric.decimals,
-                !numeric.use_grouping,
-            )
-            .ok()
-            .map(|rendered| rendered.to_string_lossy())?
-    };
-
-    let body = if scaled_value.is_sign_negative() && !base.starts_with('-') {
-        format!("-{base}")
-    } else {
-        base
-    };
-    Some(apply_numeric_affixes(body, &numeric))
-}
-
-fn parse_numeric_section(section: &str) -> Option<ParsedNumericSection> {
-    let cleaned = expand_literal_tokens(section);
-    let first_placeholder = cleaned.find(['#', '0', '?'])?;
-    let last_placeholder = cleaned.rfind(['#', '0', '?'])?;
-    let prefix = cleaned[..first_placeholder].replace('*', "");
-    let suffix = cleaned[last_placeholder + 1..].replace('*', "");
-    let placeholder_region = &cleaned[first_placeholder..=last_placeholder];
-    let decimals = placeholder_region
-        .split_once('.')
-        .map(|(_, fractional)| {
-            fractional
-                .chars()
-                .filter(|ch| matches!(ch, '0' | '#' | '?'))
-                .count() as i32
-        })
-        .unwrap_or(0);
-    let integer_region = placeholder_region
-        .split_once('.')
-        .map(|(integer, _)| integer)
-        .unwrap_or(placeholder_region);
-    let use_grouping = integer_region.contains(',');
-    let percent_count = prefix.matches('%').count() as i32 + suffix.matches('%').count() as i32;
-    let negative_parentheses = prefix.contains('(') && suffix.contains(')');
-    let is_currency = prefix.contains('$')
-        || prefix.contains('R')
-        || suffix.contains('$')
-        || suffix.contains('R');
-
-    Some(ParsedNumericSection {
-        prefix,
-        suffix,
-        decimals,
-        use_grouping,
-        percent_count,
-        negative_parentheses,
-        is_currency,
-    })
-}
-
-fn apply_numeric_affixes(base: String, numeric: &ParsedNumericSection) -> String {
-    if numeric.is_currency
-        && numeric.suffix.is_empty()
-        && base.starts_with(&numeric.prefix)
-        && !numeric.prefix.is_empty()
-    {
-        return if numeric.negative_parentheses && base.starts_with('-') {
-            let unsigned = base.trim_start_matches('-');
-            format!("{}{}{}", numeric.prefix, unsigned, numeric.suffix)
-        } else {
-            base
-        };
-    }
-
-    if numeric.negative_parentheses && base.starts_with('-') {
-        let unsigned = base.trim_start_matches('-');
-        format!("{}{}{}", numeric.prefix, unsigned, numeric.suffix)
-    } else {
-        format!("{}{}{}", numeric.prefix, base, numeric.suffix)
-    }
-}
-
-fn select_number_format_section(code: &str, value: f64) -> Option<String> {
-    let sections = split_format_sections(code);
-    if sections.is_empty() {
-        return None;
-    }
-
-    for section in &sections {
-        if let Some(condition) = extract_condition(section) {
-            if condition_matches(&condition, value) {
-                return Some(section.clone());
-            }
-        }
-    }
-
-    match sections.len() {
-        1 => sections.first().cloned(),
-        2 => {
-            if value < 0.0 {
-                sections
-                    .get(1)
-                    .cloned()
-                    .or_else(|| sections.first().cloned())
-            } else {
-                sections.first().cloned()
-            }
-        }
-        _ => {
-            if value > 0.0 {
-                sections.first().cloned()
-            } else if value < 0.0 {
-                sections
-                    .get(1)
-                    .cloned()
-                    .or_else(|| sections.first().cloned())
-            } else {
-                sections
-                    .get(2)
-                    .cloned()
-                    .or_else(|| sections.first().cloned())
-            }
-        }
-    }
-}
-
-fn split_format_sections(code: &str) -> Vec<String> {
-    let mut sections = Vec::new();
-    let mut current = String::new();
-    let mut in_quotes = false;
-    let mut escaped = false;
-
-    for ch in code.chars() {
-        if escaped {
-            current.push(ch);
-            escaped = false;
-            continue;
-        }
-        match ch {
-            '\\' => {
-                current.push(ch);
-                escaped = true;
-            }
-            '"' => {
-                current.push(ch);
-                in_quotes = !in_quotes;
-            }
-            ';' if !in_quotes => {
-                sections.push(current.trim().to_string());
-                current.clear();
-            }
-            _ => current.push(ch),
-        }
-    }
-    if !current.is_empty() || code.ends_with(';') {
-        sections.push(current.trim().to_string());
-    }
-    sections
-        .into_iter()
-        .filter(|section| !section.is_empty())
-        .collect()
-}
-
-fn strip_condition_and_color_tokens(section: &str) -> String {
-    let mut stripped = String::new();
-    let mut chars = section.chars().peekable();
-    while let Some(ch) = chars.next() {
-        if ch == '[' {
-            let mut token = String::new();
-            for next in chars.by_ref() {
-                if next == ']' {
-                    break;
-                }
-                token.push(next);
-            }
-            if token.starts_with('>')
-                || token.starts_with('<')
-                || token.starts_with('=')
-                || token.chars().all(|c| c.is_ascii_alphabetic())
-            {
-                continue;
-            }
-            stripped.push('[');
-            stripped.push_str(&token);
-            stripped.push(']');
-        } else {
-            stripped.push(ch);
-        }
-    }
-    stripped.trim().to_string()
-}
-
-fn expand_literal_tokens(section: &str) -> String {
-    let mut result = String::new();
-    let mut chars = section.chars().peekable();
-    let mut in_quotes = false;
-
-    while let Some(ch) = chars.next() {
-        match ch {
-            '"' => in_quotes = !in_quotes,
-            '\\' => {
-                if let Some(next) = chars.next() {
-                    result.push(next);
-                }
-            }
-            '_' => {
-                let _ = chars.next();
-                result.push(' ');
-            }
-            '*' => {}
-            _ if in_quotes => result.push(ch),
-            _ => result.push(ch),
-        }
-    }
-
-    result
-}
-
-fn extract_condition(section: &str) -> Option<String> {
-    let trimmed = section.trim_start();
-    let remaining = trimmed.strip_prefix('[')?;
-    let token = remaining.split(']').next()?;
-    if token.starts_with('>') || token.starts_with('<') || token.starts_with('=') {
-        Some(token.to_string())
-    } else {
-        None
-    }
-}
-
-fn condition_matches(condition: &str, value: f64) -> bool {
-    let operator = if let Some(rest) = condition.strip_prefix(">=") {
-        (">=", rest)
-    } else if let Some(rest) = condition.strip_prefix("<=") {
-        ("<=", rest)
-    } else if let Some(rest) = condition.strip_prefix("<>") {
-        ("<>", rest)
-    } else if let Some(rest) = condition.strip_prefix('>') {
-        (">", rest)
-    } else if let Some(rest) = condition.strip_prefix('<') {
-        ("<", rest)
-    } else if let Some(rest) = condition.strip_prefix('=') {
-        ("=", rest)
-    } else {
-        return false;
-    };
-    let Ok(threshold) = operator.1.trim().parse::<f64>() else {
-        return false;
-    };
-    match operator.0 {
-        ">" => value > threshold,
-        ">=" => value >= threshold,
-        "<" => value < threshold,
-        "<=" => value <= threshold,
-        "=" => (value - threshold).abs() < f64::EPSILON,
-        "<>" => (value - threshold).abs() >= f64::EPSILON,
-        _ => false,
-    }
-}
-
-fn looks_like_date_format(section: &str) -> bool {
-    let lower = section.to_ascii_lowercase();
-    (lower.contains('y') && lower.contains('d') && lower.contains('m'))
-        && !lower.contains('#')
-        && !lower.contains('0')
-}
-
-fn render_with_date_tokens(
-    locale_ctx: &LocaleFormatContext<'_>,
-    value: f64,
-    section: &str,
-) -> Option<String> {
-    let (year, month, day) =
-        oxfunc_core::locale_format::ymd_from_excel_serial(locale_ctx.date_system, value)?;
-    let mut rendered = expand_literal_tokens(section);
-    rendered = rendered.replace("yyyy", &format!("{year:04}"));
-    rendered = rendered.replace("yy", &format!("{:02}", year.rem_euclid(100)));
-    rendered = rendered.replace("mmmm", month_name(month, false));
-    rendered = rendered.replace("mmm", month_name(month, true));
-    rendered = rendered.replace("mm", &format!("{month:02}"));
-    rendered = rendered.replace("dd", &format!("{day:02}"));
-    rendered = rendered.replace("m", &month.to_string());
-    rendered = rendered.replace("d", &day.to_string());
-    Some(rendered)
-}
-
-fn month_name(month: i64, abbreviated: bool) -> &'static str {
-    match (month, abbreviated) {
-        (1, true) => "Jan",
-        (2, true) => "Feb",
-        (3, true) => "Mar",
-        (4, true) => "Apr",
-        (5, true) => "May",
-        (6, true) => "Jun",
-        (7, true) => "Jul",
-        (8, true) => "Aug",
-        (9, true) => "Sep",
-        (10, true) => "Oct",
-        (11, true) => "Nov",
-        (12, true) => "Dec",
-        (1, false) => "January",
-        (2, false) => "February",
-        (3, false) => "March",
-        (4, false) => "April",
-        (5, false) => "May",
-        (6, false) => "June",
-        (7, false) => "July",
-        (8, false) => "August",
-        (9, false) => "September",
-        (10, false) => "October",
-        (11, false) => "November",
-        (12, false) => "December",
-        _ => "",
-    }
-}
-
-fn render_visible_value_text(value: &EvalValue) -> String {
-    match value {
-        EvalValue::Number(number) => render_visible_number(*number),
-        EvalValue::Text(text) => text.to_string_lossy(),
-        EvalValue::Logical(value) => {
-            if *value {
-                "TRUE".to_string()
-            } else {
-                "FALSE".to_string()
-            }
-        }
-        EvalValue::Error(code) => worksheet_error_text(*code).to_string(),
-        EvalValue::Array(array) => format!("Array({}x{})", array.shape().rows, array.shape().cols),
-        EvalValue::Reference(reference) => reference.target.clone(),
-        EvalValue::Lambda(lambda) => format!("Lambda({})", lambda.callable_token),
-    }
-}
-
-fn render_visible_number(number: f64) -> String {
-    if number.fract() == 0.0 {
-        format!("{number:.0}")
-    } else {
-        number.to_string()
-    }
-}
-
-fn worksheet_error_text(code: WorksheetErrorCode) -> &'static str {
-    match code {
-        WorksheetErrorCode::Null => "#NULL!",
-        WorksheetErrorCode::Div0 => "#DIV/0!",
-        WorksheetErrorCode::Value => "#VALUE!",
-        WorksheetErrorCode::Ref => "#REF!",
-        WorksheetErrorCode::Name => "#NAME?",
-        WorksheetErrorCode::Num => "#NUM!",
-        WorksheetErrorCode::NA => "#N/A",
-        WorksheetErrorCode::Busy => "#BUSY!",
-        WorksheetErrorCode::GettingData => "#GETTING_DATA",
-        WorksheetErrorCode::Spill => "#SPILL!",
-        WorksheetErrorCode::Calc => "#CALC!",
-        WorksheetErrorCode::Field => "#FIELD!",
-        WorksheetErrorCode::Blocked => "#BLOCKED!",
-        WorksheetErrorCode::Connect => "#CONNECT!",
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use oxfunc_core::locale_format::en_us_context;
     use oxfunc_core::value::{EvalValue, ExtendedValue};
 
     use super::{
         VerificationConditionalFormattingRule, VerificationPublicationContext,
-        build_verification_publication_surface, render_with_number_format_code,
+        build_verification_publication_surface,
     };
+    use crate::format::{en_us_context, render_with_code};
     use crate::interface::ReturnedValueSurface;
     use crate::seam::TopologyDelta;
     use crate::source::FormulaSourceRecord;
@@ -757,24 +287,28 @@ mod tests {
     fn number_format_code_heuristics_cover_grouping_percent_date_and_negative_sections() {
         let locale = en_us_context();
         assert_eq!(
-            render_with_number_format_code(&locale, 6.0, "$#,##0.00"),
-            Some("$6.00".to_string())
+            render_with_code(&locale.profile, locale.date_system, 6.0, "$#,##0.00"),
+            Ok("$6.00".to_string())
         );
         assert_eq!(
-            render_with_number_format_code(&locale, 1234.567, "#,##0.000"),
-            Some("1,234.567".to_string())
+            render_with_code(&locale.profile, locale.date_system, 1234.567, "#,##0.000"),
+            Ok("1,234.567".to_string())
         );
         assert_eq!(
-            render_with_number_format_code(&locale, 0.125, "0.0%"),
-            Some("12.5%".to_string())
+            render_with_code(&locale.profile, locale.date_system, 0.125, "0.0%"),
+            Ok("12.5%".to_string())
         );
         assert_eq!(
-            render_with_number_format_code(&locale, -1234.5, "($#,##0.00)"),
-            Some("($1,234.50)".to_string())
+            render_with_code(&locale.profile, locale.date_system, -1234.5, "($#,##0.00)"),
+            Ok("($1,234.50)".to_string())
         );
         assert_eq!(
-            render_with_number_format_code(&locale, 45293.0, "m/d/yyyy"),
-            Some("1/2/2024".to_string())
+            render_with_code(&locale.profile, locale.date_system, 45293.0, "m/d/yyyy"),
+            Ok("1/2/2024".to_string())
+        );
+        assert!(
+            render_with_code(&locale.profile, locale.date_system, 45293.5, "m/d/yyyy h:mm")
+                .is_err()
         );
     }
 
@@ -1120,11 +654,7 @@ fn parse_threshold_number(
 ) -> Option<f64> {
     let stripped = strip_threshold_quotes(threshold);
     stripped.parse::<f64>().ok().or_else(|| {
-        locale_ctx.and_then(|ctx| {
-            ctx.parser
-                .parse_value_text(&ctx.profile, ctx.date_system, stripped)
-                .ok()
-        })
+        locale_ctx.and_then(|ctx| parse_value_text(&ctx.profile, ctx.date_system, stripped).ok())
     })
 }
 

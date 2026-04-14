@@ -279,7 +279,8 @@ Consumer-facing packaging rule:
    - additive `comparison_views` publication for the current XML verification lane when `verification_publication_surface` facts are available,
 5. broader registry/lifecycle/promotion breadth remains outside that current first floor.
 6. the current admitted comparison-view family set is:
-   - `visible_value`
+   - `comparison_value`
+   - `visible_value_text`
    - `effective_display_text`
    - `formatting_view`
    - `conditional_formatting_view`

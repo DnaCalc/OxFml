@@ -3,7 +3,14 @@
   "shared_scenario_alias": "alias.runtime",
   "comparison_views": [
     {
-      "view_family": "visible_value",
+      "view_family": "comparison_value",
+      "value": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "view_family": "visible_value_text",
       "value": "6"
     },
     {

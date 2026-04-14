@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use oxfml_core::binding::NameKind;
 use oxfml_core::eval::EvaluationContext;
+use oxfml_core::format::en_us_context;
 use oxfml_core::interface::{
     HostProviderOutcomeKind, InMemoryLibraryContextProvider, LibraryContextProvider,
     LibraryContextSnapshotRef, PinnedLibraryContextView, ReturnedValueSurface,
@@ -18,7 +19,6 @@ use oxfunc_core::host_info::{
     CellInfoQuery, HostInfoError, HostInfoProvider, ImageProviderResult, ImageRequest, InfoQuery,
     ResolvedWebImage,
 };
-use oxfunc_core::locale_format::en_us_context;
 use oxfunc_core::value::{
     EvalValue, ExcelText, ExtendedValue, NumberFormatHint, PresentationHint, ReferenceLike,
     RichValue, RichValueData, RichValueType,

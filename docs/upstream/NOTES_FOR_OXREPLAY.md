@@ -81,7 +81,8 @@ Current first-wave narrowing:
 1. shared-scenario alias publication should be embedded directly in projection
    results in the first wave,
 2. the current admitted XML verification family set is:
-   - `visible_value`
+   - `comparison_value`
+   - `visible_value_text`
    - `effective_display_text`
    - `formatting_view`
    - `conditional_formatting_view`

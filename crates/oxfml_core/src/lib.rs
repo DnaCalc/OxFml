@@ -2,6 +2,7 @@ pub mod binding;
 pub mod carrier;
 pub mod consumer;
 pub mod eval;
+pub mod format;
 mod host;
 pub mod interface;
 mod language_service;
@@ -65,9 +66,8 @@ pub use interface::{
     classify_library_context_field,
 };
 pub use publication::{
-    LocaleFormatContextSurface, VerificationConditionalFormattingRule,
-    VerificationPublicationContext, VerificationPublicationSurface, VerificationTypedValueSurface,
-    build_verification_publication_surface,
+    LocaleFormatContextSurface, VerificationConditionalFormattingRule, VerificationPublicationContext,
+    VerificationPublicationSurface, build_verification_publication_surface,
 };
 pub use red::{
     IncrementalRedProjectionResult, RedNode, RedProjection, project_red_view,

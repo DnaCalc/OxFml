@@ -102,7 +102,7 @@ pub struct HostRecalcOutput {
     pub artifact_reuse: ArtifactReuseReport,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FirstHostReplayCapturePacket {
     pub adapter_id: String,
     pub formula_stable_id: String,

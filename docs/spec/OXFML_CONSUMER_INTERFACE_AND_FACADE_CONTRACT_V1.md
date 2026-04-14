@@ -384,7 +384,8 @@ Current floor note:
    for fixture-family and retained-witness projection.
 2. the active `W056` follow-on now additionally allows runtime-result and first-host-capture projection to publish machine-readable `comparison_views` for the current XML verification lane.
 3. the currently admitted view families are:
-   - `visible_value`
+   - `comparison_value`
+   - `visible_value_text`
    - `effective_display_text`
    - `formatting_view`
    - `conditional_formatting_view`

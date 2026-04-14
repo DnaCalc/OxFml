@@ -21,7 +21,8 @@ OxFml landed a first `W056` slice that adds a typed verification publication/exp
 2. `VerificationPublicationSurface`
    - OxFml-owned export packet carrying:
      - `entered_cell_text`
-     - `typed_value`
+     - `published_value`
+     - `published_value_class`
      - `visible_value_text`
      - `effective_display_text`
      - `format_profile`
@@ -50,7 +51,8 @@ OxFml landed a first `W056` slice that adds a typed verification publication/exp
    - the first-host replay capture packet now carries `verification_publication_surface`
    - `ReplayProjectionResult` now exposes `verification_publication_surface`
    - `ReplayProjectionResult` now also publishes additive `comparison_views` for:
-     - `visible_value`
+     - `comparison_value`
+     - `visible_value_text`
      - `effective_display_text`
      - `formatting_view`
      - `conditional_formatting_view`

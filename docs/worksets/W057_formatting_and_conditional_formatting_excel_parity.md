@@ -95,13 +95,13 @@ This workset exists because `W056` now proves useful XML-verification export, br
 | 9 | CURRENT_BLOCKERS.md updated (new/resolved)? | |
 
 ## Status
-- execution_state: planned
+- execution_state: in_progress
 - scope_completeness: scope_partial
 - target_completeness: target_partial
 - integration_completeness: partial
 - open_lanes:
-  - the full Excel-parity family set is intentionally larger than the currently admitted `W056` best-effort slice
-  - exact owner split between OxFml-local logic and any required OxFunc format-engine widening remains to be narrowed family by family
+  - the full Excel-parity family set is intentionally larger than the current landed production locale/format builder plus the first typed `comparison_value` verification slice
+  - the production OxFml locale/format builder now exists, but broader function-path uptake outside the current local runtime/publication floor still depends on later cross-repo uptake
   - downstream retained replay and host uptake will remain partial until later evidence waves land
 - claim_confidence: draft
 - reviewed_inbound_observations: current OxFunc and OxCalc ledgers plus the OxReplay XML comparison-view request remain relevant; `W056` outbound notes should be treated as the immediate predecessor state for this workset

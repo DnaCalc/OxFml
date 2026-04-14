@@ -24,7 +24,8 @@ use oxfml_core::semantics::{
 };
 use oxfml_core::source::FormulaSourceRecord;
 use oxfml_core::{FormulaChannelKind, TypedContextQueryBundle};
-use oxfunc_core::locale_format::en_us_context;
+use oxfml_core::format::en_us_context;
+use oxfunc_core::value::EvalValue;
 use serde_json::Value;
 
 #[test]
@@ -194,7 +195,7 @@ fn replay_projection_service_projects_runtime_and_host_outputs() {
             .comparison_views
             .as_ref()
             .map(|views| views.len()),
-        Some(4)
+        Some(5)
     );
     assert_eq!(
         runtime_projection
@@ -233,8 +234,15 @@ fn replay_projection_service_projects_runtime_and_host_outputs() {
         runtime_projection
             .verification_publication_surface
             .as_ref()
-            .map(|surface| surface.typed_value.value_kind.as_str()),
-        Some("number")
+            .map(|surface| surface.published_value.clone()),
+        Some(EvalValue::Number(6.0))
+    );
+    assert_eq!(
+        runtime_projection
+            .verification_publication_surface
+            .as_ref()
+            .map(|surface| surface.published_value_class.clone()),
+        Some(oxfml_core::WorksheetValueClass::Scalar)
     );
     assert_eq!(
         runtime_projection
@@ -321,7 +329,7 @@ fn replay_projection_service_projects_runtime_and_host_outputs() {
 }
 
 #[test]
-fn replay_projection_service_emits_only_visible_value_without_publication_context() {
+fn replay_projection_service_emits_comparison_value_and_visible_text_without_publication_context() {
     let environment = RuntimeEnvironment::new();
     let runtime_result = environment
         .execute(RuntimeFormulaRequest::new(
@@ -343,7 +351,14 @@ fn replay_projection_service_emits_only_visible_value_without_publication_contex
             .map(|views| comparison_views_json(views)),
         Some(serde_json::json!([
             {
-                "view_family": "visible_value",
+                "view_family": "comparison_value",
+                "value": {
+                    "kind": "number",
+                    "value": 6.0
+                }
+            },
+            {
+                "view_family": "visible_value_text",
                 "value": "6"
             }
         ]))
@@ -372,11 +387,60 @@ fn replay_projection_service_emits_only_visible_value_without_publication_contex
             .map(|views| comparison_views_json(views)),
         Some(serde_json::json!([
             {
-                "view_family": "visible_value",
+                "view_family": "comparison_value",
+                "value": {
+                    "kind": "number",
+                    "value": 6.0
+                }
+            },
+            {
+                "view_family": "visible_value_text",
                 "value": "6"
             }
         ]))
     );
+}
+
+#[test]
+fn replay_projection_service_preserves_full_array_contents_in_comparison_value() {
+    let environment = RuntimeEnvironment::new();
+    let runtime_result = environment
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new("replay:array", 1, "=SEQUENCE(2,2)"),
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("runtime result should execute");
+
+    let runtime_projection =
+        ReplayProjectionService::project(ReplayProjectionRequest::runtime_result(&runtime_result));
+
+    let comparison_value = runtime_projection
+        .comparison_views
+        .as_ref()
+        .and_then(|views| {
+            views.iter()
+                .find(|view| view.view_family == "comparison_value")
+                .map(|view| view.value.clone())
+        })
+        .expect("comparison_value view should exist");
+
+    assert_eq!(
+        comparison_value,
+        serde_json::json!({
+            "kind": "array",
+            "shape": {
+                "rows": 2,
+                "cols": 2
+            },
+            "cells": [
+                { "kind": "number", "value": 1.0 },
+                { "kind": "number", "value": 2.0 },
+                { "kind": "number", "value": 3.0 },
+                { "kind": "number", "value": 4.0 }
+            ]
+        })
+    );
+    assert_eq!(runtime_result.verification_publication_surface.visible_value_text, "1");
 }
 
 fn comparison_views_json(views: &[oxfml_core::consumer::replay::ReplayComparisonView]) -> Value {

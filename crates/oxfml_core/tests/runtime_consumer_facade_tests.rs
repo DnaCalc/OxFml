@@ -4,6 +4,7 @@ use oxfml_core::consumer::runtime::{
     RuntimeEnvironment, RuntimeFormulaRequest, RuntimeManagedSessionError,
     RuntimeManagedSessionPhase, RuntimeSessionFacade,
 };
+use oxfml_core::format::en_us_context;
 use oxfml_core::semantics::{
     LibraryAvailabilityState, LibraryContextSnapshot, LibraryContextSnapshotEntry,
     RegistrationSourceKind,
@@ -403,7 +404,7 @@ fn runtime_session_facade_executes_and_commits_managed_in_one_step() {
 
 #[test]
 fn runtime_environment_executes_rtd_formula_through_typed_query_bundle() {
-    let locale = oxfunc_core::locale_format::en_us_context();
+    let locale = en_us_context();
     let request = RuntimeFormulaRequest::new(
         FormulaSourceRecord::new("runtime:rtd", 1, "=RTD(\"prog\",\"server\",\"topic\")"),
         TypedContextQueryBundle::new(None, Some(&ValueRtdProvider), Some(&locale), None, None),
@@ -507,7 +508,7 @@ fn runtime_environment_applies_registered_external_catalog_mutation() {
 fn runtime_session_facade_reports_managed_diagnostics_for_overlay_and_claim_owner() {
     let environment = RuntimeEnvironment::new();
     let mut session = RuntimeSessionFacade::new(environment);
-    let locale = oxfunc_core::locale_format::en_us_context();
+    let locale = en_us_context();
     let request = RuntimeFormulaRequest::new(
         FormulaSourceRecord::new("runtime:managed-diagnostics", 1, "=INFO(\"directory\")"),
         TypedContextQueryBundle::new(

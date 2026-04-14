@@ -4,12 +4,13 @@ use std::path::PathBuf;
 
 mod common;
 
+use oxfml_core::format::en_us_context;
 use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult};
 use oxfunc_core::host_info::{
     CellInfoQuery, HostInfoError, HostInfoProvider, ImageProviderResult, ImageRequest,
     ImageSizingMode, InfoQuery, ResolvedWebImage,
 };
-use oxfunc_core::locale_format::{LocaleFormatContext, en_us_context};
+use oxfunc_core::locale_format::LocaleFormatContext;
 use oxfunc_core::value::{
     ArrayCellValue, CellStyleHint, EvalValue, ExcelText, NumberFormatHint, PresentationHint,
     ReferenceKind, ReferenceLike, WorksheetErrorCode,

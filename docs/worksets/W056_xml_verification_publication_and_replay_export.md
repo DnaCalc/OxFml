@@ -64,9 +64,10 @@ Add a bounded OxFml-owned verification publication/export surface so XML-backed 
 - integration_completeness: partial
 - open_lanes:
   - a first `VerificationPublicationContext` and `VerificationPublicationSurface` now exist in code and are carried through `RuntimeFormulaResult`, the first-host replay capture packet, and `ReplayProjectionResult`
+  - the verification publication surface now preserves `published_value: EvalValue` plus `published_value_class` directly from the OxFunc-owned value model rather than a local typed-value wrapper
   - the current effective-display slice now covers the earlier currency bridge plus a broader best-effort local lane for grouped/fixed numeric codes, percent formats, sectioned negative formats, and date-token patterns such as `m/d/yyyy`
   - the current first conditional-formatting slice now computes applicability and effective font/fill/display consequences for operator-driven rules and simple current-cell expression rules such as `=A1>0`, including bounded `AND(...)` / `OR(...)` forms
-  - replay projection now publishes `comparison_views` for `visible_value`, `effective_display_text`, `formatting_view`, and `conditional_formatting_view` when the verification publication surface is present; retained local fixture evidence lives at `crates/oxfml_core/tests/fixtures/xml_verification_comparison_views_projection.json`
+  - replay projection now publishes `comparison_views` for `comparison_value`, `visible_value_text`, `effective_display_text`, `formatting_view`, and `conditional_formatting_view` when the verification publication surface is present; retained local fixture evidence lives at `crates/oxfml_core/tests/fixtures/xml_verification_comparison_views_projection.json`
   - full display-code breadth beyond the current admitted and heuristically rendered slice remains outside this workset
   - broad conditional-formatting semantics, priority chains, and full formula-evaluation closure remain outside this workset
   - broader retained-witness or pack-grade replay promotion of this family remains downstream of this workset

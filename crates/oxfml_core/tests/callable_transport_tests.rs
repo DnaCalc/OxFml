@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
+use oxfml_core::format::en_us_context;
 use oxfml_core::binding::{BindContext, BindRequest, BoundExpr, NameKind, bind_formula};
 use oxfml_core::eval::{
     CallableDefinedNameBinding, CallableValueCarrier, CallableValueProfile, DefinedNameBinding,
@@ -11,7 +12,6 @@ use oxfml_core::red::project_red_view;
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
 use oxfml_core::test_support::host::SingleFormulaHost;
-use oxfunc_core::locale_format::en_us_context;
 use oxfunc_core::value::{EvalValue, ExcelText, ReferenceLike};
 use serde::Deserialize;
 

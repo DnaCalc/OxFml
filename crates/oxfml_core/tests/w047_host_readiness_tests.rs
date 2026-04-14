@@ -1,6 +1,5 @@
 use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult, RtdRequest};
 use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
-use oxfunc_core::locale_format::en_us_context;
 use oxfunc_core::value::{EvalValue, ExcelText};
 
 use oxfml_core::binding::{BindContext, BindRequest, NormalizedReference, bind_formula};
@@ -9,6 +8,7 @@ use oxfml_core::carrier::{
     DataValidationCarrierSpec, validate_conditional_formatting_formula,
     validate_data_validation_formula,
 };
+use oxfml_core::format::en_us_context;
 use oxfml_core::interface::{
     HostProviderOutcomeKind, InMemoryLibraryContextProvider, ReturnedValueSurfaceKind,
     TypedContextQueryBundle,

@@ -5,6 +5,7 @@ use crate::consumer::runtime::{
 use crate::host::FirstHostReplayCapturePacket;
 use crate::interface::{LibraryContextSnapshotRef, TypedContextQueryBundleSpec};
 use crate::publication::VerificationPublicationSurface;
+use oxfunc_core::value::{ArrayCellValue, EvalValue};
 use serde_json::{Value, json};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,7 +36,7 @@ pub struct ReplayRetainedWitnessSource {
     pub reduction_manifest_ref: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ReplayFirstHostCaptureSource {
     pub source_artifact_family: String,
     pub session_id: Option<String>,
@@ -603,10 +604,16 @@ fn project_retained_witness(
 }
 
 fn build_comparison_views(surface: &VerificationPublicationSurface) -> Vec<ReplayComparisonView> {
-    let mut views = vec![ReplayComparisonView {
-        view_family: "visible_value".to_string(),
-        value: Value::String(surface.visible_value_text.clone()),
-    }];
+    let mut views = vec![
+        ReplayComparisonView {
+            view_family: "comparison_value".to_string(),
+            value: comparison_value_json(&surface.published_value),
+        },
+        ReplayComparisonView {
+            view_family: "visible_value_text".to_string(),
+            value: Value::String(surface.visible_value_text.clone()),
+        },
+    ];
 
     if !surface.has_publication_context {
         return views;
@@ -627,6 +634,80 @@ fn build_comparison_views(surface: &VerificationPublicationSurface) -> Vec<Repla
         },
     ]);
     views
+}
+
+fn comparison_value_json(value: &EvalValue) -> Value {
+    match value {
+        EvalValue::Number(number) => json!({
+            "kind": "number",
+            "value": number
+        }),
+        EvalValue::Text(text) => json!({
+            "kind": "text",
+            "value": text.to_string_lossy()
+        }),
+        EvalValue::Logical(value) => json!({
+            "kind": "logical",
+            "value": value
+        }),
+        EvalValue::Error(code) => json!({
+            "kind": "error",
+            "code": format!("{code:?}"),
+            "display": crate::format::worksheet_error_text(*code)
+        }),
+        EvalValue::Array(array) => json!({
+            "kind": "array",
+            "shape": {
+                "rows": array.shape().rows,
+                "cols": array.shape().cols
+            },
+            "cells": array
+                .iter_row_major()
+                .map(array_cell_json)
+                .collect::<Vec<_>>()
+        }),
+        EvalValue::Reference(reference) => json!({
+            "kind": "reference",
+            "reference_kind": format!("{:?}", reference.kind),
+            "target": reference.target
+        }),
+        EvalValue::Lambda(lambda) => json!({
+            "kind": "lambda",
+            "callable_token": lambda.callable_token,
+            "origin_kind": format!("{:?}", lambda.origin_kind),
+            "arity_shape": {
+                "min": lambda.arity_shape.min,
+                "max": lambda.arity_shape.max
+            },
+            "capture_mode": format!("{:?}", lambda.capture_mode),
+            "invocation_contract_ref": lambda.invocation_contract_ref
+        }),
+    }
+}
+
+fn array_cell_json(value: &ArrayCellValue) -> Value {
+    match value {
+        ArrayCellValue::Number(number) => json!({
+            "kind": "number",
+            "value": number
+        }),
+        ArrayCellValue::Text(text) => json!({
+            "kind": "text",
+            "value": text.to_string_lossy()
+        }),
+        ArrayCellValue::Logical(value) => json!({
+            "kind": "logical",
+            "value": value
+        }),
+        ArrayCellValue::Error(code) => json!({
+            "kind": "error",
+            "code": format!("{code:?}"),
+            "display": crate::format::worksheet_error_text(*code)
+        }),
+        ArrayCellValue::EmptyCell => json!({
+            "kind": "empty_cell"
+        }),
+    }
 }
 
 fn formatting_view_json(surface: &VerificationPublicationSurface) -> Value {

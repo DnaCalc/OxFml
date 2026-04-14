@@ -14,10 +14,11 @@ Answer the OxReplay-side XML comparison-view request by declaring the landed OxF
 OxFml replay projection now publishes additive machine-readable `comparison_views` when the replay-facing result carries `verification_publication_surface`.
 
 Current landed family set:
-1. `{ "view_family": "visible_value", "value": ... }`
-2. `{ "view_family": "effective_display_text", "value": ... }`
-3. `{ "view_family": "formatting_view", "value": ... }`
-4. `{ "view_family": "conditional_formatting_view", "value": ... }`
+1. `{ "view_family": "comparison_value", "value": ... }`
+2. `{ "view_family": "visible_value_text", "value": ... }`
+3. `{ "view_family": "effective_display_text", "value": ... }`
+4. `{ "view_family": "formatting_view", "value": ... }`
+5. `{ "view_family": "conditional_formatting_view", "value": ... }`
 
 Current publication rule:
 1. these views are emitted on `ReplayProjectionResult` for runtime-result projection and first-host-capture projection,
@@ -26,13 +27,15 @@ Current publication rule:
 4. they are not host-local convenience strings and they do not move lane semantics into OxReplay.
 
 ## Current family meaning
-1. `visible_value`
+1. `comparison_value`
+   - current value: OxFml-owned typed comparison truth rooted in the OxFunc value model, including full array cell content
+2. `visible_value_text`
    - current value: OxFml visible worksheet-value text
-2. `effective_display_text`
+3. `effective_display_text`
    - current value: OxFml effective display text for the admitted locale/number-format slice plus broader best-effort grouped, percent, sectioned-negative, and date-token rendering
-3. `formatting_view`
+4. `formatting_view`
    - current value: machine-readable format-profile, locale-format-context, date-system flag, style identity/lineage, format dependency facts, format/display delta, presentation-hint, and color facts
-4. `conditional_formatting_view`
+5. `conditional_formatting_view`
    - current value: machine-readable conditional-formatting rule facts plus target-range, operator, threshold, applicability, effective style, and effective-display carriage from the current verification packet
 
 ## Current evidence

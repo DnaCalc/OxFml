@@ -6,12 +6,12 @@ use oxfunc_core::host_info::{
     CellInfoQuery, HostInfoError, HostInfoProvider, ImageProviderResult, ImageRequest, InfoQuery,
     ResolvedWebImage,
 };
-use oxfunc_core::locale_format::en_us_context;
 use oxfunc_core::value::{
     CellStyleHint, EvalValue, ExcelText, NumberFormatHint, PresentationHint, ReferenceLike,
 };
 use serde::Deserialize;
 
+use oxfml_core::format::en_us_context;
 use oxfml_core::seam::{AcceptDecision, TraceEventKind};
 use oxfml_core::semantics::{
     LibraryAvailabilityState, LibraryContextSnapshot, LibraryContextSnapshotEntry,
