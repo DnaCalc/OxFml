@@ -14,7 +14,10 @@ use crate::interface::{
     ReturnedValueSurface, TableCallerRegion, TableDescriptor, TableRef, TypedContextQueryBundle,
     TypedContextQueryBundleSpec,
 };
-use crate::publication::{VerificationPublicationContext, VerificationPublicationSurface};
+use crate::publication::{
+    VerificationComparisonView, VerificationPublicationContext, VerificationPublicationSurface,
+    build_verification_comparison_views,
+};
 use crate::red::project_red_view;
 use crate::scheduler::ExecutionContract;
 use crate::seam::{
@@ -285,6 +288,7 @@ pub struct RuntimeFormulaResult {
     pub evaluation: EvaluationOutput,
     pub published_worksheet_value: EvalValue,
     pub returned_value_surface: ReturnedValueSurface,
+    pub comparison_views: Vec<VerificationComparisonView>,
     pub verification_publication_surface: VerificationPublicationSurface,
     pub candidate_result: AcceptedCandidateResult,
     pub commit_decision: AcceptDecision,
@@ -304,6 +308,9 @@ impl RuntimeFormulaResult {
                 locale_ctx,
                 verification_publication_context,
             );
+        let comparison_views = build_verification_comparison_views(
+            &first_host_replay_capture_packet.verification_publication_surface,
+        );
         Self {
             source: host_output.source,
             syntax_diagnostics: host_output.syntax_diagnostics,
@@ -315,6 +322,7 @@ impl RuntimeFormulaResult {
             evaluation: host_output.evaluation,
             published_worksheet_value: host_output.published_worksheet_value,
             returned_value_surface: host_output.returned_value_surface,
+            comparison_views,
             verification_publication_surface: first_host_replay_capture_packet
                 .verification_publication_surface
                 .clone(),

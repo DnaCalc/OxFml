@@ -4,9 +4,9 @@ use crate::consumer::runtime::{
 };
 use crate::host::FirstHostReplayCapturePacket;
 use crate::interface::{LibraryContextSnapshotRef, TypedContextQueryBundleSpec};
-use crate::publication::VerificationPublicationSurface;
-use oxfunc_core::value::{ArrayCellValue, EvalValue};
-use serde_json::{Value, json};
+use crate::publication::{
+    VerificationComparisonView, VerificationPublicationSurface, build_verification_comparison_views,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReplayProjectionFamily {
@@ -160,11 +160,7 @@ impl<'a> ReplayProjectionRequest<'a> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct ReplayComparisonView {
-    pub view_family: String,
-    pub value: Value,
-}
+pub type ReplayComparisonView = VerificationComparisonView;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReplayProjectionResult {
@@ -286,7 +282,7 @@ fn project_runtime_result(
             .iter()
             .map(|event| format!("{:?}", event.event_kind))
             .collect(),
-        comparison_views: Some(build_comparison_views(
+        comparison_views: Some(build_verification_comparison_views(
             &result.verification_publication_surface,
         )),
         verification_publication_surface: Some(result.verification_publication_surface.clone()),
@@ -320,7 +316,7 @@ fn project_first_host_capture(
         candidate_result_id: Some(source.packet.candidate_result_id.clone()),
         commit_decision_kind: Some(source.packet.commit_decision_kind.clone()),
         trace_event_kinds: source.packet.trace_event_kinds.clone(),
-        comparison_views: Some(build_comparison_views(
+        comparison_views: Some(build_verification_comparison_views(
             &source.packet.verification_publication_surface,
         )),
         verification_publication_surface: Some(
@@ -601,292 +597,4 @@ fn project_retained_witness(
         verification_publication_surface: None,
         first_host_replay_capture_packet: None,
     }
-}
-
-fn build_comparison_views(surface: &VerificationPublicationSurface) -> Vec<ReplayComparisonView> {
-    let mut views = vec![
-        ReplayComparisonView {
-            view_family: "comparison_value".to_string(),
-            value: comparison_value_json(&surface.published_value),
-        },
-        ReplayComparisonView {
-            view_family: "visible_value_text".to_string(),
-            value: Value::String(surface.visible_value_text.clone()),
-        },
-    ];
-
-    if !surface.has_publication_context {
-        return views;
-    }
-
-    views.extend([
-        ReplayComparisonView {
-            view_family: "effective_display_text".to_string(),
-            value: Value::String(surface.effective_display_text.clone()),
-        },
-        ReplayComparisonView {
-            view_family: "formatting_view".to_string(),
-            value: formatting_view_json(surface),
-        },
-        ReplayComparisonView {
-            view_family: "conditional_formatting_view".to_string(),
-            value: conditional_formatting_view_json(surface),
-        },
-    ]);
-    views
-}
-
-fn comparison_value_json(value: &EvalValue) -> Value {
-    match value {
-        EvalValue::Number(number) => json!({
-            "kind": "number",
-            "value": number
-        }),
-        EvalValue::Text(text) => json!({
-            "kind": "text",
-            "value": text.to_string_lossy()
-        }),
-        EvalValue::Logical(value) => json!({
-            "kind": "logical",
-            "value": value
-        }),
-        EvalValue::Error(code) => json!({
-            "kind": "error",
-            "code": format!("{code:?}"),
-            "display": crate::format::worksheet_error_text(*code)
-        }),
-        EvalValue::Array(array) => json!({
-            "kind": "array",
-            "shape": {
-                "rows": array.shape().rows,
-                "cols": array.shape().cols
-            },
-            "cells": array
-                .iter_row_major()
-                .map(array_cell_json)
-                .collect::<Vec<_>>()
-        }),
-        EvalValue::Reference(reference) => json!({
-            "kind": "reference",
-            "reference_kind": format!("{:?}", reference.kind),
-            "target": reference.target
-        }),
-        EvalValue::Lambda(lambda) => json!({
-            "kind": "lambda",
-            "callable_token": lambda.callable_token,
-            "origin_kind": format!("{:?}", lambda.origin_kind),
-            "arity_shape": {
-                "min": lambda.arity_shape.min,
-                "max": lambda.arity_shape.max
-            },
-            "capture_mode": format!("{:?}", lambda.capture_mode),
-            "invocation_contract_ref": lambda.invocation_contract_ref
-        }),
-    }
-}
-
-fn array_cell_json(value: &ArrayCellValue) -> Value {
-    match value {
-        ArrayCellValue::Number(number) => json!({
-            "kind": "number",
-            "value": number
-        }),
-        ArrayCellValue::Text(text) => json!({
-            "kind": "text",
-            "value": text.to_string_lossy()
-        }),
-        ArrayCellValue::Logical(value) => json!({
-            "kind": "logical",
-            "value": value
-        }),
-        ArrayCellValue::Error(code) => json!({
-            "kind": "error",
-            "code": format!("{code:?}"),
-            "display": crate::format::worksheet_error_text(*code)
-        }),
-        ArrayCellValue::EmptyCell => json!({
-            "kind": "empty_cell"
-        }),
-    }
-}
-
-fn formatting_view_json(surface: &VerificationPublicationSurface) -> Value {
-    if is_spreadsheetml_xml_verification(surface) {
-        return json!({
-            "number_format_code": surface.number_format_code,
-            "style_id": surface.style_id,
-            "font_color": surface.font_color,
-            "fill_color": surface.fill_color
-        });
-    }
-
-    json!({
-        "format_profile": surface.format_profile,
-        "locale_format_context": surface.locale_format_context.as_ref().map(locale_format_context_json),
-        "date1904": surface.date1904,
-        "number_format_code": surface.number_format_code,
-        "style_id": surface.style_id,
-        "style_hierarchy": surface.style_hierarchy,
-        "format_dependency_facts": surface
-            .format_dependency_facts
-            .iter()
-            .map(format_dependency_fact_json)
-            .collect::<Vec<_>>(),
-        "format_delta": surface.format_delta.as_ref().map(format_delta_json),
-        "display_delta": surface.display_delta.as_ref().map(display_delta_json),
-        "presentation_hint": surface.presentation_hint.as_ref().map(presentation_hint_json),
-        "font_color": surface.font_color,
-        "fill_color": surface.fill_color,
-        "effective_font_color": surface.effective_font_color,
-        "effective_fill_color": surface.effective_fill_color
-    })
-}
-
-fn conditional_formatting_view_json(surface: &VerificationPublicationSurface) -> Value {
-    if is_spreadsheetml_xml_verification(surface) {
-        let rules = surface
-            .conditional_formatting_rules
-            .iter()
-            .map(spreadsheetml_conditional_formatting_rule_json)
-            .collect::<Vec<_>>();
-        let applied_rule_indexes = surface
-            .conditional_formatting_applies
-            .iter()
-            .enumerate()
-            .filter_map(|(index, applies)| applies.and_then(|value| value.then_some(index + 1)))
-            .collect::<Vec<_>>();
-
-        return json!({
-            "rules": rules,
-            "effective_style": {
-                "number_format_code": surface.number_format_code,
-                "font_color": surface.effective_font_color,
-                "fill_color": surface.effective_fill_color,
-                "effective_display_text": surface.effective_display_text,
-                "applied_rule_indexes": applied_rule_indexes,
-                "source_projection": "spreadsheetml_expression_rules_v1"
-            }
-        });
-    }
-
-    json!({
-        "rules": surface
-            .conditional_formatting_rules
-            .iter()
-            .map(conditional_formatting_rule_json)
-            .collect::<Vec<_>>(),
-        "target_ranges": surface.conditional_formatting_target_ranges,
-        "rule_kind": surface.conditional_formatting_rule_kind,
-        "operator": surface.conditional_formatting_operator,
-        "thresholds": surface.conditional_formatting_thresholds,
-        "applies": surface.conditional_formatting_applies,
-        "effective_font_color": surface.conditional_formatting_effective_font_color,
-        "effective_fill_color": surface.conditional_formatting_effective_fill_color,
-        "effective_display": surface.conditional_formatting_effective_display
-    })
-}
-
-fn is_spreadsheetml_xml_verification(surface: &VerificationPublicationSurface) -> bool {
-    matches!(
-        surface.format_profile.as_deref(),
-        Some("excel-spreadsheetml-2003-default")
-    )
-}
-
-fn locale_format_context_json(surface: &crate::publication::LocaleFormatContextSurface) -> Value {
-    json!({
-        "locale_profile_id": surface.locale_profile_id,
-        "date_system": surface.date_system,
-        "decimal_separator": surface.decimal_separator,
-        "thousands_separator": surface.thousands_separator,
-        "currency_symbol": surface.currency_symbol,
-        "date_separator": surface.date_separator,
-        "time_separator": surface.time_separator
-    })
-}
-
-fn format_dependency_fact_json(fact: &crate::seam::FormatDependencyFact) -> Value {
-    json!({
-        "formula_stable_id": fact.formula_stable_id,
-        "dependency_token": fact.dependency_token,
-        "dependency_class": fact.dependency_class,
-        "scope": fact.scope
-    })
-}
-
-fn locus_json(locus: &crate::seam::Locus) -> Value {
-    json!({
-        "sheet_id": locus.sheet_id,
-        "row": locus.row,
-        "col": locus.col
-    })
-}
-
-fn format_delta_json(delta: &crate::seam::FormatDelta) -> Value {
-    json!({
-        "formula_stable_id": delta.formula_stable_id,
-        "target_loci": delta.target_loci.iter().map(locus_json).collect::<Vec<_>>(),
-        "format_effect_class": delta.format_effect_class,
-        "format_effect_payload": delta.format_effect_payload
-    })
-}
-
-fn display_delta_json(delta: &crate::seam::DisplayDelta) -> Value {
-    json!({
-        "formula_stable_id": delta.formula_stable_id,
-        "target_loci": delta.target_loci.iter().map(locus_json).collect::<Vec<_>>(),
-        "display_effect_class": delta.display_effect_class,
-        "display_effect_payload": delta.display_effect_payload
-    })
-}
-
-fn presentation_hint_json(hint: &oxfunc_core::value::PresentationHint) -> Value {
-    json!({
-        "number_format": hint.number_format.map(|value| format!("{value:?}")),
-        "style": hint.style.map(|value| format!("{value:?}"))
-    })
-}
-
-fn conditional_formatting_rule_json(
-    rule: &crate::publication::VerificationConditionalFormattingRule,
-) -> Value {
-    json!({
-        "target_ranges": rule.target_ranges,
-        "rule_kind": rule.rule_kind,
-        "operator": rule.operator,
-        "thresholds": rule.thresholds,
-        "font_color": rule.font_color,
-        "fill_color": rule.fill_color,
-        "effective_display_text": rule.effective_display_text,
-        "applies": rule.applies,
-        "effective_font_color": rule.effective_font_color,
-        "effective_fill_color": rule.effective_fill_color
-    })
-}
-
-fn spreadsheetml_conditional_formatting_rule_json(
-    rule: &crate::publication::VerificationConditionalFormattingRule,
-) -> Value {
-    let range = rule.target_ranges.first().cloned();
-    let is_expression = rule.rule_kind.eq_ignore_ascii_case("expression");
-    let formula = is_expression
-        .then(|| rule.thresholds.first().cloned())
-        .flatten();
-    let value1 = (!is_expression)
-        .then(|| rule.thresholds.first().cloned())
-        .flatten();
-    let value2 = (!is_expression)
-        .then(|| rule.thresholds.get(1).cloned())
-        .flatten();
-
-    json!({
-        "range": range,
-        "formula": formula,
-        "value1": value1,
-        "value2": value2,
-        "operator": rule.operator,
-        "rule_kind": rule.rule_kind.to_ascii_lowercase(),
-        "font_color": rule.font_color,
-        "fill_color": rule.fill_color
-    })
 }

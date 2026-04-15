@@ -5,6 +5,9 @@ use oxfml_core::consumer::runtime::{
     RuntimeManagedSessionPhase, RuntimeSessionFacade,
 };
 use oxfml_core::format::en_us_context;
+use oxfml_core::publication::{
+    VerificationConditionalFormattingRule, VerificationPublicationContext,
+};
 use oxfml_core::semantics::{
     LibraryAvailabilityState, LibraryContextSnapshot, LibraryContextSnapshotEntry,
     RegistrationSourceKind,
@@ -24,6 +27,7 @@ use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult, RtdRequest}
 use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
 use oxfunc_core::value::EvalValue;
 use oxfunc_core::value::{CallArgValue, ExcelText};
+use serde_json::Value;
 
 #[test]
 fn runtime_environment_executes_against_pinned_snapshot_ref() {
@@ -464,6 +468,66 @@ fn runtime_environment_executes_registered_external_formula_through_typed_query_
         }
         other => panic!("unexpected normalized call request: {other:?}"),
     }
+}
+
+#[test]
+fn runtime_environment_emits_effective_display_text_comparison_view_for_verification_context() {
+    let locale = en_us_context();
+    let request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new("runtime:verification-comparison-views", 1, "=SUM(1,2,3)"),
+        TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
+    )
+    .with_verification_publication_context(VerificationPublicationContext {
+        format_profile: Some("excel-spreadsheetml-2003-default".to_string()),
+        number_format_code: Some("$#,##0.00".to_string()),
+        style_id: Some("calc".to_string()),
+        style_hierarchy: vec!["calcBase".to_string(), "calc".to_string()],
+        font_color: Some("#112233".to_string()),
+        fill_color: Some("#445566".to_string()),
+        conditional_formatting_rules: vec![VerificationConditionalFormattingRule {
+            target_ranges: vec!["A1".to_string()],
+            rule_kind: "Expression".to_string(),
+            operator: None,
+            thresholds: vec!["=A1>0".to_string()],
+            font_color: Some("#FF0000".to_string()),
+            fill_color: Some("#00FF00".to_string()),
+            effective_display_text: None,
+            applies: None,
+            effective_font_color: None,
+            effective_fill_color: None,
+        }],
+    });
+
+    let result = RuntimeEnvironment::new()
+        .execute(request)
+        .expect("runtime verification execution should succeed");
+
+    assert_eq!(
+        result
+            .verification_publication_surface
+            .effective_display_text,
+        "$6.00"
+    );
+    assert_eq!(result.comparison_views.len(), 5);
+    assert_eq!(
+        result
+            .comparison_views
+            .iter()
+            .find(|view| view.view_family == "comparison_value")
+            .map(|view| view.value.clone()),
+        Some(serde_json::json!({
+            "kind": "number",
+            "value": 6.0
+        }))
+    );
+    assert_eq!(
+        result
+            .comparison_views
+            .iter()
+            .find(|view| view.view_family == "effective_display_text")
+            .map(|view| view.value.clone()),
+        Some(Value::String("$6.00".to_string()))
+    );
 }
 
 #[test]
