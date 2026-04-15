@@ -12,6 +12,7 @@ use oxfml_core::consumer::replay::{
 use oxfml_core::consumer::runtime::{
     RuntimeEnvironment, RuntimeFormulaRequest, RuntimeSessionFacade,
 };
+use oxfml_core::format::en_us_context;
 use oxfml_core::interface::{
     InMemoryLibraryContextProvider, LibraryContextProvider, LibraryContextSnapshotRef,
 };
@@ -24,7 +25,6 @@ use oxfml_core::semantics::{
 };
 use oxfml_core::source::FormulaSourceRecord;
 use oxfml_core::{FormulaChannelKind, TypedContextQueryBundle};
-use oxfml_core::format::en_us_context;
 use oxfunc_core::value::EvalValue;
 use serde_json::Value;
 
@@ -418,7 +418,8 @@ fn replay_projection_service_preserves_full_array_contents_in_comparison_value()
         .comparison_views
         .as_ref()
         .and_then(|views| {
-            views.iter()
+            views
+                .iter()
                 .find(|view| view.view_family == "comparison_value")
                 .map(|view| view.value.clone())
         })
@@ -440,7 +441,12 @@ fn replay_projection_service_preserves_full_array_contents_in_comparison_value()
             ]
         })
     );
-    assert_eq!(runtime_result.verification_publication_surface.visible_value_text, "1");
+    assert_eq!(
+        runtime_result
+            .verification_publication_surface
+            .visible_value_text,
+        "1"
+    );
 }
 
 fn comparison_views_json(views: &[oxfml_core::consumer::replay::ReplayComparisonView]) -> Value {

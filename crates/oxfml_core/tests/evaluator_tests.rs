@@ -474,7 +474,10 @@ fn evaluator_supports_scientific_numeric_literals() {
 #[test]
 fn evaluator_maps_negative_fractional_power_to_num_error() {
     let output = evaluate("=(-1)^0.5", None, None, Some(&en_us_context()));
-    assert_eq!(output.oxfunc_value, EvalValue::Error(WorksheetErrorCode::Num));
+    assert_eq!(
+        output.oxfunc_value,
+        EvalValue::Error(WorksheetErrorCode::Num)
+    );
     assert_eq!(output.result.payload_summary, "Error(Num)");
 }
 
@@ -1572,7 +1575,11 @@ fn evaluator_returns_lambda_value_from_helper_bound_returned_lambda() {
     );
     assert!(matches!(output.oxfunc_value, EvalValue::Lambda(_)));
     assert_eq!(
-        output.result.callable_carrier.as_ref().map(|carrier| carrier.arity),
+        output
+            .result
+            .callable_carrier
+            .as_ref()
+            .map(|carrier| carrier.arity),
         Some(1)
     );
 }
@@ -1630,7 +1637,10 @@ fn evaluator_projects_runaway_recursive_defined_name_callable_as_num_error() {
     );
 
     let output = evaluate("=Loop()", Some(bindings), None, Some(&en_us_context()));
-    assert_eq!(output.oxfunc_value, EvalValue::Error(WorksheetErrorCode::Num));
+    assert_eq!(
+        output.oxfunc_value,
+        EvalValue::Error(WorksheetErrorCode::Num)
+    );
 }
 
 #[test]
@@ -1707,7 +1717,12 @@ fn evaluator_matches_excel_named_recursion_success_boundary() {
         )),
     );
 
-    let output = evaluate("=CountDown(5460)", Some(bindings), None, Some(&en_us_context()));
+    let output = evaluate(
+        "=CountDown(5460)",
+        Some(bindings),
+        None,
+        Some(&en_us_context()),
+    );
     assert_eq!(output.oxfunc_value, EvalValue::Number(5460.0));
 }
 
@@ -1746,8 +1761,16 @@ fn evaluator_matches_excel_named_recursion_failure_boundary() {
         )),
     );
 
-    let output = evaluate("=CountDown(5461)", Some(bindings), None, Some(&en_us_context()));
-    assert_eq!(output.oxfunc_value, EvalValue::Error(WorksheetErrorCode::Num));
+    let output = evaluate(
+        "=CountDown(5461)",
+        Some(bindings),
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(
+        output.oxfunc_value,
+        EvalValue::Error(WorksheetErrorCode::Num)
+    );
 }
 
 #[test]
@@ -1769,7 +1792,10 @@ fn evaluator_matches_excel_let_self_application_recursion_failure_boundary() {
         None,
         Some(&en_us_context()),
     );
-    assert_eq!(output.oxfunc_value, EvalValue::Error(WorksheetErrorCode::Num));
+    assert_eq!(
+        output.oxfunc_value,
+        EvalValue::Error(WorksheetErrorCode::Num)
+    );
 }
 
 #[test]
@@ -1780,7 +1806,10 @@ fn evaluator_projects_direct_helper_local_self_recursion_as_name_error() {
         None,
         Some(&en_us_context()),
     );
-    assert_eq!(output.oxfunc_value, EvalValue::Error(WorksheetErrorCode::Name));
+    assert_eq!(
+        output.oxfunc_value,
+        EvalValue::Error(WorksheetErrorCode::Name)
+    );
 }
 
 fn evaluate(
@@ -1928,7 +1957,11 @@ fn callable_profile_from_summary(summary: &str) -> CallableValueProfile {
         match key {
             "arity" => arity = Some(value.parse::<usize>().expect("callable arity should parse")),
             "required_arity" => {
-                required_arity = Some(value.parse::<usize>().expect("callable required arity should parse"))
+                required_arity = Some(
+                    value
+                        .parse::<usize>()
+                        .expect("callable required arity should parse"),
+                )
             }
             "params" => parameter_names = Some(split_profile_list(value)),
             "optional_params" => optional_parameter_names = Some(split_profile_list(value)),

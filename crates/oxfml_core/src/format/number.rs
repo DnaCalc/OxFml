@@ -70,7 +70,11 @@ pub fn render_with_number_format_code(
     let scaled_value = apply_scaling(value, &numeric);
 
     if let Some(exponent_digits) = numeric.scientific_exponent_digits {
-        let rendered = render_scientific(scaled_value, numeric.decimals.max(0) as usize, exponent_digits);
+        let rendered = render_scientific(
+            scaled_value,
+            numeric.decimals.max(0) as usize,
+            exponent_digits,
+        );
         return Ok(apply_numeric_affixes(rendered, &numeric));
     }
 
@@ -80,7 +84,12 @@ pub fn render_with_number_format_code(
     {
         render_currency(profile, scaled_value, numeric.decimals)
     } else {
-        render_fixed(profile, scaled_value.abs(), numeric.decimals, !numeric.use_grouping)
+        render_fixed(
+            profile,
+            scaled_value.abs(),
+            numeric.decimals,
+            !numeric.use_grouping,
+        )
     };
 
     let body = if scaled_value.is_sign_negative() && !base.starts_with('-') {
@@ -95,12 +104,7 @@ pub fn render_currency(profile: &FormatProfile, value: f64, decimals: i32) -> St
     render_fixed_common(profile, value, decimals, true, profile.currency_symbol)
 }
 
-pub fn render_fixed(
-    profile: &FormatProfile,
-    value: f64,
-    decimals: i32,
-    no_commas: bool,
-) -> String {
+pub fn render_fixed(profile: &FormatProfile, value: f64, decimals: i32, no_commas: bool) -> String {
     render_fixed_common(profile, value, decimals, !no_commas, "")
 }
 
@@ -138,8 +142,8 @@ pub(crate) fn parse_numeric_section(section: &str) -> Option<ParsedNumericSectio
         .filter(|digits| *digits > 0);
     let percent_count = prefix.matches('%').count() as i32 + suffix.matches('%').count() as i32;
     let negative_parentheses = prefix.contains('(') && suffix.contains(')');
-    let is_currency = prefix.contains(profile_currency_tokens())
-        || suffix.contains(profile_currency_tokens());
+    let is_currency =
+        prefix.contains(profile_currency_tokens()) || suffix.contains(profile_currency_tokens());
 
     Some(ParsedNumericSection {
         prefix,
@@ -270,7 +274,10 @@ pub(crate) fn select_number_format_section(code: &str, value: f64) -> Option<Str
         1 => sections.first().cloned(),
         2 => {
             if value < 0.0 {
-                sections.get(1).cloned().or_else(|| sections.first().cloned())
+                sections
+                    .get(1)
+                    .cloned()
+                    .or_else(|| sections.first().cloned())
             } else {
                 sections.first().cloned()
             }
@@ -279,9 +286,15 @@ pub(crate) fn select_number_format_section(code: &str, value: f64) -> Option<Str
             if value > 0.0 {
                 sections.first().cloned()
             } else if value < 0.0 {
-                sections.get(1).cloned().or_else(|| sections.first().cloned())
+                sections
+                    .get(1)
+                    .cloned()
+                    .or_else(|| sections.first().cloned())
             } else {
-                sections.get(2).cloned().or_else(|| sections.first().cloned())
+                sections
+                    .get(2)
+                    .cloned()
+                    .or_else(|| sections.first().cloned())
             }
         }
     }

@@ -5,8 +5,7 @@ use serde::Deserialize;
 
 use oxfml_core::binding::{
     BinaryOp, BindContext, BindRequest, BoundExpr, NameKind, NormalizedReference, ReferenceExpr,
-    UnaryOp, bind_formula,
-    bind_formula_incremental,
+    UnaryOp, bind_formula, bind_formula_incremental,
 };
 use oxfml_core::red::{project_red_view, project_red_view_incremental};
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
@@ -342,7 +341,10 @@ fn bind_preserves_array_literal_multiplied_by_unary_negative_literal_shape() {
         panic!("expected unary negative literal, got {:?}", right);
     };
     assert_eq!(*right_op, UnaryOp::Negate);
-    assert_eq!(unary_expr.as_ref(), &BoundExpr::NumberLiteral("1".to_string()));
+    assert_eq!(
+        unary_expr.as_ref(),
+        &BoundExpr::NumberLiteral("1".to_string())
+    );
 }
 
 #[test]
@@ -368,7 +370,11 @@ fn bind_prefers_helper_local_name_over_cell_like_reference_text() {
     });
 
     assert!(bind.bound_formula.diagnostics.is_empty());
-    let BoundExpr::FunctionCall { function_name, args } = &bind.bound_formula.root else {
+    let BoundExpr::FunctionCall {
+        function_name,
+        args,
+    } = &bind.bound_formula.root
+    else {
         panic!("expected LET call root, got {:?}", bind.bound_formula.root);
     };
     assert_eq!(function_name, "LET");
@@ -376,7 +382,8 @@ fn bind_prefers_helper_local_name_over_cell_like_reference_text() {
     let BoundExpr::Invocation { callee, .. } = &args[4] else {
         panic!("expected helper invocation body, got {:?}", args[4]);
     };
-    let BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Name(name))) = callee.as_ref()
+    let BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Name(name))) =
+        callee.as_ref()
     else {
         panic!("expected helper-local name callee, got {:?}", callee);
     };

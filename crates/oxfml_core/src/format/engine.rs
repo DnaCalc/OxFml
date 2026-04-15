@@ -1,6 +1,6 @@
 use oxfunc_core::locale_format::{
     FormatCodeEngine, FormatFailure, FormatProfile, LocaleFormatContext, LocaleProfileId,
-    LocaleValueParser, ParseFailure, WorkbookDateSystem, format_profile, excel_serial_from_ymd,
+    LocaleValueParser, ParseFailure, WorkbookDateSystem, excel_serial_from_ymd, format_profile,
 };
 use oxfunc_core::value::ExcelText;
 
@@ -143,7 +143,9 @@ impl FormatCodeEngine for OxFmlFormatCodeEngine {
         value: f64,
         decimals: i32,
     ) -> Result<ExcelText, FormatFailure> {
-        Ok(text_from_string(render_currency_text(profile, value, decimals)))
+        Ok(text_from_string(render_currency_text(
+            profile, value, decimals,
+        )))
     }
 
     fn render_fixed(

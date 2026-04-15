@@ -9,20 +9,20 @@ use oxfunc_core::functions::call_register_id_family::{
 };
 use oxfunc_core::functions::callable_helpers::{CallableInvocationError, CallableInvoker};
 use oxfunc_core::functions::cell::{CellEvalError, eval_cell_surface};
-use oxfunc_core::functions::info_fn::{InfoEvalError, eval_info_surface};
 use oxfunc_core::functions::if_fn::{eval_if_surface, map_if_error_to_ws};
 use oxfunc_core::functions::iferror::{eval_iferror_surface, map_iferror_error_to_ws};
+use oxfunc_core::functions::info_fn::{InfoEvalError, eval_info_surface};
 use oxfunc_core::functions::op_implicit_intersection::{
     eval_op_implicit_intersection_surface, map_op_implicit_intersection_error_to_ws,
 };
 use oxfunc_core::functions::rtd_fn::RtdProvider;
 use oxfunc_core::functions::surface_dispatch::{
-    eval_surface_extended_call, eval_surface_value_call_with_callable,
     FUNC_ID_OP_ADD, FUNC_ID_OP_CONCAT, FUNC_ID_OP_DIVIDE, FUNC_ID_OP_EQUAL,
-    FUNC_ID_OP_GREATER_EQUAL, FUNC_ID_OP_GREATER_THAN, FUNC_ID_OP_LESS_EQUAL,
-    FUNC_ID_OP_INTERSECTION_REF, FUNC_ID_OP_LESS_THAN, FUNC_ID_OP_MULTIPLY, FUNC_ID_OP_NEGATE,
+    FUNC_ID_OP_GREATER_EQUAL, FUNC_ID_OP_GREATER_THAN, FUNC_ID_OP_INTERSECTION_REF,
+    FUNC_ID_OP_LESS_EQUAL, FUNC_ID_OP_LESS_THAN, FUNC_ID_OP_MULTIPLY, FUNC_ID_OP_NEGATE,
     FUNC_ID_OP_NOT_EQUAL, FUNC_ID_OP_PERCENT, FUNC_ID_OP_POWER, FUNC_ID_OP_RANGE_REF,
     FUNC_ID_OP_SPILL_REF, FUNC_ID_OP_SUBTRACT, FUNC_ID_OP_UNARY_PLUS, FUNC_ID_OP_UNION_REF,
+    eval_surface_extended_call, eval_surface_value_call_with_callable,
 };
 use oxfunc_core::host_info::HostInfoProvider;
 use oxfunc_core::locale_format::LocaleFormatContext;
@@ -40,8 +40,8 @@ use oxfunc_core::value::{
 use stacker::maybe_grow;
 
 use crate::binding::{
-    AreaRef, BoundExpr, BoundFormula, CellRef, ErrorRef, NameKind, NameRef,
-    NormalizedReference, ReferenceExpr, StructuredResolvedRef,
+    AreaRef, BoundExpr, BoundFormula, CellRef, ErrorRef, NameKind, NameRef, NormalizedReference,
+    ReferenceExpr, StructuredResolvedRef,
 };
 use crate::interface::{ReturnedValueSurface, TypedContextQueryBundle};
 use crate::semantics::{SemanticPlan, lookup_function_meta};
@@ -283,10 +283,7 @@ impl CallableRegistry {
         let oxfunc_value = OxLambdaValue::new(
             token.clone(),
             oxfunc_origin_kind_from_local(lambda.origin_kind),
-            OxCallableArityShape::range(
-                lambda_required_arity(&lambda.params),
-                lambda.params.len(),
-            ),
+            OxCallableArityShape::range(lambda_required_arity(&lambda.params), lambda.params.len()),
             if lambda.closure.is_empty() {
                 OxCallableCaptureMode::NoCapture
             } else {
@@ -587,23 +584,23 @@ fn evaluate_expr_value(
             trace,
         ),
         BoundExpr::OmittedArgument => Ok(EvalValue::Error(WorksheetErrorCode::Value)),
-        BoundExpr::HelperParameterName(name) | BoundExpr::HelperOptionalParameterName(name) => Err(EvaluationError {
-            message: format!(
-                "helper parameter {name} cannot be evaluated without helper-form environment support"
-            ),
-        }),
-        BoundExpr::Binary { op, left, right } => {
-            evaluate_binary_operator_call(
-                *op,
-                left,
-                right,
-                context,
-                resolver,
-                helper_bindings,
-                callable_registry,
-                trace,
-            )
+        BoundExpr::HelperParameterName(name) | BoundExpr::HelperOptionalParameterName(name) => {
+            Err(EvaluationError {
+                message: format!(
+                    "helper parameter {name} cannot be evaluated without helper-form environment support"
+                ),
+            })
         }
+        BoundExpr::Binary { op, left, right } => evaluate_binary_operator_call(
+            *op,
+            left,
+            right,
+            context,
+            resolver,
+            helper_bindings,
+            callable_registry,
+            trace,
+        ),
         BoundExpr::Unary { op, expr } => evaluate_unary_operator_call(
             *op,
             expr,
@@ -1007,19 +1004,17 @@ fn evaluate_reference_as_call_arg(
         ReferenceExpr::Atom(NormalizedReference::Error(error)) => Ok(CallArgValue::Eval(
             EvalValue::Error(error_code_for_error_ref(error)),
         )),
-        ReferenceExpr::Spill { anchor } => {
-            evaluate_reference_operator_call(
-                "OP_SPILL_REF",
-                FUNC_ID_OP_SPILL_REF,
-                vec![anchor.as_ref()],
-                context,
-                resolver,
-                helper_bindings,
-                callable_registry,
-                preserve_reference,
-                trace,
-            )
-        }
+        ReferenceExpr::Spill { anchor } => evaluate_reference_operator_call(
+            "OP_SPILL_REF",
+            FUNC_ID_OP_SPILL_REF,
+            vec![anchor.as_ref()],
+            context,
+            resolver,
+            helper_bindings,
+            callable_registry,
+            preserve_reference,
+            trace,
+        ),
         ReferenceExpr::Range { start, end } => evaluate_reference_operator_call(
             "OP_RANGE_REF",
             FUNC_ID_OP_RANGE_REF,
@@ -1123,7 +1118,9 @@ fn call_arg_from_reference_operator_value(
     resolver: &mut LocalReferenceResolver<'_>,
 ) -> Result<CallArgValue, EvaluationError> {
     match value {
-        EvalValue::Reference(reference) if preserve_reference => Ok(CallArgValue::Reference(reference)),
+        EvalValue::Reference(reference) if preserve_reference => {
+            Ok(CallArgValue::Reference(reference))
+        }
         EvalValue::Reference(reference) => resolve_oxfunc_eval_value(resolver, &reference)
             .map(call_arg_from_resolved_reference_value)
             .map_err(map_resolution_error),
@@ -1548,7 +1545,9 @@ fn evaluate_if_call(
     };
 
     let mut call_args = vec![condition.clone()];
-    let mut prepared_arguments = vec![prepared_argument_for_call_arg(0, &args[0], &condition, true)];
+    let mut prepared_arguments = vec![prepared_argument_for_call_arg(
+        0, &args[0], &condition, true,
+    )];
     if condition_is_true {
         let true_arg = evaluate_expr_as_call_arg(
             &args[1],
@@ -1588,7 +1587,9 @@ fn evaluate_if_call(
                 false,
                 trace,
             )?;
-            prepared_arguments.push(prepared_argument_for_call_arg(2, &args[2], &false_arg, true));
+            prepared_arguments.push(prepared_argument_for_call_arg(
+                2, &args[2], &false_arg, true,
+            ));
             call_args.push(false_arg);
         }
     }
@@ -1601,9 +1602,8 @@ fn evaluate_if_call(
         prepared_arguments,
         context,
     );
-    Ok(eval_if_surface(&call_args, resolver).unwrap_or_else(|error| {
-        EvalValue::Error(map_if_error_to_ws(&error))
-    }))
+    Ok(eval_if_surface(&call_args, resolver)
+        .unwrap_or_else(|error| EvalValue::Error(map_if_error_to_ws(&error))))
 }
 
 fn evaluate_iferror_call(
@@ -1666,9 +1666,8 @@ fn evaluate_iferror_call(
         prepared_arguments,
         context,
     );
-    Ok(eval_iferror_surface(&call_args, resolver).unwrap_or_else(|error| {
-        EvalValue::Error(map_iferror_error_to_ws(&error))
-    }))
+    Ok(eval_iferror_surface(&call_args, resolver)
+        .unwrap_or_else(|error| EvalValue::Error(map_iferror_error_to_ws(&error))))
 }
 
 fn evaluate_lambda_call(
@@ -2229,7 +2228,9 @@ fn helper_free_names_in_expr(
         | BoundExpr::OmittedArgument
         | BoundExpr::HelperParameterName(_)
         | BoundExpr::HelperOptionalParameterName(_) => BTreeSet::new(),
-        BoundExpr::Unary { expr, .. } => helper_free_names_in_expr(expr, bound_names, helper_bindings),
+        BoundExpr::Unary { expr, .. } => {
+            helper_free_names_in_expr(expr, bound_names, helper_bindings)
+        }
         BoundExpr::Binary { left, right, .. } => {
             let mut names = helper_free_names_in_expr(left, bound_names, helper_bindings);
             names.extend(helper_free_names_in_expr(
@@ -2846,10 +2847,10 @@ fn whole_column_target(columns: &crate::binding::WholeColumnRef) -> String {
     qualified_reference_target(
         &columns.sheet_id,
         format!(
-        "{}:{}",
-        column_letters(columns.col_start),
-        column_letters(end_col)
-    ),
+            "{}:{}",
+            column_letters(columns.col_start),
+            column_letters(end_col)
+        ),
     )
 }
 
@@ -3076,7 +3077,8 @@ fn resolve_local_area_reference(
 
     let (start, end) = reference.target.split_once(':')?;
     let (start_sheet, start_row, start_col) = parse_a1_target(start)?;
-    let (end_sheet, end_row, end_col) = parse_a1_target_with_default_sheet(end, start_sheet.as_deref())?;
+    let (end_sheet, end_row, end_col) =
+        parse_a1_target_with_default_sheet(end, start_sheet.as_deref())?;
     if start_sheet != end_sheet {
         return None;
     }

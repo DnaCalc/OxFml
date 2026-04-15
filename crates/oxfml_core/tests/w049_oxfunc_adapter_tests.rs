@@ -472,7 +472,10 @@ fn adapter_executes_helper_bound_returned_lambda_invocation() {
         run.evaluation_artifact.evaluation_result.payload_summary,
         "Number(15)"
     );
-    assert_eq!(run.evaluation_artifact.worksheet_value, EvalValue::Number(15.0));
+    assert_eq!(
+        run.evaluation_artifact.worksheet_value,
+        EvalValue::Number(15.0)
+    );
     assert_eq!(
         run.preparation_artifact
             .prepared_calls

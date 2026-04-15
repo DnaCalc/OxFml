@@ -2,12 +2,12 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
-use oxfml_core::format::en_us_context;
 use oxfml_core::binding::{BindContext, BindRequest, BoundExpr, NameKind, bind_formula};
 use oxfml_core::eval::{
     CallableDefinedNameBinding, CallableValueCarrier, CallableValueProfile, DefinedNameBinding,
     EvaluationBackend,
 };
+use oxfml_core::format::en_us_context;
 use oxfml_core::red::project_red_view;
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
@@ -247,7 +247,11 @@ fn callable_profile_from_summary(summary: &str) -> CallableValueProfile {
         match key {
             "arity" => arity = Some(value.parse::<usize>().expect("callable arity should parse")),
             "required_arity" => {
-                required_arity = Some(value.parse::<usize>().expect("callable required arity should parse"))
+                required_arity = Some(
+                    value
+                        .parse::<usize>()
+                        .expect("callable required arity should parse"),
+                )
             }
             "params" => parameter_names = Some(split_profile_list(value)),
             "optional_params" => optional_parameter_names = Some(split_profile_list(value)),

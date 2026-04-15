@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::PathBuf;
 
-use oxfml_core::format::en_us_context;
 use oxfml_core::EvaluationBackend;
+use oxfml_core::format::en_us_context;
 use oxfml_core::seam::AcceptDecision;
 use oxfml_core::test_support::host::{
     EmpiricalOracleScenario, HostRecalcOutput, SingleFormulaHost,

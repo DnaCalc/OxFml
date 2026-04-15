@@ -66,8 +66,9 @@ pub use interface::{
     classify_library_context_field,
 };
 pub use publication::{
-    LocaleFormatContextSurface, VerificationConditionalFormattingRule, VerificationPublicationContext,
-    VerificationPublicationSurface, build_verification_publication_surface,
+    LocaleFormatContextSurface, VerificationConditionalFormattingRule,
+    VerificationPublicationContext, VerificationPublicationSurface,
+    build_verification_publication_surface,
 };
 pub use red::{
     IncrementalRedProjectionResult, RedNode, RedProjection, project_red_view,

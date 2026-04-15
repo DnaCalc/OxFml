@@ -309,12 +309,15 @@ impl Binder {
                 let bound_child = self.bind_expr(child);
                 if token_text(node, "#").is_some() {
                     match bound_child {
-                        BoundExpr::Reference(reference) => BoundExpr::Reference(ReferenceExpr::Spill {
-                            anchor: Box::new(reference),
-                        }),
+                        BoundExpr::Reference(reference) => {
+                            BoundExpr::Reference(ReferenceExpr::Spill {
+                                anchor: Box::new(reference),
+                            })
+                        }
                         other => {
                             self.diagnostics.push(BindDiagnostic {
-                                message: "spill suffix applied to non-reference expression".to_string(),
+                                message: "spill suffix applied to non-reference expression"
+                                    .to_string(),
                                 span: node.span,
                             });
                             other

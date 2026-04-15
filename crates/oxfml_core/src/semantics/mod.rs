@@ -826,8 +826,9 @@ fn lambda_has_lexical_capture(args: &[BoundExpr]) -> bool {
     let params = args[..body_index]
         .iter()
         .filter_map(|arg| match arg {
-            BoundExpr::HelperParameterName(name)
-            | BoundExpr::HelperOptionalParameterName(name) => Some(name.as_str()),
+            BoundExpr::HelperParameterName(name) | BoundExpr::HelperOptionalParameterName(name) => {
+                Some(name.as_str())
+            }
             _ => None,
         })
         .collect::<BTreeSet<_>>();
