@@ -14,7 +14,7 @@ Add a bounded OxFml-owned verification publication/export surface so XML-backed 
 2. Define a stable verification publication/export surface carried through runtime and replay projection.
 3. Compute and export an OxFml-owned first effective-display text projection for the current admitted formatting slice when locale/date-system and number-format inputs are present.
 4. Preserve style, format-dependency, format/display delta, and conditional-formatting facts in one comparison-friendly packet for downstream verification tooling.
-5. Publish replay-facing `comparison_views` for the admitted XML verification family set when those facts are available from OxFml-owned publication surfaces.
+5. Publish OxFml-owned `comparison_views` for the admitted XML verification family set when those facts are available from OxFml-owned publication surfaces.
 6. Update DNA OneCalc-facing and OxReplay-facing consumer guidance and outbound handoff notes to describe the landed first slice and the remaining gaps honestly.
 
 ### Out of scope
@@ -25,7 +25,7 @@ Add a bounded OxFml-owned verification publication/export surface so XML-backed 
 
 ## Deliverables
 1. A typed verification publication context and export surface in OxFml code.
-2. Runtime and replay projection carriage for the new export surface plus replay-facing `comparison_views`.
+2. Runtime and replay projection carriage for the new export surface plus additive `comparison_views`.
 3. Deterministic tests and retained fixture evidence proving the first effective-display, formatting-context, and comparison-view export slice.
 4. Updated downstream guidance and outbound OxFml handoff responses for DNA OneCalc and OxReplay.
 
@@ -39,7 +39,7 @@ Add a bounded OxFml-owned verification publication/export surface so XML-backed 
 - A typed verification publication/export packet exists and is reachable from the landed runtime and replay facades.
 - Effective display text is no longer limited to plain visible value summary when the current admitted locale/number-format slice can be rendered honestly.
 - Style, format, and conditional-formatting context required for XML-backed verification are carried in one stable comparison-friendly structure.
-- Replay projection publishes the admitted `comparison_views` family set directly from OxFml-owned publication facts for runtime-result and first-host-capture projections.
+- The admitted `comparison_views` family set is published directly from OxFml-owned publication facts for ordinary runtime results and replay-facing first-host-capture projections.
 - Best-effort conditional-formatting applicability and effective style/display consequences are computed when the current rule facts are sufficient.
 - Remaining unsupported display/conditional-formatting breadth is explicitly listed in docs and handoff notes.
 
@@ -67,7 +67,7 @@ Add a bounded OxFml-owned verification publication/export surface so XML-backed 
   - the verification publication surface now preserves `published_value: EvalValue` plus `published_value_class` directly from the OxFunc-owned value model rather than a local typed-value wrapper
   - the current effective-display slice now covers the earlier currency bridge plus a broader best-effort local lane for grouped/fixed numeric codes, percent formats, sectioned negative formats, and date-token patterns such as `m/d/yyyy`
   - the current first conditional-formatting slice now computes applicability and effective font/fill/display consequences for operator-driven rules and simple current-cell expression rules such as `=A1>0`, including bounded `AND(...)` / `OR(...)` forms
-  - replay projection now publishes `comparison_views` for `comparison_value`, `visible_value_text`, `effective_display_text`, `formatting_view`, and `conditional_formatting_view` when the verification publication surface is present; retained local fixture evidence lives at `crates/oxfml_core/tests/fixtures/xml_verification_comparison_views_projection.json`
+  - `RuntimeFormulaResult` and replay projection now publish `comparison_views` for `comparison_value`, `visible_value_text`, `effective_display_text`, `formatting_view`, and `conditional_formatting_view` when the verification publication surface is present; retained local fixture evidence still lives at `crates/oxfml_core/tests/fixtures/xml_verification_comparison_views_projection.json`
   - full display-code breadth beyond the current admitted and heuristically rendered slice remains outside this workset
   - broad conditional-formatting semantics, priority chains, and full formula-evaluation closure remain outside this workset
   - broader retained-witness or pack-grade replay promotion of this family remains downstream of this workset

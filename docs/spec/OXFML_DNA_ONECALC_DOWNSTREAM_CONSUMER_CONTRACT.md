@@ -341,7 +341,9 @@ DNA OneCalc must handle each value class as follows.
    - `conditional_formatting_effective_display`,
 3. prefer `VerificationPublicationSurface` from `RuntimeFormulaResult` and `ReplayProjectionResult` over reinterpreting `AcceptedCandidateResult`, `CommitBundle`, or raw JSON fragments locally,
 4. keep `VerificationPublicationContext` host-owned as input context while treating `VerificationPublicationSurface` as OxFml-owned publication/export meaning,
-5. where replay-facing family comparison is needed, prefer `ReplayProjectionResult.comparison_views` for the admitted family set:
+5. where family-oriented comparison is needed, prefer OxFml-owned `comparison_views` for the admitted family set:
+   - `RuntimeFormulaResult.comparison_views` for ordinary direct runtime verification
+   - `ReplayProjectionResult.comparison_views` for replay-facing or retained-artifact comparison
    - `comparison_value`
    - `visible_value_text`
    - `effective_display_text`

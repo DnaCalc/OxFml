@@ -47,6 +47,12 @@ OxFml landed a first `W056` slice that adds a typed verification publication/exp
 3. runtime carriage
    - `RuntimeFormulaRequest` now accepts optional `VerificationPublicationContext`
    - `RuntimeFormulaResult` now exposes `verification_publication_surface`
+   - `RuntimeFormulaResult` now also publishes additive `comparison_views` for:
+     - `comparison_value`
+     - `visible_value_text`
+     - `effective_display_text`
+     - `formatting_view`
+     - `conditional_formatting_view`
 4. replay carriage
    - the first-host replay capture packet now carries `verification_publication_surface`
    - `ReplayProjectionResult` now exposes `verification_publication_surface`
@@ -65,9 +71,10 @@ OxFml landed a first `W056` slice that adds a typed verification publication/exp
 For XML-backed verification, DNA OneCalc should now:
 1. send extracted number-format, style, and conditional-formatting context through `VerificationPublicationContext`
 2. read `verification_publication_surface` from `RuntimeFormulaResult` for ordinary runtime comparison
-3. read `verification_publication_surface` from `ReplayProjectionResult` for retained-artifact and replay-facing comparison
-4. prefer `ReplayProjectionResult.comparison_views` when family-oriented replay comparison is needed
-5. stop inferring effective display or formatting view from raw visible value alone for the admitted first slice
+3. prefer `RuntimeFormulaResult.comparison_views` when ordinary direct runtime comparison wants the admitted family-oriented envelope
+4. read `verification_publication_surface` from `ReplayProjectionResult` for retained-artifact and replay-facing comparison
+5. prefer `ReplayProjectionResult.comparison_views` when family-oriented replay comparison is needed
+6. stop inferring effective display or formatting view from raw visible value alone for the admitted first slice
 
 ## Current Limits
 The landed slice is intentionally narrower than full display closure.
@@ -77,6 +84,7 @@ Open lanes remain:
 2. full conditional-formatting formula closure, priority chains, and broad OxFml-owned conditional-formatting display evaluation are not claimed
 3. current conditional-formatting export is host-supplied verification context carried through an OxFml-owned packet
 4. the newly published `comparison_views` are a local OxFml replay-projection floor; downstream retained uptake and broader family promotion remain separate follow-on work
+5. the newly published runtime `comparison_views` are an additive direct-host verification surface; they do not replace the richer `VerificationPublicationSurface`
 
 ## Files Updated
 1. `crates/oxfml_core/src/publication/mod.rs`

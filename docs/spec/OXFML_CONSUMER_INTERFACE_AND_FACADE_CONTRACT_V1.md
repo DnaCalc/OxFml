@@ -232,9 +232,12 @@ It should return:
    - topology/effect fact refs where present
    - dependency-sensitive surfaced facts where publication or invalidation
      meaning depends on them
-10. explicit caller-context dependence signal for the first admitted
+10. additive OxFml-owned `comparison_views` when `verification_publication_surface`
+    is present and OxFml can state the admitted comparison families directly
+    from its own publication facts without downstream reinterpretation
+11. explicit caller-context dependence signal for the first admitted
     caller-sensitive subset where OxFml can determine that dependence honestly
-11. enough stable identity to support retained evidence, compare, and replay
+12. enough stable identity to support retained evidence, compare, and replay
 
 It must preserve:
 1. candidate versus commit separation,

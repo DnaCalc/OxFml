@@ -60,6 +60,10 @@ Current OxFml refinement after the latest OneCalc input:
    current comparison-friendly export packet for visible value, effective
    display, format/style context, and host-supplied conditional-formatting
    context.
+8. `RuntimeFormulaResult` now also carries additive OxFml-owned
+   `comparison_views` for the admitted comparison family set when
+   `verification_publication_surface` facts are present; replay projection
+   carries the same family set for retained or replay-facing comparison.
 
 ## 3. Frozen Seam Constraint
 The consumer-facing redesign does not reopen the OxFml <-> OxFunc seam.
@@ -159,6 +163,10 @@ Replay migration goals:
    and registry metadata explicit in machine-readable projection results,
 5. consume `verification_publication_surface` from replay projection instead of
    inferring effective display or formatting view from raw visible-value output.
+6. for ordinary direct-host XML verification, prefer
+   `RuntimeFormulaResult.comparison_views` when the downstream comparison path
+   wants the admitted family-oriented envelope rather than the richer
+   `VerificationPublicationSurface`.
 
 Expected OxFml replay facade shape:
 1. `ReplayProjectionRequest`
