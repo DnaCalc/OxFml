@@ -4,7 +4,7 @@ use oxfml_core::consumer::runtime::{
     RuntimeEnvironment, RuntimeFormulaRequest, RuntimeManagedSessionError,
     RuntimeManagedSessionPhase, RuntimeSessionFacade,
 };
-use oxfml_core::format::en_us_context;
+use oxfml_core::format::{en_us_context, worksheet_error_text};
 use oxfml_core::publication::{
     VerificationConditionalFormattingRule, VerificationPublicationContext,
 };
@@ -531,6 +531,85 @@ fn runtime_environment_emits_effective_display_text_comparison_view_for_verifica
 }
 
 #[test]
+fn runtime_environment_emits_effective_display_text_comparison_view_for_programmatic_verification_cases()
+{
+    let locale = en_us_context();
+    let cases = [
+        ("FTC-0703", "=DATEDIF(\"2020-01-15\",\"2024-03-20\",\"Y\")"),
+        (
+            "FTC-0761",
+            "=LET(n,10,result,REDUCE({0,1},SEQUENCE(n-1),LAMBDA(pair,_,LET(a,INDEX(pair,1),b,INDEX(pair,2),HSTACK(b,a+b)))),INDEX(result,2))",
+        ),
+        (
+            "FTC-0940",
+            "=SUM(FILTER({1,2,3,4,5},ISNUMBER(XMATCH({1,2,3,4,5},{2,4,6,8}))))",
+        ),
+        (
+            "FTC-1030",
+            "=LET(data,CHOOSE(SEQUENCE(1,3),{1;2;3},{10;20;30},{100;200;300}),result,TRANSPOSE(data),INDEX(result,1,2))",
+        ),
+    ];
+
+    for (case_id, formula) in cases {
+        let result = RuntimeEnvironment::new()
+            .execute(RuntimeFormulaRequest::new(
+                FormulaSourceRecord::new(
+                    &format!("runtime:programmatic-verification:{case_id}"),
+                    1,
+                    formula,
+                ),
+                TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
+            ))
+            .unwrap_or_else(|error| panic!("{case_id} runtime execution should succeed: {error}"));
+
+        assert!(
+            !result.verification_publication_surface.has_publication_context,
+            "{case_id} should remain a no-explicit-publication-context control"
+        );
+        let expected_value =
+            expected_programmatic_comparison_value(&result.published_worksheet_value);
+        let expected_text = result.verification_publication_surface.effective_display_text.clone();
+        assert_eq!(
+            result.verification_publication_surface.visible_value_text,
+            result.verification_publication_surface.effective_display_text,
+            "{case_id} visible value text"
+        );
+        assert_eq!(
+            result.comparison_views.len(),
+            3,
+            "{case_id} comparison view count"
+        );
+        assert_eq!(
+            result
+                .comparison_views
+                .iter()
+                .find(|view| view.view_family == "comparison_value")
+                .map(|view| view.value.clone()),
+            Some(expected_value.clone()),
+            "{case_id} comparison_value view"
+        );
+        assert_eq!(
+            result
+                .comparison_views
+                .iter()
+                .find(|view| view.view_family == "visible_value_text")
+                .map(|view| view.value.clone()),
+            Some(Value::String(expected_text.clone())),
+            "{case_id} visible_value_text view"
+        );
+        assert_eq!(
+            result
+                .comparison_views
+                .iter()
+                .find(|view| view.view_family == "effective_display_text")
+                .map(|view| view.value.clone()),
+            Some(Value::String(expected_text)),
+            "{case_id} effective_display_text view"
+        );
+    }
+}
+
+#[test]
 fn runtime_environment_applies_registered_external_catalog_mutation() {
     let controller = RecordingCatalogController::default();
     let environment = RuntimeEnvironment::new();
@@ -636,6 +715,21 @@ fn runtime_snapshot_v1() -> LibraryContextSnapshot {
             runtime_capability_state: Some(LibraryAvailabilityState::CatalogKnown),
             post_dispatch_state: None,
         }],
+    }
+}
+
+fn expected_programmatic_comparison_value(value: &EvalValue) -> Value {
+    match value {
+        EvalValue::Number(number) => serde_json::json!({
+            "kind": "number",
+            "value": number
+        }),
+        EvalValue::Error(code) => serde_json::json!({
+            "kind": "error",
+            "code": format!("{code:?}"),
+            "display": worksheet_error_text(*code)
+        }),
+        other => panic!("unexpected programmatic verification value shape: {other:?}"),
     }
 }
 

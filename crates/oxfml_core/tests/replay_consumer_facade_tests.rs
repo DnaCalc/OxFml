@@ -12,7 +12,7 @@ use oxfml_core::consumer::replay::{
 use oxfml_core::consumer::runtime::{
     RuntimeEnvironment, RuntimeFormulaRequest, RuntimeSessionFacade,
 };
-use oxfml_core::format::en_us_context;
+use oxfml_core::format::{en_us_context, worksheet_error_text};
 use oxfml_core::interface::{
     InMemoryLibraryContextProvider, LibraryContextProvider, LibraryContextSnapshotRef,
 };
@@ -360,6 +360,10 @@ fn replay_projection_service_emits_comparison_value_and_visible_text_without_pub
             {
                 "view_family": "visible_value_text",
                 "value": "6"
+            },
+            {
+                "view_family": "effective_display_text",
+                "value": "6"
             }
         ]))
     );
@@ -396,9 +400,123 @@ fn replay_projection_service_emits_comparison_value_and_visible_text_without_pub
             {
                 "view_family": "visible_value_text",
                 "value": "6"
+            },
+            {
+                "view_family": "effective_display_text",
+                "value": "6"
             }
         ]))
     );
+}
+
+#[test]
+fn replay_projection_service_emits_effective_display_text_for_programmatic_verification_cases() {
+    let locale = en_us_context();
+    let cases = [
+        ("FTC-0703", "=DATEDIF(\"2020-01-15\",\"2024-03-20\",\"Y\")"),
+        (
+            "FTC-0761",
+            "=LET(n,10,result,REDUCE({0,1},SEQUENCE(n-1),LAMBDA(pair,_,LET(a,INDEX(pair,1),b,INDEX(pair,2),HSTACK(b,a+b)))),INDEX(result,2))",
+        ),
+        (
+            "FTC-0940",
+            "=SUM(FILTER({1,2,3,4,5},ISNUMBER(XMATCH({1,2,3,4,5},{2,4,6,8}))))",
+        ),
+        (
+            "FTC-1030",
+            "=LET(data,CHOOSE(SEQUENCE(1,3),{1;2;3},{10;20;30},{100;200;300}),result,TRANSPOSE(data),INDEX(result,1,2))",
+        ),
+    ];
+
+    let environment = RuntimeEnvironment::new();
+
+    for (case_id, formula) in cases {
+        let runtime_result = environment
+            .execute(RuntimeFormulaRequest::new(
+                FormulaSourceRecord::new(
+                    &format!("replay:programmatic-verification:{case_id}"),
+                    1,
+                    formula,
+                ),
+                TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
+            ))
+            .unwrap_or_else(|error| panic!("{case_id} runtime result should execute: {error}"));
+        let expected_value =
+            expected_programmatic_comparison_value(&runtime_result.published_worksheet_value);
+        let expected_text = runtime_result
+            .verification_publication_surface
+            .effective_display_text
+            .clone();
+
+        let runtime_projection =
+            ReplayProjectionService::project(ReplayProjectionRequest::runtime_result(&runtime_result));
+
+        assert_eq!(
+            runtime_projection
+                .comparison_views
+                .as_ref()
+                .map(|views| views.len()),
+            Some(3),
+            "{case_id} runtime projection view count"
+        );
+        assert_eq!(
+            runtime_projection
+                .comparison_views
+                .as_ref()
+                .and_then(|views| {
+                    views
+                        .iter()
+                        .find(|view| view.view_family == "comparison_value")
+                        .map(|view| view.value.clone())
+                }),
+            Some(expected_value.clone()),
+            "{case_id} runtime projection comparison_value"
+        );
+        assert_eq!(
+            runtime_projection
+                .comparison_views
+                .as_ref()
+                .and_then(|views| {
+                    views
+                        .iter()
+                        .find(|view| view.view_family == "effective_display_text")
+                        .map(|view| view.value.clone())
+                }),
+            Some(Value::String(expected_text.clone())),
+            "{case_id} runtime projection effective_display_text"
+        );
+
+        let first_host_capture = ReplayFirstHostCaptureSource {
+            source_artifact_family: "first_host_capture_packet".to_string(),
+            session_id: runtime_result.candidate_result.session_id.clone(),
+            packet: runtime_result.first_host_replay_capture_packet.clone(),
+        };
+        let host_projection = ReplayProjectionService::project(
+            ReplayProjectionRequest::first_host_capture(&first_host_capture),
+        );
+
+        assert_eq!(
+            host_projection
+                .comparison_views
+                .as_ref()
+                .map(|views| views.len()),
+            Some(3),
+            "{case_id} first-host projection view count"
+        );
+        assert_eq!(
+            host_projection
+                .comparison_views
+                .as_ref()
+                .and_then(|views| {
+                    views
+                        .iter()
+                        .find(|view| view.view_family == "effective_display_text")
+                        .map(|view| view.value.clone())
+                }),
+            Some(Value::String(expected_text)),
+            "{case_id} first-host projection effective_display_text"
+        );
+    }
 }
 
 #[test]
@@ -472,6 +590,21 @@ fn load_expected_comparison_views_fixture() -> Value {
     let fixture: Value =
         serde_json::from_str(&content).expect("comparison-view fixture should deserialize");
     fixture["comparison_views"].clone()
+}
+
+fn expected_programmatic_comparison_value(value: &EvalValue) -> Value {
+    match value {
+        EvalValue::Number(number) => serde_json::json!({
+            "kind": "number",
+            "value": number
+        }),
+        EvalValue::Error(code) => serde_json::json!({
+            "kind": "error",
+            "code": format!("{code:?}"),
+            "display": worksheet_error_text(*code)
+        }),
+        other => panic!("unexpected programmatic verification value shape: {other:?}"),
+    }
 }
 
 #[test]

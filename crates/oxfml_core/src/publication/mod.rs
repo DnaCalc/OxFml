@@ -239,6 +239,10 @@ pub fn build_verification_comparison_views(
             view_family: "visible_value_text".to_string(),
             value: Value::String(surface.visible_value_text.clone()),
         },
+        VerificationComparisonView {
+            view_family: "effective_display_text".to_string(),
+            value: Value::String(surface.effective_display_text.clone()),
+        },
     ];
 
     if !surface.has_publication_context {
@@ -246,10 +250,6 @@ pub fn build_verification_comparison_views(
     }
 
     views.extend([
-        VerificationComparisonView {
-            view_family: "effective_display_text".to_string(),
-            value: Value::String(surface.effective_display_text.clone()),
-        },
         VerificationComparisonView {
             view_family: "formatting_view".to_string(),
             value: formatting_view_json(surface),
