@@ -5,6 +5,7 @@ use oxfunc_core::value::EvalValue;
 use crate::binding::{BindContext, BindDiagnostic, NameKind, bind_formula};
 use crate::consumer::ConsumerLibraryContextState;
 use crate::eval::{DefinedNameBinding, EvaluationBackend, EvaluationOutput};
+use crate::format::current_excel_host_context;
 use crate::host::{
     ArtifactReuseReport, FirstHostReplayCapturePacket, HostRecalcOutput, SingleFormulaHost,
 };
@@ -184,14 +185,22 @@ impl<'a> RuntimeEnvironment<'a> {
         request: RuntimeFormulaRequest<'q>,
     ) -> Result<RuntimeFormulaResult, String> {
         self.apply_to_host(host, request.source());
+        let default_locale_ctx = current_excel_host_context();
+        let effective_typed_query_bundle = TypedContextQueryBundle {
+            locale_ctx: request
+                .typed_query_bundle
+                .locale_ctx
+                .or(Some(&default_locale_ctx)),
+            ..request.typed_query_bundle
+        };
         let output = host.recalc_with_library_context_view(
             request.backend(),
-            request.typed_query_bundle,
+            effective_typed_query_bundle,
             self.library_context.pinned_view(),
         )?;
         Ok(RuntimeFormulaResult::from_host_output(
             output,
-            request.typed_query_bundle.locale_ctx,
+            effective_typed_query_bundle.locale_ctx,
             request.verification_publication_context(),
         ))
     }
