@@ -675,6 +675,23 @@ fn runtime_environment_executes_foundation_text_date_format_cases() {
 }
 
 #[test]
+fn runtime_environment_executes_foundation_helper_array_case_ftc_1031() {
+    let locale = en_us_context();
+    let formula = "=LET(yr,2024,m,1,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),gridStart,firstDay-WEEKDAY(firstDay,1)+1,week1,gridStart+SEQUENCE(1,7,,1)-1,dayNums,MAP(week1,LAMBDA(d,IF(AND(d>=firstDay,d<=lastDay),DAY(d),0))),SUM(dayNums))";
+
+    let result = RuntimeEnvironment::new()
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new("runtime:foundation:FTC-1031", 1, formula),
+            TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
+        ))
+        .expect("FTC-1031 runtime execution should succeed");
+
+    assert_eq!(result.published_worksheet_value, EvalValue::Number(21.0));
+    assert_eq!(result.verification_publication_surface.visible_value_text, "21");
+    assert_eq!(result.verification_publication_surface.effective_display_text, "21");
+}
+
+#[test]
 fn runtime_environment_applies_registered_external_catalog_mutation() {
     let controller = RecordingCatalogController::default();
     let environment = RuntimeEnvironment::new();

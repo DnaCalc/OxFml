@@ -424,16 +424,7 @@ impl Binder {
         ) {
             self.push_reference_seed(&structured);
             BoundExpr::Reference(ReferenceExpr::Atom(structured))
-        } else if let Some(cell_ref) = parse_cell_reference(
-            &text,
-            &self.context.sheet_id,
-            &self.context,
-            self.formula_channel_kind,
-        ) {
-            let normalized = NormalizedReference::Cell(cell_ref);
-            self.push_reference_seed(&normalized);
-            BoundExpr::Reference(ReferenceExpr::Atom(normalized))
-        } else if self.helper_local_names.iter().any(|name| name == &text) {
+        } else if self.is_helper_local_name(&text) {
             let normalized = NormalizedReference::Name(NameRef {
                 name: text,
                 workbook_id: self.context.workbook_id.clone(),
@@ -441,6 +432,15 @@ impl Binder {
                 kind: NameKind::HelperLocal,
                 caller_context_dependent: false,
             });
+            self.push_reference_seed(&normalized);
+            BoundExpr::Reference(ReferenceExpr::Atom(normalized))
+        } else if let Some(cell_ref) = parse_cell_reference(
+            &text,
+            &self.context.sheet_id,
+            &self.context,
+            self.formula_channel_kind,
+        ) {
+            let normalized = NormalizedReference::Cell(cell_ref);
             self.push_reference_seed(&normalized);
             BoundExpr::Reference(ReferenceExpr::Atom(normalized))
         } else if let Some(kind) = self.context.names.get(&text).cloned() {
@@ -1002,8 +1002,14 @@ impl Binder {
         Some((text, false))
     }
 
+    fn is_helper_local_name(&self, text: &str) -> bool {
+        self.helper_local_names
+            .iter()
+            .any(|name| name.eq_ignore_ascii_case(text))
+    }
+
     fn bind_identifier_expr_from_name(&mut self, text: &str) -> BoundExpr {
-        if self.helper_local_names.iter().any(|name| name == text) {
+        if self.is_helper_local_name(text) {
             let normalized = NormalizedReference::Name(NameRef {
                 name: text.to_string(),
                 workbook_id: self.context.workbook_id.clone(),
