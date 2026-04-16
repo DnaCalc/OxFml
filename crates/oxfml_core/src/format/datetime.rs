@@ -23,7 +23,7 @@ pub fn render_with_date_tokens(
 
     let (year, month, day) = ymd_from_excel_serial(date_system, value)?;
     let weekday_index = weekday_from_ymd(year, month, day);
-    let mut rendered = section.to_string();
+    let mut rendered = section.to_ascii_lowercase();
 
     rendered = rendered.replace("AM/PM", "AM");
     rendered = rendered.replace("am/pm", "am");

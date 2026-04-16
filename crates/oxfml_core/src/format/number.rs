@@ -59,13 +59,21 @@ pub fn render_with_number_format_code(
     let section = select_number_format_section(number_format_code, value)
         .ok_or_else(|| FormatFailure::UnsupportedCode(number_format_code.to_string()))?;
     let stripped = strip_condition_and_color_tokens(&section);
+    if stripped.chars().all(char::is_whitespace) {
+        return Ok(stripped);
+    }
+    let trimmed = stripped.trim();
 
-    if datetime::looks_like_date_format(&stripped) {
-        return datetime::render_with_date_tokens(profile, date_system, value, &stripped)
+    if datetime::looks_like_date_format(trimmed) {
+        return datetime::render_with_date_tokens(profile, date_system, value, trimmed)
             .ok_or(FormatFailure::InvalidDateSerial);
     }
 
-    let numeric = parse_numeric_section(&stripped)
+    if is_two_digit_integer_code(trimmed) {
+        return render_two_digit_integer(value);
+    }
+
+    let numeric = parse_numeric_section(trimmed)
         .ok_or_else(|| FormatFailure::UnsupportedCode(number_format_code.to_string()))?;
     let scaled_value = apply_scaling(value, &numeric);
 
@@ -262,12 +270,19 @@ pub(crate) fn select_number_format_section(code: &str, value: f64) -> Option<Str
         return None;
     }
 
-    for section in &sections {
-        if let Some(condition) = extract_condition(section) {
-            if condition_matches(&condition, value) {
-                return Some(section.clone());
+    let has_explicit_condition = sections.iter().any(|section| extract_condition(section).is_some());
+    if has_explicit_condition {
+        let mut fallback = None;
+        for section in &sections {
+            if let Some(condition) = extract_condition(section) {
+                if condition_matches(&condition, value) {
+                    return Some(section.clone());
+                }
+            } else if fallback.is_none() {
+                fallback = Some(section.clone());
             }
         }
+        return fallback;
     }
 
     match sections.len() {
@@ -322,18 +337,18 @@ fn split_format_sections(code: &str) -> Vec<String> {
                 in_quotes = !in_quotes;
             }
             ';' if !in_quotes => {
-                sections.push(current.trim().to_string());
+                sections.push(current.clone());
                 current.clear();
             }
             _ => current.push(ch),
         }
     }
     if !current.is_empty() || code.ends_with(';') {
-        sections.push(current.trim().to_string());
+        sections.push(current);
     }
     sections
         .into_iter()
-        .filter(|section| !section.is_empty())
+        .filter(|section| !section.trim().is_empty())
         .collect()
 }
 
@@ -363,7 +378,7 @@ pub(crate) fn strip_condition_and_color_tokens(section: &str) -> String {
             stripped.push(ch);
         }
     }
-    stripped.trim().to_string()
+    stripped
 }
 
 pub(crate) fn expand_literal_tokens(section: &str) -> String {
@@ -430,5 +445,23 @@ fn condition_matches(condition: &str, value: f64) -> bool {
         "=" => (value - threshold).abs() < f64::EPSILON,
         "<>" => (value - threshold).abs() >= f64::EPSILON,
         _ => false,
+    }
+}
+
+fn is_two_digit_integer_code(section: &str) -> bool {
+    section == "00"
+}
+
+fn render_two_digit_integer(value: f64) -> Result<String, FormatFailure> {
+    if !value.is_finite() {
+        return Err(FormatFailure::UnsupportedCode("00".to_string()));
+    }
+
+    let rounded = value.round();
+    let magnitude = rounded.abs() as i64;
+    if rounded.is_sign_negative() && rounded != 0.0 {
+        Ok(format!("-{magnitude:02}"))
+    } else {
+        Ok(format!("{magnitude:02}"))
     }
 }
