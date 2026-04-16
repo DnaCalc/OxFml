@@ -692,48 +692,36 @@ fn runtime_environment_executes_foundation_helper_array_case_ftc_1031() {
 }
 
 #[test]
-fn runtime_environment_injects_default_locale_for_no_locale_text_verification_cases() {
+fn runtime_environment_blocks_no_locale_text_verification_cases() {
     let cases = [
         (
             "FTC-1021",
             "=LET(yr,2024,m,3,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),testDate,DATE(yr,m,15),TEXT(testDate,\"[<\"&firstDay&\"] ;[>\"&lastDay&\"] ;dd\"))",
-            text_eval_value("15"),
-            "15",
         ),
         (
             "FTC-1022",
             "=LET(yr,2024,m,3,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),testDate,DATE(yr,2,28),result,TEXT(testDate,\"[<\"&firstDay&\"] ;[>\"&lastDay&\"] ;dd\"),LEN(TRIM(result)))",
-            EvalValue::Number(0.0),
-            "0",
         ),
         (
             "FTC-1023",
             "=LET(baseSun,DATE(2024,1,7),headers,TEXT(baseSun+SEQUENCE(1,7,,1)-1,\"DDD\"),INDEX(headers,1,1))",
-            text_eval_value("Sun"),
-            "Sun",
         ),
         (
             "FTC-1024",
             "=LET(yr,2024,m,2,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),gridStart,firstDay-WEEKDAY(firstDay,1)+1,dates,gridStart+SEQUENCE(7,,0),dayTexts,MAP(dates,LAMBDA(d,IF(AND(d>=firstDay,d<=lastDay),TEXT(DAY(d),\"00\"),\"  \"))),TEXTJOIN(\",\",FALSE,dayTexts))",
-            text_eval_value("  ,  ,  ,  ,01,02,03"),
-            "  ,  ,  ,  ,01,02,03",
         ),
         (
             "FTC-1028",
             "=TEXT(DATE(2024,7,1),\"MMMM\")",
-            text_eval_value("July"),
-            "July",
         ),
         (
             "FTC-1040",
             "=LET(yr,2024,m,1,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),gridStart,firstDay-WEEKDAY(firstDay,1)+1,dates,gridStart+SEQUENCE(42,,0),dayStrs,MAP(dates,LAMBDA(d,IF(AND(d>=firstDay,d<=lastDay),TEXT(DAY(d),\"00\"),\"  \"))),monthName,TEXT(firstDay,\"MMMM\"),TEXTJOIN(\"|\",FALSE,monthName,INDEX(dayStrs,1),INDEX(dayStrs,2),INDEX(dayStrs,3),INDEX(dayStrs,4),INDEX(dayStrs,5),INDEX(dayStrs,6),INDEX(dayStrs,7)))",
-            text_eval_value("January|  |01|02|03|04|05|06"),
-            "January|  |01|02|03|04|05|06",
         ),
     ];
 
-    for (case_id, formula, expected_value, expected_text) in cases {
-        let result = RuntimeEnvironment::new()
+    for (case_id, formula) in cases {
+        let error = RuntimeEnvironment::new()
             .execute(RuntimeFormulaRequest::new(
                 FormulaSourceRecord::new(
                     &format!("runtime:no-locale-foundation:{case_id}"),
@@ -742,26 +730,15 @@ fn runtime_environment_injects_default_locale_for_no_locale_text_verification_ca
                 ),
                 TypedContextQueryBundle::default(),
             ))
-            .unwrap_or_else(|error| panic!("{case_id} runtime execution should succeed: {error}"));
+            .expect_err("no-locale runtime execution should be blocked");
 
-        assert_eq!(
-            result.published_worksheet_value, expected_value,
-            "{case_id} published worksheet value"
-        );
-        assert_eq!(
-            result.verification_publication_surface.visible_value_text, expected_text,
-            "{case_id} visible value text"
-        );
-        assert_eq!(
-            result.verification_publication_surface.effective_display_text, expected_text,
-            "{case_id} effective display text"
+        assert!(
+            error.contains("capability denied"),
+            "{case_id} capability denial marker"
         );
         assert!(
-            result
-                .typed_query_bundle_spec
-                .families
-                .contains(&TypedContextQueryFamily::LocaleFormatContext),
-            "{case_id} typed query bundle spec should include locale context"
+            error.contains("locale_format_context"),
+            "{case_id} missing locale capability marker"
         );
     }
 }

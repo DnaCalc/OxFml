@@ -5,7 +5,6 @@ use oxfunc_core::value::EvalValue;
 use crate::binding::{BindContext, BindDiagnostic, NameKind, bind_formula};
 use crate::consumer::ConsumerLibraryContextState;
 use crate::eval::{DefinedNameBinding, EvaluationBackend, EvaluationOutput};
-use crate::format::current_excel_host_context;
 use crate::host::{
     ArtifactReuseReport, FirstHostReplayCapturePacket, HostRecalcOutput, SingleFormulaHost,
 };
@@ -184,23 +183,24 @@ impl<'a> RuntimeEnvironment<'a> {
         host: &mut SingleFormulaHost,
         request: RuntimeFormulaRequest<'q>,
     ) -> Result<RuntimeFormulaResult, String> {
+        let compiled = compile_runtime_prepare_request(self, &request)?;
+        if compiled.prepare_request.semantic_plan.execution_profile.requires_locale
+            && request.typed_query_bundle.locale_ctx.is_none()
+        {
+            return Err(
+                "capability denied: locale_format_context unavailable for runtime execution"
+                    .to_string(),
+            );
+        }
         self.apply_to_host(host, request.source());
-        let default_locale_ctx = current_excel_host_context();
-        let effective_typed_query_bundle = TypedContextQueryBundle {
-            locale_ctx: request
-                .typed_query_bundle
-                .locale_ctx
-                .or(Some(&default_locale_ctx)),
-            ..request.typed_query_bundle
-        };
         let output = host.recalc_with_library_context_view(
             request.backend(),
-            effective_typed_query_bundle,
+            request.typed_query_bundle,
             self.library_context.pinned_view(),
         )?;
         Ok(RuntimeFormulaResult::from_host_output(
             output,
-            effective_typed_query_bundle.locale_ctx,
+            request.typed_query_bundle.locale_ctx,
             request.verification_publication_context(),
         ))
     }
