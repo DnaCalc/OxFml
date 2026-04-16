@@ -103,9 +103,14 @@ name = "oxfunc_core"
 version = "0.1.0"
 dependencies = [
  "libm",
+ "oxfunc_value_types",
  "sxd-document",
  "sxd-xpath",
 ]
+
+[[package]]
+name = "oxfunc_value_types"
+version = "0.1.0"
 
 [[package]]
 name = "peresil"
