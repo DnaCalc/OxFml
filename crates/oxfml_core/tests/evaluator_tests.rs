@@ -555,6 +555,41 @@ fn evaluator_executes_foundation_array_lambda_carrier_cases() {
 }
 
 #[test]
+fn evaluator_executes_choosecols_selector_array_case_ftc_0820() {
+    let output = evaluate(
+        "=SUM(CHOOSECOLS({10,20,30,40,50},{3,1,5}))",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+
+    assert_eq!(output.oxfunc_value, EvalValue::Number(90.0));
+    assert_eq!(output.result.payload_summary, "Number(90)");
+    assert_eq!(
+        output
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec!["FUNC.CHOOSECOLS", "FUNC.SUM"]
+    );
+    assert_eq!(
+        output.trace.prepared_calls[0]
+            .prepared_arguments
+            .iter()
+            .map(|arg| arg.structure_class)
+            .collect::<Vec<_>>(),
+        vec![
+            oxfml_core::PreparedStructureClass::ArrayLike,
+            oxfml_core::PreparedStructureClass::DirectScalar,
+            oxfml_core::PreparedStructureClass::DirectScalar,
+            oxfml_core::PreparedStructureClass::DirectScalar,
+        ]
+    );
+}
+
+#[test]
 fn evaluator_executes_if_text_true_condition_ftc_0541() {
     let locale = en_us_context();
     let output = evaluate_with_rtd_provider(

@@ -720,6 +720,16 @@ fn runtime_environment_executes_foundation_text_date_format_case_ftc_1040() {
 }
 
 #[test]
+fn runtime_environment_executes_choosecols_selector_array_case_ftc_0820() {
+    assert_runtime_foundation_case(
+        "FTC-0820",
+        "=SUM(CHOOSECOLS({10,20,30,40,50},{3,1,5}))",
+        EvalValue::Number(90.0),
+        "90",
+    );
+}
+
+#[test]
 fn runtime_environment_executes_if_text_true_condition_ftc_0541() {
     let locale = en_us_context();
     let result = RuntimeEnvironment::new()
