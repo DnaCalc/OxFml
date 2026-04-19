@@ -249,6 +249,7 @@ struct LambdaBinding {
 
 #[derive(Debug, Clone, PartialEq)]
 struct RegisteredCallableBinding {
+    value: OxLambdaValue,
     lambda: LambdaBinding,
 }
 
@@ -291,13 +292,22 @@ impl CallableRegistry {
             },
             HELPER_LAMBDA_INVOCATION_CONTRACT_REF,
         );
-        self.bindings
-            .insert(token, RegisteredCallableBinding { lambda });
+        self.bindings.insert(
+            token,
+            RegisteredCallableBinding {
+                value: oxfunc_value.clone(),
+                lambda,
+            },
+        );
         oxfunc_value
     }
 
     fn get(&self, token: &str) -> Option<&RegisteredCallableBinding> {
         self.bindings.get(token)
+    }
+
+    fn value(&self, token: &str) -> Option<OxLambdaValue> {
+        self.bindings.get(token).map(|binding| binding.value.clone())
     }
 }
 
@@ -386,15 +396,16 @@ pub fn evaluate_formula(
         &callable_registry,
         &mut trace,
     )?;
+    let output_value = sanitize_final_output_value(value, &callable_registry);
 
     Ok(EvaluationOutput {
-        result: prepared_result_from_eval_value(&value, context.plan),
+        result: prepared_result_from_eval_value(&output_value, context.plan),
         returned_value_surface: returned_value_surface_for_output(
             &context.bind_formula.root,
-            &value,
+            &output_value,
             &context,
         ),
-        oxfunc_value: value,
+        oxfunc_value: output_value,
         trace,
     })
 }
@@ -817,7 +828,11 @@ fn evaluate_function_call(
         context.rtd_provider,
         context.registered_external_provider,
     ) {
-        Ok(value) => Ok(value),
+        Ok(value) => Ok(decode_callable_carrier_function_result(
+            function_name,
+            value,
+            callable_registry,
+        )),
         Err(_error)
             if allow_host_query_worksheet_error_fallback(
                 function_name,
@@ -3105,7 +3120,86 @@ fn call_arg_from_prepared(prepared: &PreparedArgValue) -> CallArgValue {
 }
 
 fn prepared_arg_from_eval_value(value: EvalValue) -> PreparedArgValue {
-    PreparedArgValue::Eval(value)
+    PreparedArgValue::Eval(encode_callable_array_transport_value(value))
+}
+
+fn encode_callable_array_transport_value(value: EvalValue) -> EvalValue {
+    match value {
+        EvalValue::Lambda(lambda) => EvalValue::Text(callable_array_carrier_text(&lambda.callable_token)),
+        other => other,
+    }
+}
+
+fn decode_callable_carrier_function_result(
+    function_name: &str,
+    value: EvalValue,
+    callable_registry: &RefCell<CallableRegistry>,
+) -> EvalValue {
+    match function_name {
+        "INDEX" | "XLOOKUP" => decode_callable_carrier_scalar(value, callable_registry),
+        _ => value,
+    }
+}
+
+fn decode_callable_carrier_scalar(
+    value: EvalValue,
+    callable_registry: &RefCell<CallableRegistry>,
+) -> EvalValue {
+    match value {
+        EvalValue::Text(text) => decode_callable_carrier_text(&text, callable_registry)
+            .unwrap_or(EvalValue::Text(text)),
+        other => other,
+    }
+}
+
+fn sanitize_final_output_value(
+    value: EvalValue,
+    callable_registry: &RefCell<CallableRegistry>,
+) -> EvalValue {
+    match value {
+        EvalValue::Text(text) => decode_callable_carrier_text(&text, callable_registry)
+            .unwrap_or(EvalValue::Text(text)),
+        EvalValue::Array(array) => {
+            let shape = array.shape();
+            let mut cells = Vec::with_capacity(shape.rows * shape.cols);
+            for row in 0..shape.rows {
+                for col in 0..shape.cols {
+                    let cell = match array.get(row, col) {
+                        Some(ArrayCellValue::Text(text))
+                            if decode_callable_carrier_text(text, callable_registry).is_some() =>
+                        {
+                            ArrayCellValue::Error(WorksheetErrorCode::Value)
+                        }
+                        Some(cell) => cell.clone(),
+                        None => ArrayCellValue::EmptyCell,
+                    };
+                    cells.push(cell);
+                }
+            }
+            EvalArray::new(shape, cells)
+                .map(EvalValue::Array)
+                .unwrap_or(EvalValue::Error(WorksheetErrorCode::Value))
+        }
+        other => other,
+    }
+}
+
+fn callable_array_carrier_text(token: &str) -> ExcelText {
+    ExcelText::from_interop_assignment(&format!("{}{}", CALLABLE_ARRAY_CARRIER_PREFIX, token))
+}
+
+fn decode_callable_carrier_text(
+    text: &ExcelText,
+    callable_registry: &RefCell<CallableRegistry>,
+) -> Option<EvalValue> {
+    let token = text
+        .to_string_lossy()
+        .strip_prefix(CALLABLE_ARRAY_CARRIER_PREFIX)?
+        .to_string();
+    callable_registry
+        .borrow()
+        .value(&token)
+        .map(EvalValue::Lambda)
 }
 
 fn resolve_local_area_reference(
@@ -3151,7 +3245,10 @@ fn array_cell_value_from_eval_value(value: Option<EvalValue>) -> ArrayCellValue 
         Some(EvalValue::Text(text)) => ArrayCellValue::Text(text),
         Some(EvalValue::Logical(value)) => ArrayCellValue::Logical(value),
         Some(EvalValue::Error(code)) => ArrayCellValue::Error(code),
-        Some(EvalValue::Array(_)) | Some(EvalValue::Reference(_)) | Some(EvalValue::Lambda(_)) => {
+        Some(EvalValue::Lambda(lambda)) => {
+            ArrayCellValue::Text(callable_array_carrier_text(&lambda.callable_token))
+        }
+        Some(EvalValue::Array(_)) | Some(EvalValue::Reference(_)) => {
             ArrayCellValue::Error(WorksheetErrorCode::Value)
         }
         None => ArrayCellValue::EmptyCell,
@@ -3221,6 +3318,8 @@ fn column_number(text: &str) -> Option<u32> {
     }
     Some(value)
 }
+
+const CALLABLE_ARRAY_CARRIER_PREFIX: &str = "oxfml.callable-array::";
 
 fn callable_token(id: usize, summary: &str) -> String {
     format!("oxfml.callable.{id}::{summary}")

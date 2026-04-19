@@ -532,27 +532,25 @@ fn evaluator_executes_foundation_let_lambda_success_cases() {
 }
 
 #[test]
-fn evaluator_classifies_foundation_array_lambda_carrier_gap_cases() {
+fn evaluator_executes_foundation_array_lambda_carrier_cases() {
     let locale = en_us_context();
     let cases = [
         (
             "FTC-0448",
             "=LET(dict,{\"x\",LAMBDA(100);\"y\",LAMBDA(200)},GETlambda,LAMBDA(d,LAMBDA(key,LET(keys,TAKE(d,,1),objects,DROP(d,,1),obj,XLOOKUP(key,keys,objects,\"not found\"),obj()))),getter,GETlambda(dict),getter(\"y\"))",
+            EvalValue::Number(200.0),
         ),
         (
             "FTC-0455",
             "=LET(THUNK,LAMBDA(x,LAMBDA(x)),vals,MAP({1;2;3},LAMBDA(v,THUNK(v*10))),INDEX(vals,2,1)())",
+            EvalValue::Number(20.0),
         ),
     ];
 
-    for (case_id, formula) in cases {
-        let error = evaluate_with_rtd_provider(formula, None, None, None, Some(&locale))
-            .expect_err("array-lambda carrier gap should remain a classified local failure");
-        assert!(
-            error.message.contains("callee evaluated to Error"),
-            "{case_id} error classification: {}",
-            error.message
-        );
+    for (case_id, formula, expected_value) in cases {
+        let output = evaluate_with_rtd_provider(formula, None, None, None, Some(&locale))
+            .unwrap_or_else(|error| panic!("{case_id} evaluator execution should succeed: {error:?}"));
+        assert_eq!(output.oxfunc_value, expected_value, "{case_id} value");
     }
 }
 

@@ -638,30 +638,24 @@ fn runtime_environment_executes_foundation_let_lambda_success_cases() {
 }
 
 #[test]
-fn runtime_environment_classifies_foundation_array_lambda_carrier_gap_cases() {
-    let locale = en_us_context();
+fn runtime_environment_executes_foundation_array_lambda_carrier_cases() {
     let cases = [
         (
             "FTC-0448",
             "=LET(dict,{\"x\",LAMBDA(100);\"y\",LAMBDA(200)},GETlambda,LAMBDA(d,LAMBDA(key,LET(keys,TAKE(d,,1),objects,DROP(d,,1),obj,XLOOKUP(key,keys,objects,\"not found\"),obj()))),getter,GETlambda(dict),getter(\"y\"))",
+            EvalValue::Number(200.0),
+            "200",
         ),
         (
             "FTC-0455",
             "=LET(THUNK,LAMBDA(x,LAMBDA(x)),vals,MAP({1;2;3},LAMBDA(v,THUNK(v*10))),INDEX(vals,2,1)())",
+            EvalValue::Number(20.0),
+            "20",
         ),
     ];
 
-    for (case_id, formula) in cases {
-        let error = RuntimeEnvironment::new()
-            .execute(RuntimeFormulaRequest::new(
-                FormulaSourceRecord::new(&format!("runtime:foundation:{case_id}"), 1, formula),
-                TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
-            ))
-            .expect_err("array-lambda carrier gap should remain a classified runtime failure");
-        assert!(
-            error.contains("callee evaluated to Error"),
-            "{case_id} error classification: {error}"
-        );
+    for (case_id, formula, expected_value, expected_text) in cases {
+        assert_runtime_foundation_case(case_id, formula, expected_value, expected_text);
     }
 }
 
@@ -739,7 +733,10 @@ fn runtime_environment_executes_if_text_true_condition_ftc_0541() {
         ))
         .expect("FTC-0541 runtime execution should succeed");
 
-    assert_eq!(result.published_worksheet_value, text_eval_value("yes"));
+    assert_eq!(
+        result.published_worksheet_value,
+        text_eval_value("yes")
+    );
     assert_eq!(result.verification_publication_surface.visible_value_text, "yes");
     assert_eq!(result.verification_publication_surface.effective_display_text, "yes");
 }
