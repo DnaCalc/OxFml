@@ -472,7 +472,7 @@ fn project_runtime_managed_session(
         ),
         candidate_result_id: result.candidate_result_id.clone(),
         commit_decision_kind: None,
-        execution_outcome_surface: None,
+        execution_outcome_surface: result.execution_outcome_surface.clone(),
         trace_event_kinds: result
             .trace_events
             .iter()

@@ -730,6 +730,7 @@ fn replay_projection_service_projects_runtime_managed_session_results() {
     );
     assert_eq!(session_projection.phase.as_deref(), Some("Executed"));
     assert!(session_projection.candidate_result_id.is_some());
+    assert_eq!(session_projection.execution_outcome_surface, None);
 
     let commit = session
         .commit_managed(
@@ -757,6 +758,16 @@ fn replay_projection_service_projects_runtime_managed_session_results() {
     );
     assert_eq!(
         commit_projection.execution_outcome_surface,
+        Some(commit.execution_outcome_surface.clone())
+    );
+    let committed_session_snapshot = session
+        .managed_session_snapshot()
+        .expect("managed committed session snapshot should exist");
+    let committed_session_projection = ReplayProjectionService::project(
+        ReplayProjectionRequest::runtime_managed_session(&committed_session_snapshot),
+    );
+    assert_eq!(
+        committed_session_projection.execution_outcome_surface,
         Some(commit.execution_outcome_surface.clone())
     );
     assert_eq!(
@@ -808,6 +819,16 @@ fn replay_projection_service_projects_runtime_managed_termination_results() {
     );
     assert_eq!(
         termination_projection.execution_outcome_surface,
+        Some(termination.execution_outcome_surface.clone())
+    );
+    let terminated_session_snapshot = session
+        .managed_session_snapshot()
+        .expect("managed terminated session snapshot should exist");
+    let terminated_session_projection = ReplayProjectionService::project(
+        ReplayProjectionRequest::runtime_managed_session(&terminated_session_snapshot),
+    );
+    assert_eq!(
+        terminated_session_projection.execution_outcome_surface,
         Some(termination.execution_outcome_surface.clone())
     );
 }

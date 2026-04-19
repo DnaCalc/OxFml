@@ -413,6 +413,7 @@ pub struct RuntimeManagedSessionSnapshot {
     pub typed_query_bundle_spec: Option<TypedContextQueryBundleSpec>,
     pub candidate_result_id: Option<String>,
     pub last_reject: Option<RejectRecord>,
+    pub execution_outcome_surface: Option<ExecutionOutcomeSurface>,
     pub trace_events: Vec<TraceEvent>,
 }
 
@@ -781,17 +782,23 @@ fn runtime_capability_view_spec(request: &RuntimeFormulaRequest<'_>) -> Capabili
 }
 
 fn runtime_managed_session_snapshot(record: &SessionRecord) -> RuntimeManagedSessionSnapshot {
+    let phase = runtime_managed_phase(record.phase.clone());
+    let last_reject = record.last_reject.clone();
     RuntimeManagedSessionSnapshot {
         formula_stable_id: record.prepared.source.formula_stable_id.0.clone(),
         session_id: record.session_id.clone(),
-        phase: runtime_managed_phase(record.phase.clone()),
+        phase,
         library_context_snapshot_ref: record.prepared.library_context_snapshot_ref.clone(),
         typed_query_bundle_spec: record.typed_query_bundle_spec.clone(),
         candidate_result_id: record
             .candidate_result
             .as_ref()
             .map(|candidate| candidate.candidate_result_id.clone()),
-        last_reject: record.last_reject.clone(),
+        execution_outcome_surface: runtime_execution_outcome_surface_from_managed_session_state(
+            phase,
+            last_reject.as_ref(),
+        ),
+        last_reject,
         trace_events: record.trace_events.clone(),
     }
 }
@@ -816,6 +823,29 @@ fn runtime_overlay_summary(overlay: &OverlayEntry) -> RuntimeManagedOverlaySumma
         overlay_scope_key: overlay.overlay_scope_key.clone(),
         overlay_family: overlay.overlay_family.clone(),
         formula_stable_id: overlay.formula_stable_id.clone(),
+    }
+}
+
+fn runtime_execution_outcome_surface_from_managed_session_state(
+    phase: RuntimeManagedSessionPhase,
+    last_reject: Option<&RejectRecord>,
+) -> Option<ExecutionOutcomeSurface> {
+    match phase {
+        RuntimeManagedSessionPhase::Committed => Some(ExecutionOutcomeSurface {
+            outcome_kind: ExecutionOutcomeKind::ExecutedResult,
+            outcome_stage: ExecutionOutcomeStage::Executed,
+            class_id: "executed_result".to_string(),
+            lane_reason_code: None,
+            raw_detail: None,
+        }),
+        RuntimeManagedSessionPhase::Rejected
+        | RuntimeManagedSessionPhase::Aborted
+        | RuntimeManagedSessionPhase::Expired => {
+            last_reject.map(runtime_execution_outcome_surface_from_reject_record)
+        }
+        RuntimeManagedSessionPhase::Open
+        | RuntimeManagedSessionPhase::CapabilityViewEstablished
+        | RuntimeManagedSessionPhase::Executed => None,
     }
 }
 

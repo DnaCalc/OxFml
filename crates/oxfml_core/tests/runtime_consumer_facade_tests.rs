@@ -217,6 +217,10 @@ fn runtime_session_facade_runs_managed_session_through_commit() {
     assert_eq!(snapshot.phase, RuntimeManagedSessionPhase::Committed);
     assert_eq!(commit.session.phase, RuntimeManagedSessionPhase::Committed);
     assert_eq!(
+        snapshot.execution_outcome_surface,
+        Some(commit.execution_outcome_surface.clone())
+    );
+    assert_eq!(
         snapshot.candidate_result_id,
         Some(execution.candidate_result.candidate_result_id)
     );
@@ -264,6 +268,10 @@ fn runtime_session_facade_reports_managed_abort_with_session_snapshot() {
             .lane_reason_code
             .as_deref(),
         Some("SessionTerminated")
+    );
+    assert_eq!(
+        termination.session.execution_outcome_surface,
+        Some(termination.execution_outcome_surface.clone())
     );
     assert!(
         termination
