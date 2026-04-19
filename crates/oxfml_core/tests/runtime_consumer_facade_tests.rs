@@ -670,6 +670,16 @@ fn runtime_environment_executes_foundation_text_date_format_case_ftc_1021() {
 }
 
 #[test]
+fn runtime_environment_executes_text_with_pinned_grouping_separator_context() {
+    assert_runtime_foundation_text_case(
+        "TEXT-PINNED-GROUPING-SEPARATORS",
+        "=TEXT(1234567.89,\"#,##0.00\")",
+        text_eval_value("1,234,567.89"),
+        "1,234,567.89",
+    );
+}
+
+#[test]
 fn runtime_environment_executes_foundation_text_date_format_case_ftc_1022() {
     assert_runtime_foundation_text_case(
         "FTC-1022",
@@ -784,6 +794,12 @@ fn runtime_environment_blocks_no_locale_text_verification_cases() {
         (
             "FTC-1040",
             "=LET(yr,2024,m,1,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),gridStart,firstDay-WEEKDAY(firstDay,1)+1,dates,gridStart+SEQUENCE(42,,0),dayStrs,MAP(dates,LAMBDA(d,IF(AND(d>=firstDay,d<=lastDay),TEXT(DAY(d),\"00\"),\"  \"))),monthName,TEXT(firstDay,\"MMMM\"),TEXTJOIN(\"|\",FALSE,monthName,INDEX(dayStrs,1),INDEX(dayStrs,2),INDEX(dayStrs,3),INDEX(dayStrs,4),INDEX(dayStrs,5),INDEX(dayStrs,6),INDEX(dayStrs,7)))",
+        ),
+        // Separator-sensitive TEXT formatting remains blocked without an explicit locale
+        // context; OxFml should not silently guess a machine-specific Excel separator profile.
+        (
+            "TEXT-SEPARATORS-UNPINNED",
+            "=TEXT(1234567.89,\"#,##0.00\")",
         ),
     ];
 

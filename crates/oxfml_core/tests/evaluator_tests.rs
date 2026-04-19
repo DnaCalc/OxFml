@@ -55,6 +55,30 @@ fn evaluator_runs_value_with_locale_parser() {
 }
 
 #[test]
+fn evaluator_runs_text_with_pinned_grouping_separator_context() {
+    let output = evaluate(
+        "=TEXT(1234567.89,\"#,##0.00\")",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(
+        output.oxfunc_value,
+        EvalValue::Text(ExcelText::from_interop_assignment("1,234,567.89"))
+    );
+    assert_eq!(output.result.payload_summary, "Text(1,234,567.89)");
+    assert_eq!(
+        output.result.format_hint.as_deref(),
+        Some("locale_format_semantics")
+    );
+    assert_eq!(output.trace.prepared_calls[0].function_id, "FUNC.TEXT");
+    assert_eq!(
+        output.result.capability_dependencies,
+        vec!["locale_format_context".to_string()]
+    );
+}
+
+#[test]
 fn evaluator_runs_cell_with_host_info_provider() {
     let output = evaluate(
         "=CELL(\"filename\",A1)",
