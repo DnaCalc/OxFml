@@ -107,6 +107,35 @@ fn adapter_projects_direct_scalar_and_array_like_preparation_artifacts() {
 }
 
 #[test]
+fn adapter_preserves_randarray_width_for_columns_ftc_0505_without_explicit_random_bundle() {
+    let locale = oxfml_core::format::en_us_context();
+    let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
+        "ftc-0505-randarray-width",
+        "formula:foundation:FTC-0505",
+        "=COLUMNS(RANDARRAY(5,3))",
+        locus(1, 1),
+        TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
+    ))
+    .expect("FTC-0505 adapter run should succeed");
+
+    assert_eq!(run.evaluation_artifact.worksheet_value, EvalValue::Number(3.0));
+    assert_eq!(
+        run.evaluation_artifact.evaluation_result.payload_summary,
+        "Number(3)"
+    );
+    assert!(
+        run.preparation_artifact
+            .typed_query_bundle_spec
+            .families
+            .contains(&TypedContextQueryFamily::RandomValue)
+    );
+    assert_eq!(
+        run.preparation_artifact.prepared_calls[1].prepared_arguments[0].structure_class,
+        PreparedStructureClass::ArrayLike
+    );
+}
+
+#[test]
 fn adapter_handles_unary_negative_literals_in_ordinary_calls() {
     let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
         "sign-negative-literal",

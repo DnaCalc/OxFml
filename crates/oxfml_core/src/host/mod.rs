@@ -360,7 +360,8 @@ impl SingleFormulaHost {
         query_bundle: TypedContextQueryBundle<'_>,
         library_context_view: PinnedLibraryContextView<'_>,
     ) -> Result<HostRecalcOutput, String> {
-        let typed_query_bundle_spec = query_bundle.freeze_candidate_spec();
+        let effective_query_bundle = effective_query_bundle(query_bundle, self);
+        let typed_query_bundle_spec = effective_query_bundle.freeze_candidate_spec();
         let mut source = FormulaSourceRecord::new(
             self.formula_stable_id.clone(),
             self.formula_text_version,
@@ -504,7 +505,7 @@ impl SingleFormulaHost {
         evaluation_context.caller_col = self.caller_col as usize;
         evaluation_context.cell_values = self.cell_values.clone();
         evaluation_context.defined_names = self.defined_names.clone();
-        evaluation_context.apply_typed_context_query_bundle(query_bundle);
+        evaluation_context.apply_typed_context_query_bundle(effective_query_bundle);
 
         let bind_mismatch_detail = bind_mismatch_detail(&bind.bound_formula.diagnostics);
         let evaluation = if let Some(detail) = bind_mismatch_detail.as_deref() {
@@ -948,6 +949,20 @@ fn parse_empirical_eval_value(summary: &str) -> Result<EvalValue, String> {
     }
 
     Err(format!("unsupported empirical binding summary: {summary}"))
+}
+
+fn effective_query_bundle<'a>(
+    query_bundle: TypedContextQueryBundle<'a>,
+    host: &SingleFormulaHost,
+) -> TypedContextQueryBundle<'a> {
+    TypedContextQueryBundle {
+        host_info: query_bundle.host_info,
+        rtd_provider: query_bundle.rtd_provider,
+        registered_external_provider: query_bundle.registered_external_provider,
+        locale_ctx: query_bundle.locale_ctx,
+        now_serial: query_bundle.now_serial.or(host.now_serial),
+        random_value: query_bundle.random_value.or(host.random_value),
+    }
 }
 
 fn bind_mismatch_detail(diagnostics: &[BindDiagnostic]) -> Option<String> {

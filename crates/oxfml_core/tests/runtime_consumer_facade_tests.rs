@@ -663,6 +663,45 @@ fn runtime_environment_emits_effective_display_text_comparison_view_for_programm
 }
 
 #[test]
+fn runtime_environment_preserves_randarray_width_for_columns_ftc_0505_without_explicit_random_bundle() {
+    let locale = en_us_context();
+    let result = RuntimeEnvironment::new()
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new(
+                "runtime:foundation:FTC-0505",
+                1,
+                "=COLUMNS(RANDARRAY(5,3))",
+            ),
+            TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
+        ))
+        .expect("FTC-0505 runtime execution should succeed");
+
+    assert_eq!(result.published_worksheet_value, EvalValue::Number(3.0));
+    assert_eq!(
+        result.execution_outcome_surface.outcome_kind,
+        ExecutionOutcomeKind::ExecutedResult
+    );
+    assert_eq!(
+        result.comparison_views.iter().find(|view| view.view_family == "comparison_value").map(|view| view.value.clone()),
+        Some(serde_json::json!({
+            "kind": "number",
+            "value": 3.0
+        }))
+    );
+    assert_eq!(result.verification_publication_surface.visible_value_text, "3");
+    assert!(
+        result
+            .typed_query_bundle_spec
+            .families
+            .contains(&TypedContextQueryFamily::RandomValue)
+    );
+    assert_eq!(
+        result.evaluation.trace.prepared_calls[1].prepared_arguments[0].structure_class,
+        oxfml_core::PreparedStructureClass::ArrayLike
+    );
+}
+
+#[test]
 fn runtime_environment_matches_excel_lambda_array_authoring_frontier_cases() {
     let locale = en_us_context();
     let cases = [
