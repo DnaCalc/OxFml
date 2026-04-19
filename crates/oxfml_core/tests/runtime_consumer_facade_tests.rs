@@ -755,6 +755,88 @@ fn runtime_environment_matches_excel_builtin_collision_arity_authoring_frontier_
 }
 
 #[test]
+fn runtime_environment_mirrors_builtin_frontier_for_colliding_let_call_shapes() {
+    let locale = en_us_context();
+    let reject_cases = [
+        ("plain-t-zero", "=T()", "T"),
+        ("colliding-t-zero", "=LET(t,LAMBDA(42),t())", "T"),
+        ("plain-gcd-zero", "=GCD()", "GCD"),
+        ("colliding-gcd-zero", "=LET(gcd,LAMBDA(42),gcd())", "GCD"),
+    ];
+
+    for (case_id, formula, builtin_name) in reject_cases {
+        let result = RuntimeEnvironment::new()
+            .execute(RuntimeFormulaRequest::new(
+                FormulaSourceRecord::new(format!("runtime:{case_id}"), 1, formula),
+                TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
+            ))
+            .unwrap_or_else(|error| {
+                panic!("{case_id} runtime execution should classify bind mismatch: {error:?}")
+            });
+
+        assert_eq!(
+            result.execution_outcome_surface.outcome_kind,
+            ExecutionOutcomeKind::Rejected,
+            "{case_id} outcome kind"
+        );
+        assert_eq!(
+            result.execution_outcome_surface.outcome_stage,
+            ExecutionOutcomeStage::BindBoundary,
+            "{case_id} outcome stage"
+        );
+        assert!(result.bind_diagnostics.iter().any(|diagnostic| {
+            diagnostic.message.starts_with(&format!(
+                "built-in function call '{builtin_name}' rejects 0 arguments at the authoring boundary"
+            ))
+        }));
+    }
+
+    let accepted_cases = [
+        ("plain-t-one", "=T(\"x\")", text_eval_value("x"), "x"),
+        (
+            "colliding-t-one",
+            "=LET(t,LAMBDA(42),t(\"x\"))",
+            text_eval_value("x"),
+            "x",
+        ),
+        ("plain-gcd-two", "=GCD(48,36)", EvalValue::Number(12.0), "12"),
+        (
+            "colliding-gcd-two",
+            "=LET(gcd,LAMBDA(42),gcd(48,36))",
+            EvalValue::Number(12.0),
+            "12",
+        ),
+        (
+            "plain-gcd-value",
+            "=GCD(\"x\",48)",
+            EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Value),
+            "#VALUE!",
+        ),
+    ];
+
+    for (case_id, formula, expected_value, expected_text) in accepted_cases {
+        let result = RuntimeEnvironment::new()
+            .execute(RuntimeFormulaRequest::new(
+                FormulaSourceRecord::new(format!("runtime:{case_id}"), 1, formula),
+                TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
+            ))
+            .unwrap_or_else(|error| panic!("{case_id} runtime execution should succeed: {error:?}"));
+
+        assert_eq!(
+            result.execution_outcome_surface.outcome_kind,
+            ExecutionOutcomeKind::ExecutedResult,
+            "{case_id} outcome kind"
+        );
+        assert_eq!(result.published_worksheet_value, expected_value, "{case_id} value");
+        assert_eq!(
+            result.verification_publication_surface.visible_value_text,
+            expected_text,
+            "{case_id} visible text"
+        );
+    }
+}
+
+#[test]
 fn runtime_environment_preserves_non_colliding_zero_arg_lambda_thunk_call_ftc_0444_control() {
     assert_runtime_foundation_case(
         "FTC-0444-CONTROL",
@@ -788,6 +870,14 @@ fn runtime_environment_matches_excel_builtin_colliding_let_recursive_name_fronti
         ))
         .expect("FTC-0443 runtime execution should succeed");
 
+    assert_eq!(
+        result.execution_outcome_surface.outcome_kind,
+        ExecutionOutcomeKind::ExecutedResult
+    );
+    assert_eq!(
+        result.execution_outcome_surface.outcome_stage,
+        ExecutionOutcomeStage::Executed
+    );
     assert_eq!(
         result.published_worksheet_value,
         EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Value)

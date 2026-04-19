@@ -650,15 +650,15 @@ fn adapter_rejects_plain_t_zero_arity_call_as_bind_mismatch() {
 }
 
 #[test]
-fn adapter_rejects_plain_sum_zero_arity_call_as_bind_mismatch() {
+fn adapter_rejects_plain_gcd_zero_arity_call_as_bind_mismatch() {
     let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
-        "plain-sum-zero-arity",
-        "formula:plain-sum-zero-arity",
-        "=SUM()",
+        "plain-gcd-zero-arity",
+        "formula:plain-gcd-zero-arity",
+        "=GCD()",
         locus(1, 1),
         TypedContextQueryBundle::default(),
     ))
-    .expect("plain SUM adapter run should classify bind mismatch");
+    .expect("plain GCD adapter run should classify bind mismatch");
 
     assert_eq!(run.evaluation_artifact.commit_decision_kind, "rejected");
     assert_eq!(
@@ -671,9 +671,48 @@ fn adapter_rejects_plain_sum_zero_arity_call_as_bind_mismatch() {
     );
     assert!(run.preparation_artifact.bind_diagnostics.iter().any(|diagnostic| {
         diagnostic.message.starts_with(
-            "built-in function call 'SUM' rejects 0 arguments at the authoring boundary",
+            "built-in function call 'GCD' rejects 0 arguments at the authoring boundary",
         )
     }));
+}
+
+#[test]
+fn adapter_executes_colliding_let_calls_when_builtin_frontier_accepts_shape() {
+    let cases = [
+        (
+            "collision-t-accepted-shape",
+            "=LET(t,LAMBDA(42),t(\"x\"))",
+            EvalValue::Text(ExcelText::from_interop_assignment("x")),
+        ),
+        (
+            "collision-gcd-accepted-shape",
+            "=LET(gcd,LAMBDA(42),gcd(48,36))",
+            EvalValue::Number(12.0),
+        ),
+    ];
+
+    for (case_id, formula, expected_value) in cases {
+        let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
+            format!("adapter:{case_id}"),
+            format!("formula:{case_id}"),
+            formula,
+            locus(1, 1),
+            TypedContextQueryBundle::default(),
+        ))
+        .unwrap_or_else(|error| panic!("{case_id} adapter run should execute: {error}"));
+
+        assert_eq!(run.evaluation_artifact.commit_decision_kind, "accepted");
+        assert_eq!(
+            run.evaluation_artifact.execution_outcome_surface.outcome_kind,
+            ExecutionOutcomeKind::ExecutedResult,
+            "{case_id} outcome kind"
+        );
+        assert_eq!(
+            run.evaluation_artifact.worksheet_value,
+            expected_value,
+            "{case_id} worksheet value"
+        );
+    }
 }
 
 #[test]

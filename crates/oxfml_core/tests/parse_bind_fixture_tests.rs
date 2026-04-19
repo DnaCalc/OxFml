@@ -447,8 +447,8 @@ fn bind_surfaces_t_builtin_arity_authoring_reject_for_ftc_0444() {
 }
 
 #[test]
-fn bind_surfaces_generic_builtin_arity_authoring_reject_for_plain_sum_zero_arity() {
-    let source = FormulaSourceRecord::new("fixture-builtin-arity-sum-zero", 1, "=SUM()");
+fn bind_surfaces_generic_builtin_arity_authoring_reject_for_plain_gcd_zero_arity() {
+    let source = FormulaSourceRecord::new("fixture-builtin-arity-gcd-zero", 1, "=GCD()");
     let parse = parse_formula(ParseRequest {
         source: source.clone(),
     });
@@ -467,16 +467,16 @@ fn bind_surfaces_generic_builtin_arity_authoring_reject_for_plain_sum_zero_arity
     assert!(bind.bound_formula.diagnostics.iter().any(|diagnostic| {
         diagnostic
             .message
-            .starts_with("built-in function call 'SUM' rejects 0 arguments at the authoring boundary")
+            .starts_with("built-in function call 'GCD' rejects 0 arguments at the authoring boundary")
     }));
     let BoundExpr::FunctionCall {
         function_name,
         args,
     } = &bind.bound_formula.root
     else {
-        panic!("expected SUM call root, got {:?}", bind.bound_formula.root);
+        panic!("expected GCD call root, got {:?}", bind.bound_formula.root);
     };
-    assert_eq!(function_name, "SUM");
+    assert_eq!(function_name, "GCD");
     assert!(args.is_empty());
 }
 
