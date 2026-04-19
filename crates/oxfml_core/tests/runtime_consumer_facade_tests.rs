@@ -726,7 +726,7 @@ fn runtime_environment_executes_foundation_text_date_format_case_ftc_1040() {
 }
 
 #[test]
-fn runtime_environment_projects_foundation_if_text_true_error_case_ftc_0541() {
+fn runtime_environment_executes_if_text_true_condition_ftc_0541() {
     let locale = en_us_context();
     let result = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
@@ -737,20 +737,11 @@ fn runtime_environment_projects_foundation_if_text_true_error_case_ftc_0541() {
             ),
             TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
         ))
-        .expect("FTC-0541 runtime execution should succeed and project #VALUE!");
+        .expect("FTC-0541 runtime execution should succeed");
 
-    assert_eq!(
-        result.published_worksheet_value,
-        EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Value)
-    );
-    assert_eq!(
-        result.verification_publication_surface.visible_value_text,
-        worksheet_error_text(oxfunc_core::value::WorksheetErrorCode::Value)
-    );
-    assert_eq!(
-        result.verification_publication_surface.effective_display_text,
-        worksheet_error_text(oxfunc_core::value::WorksheetErrorCode::Value)
-    );
+    assert_eq!(result.published_worksheet_value, text_eval_value("yes"));
+    assert_eq!(result.verification_publication_surface.visible_value_text, "yes");
+    assert_eq!(result.verification_publication_surface.effective_display_text, "yes");
 }
 
 #[test]

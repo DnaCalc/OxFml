@@ -557,7 +557,7 @@ fn evaluator_classifies_foundation_array_lambda_carrier_gap_cases() {
 }
 
 #[test]
-fn evaluator_projects_if_text_true_condition_as_worksheet_error_ftc_0541() {
+fn evaluator_executes_if_text_true_condition_ftc_0541() {
     let locale = en_us_context();
     let output = evaluate_with_rtd_provider(
         "=IF(\"TRUE\",\"yes\",\"no\")",
@@ -566,14 +566,21 @@ fn evaluator_projects_if_text_true_condition_as_worksheet_error_ftc_0541() {
         None,
         Some(&locale),
     )
-    .expect("FTC-0541 should project a worksheet error instead of a runtime failure");
+    .expect("FTC-0541 should evaluate successfully");
 
     assert_eq!(
         output.oxfunc_value,
-        EvalValue::Error(WorksheetErrorCode::Value)
+        EvalValue::Text(ExcelText::from_interop_assignment("yes"))
     );
-    assert_eq!(output.result.payload_summary, "Error(Value)");
+    assert_eq!(output.result.payload_summary, "Text(yes)");
     assert_eq!(output.trace.prepared_calls[0].function_id, "FUNC.IF");
+}
+
+#[test]
+fn evaluator_executes_if_text_false_condition() {
+    let output = evaluate("=IF(\"FALSE\",1,2)", None, None, Some(&en_us_context()));
+    assert_eq!(output.oxfunc_value, EvalValue::Number(2.0));
+    assert_eq!(output.result.payload_summary, "Number(2)");
 }
 
 #[test]

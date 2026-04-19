@@ -1502,6 +1502,26 @@ fn evaluate_let_call(
     materialize_call_arg(body_arg, resolver)
 }
 
+fn coerce_excel_if_text_condition(
+    condition: &CallArgValue,
+    resolver: &mut LocalReferenceResolver<'_>,
+) -> Result<Option<bool>, EvaluationError> {
+    match condition {
+        CallArgValue::Eval(EvalValue::Text(text)) => {
+            let normalized = text.to_string_lossy().trim().to_ascii_uppercase();
+            match normalized.as_str() {
+                "TRUE" => Ok(Some(true)),
+                "FALSE" => Ok(Some(false)),
+                _ => Ok(None),
+            }
+        }
+        CallArgValue::Reference(reference) => resolve_oxfunc_eval_value(resolver, reference)
+            .map_err(map_resolution_error)
+            .and_then(|value| coerce_excel_if_text_condition(&CallArgValue::Eval(value), resolver)),
+        _ => Ok(None),
+    }
+}
+
 fn evaluate_if_call(
     args: &[BoundExpr],
     context: &EvaluationContext<'_>,
@@ -1527,9 +1547,14 @@ fn evaluate_if_call(
     let mut prepared_arguments = vec![prepared_argument_for_call_arg(
         0, &args[0], &condition, true,
     )];
+    let normalized_condition = if let Some(value) = coerce_excel_if_text_condition(&condition, resolver)? {
+        CallArgValue::Eval(EvalValue::Logical(value))
+    } else {
+        condition.clone()
+    };
     let condition_is_true = match eval_if_surface(
         &[
-            condition.clone(),
+            normalized_condition.clone(),
             CallArgValue::Eval(EvalValue::Number(1.0)),
             CallArgValue::Eval(EvalValue::Number(0.0)),
         ],
@@ -1563,7 +1588,7 @@ fn evaluate_if_call(
         }
     };
 
-    let mut call_args = vec![condition.clone()];
+    let mut call_args = vec![normalized_condition.clone()];
     if condition_is_true {
         let true_arg = evaluate_expr_as_call_arg(
             &args[1],
