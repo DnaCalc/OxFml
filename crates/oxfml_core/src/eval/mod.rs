@@ -745,10 +745,10 @@ fn evaluate_function_call(
 
     let mut prepared_arguments = Vec::with_capacity(args.len());
     let mut call_args = Vec::with_capacity(args.len());
-    for (source_ordinal, arg) in args.iter().enumerate() {
+    for (ordinal, arg) in args.iter().enumerate() {
         let preserve_reference =
             meta.arg_preparation_profile == ArgPreparationProfile::RefsVisibleInAdapter;
-        let callable_slot = is_builtin_callable_slot(function_name, source_ordinal);
+        let callable_slot = is_builtin_callable_slot(function_name, ordinal);
         let call_arg = evaluate_expr_as_call_arg(
             arg,
             context,
@@ -759,24 +759,6 @@ fn evaluate_function_call(
             callable_slot,
             trace,
         )?;
-
-        if let Some(expanded_call_args) =
-            expand_variadic_selector_call_args(function_name, source_ordinal, &call_arg)
-        {
-            for expanded_call_arg in expanded_call_args {
-                let ordinal = call_args.len();
-                prepared_arguments.push(prepared_argument_for_call_arg(
-                    ordinal,
-                    arg,
-                    &expanded_call_arg,
-                    preserve_reference,
-                ));
-                call_args.push(expanded_call_arg);
-            }
-            continue;
-        }
-
-        let ordinal = call_args.len();
         prepared_arguments.push(prepared_argument_for_call_arg(
             ordinal,
             arg,
@@ -882,45 +864,6 @@ fn allow_host_query_worksheet_error_fallback(
         ),
         _ => false,
     }
-}
-
-fn expand_variadic_selector_call_args(
-    function_name: &str,
-    ordinal: usize,
-    call_arg: &CallArgValue,
-) -> Option<Vec<CallArgValue>> {
-    if ordinal == 0 || !matches!(function_name, "CHOOSECOLS" | "CHOOSEROWS") {
-        return None;
-    }
-
-    let CallArgValue::Eval(EvalValue::Array(array)) = call_arg else {
-        return None;
-    };
-    let shape = array.shape();
-    if shape.rows != 1 && shape.cols != 1 {
-        return None;
-    }
-
-    let mut expanded = Vec::with_capacity(shape.rows * shape.cols);
-    for row in 0..shape.rows {
-        for col in 0..shape.cols {
-            let call_arg = match array.get(row, col) {
-                Some(ArrayCellValue::Number(number)) => {
-                    CallArgValue::Eval(EvalValue::Number(*number))
-                }
-                Some(ArrayCellValue::Text(text)) => {
-                    CallArgValue::Eval(EvalValue::Text(text.clone()))
-                }
-                Some(ArrayCellValue::Logical(value)) => {
-                    CallArgValue::Eval(EvalValue::Logical(*value))
-                }
-                Some(ArrayCellValue::Error(code)) => CallArgValue::Eval(EvalValue::Error(*code)),
-                Some(ArrayCellValue::EmptyCell) | None => CallArgValue::EmptyCell,
-            };
-            expanded.push(call_arg);
-        }
-    }
-    Some(expanded)
 }
 
 fn evaluate_expr_as_call_arg(
