@@ -696,6 +696,48 @@ fn runtime_environment_executes_foundation_array_lambda_carrier_case_ftc_0455() 
 }
 
 #[test]
+fn runtime_environment_matches_excel_builtin_colliding_let_recursive_name_frontier_ftc_0443() {
+    let locale = en_us_context();
+    let result = RuntimeEnvironment::new()
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new(
+                "runtime:foundation:FTC-0443",
+                1,
+                "=LET(gcd,LAMBDA(self,a,b,IF(b=0,a,self(self,b,MOD(a,b)))),gcd(gcd,48,36))",
+            ),
+            TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
+        ))
+        .expect("FTC-0443 runtime execution should succeed");
+
+    assert_eq!(
+        result.published_worksheet_value,
+        EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Value)
+    );
+    assert_eq!(result.verification_publication_surface.visible_value_text, "#VALUE!");
+    assert_eq!(result.verification_publication_surface.effective_display_text, "#VALUE!");
+}
+
+#[test]
+fn runtime_environment_preserves_non_builtin_recursive_self_application() {
+    assert_runtime_foundation_case(
+        "FTC-0443-NON-BUILTIN",
+        "=LET(zzgcd,LAMBDA(self,a,b,IF(b=0,a,self(self,b,MOD(a,b)))),zzgcd(zzgcd,48,36))",
+        EvalValue::Number(12.0),
+        "12",
+    );
+}
+
+#[test]
+fn runtime_environment_preserves_generic_recursive_self_application_baseline() {
+    assert_runtime_foundation_case(
+        "FTC-0443-BASELINE",
+        "=LET(f,LAMBDA(self,n,IF(n<=0,0,1+self(self,n-1))),f(f,3))",
+        EvalValue::Number(3.0),
+        "3",
+    );
+}
+
+#[test]
 fn runtime_environment_executes_foundation_text_date_format_case_ftc_1021() {
     assert_runtime_foundation_text_case(
         "FTC-1021",

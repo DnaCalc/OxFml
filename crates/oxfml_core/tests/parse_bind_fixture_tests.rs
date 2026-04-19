@@ -348,6 +348,55 @@ fn bind_preserves_array_literal_multiplied_by_unary_negative_literal_shape() {
 }
 
 #[test]
+fn bind_prefers_builtin_function_over_colliding_helper_local_in_call_position() {
+    let source = FormulaSourceRecord::new(
+        "fixture-builtin-collision-helper-call",
+        1,
+        "=LET(gcd,LAMBDA(self,a,b,IF(b=0,a,self(self,b,MOD(a,b)))),gcd(gcd,48,36))",
+    );
+    let parse = parse_formula(ParseRequest {
+        source: source.clone(),
+    });
+    let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
+    let bind = bind_formula(BindRequest {
+        source: source.clone(),
+        green_tree: parse.green_tree,
+        red_projection: red,
+        context: BindContext {
+            structure_context_version: StructureContextVersion("fixture-struct-v1".to_string()),
+            formula_token: source.formula_token(),
+            ..BindContext::default()
+        },
+    });
+
+    assert!(bind.bound_formula.diagnostics.is_empty());
+    let BoundExpr::FunctionCall {
+        function_name,
+        args,
+    } = &bind.bound_formula.root
+    else {
+        panic!("expected LET call root, got {:?}", bind.bound_formula.root);
+    };
+    assert_eq!(function_name, "LET");
+
+    let BoundExpr::FunctionCall {
+        function_name,
+        args: invocation_args,
+    } = &args[2]
+    else {
+        panic!("expected builtin function call body, got {:?}", args[2]);
+    };
+    assert_eq!(function_name, "GCD");
+    let BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Name(name))) =
+        &invocation_args[0]
+    else {
+        panic!("expected helper-local name as first arg, got {:?}", invocation_args[0]);
+    };
+    assert_eq!(name.kind, NameKind::HelperLocal);
+    assert_eq!(name.name, "gcd");
+}
+
+#[test]
 fn bind_prefers_helper_local_name_over_cell_like_reference_text() {
     let source = FormulaSourceRecord::new(
         "fixture-returned-lambda-helper-name",

@@ -1884,6 +1884,42 @@ fn evaluator_matches_excel_named_recursion_failure_boundary() {
 }
 
 #[test]
+fn evaluator_matches_excel_builtin_colliding_let_recursive_name_frontier_ftc_0443() {
+    let output = evaluate(
+        "=LET(gcd,LAMBDA(self,a,b,IF(b=0,a,self(self,b,MOD(a,b)))),gcd(gcd,48,36))",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(
+        output.oxfunc_value,
+        EvalValue::Error(WorksheetErrorCode::Value)
+    );
+}
+
+#[test]
+fn evaluator_preserves_non_builtin_let_recursive_name_self_application() {
+    let output = evaluate(
+        "=LET(zzgcd,LAMBDA(self,a,b,IF(b=0,a,self(self,b,MOD(a,b)))),zzgcd(zzgcd,48,36))",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.oxfunc_value, EvalValue::Number(12.0));
+}
+
+#[test]
+fn evaluator_preserves_generic_recursive_self_application_baseline() {
+    let output = evaluate(
+        "=LET(f,LAMBDA(self,n,IF(n<=0,0,1+self(self,n-1))),f(f,3))",
+        None,
+        None,
+        Some(&en_us_context()),
+    );
+    assert_eq!(output.oxfunc_value, EvalValue::Number(3.0));
+}
+
+#[test]
 fn evaluator_matches_excel_let_self_application_recursion_success_boundary() {
     let output = evaluate(
         "=LET(F,LAMBDA(self,n,IF(n<=0,0,1+self(self,n-1))),F(F,4094))",

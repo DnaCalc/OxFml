@@ -14,6 +14,7 @@ pub use reference::{
 use crate::interface::{
     TableCallerRegion, TableColumnDescriptor, TableDescriptor, TableRef, TableRegionKind,
 };
+use crate::semantics::lookup_function_meta;
 use crate::red::RedProjection;
 use crate::source::{
     FormulaChannelKind, FormulaSourceRecord, FormulaToken, StructureContextVersion,
@@ -792,16 +793,18 @@ impl Binder {
                 .collect::<Vec<_>>(),
         };
 
-        if self
+        let helper_local_match = self
             .helper_local_names
             .iter()
-            .any(|name| name.eq_ignore_ascii_case(&function_name))
-            || self
-                .context
-                .names
-                .keys()
-                .any(|name| name.eq_ignore_ascii_case(&function_name))
-        {
+            .any(|name| name.eq_ignore_ascii_case(&function_name));
+        let context_name_match = self
+            .context
+            .names
+            .keys()
+            .any(|name| name.eq_ignore_ascii_case(&function_name));
+        let builtin_function_match = lookup_function_meta(&uppercase_function_name).is_some();
+
+        if (helper_local_match && !builtin_function_match) || context_name_match {
             let callee = self.bind_identifier_expr_from_name(&function_name);
             return BoundExpr::Invocation {
                 callee: Box::new(callee),
