@@ -519,22 +519,7 @@ fn project_runtime_managed_commit(
             crate::seam::AcceptDecision::Accepted(_) => "accepted".to_string(),
             crate::seam::AcceptDecision::Rejected(_) => "rejected".to_string(),
         }),
-        execution_outcome_surface: Some(match &result.commit_decision {
-            crate::seam::AcceptDecision::Accepted(_) => ExecutionOutcomeSurface {
-                outcome_kind: ExecutionOutcomeKind::ExecutedResult,
-                outcome_stage: ExecutionOutcomeStage::Executed,
-                class_id: "executed_result".to_string(),
-                lane_reason_code: None,
-                raw_detail: None,
-            },
-            crate::seam::AcceptDecision::Rejected(reject) => ExecutionOutcomeSurface {
-                outcome_kind: ExecutionOutcomeKind::Rejected,
-                outcome_stage: ExecutionOutcomeStage::CommitBoundary,
-                class_id: "commit_boundary_reject".to_string(),
-                lane_reason_code: Some(format!("{:?}", reject.reject_code)),
-                raw_detail: None,
-            },
-        }),
+        execution_outcome_surface: Some(result.execution_outcome_surface.clone()),
         trace_event_kinds: result
             .session
             .trace_events
@@ -580,13 +565,7 @@ fn project_runtime_managed_termination(
         ),
         candidate_result_id: result.session.candidate_result_id.clone(),
         commit_decision_kind: Some("rejected".to_string()),
-        execution_outcome_surface: Some(ExecutionOutcomeSurface {
-            outcome_kind: ExecutionOutcomeKind::Rejected,
-            outcome_stage: ExecutionOutcomeStage::CommitBoundary,
-            class_id: "commit_boundary_reject".to_string(),
-            lane_reason_code: Some(format!("{:?}", result.reject_record.reject_code)),
-            raw_detail: None,
-        }),
+        execution_outcome_surface: Some(result.execution_outcome_surface.clone()),
         trace_event_kinds: result
             .session
             .trace_events

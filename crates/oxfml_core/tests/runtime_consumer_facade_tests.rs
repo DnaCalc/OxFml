@@ -186,6 +186,19 @@ fn runtime_session_facade_runs_managed_session_through_commit() {
         )
         .expect("managed commit should return decision");
 
+    assert_eq!(
+        commit.execution_outcome_surface.outcome_kind,
+        oxfml_core::ExecutionOutcomeKind::ExecutedResult
+    );
+    assert_eq!(
+        commit.execution_outcome_surface.outcome_stage,
+        oxfml_core::ExecutionOutcomeStage::Executed
+    );
+    assert_eq!(
+        commit.execution_outcome_surface.class_id,
+        "executed_result"
+    );
+
     match &commit.commit_decision {
         AcceptDecision::Accepted(bundle) => {
             assert_eq!(
@@ -232,6 +245,25 @@ fn runtime_session_facade_reports_managed_abort_with_session_snapshot() {
     assert_eq!(
         termination.reject_record.reject_code,
         oxfml_core::RejectCode::SessionTerminated
+    );
+    assert_eq!(
+        termination.execution_outcome_surface.outcome_kind,
+        oxfml_core::ExecutionOutcomeKind::Rejected
+    );
+    assert_eq!(
+        termination.execution_outcome_surface.outcome_stage,
+        oxfml_core::ExecutionOutcomeStage::CommitBoundary
+    );
+    assert_eq!(
+        termination.execution_outcome_surface.class_id,
+        "commit_boundary_reject"
+    );
+    assert_eq!(
+        termination
+            .execution_outcome_surface
+            .lane_reason_code
+            .as_deref(),
+        Some("SessionTerminated")
     );
     assert!(
         termination
@@ -393,6 +425,14 @@ fn runtime_session_facade_executes_and_commits_managed_in_one_step() {
         .expect("one-step managed execution should succeed");
 
     assert_eq!(commit.session.phase, RuntimeManagedSessionPhase::Committed);
+    assert_eq!(
+        commit.execution_outcome_surface.outcome_kind,
+        oxfml_core::ExecutionOutcomeKind::ExecutedResult
+    );
+    assert_eq!(
+        commit.execution_outcome_surface.outcome_stage,
+        oxfml_core::ExecutionOutcomeStage::Executed
+    );
     match &commit.commit_decision {
         AcceptDecision::Accepted(bundle) => {
             assert_eq!(

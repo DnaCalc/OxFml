@@ -21,8 +21,8 @@ use crate::publication::{
 use crate::red::project_red_view;
 use crate::scheduler::ExecutionContract;
 use crate::seam::{
-    AcceptDecision, AcceptedCandidateResult, ExecutionOutcomeSurface, FenceSnapshot, Locus,
-    RejectRecord, TraceEvent,
+    AcceptDecision, AcceptedCandidateResult, ExecutionOutcomeKind, ExecutionOutcomeStage,
+    ExecutionOutcomeSurface, FenceSnapshot, Locus, RejectRecord, TraceEvent,
 };
 use crate::semantics::{
     CompileSemanticPlanRequest, LibraryContextSnapshot, SemanticPlan, compile_semantic_plan,
@@ -383,12 +383,14 @@ pub struct RuntimeManagedExecutionResult {
 pub struct RuntimeManagedCommitResult {
     pub session: RuntimeManagedSessionSnapshot,
     pub commit_decision: AcceptDecision,
+    pub execution_outcome_surface: ExecutionOutcomeSurface,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RuntimeManagedTerminationResult {
     pub session: RuntimeManagedSessionSnapshot,
     pub reject_record: RejectRecord,
+    pub execution_outcome_surface: ExecutionOutcomeSurface,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -560,9 +562,12 @@ impl<'a> RuntimeSessionFacade<'a> {
                 "managed session missing after commit".to_string(),
             )
         })?;
+        let execution_outcome_surface =
+            runtime_execution_outcome_surface_from_commit_decision(&commit_decision);
         Ok(RuntimeManagedCommitResult {
             session,
             commit_decision,
+            execution_outcome_surface,
         })
     }
 
@@ -579,9 +584,12 @@ impl<'a> RuntimeSessionFacade<'a> {
                 "managed session missing after abort".to_string(),
             )
         })?;
+        let execution_outcome_surface =
+            runtime_execution_outcome_surface_from_reject_record(&reject_record);
         Ok(RuntimeManagedTerminationResult {
             session,
             reject_record,
+            execution_outcome_surface,
         })
     }
 
@@ -598,9 +606,12 @@ impl<'a> RuntimeSessionFacade<'a> {
                 "managed session missing after expiry".to_string(),
             )
         })?;
+        let execution_outcome_surface =
+            runtime_execution_outcome_surface_from_reject_record(&reject_record);
         Ok(RuntimeManagedTerminationResult {
             session,
             reject_record,
+            execution_outcome_surface,
         })
     }
 
@@ -805,6 +816,35 @@ fn runtime_overlay_summary(overlay: &OverlayEntry) -> RuntimeManagedOverlaySumma
         overlay_scope_key: overlay.overlay_scope_key.clone(),
         overlay_family: overlay.overlay_family.clone(),
         formula_stable_id: overlay.formula_stable_id.clone(),
+    }
+}
+
+fn runtime_execution_outcome_surface_from_commit_decision(
+    commit_decision: &AcceptDecision,
+) -> ExecutionOutcomeSurface {
+    match commit_decision {
+        AcceptDecision::Accepted(_) => ExecutionOutcomeSurface {
+            outcome_kind: ExecutionOutcomeKind::ExecutedResult,
+            outcome_stage: ExecutionOutcomeStage::Executed,
+            class_id: "executed_result".to_string(),
+            lane_reason_code: None,
+            raw_detail: None,
+        },
+        AcceptDecision::Rejected(reject) => {
+            runtime_execution_outcome_surface_from_reject_record(reject)
+        }
+    }
+}
+
+fn runtime_execution_outcome_surface_from_reject_record(
+    reject_record: &RejectRecord,
+) -> ExecutionOutcomeSurface {
+    ExecutionOutcomeSurface {
+        outcome_kind: ExecutionOutcomeKind::Rejected,
+        outcome_stage: ExecutionOutcomeStage::CommitBoundary,
+        class_id: "commit_boundary_reject".to_string(),
+        lane_reason_code: Some(format!("{:?}", reject_record.reject_code)),
+        raw_detail: None,
     }
 }
 

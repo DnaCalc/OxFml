@@ -752,6 +752,14 @@ fn replay_projection_service_projects_runtime_managed_session_results() {
         Some("accepted")
     );
     assert_eq!(
+        commit.execution_outcome_surface.class_id,
+        "executed_result"
+    );
+    assert_eq!(
+        commit_projection.execution_outcome_surface,
+        Some(commit.execution_outcome_surface.clone())
+    );
+    assert_eq!(
         commit_projection.source_case_id.as_deref(),
         Some("case:session-commit")
     );
@@ -786,6 +794,21 @@ fn replay_projection_service_projects_runtime_managed_termination_results() {
     assert_eq!(
         termination_projection.commit_decision_kind.as_deref(),
         Some("rejected")
+    );
+    assert_eq!(
+        termination.execution_outcome_surface.class_id,
+        "commit_boundary_reject"
+    );
+    assert_eq!(
+        termination
+            .execution_outcome_surface
+            .lane_reason_code
+            .as_deref(),
+        Some("SessionTerminated")
+    );
+    assert_eq!(
+        termination_projection.execution_outcome_surface,
+        Some(termination.execution_outcome_surface.clone())
     );
 }
 
