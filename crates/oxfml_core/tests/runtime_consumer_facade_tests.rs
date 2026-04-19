@@ -610,6 +610,62 @@ fn runtime_environment_emits_effective_display_text_comparison_view_for_programm
 }
 
 #[test]
+fn runtime_environment_executes_foundation_let_lambda_success_cases() {
+    let cases = [
+        (
+            "FTC-0444",
+            "=LET(THUNK,LAMBDA(x,LAMBDA(x)),t,THUNK(42),t())",
+            EvalValue::Number(42.0),
+            "42",
+        ),
+        (
+            "FTC-0446",
+            "=LET(dict,{\"key1\",LAMBDA({10,20,30});\"key2\",LAMBDA({40,50,60})},keys,INDEX(dict,0,1),INDEX(keys,1,1))",
+            text_eval_value("key1"),
+            "key1",
+        ),
+        (
+            "FTC-0447",
+            "=LET(dict,{\"a\",LAMBDA(1);\"b\",LAMBDA(2);\"c\",LAMBDA(3)},keys,TAKE(dict,,1),ROWS(keys))",
+            EvalValue::Number(3.0),
+            "3",
+        ),
+    ];
+
+    for (case_id, formula, expected_value, expected_text) in cases {
+        assert_runtime_foundation_case(case_id, formula, expected_value, expected_text);
+    }
+}
+
+#[test]
+fn runtime_environment_classifies_foundation_array_lambda_carrier_gap_cases() {
+    let locale = en_us_context();
+    let cases = [
+        (
+            "FTC-0448",
+            "=LET(dict,{\"x\",LAMBDA(100);\"y\",LAMBDA(200)},GETlambda,LAMBDA(d,LAMBDA(key,LET(keys,TAKE(d,,1),objects,DROP(d,,1),obj,XLOOKUP(key,keys,objects,\"not found\"),obj()))),getter,GETlambda(dict),getter(\"y\"))",
+        ),
+        (
+            "FTC-0455",
+            "=LET(THUNK,LAMBDA(x,LAMBDA(x)),vals,MAP({1;2;3},LAMBDA(v,THUNK(v*10))),INDEX(vals,2,1)())",
+        ),
+    ];
+
+    for (case_id, formula) in cases {
+        let error = RuntimeEnvironment::new()
+            .execute(RuntimeFormulaRequest::new(
+                FormulaSourceRecord::new(&format!("runtime:foundation:{case_id}"), 1, formula),
+                TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
+            ))
+            .expect_err("array-lambda carrier gap should remain a classified runtime failure");
+        assert!(
+            error.contains("callee evaluated to Error"),
+            "{case_id} error classification: {error}"
+        );
+    }
+}
+
+#[test]
 fn runtime_environment_executes_foundation_text_date_format_case_ftc_1021() {
     assert_runtime_foundation_text_case(
         "FTC-1021",
@@ -845,6 +901,34 @@ fn runtime_session_facade_reports_managed_diagnostics_for_overlay_and_claim_owne
             .expect("managed snapshot")
             .candidate_result_id,
         Some(execution.candidate_result.candidate_result_id)
+    );
+}
+
+fn assert_runtime_foundation_case(
+    case_id: &str,
+    formula: &str,
+    expected_value: EvalValue,
+    expected_text: &str,
+) {
+    let locale = en_us_context();
+    let result = RuntimeEnvironment::new()
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new(&format!("runtime:foundation:{case_id}"), 1, formula),
+            TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
+        ))
+        .unwrap_or_else(|error| panic!("{case_id} runtime execution should succeed: {error}"));
+
+    assert_eq!(
+        result.published_worksheet_value, expected_value,
+        "{case_id} published worksheet value"
+    );
+    assert_eq!(
+        result.verification_publication_surface.visible_value_text, expected_text,
+        "{case_id} visible value text"
+    );
+    assert_eq!(
+        result.verification_publication_surface.effective_display_text, expected_text,
+        "{case_id} effective display text"
     );
 }
 

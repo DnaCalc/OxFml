@@ -504,6 +504,59 @@ fn evaluator_matches_current_if_empty_text_excel_outcome() {
 }
 
 #[test]
+fn evaluator_executes_foundation_let_lambda_success_cases() {
+    let locale = en_us_context();
+    let cases = [
+        (
+            "FTC-0444",
+            "=LET(THUNK,LAMBDA(x,LAMBDA(x)),t,THUNK(42),t())",
+            EvalValue::Number(42.0),
+        ),
+        (
+            "FTC-0446",
+            "=LET(dict,{\"key1\",LAMBDA({10,20,30});\"key2\",LAMBDA({40,50,60})},keys,INDEX(dict,0,1),INDEX(keys,1,1))",
+            EvalValue::Text(ExcelText::from_interop_assignment("key1")),
+        ),
+        (
+            "FTC-0447",
+            "=LET(dict,{\"a\",LAMBDA(1);\"b\",LAMBDA(2);\"c\",LAMBDA(3)},keys,TAKE(dict,,1),ROWS(keys))",
+            EvalValue::Number(3.0),
+        ),
+    ];
+
+    for (case_id, formula, expected_value) in cases {
+        let output = evaluate_with_rtd_provider(formula, None, None, None, Some(&locale))
+            .unwrap_or_else(|error| panic!("{case_id} evaluator execution should succeed: {error:?}"));
+        assert_eq!(output.oxfunc_value, expected_value, "{case_id} value");
+    }
+}
+
+#[test]
+fn evaluator_classifies_foundation_array_lambda_carrier_gap_cases() {
+    let locale = en_us_context();
+    let cases = [
+        (
+            "FTC-0448",
+            "=LET(dict,{\"x\",LAMBDA(100);\"y\",LAMBDA(200)},GETlambda,LAMBDA(d,LAMBDA(key,LET(keys,TAKE(d,,1),objects,DROP(d,,1),obj,XLOOKUP(key,keys,objects,\"not found\"),obj()))),getter,GETlambda(dict),getter(\"y\"))",
+        ),
+        (
+            "FTC-0455",
+            "=LET(THUNK,LAMBDA(x,LAMBDA(x)),vals,MAP({1;2;3},LAMBDA(v,THUNK(v*10))),INDEX(vals,2,1)())",
+        ),
+    ];
+
+    for (case_id, formula) in cases {
+        let error = evaluate_with_rtd_provider(formula, None, None, None, Some(&locale))
+            .expect_err("array-lambda carrier gap should remain a classified local failure");
+        assert!(
+            error.message.contains("callee evaluated to Error"),
+            "{case_id} error classification: {}",
+            error.message
+        );
+    }
+}
+
+#[test]
 fn evaluator_projects_if_text_true_condition_as_worksheet_error_ftc_0541() {
     let locale = en_us_context();
     let output = evaluate_with_rtd_provider(
