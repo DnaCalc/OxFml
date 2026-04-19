@@ -30,11 +30,13 @@ use crate::red::{RedProjection, project_red_view_incremental};
 use crate::scheduler::{ExecutionContract, build_execution_contract};
 use crate::seam::{
     AcceptDecision, AcceptedCandidateResult, CapabilityEffectFact, CommitRequest,
-    DependencyConsequenceFact, DisplayDelta, ExecutionOutcomeKind, ExecutionOutcomeStage,
-    ExecutionOutcomeSurface, Extent, FenceSnapshot, FormatDelta, FormatDependencyFact,
-    Locus, ShapeDelta, ShapeOutcomeClass, SpillEvent, SpillEventKind, TopologyDelta,
-    TraceEvent, TraceEventKind, TracePayload, ValueDelta, ValuePayload, WorksheetValueClass,
-    commit_candidate,
+    DependencyConsequenceFact, DisplayDelta, ExecutionOutcomeSurface, Extent, FenceSnapshot,
+    FormatDelta, FormatDependencyFact, Locus, ShapeDelta, ShapeOutcomeClass, SpillEvent,
+    SpillEventKind, TopologyDelta, TraceEvent, TraceEventKind, TracePayload, ValueDelta,
+    ValuePayload, WorksheetValueClass, commit_candidate,
+    execution_outcome_surface_bind_boundary_reject,
+    execution_outcome_surface_commit_boundary_reject,
+    execution_outcome_surface_executed_result,
 };
 use crate::semantics::{CompileSemanticPlanRequest, SemanticPlan, compile_semantic_plan};
 use crate::source::{FormulaSourceRecord, StructureContextVersion};
@@ -1014,38 +1016,18 @@ fn synthetic_bind_mismatch_evaluation(
 
 fn execution_outcome_surface(commit_decision: &AcceptDecision) -> ExecutionOutcomeSurface {
     match commit_decision {
-        AcceptDecision::Accepted(_) => ExecutionOutcomeSurface {
-            outcome_kind: ExecutionOutcomeKind::ExecutedResult,
-            outcome_stage: ExecutionOutcomeStage::Executed,
-            class_id: "executed_result".to_string(),
-            lane_reason_code: None,
-            raw_detail: None,
-        },
-        AcceptDecision::Rejected(reject) => {
-            let (outcome_stage, class_id, raw_detail) = match &reject.context {
-                crate::seam::RejectContext::ResourceInvariant(context)
-                    if reject.reject_code == crate::seam::RejectCode::BindMismatch =>
-                {
-                    (
-                        ExecutionOutcomeStage::BindBoundary,
-                        "bind_boundary_reject".to_string(),
-                        Some(context.machine_detail_code.clone()),
-                    )
-                }
-                _ => (
-                    ExecutionOutcomeStage::CommitBoundary,
-                    "commit_boundary_reject".to_string(),
-                    None,
-                ),
-            };
-            ExecutionOutcomeSurface {
-                outcome_kind: ExecutionOutcomeKind::Rejected,
-                outcome_stage,
-                class_id,
-                lane_reason_code: Some(format!("{:?}", reject.reject_code)),
-                raw_detail,
+        AcceptDecision::Accepted(_) => execution_outcome_surface_executed_result(),
+        AcceptDecision::Rejected(reject) => match &reject.context {
+            crate::seam::RejectContext::ResourceInvariant(context)
+                if reject.reject_code == crate::seam::RejectCode::BindMismatch =>
+            {
+                execution_outcome_surface_bind_boundary_reject(
+                    reject.reject_code,
+                    Some(context.machine_detail_code.clone()),
+                )
             }
-        }
+            _ => execution_outcome_surface_commit_boundary_reject(reject.reject_code),
+        },
     }
 }
 

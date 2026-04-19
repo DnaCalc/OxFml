@@ -298,6 +298,41 @@ pub struct ExecutionOutcomeSurface {
     pub raw_detail: Option<String>,
 }
 
+pub(crate) fn execution_outcome_surface_executed_result() -> ExecutionOutcomeSurface {
+    ExecutionOutcomeSurface {
+        outcome_kind: ExecutionOutcomeKind::ExecutedResult,
+        outcome_stage: ExecutionOutcomeStage::Executed,
+        class_id: "executed_result".to_string(),
+        lane_reason_code: None,
+        raw_detail: None,
+    }
+}
+
+pub(crate) fn execution_outcome_surface_commit_boundary_reject(
+    reject_code: RejectCode,
+) -> ExecutionOutcomeSurface {
+    ExecutionOutcomeSurface {
+        outcome_kind: ExecutionOutcomeKind::Rejected,
+        outcome_stage: ExecutionOutcomeStage::CommitBoundary,
+        class_id: "commit_boundary_reject".to_string(),
+        lane_reason_code: Some(format!("{:?}", reject_code)),
+        raw_detail: None,
+    }
+}
+
+pub(crate) fn execution_outcome_surface_bind_boundary_reject(
+    reject_code: RejectCode,
+    raw_detail: Option<String>,
+) -> ExecutionOutcomeSurface {
+    ExecutionOutcomeSurface {
+        outcome_kind: ExecutionOutcomeKind::Rejected,
+        outcome_stage: ExecutionOutcomeStage::BindBoundary,
+        class_id: "bind_boundary_reject".to_string(),
+        lane_reason_code: Some(format!("{:?}", reject_code)),
+        raw_detail,
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TraceEventKind {
     SessionOpened,

@@ -21,8 +21,9 @@ use crate::publication::{
 use crate::red::project_red_view;
 use crate::scheduler::ExecutionContract;
 use crate::seam::{
-    AcceptDecision, AcceptedCandidateResult, ExecutionOutcomeKind, ExecutionOutcomeStage,
-    ExecutionOutcomeSurface, FenceSnapshot, Locus, RejectRecord, TraceEvent,
+    AcceptDecision, AcceptedCandidateResult, ExecutionOutcomeSurface, FenceSnapshot, Locus,
+    RejectRecord, TraceEvent, execution_outcome_surface_commit_boundary_reject,
+    execution_outcome_surface_executed_result,
 };
 use crate::semantics::{
     CompileSemanticPlanRequest, LibraryContextSnapshot, SemanticPlan, compile_semantic_plan,
@@ -831,13 +832,7 @@ fn runtime_execution_outcome_surface_from_managed_session_state(
     last_reject: Option<&RejectRecord>,
 ) -> Option<ExecutionOutcomeSurface> {
     match phase {
-        RuntimeManagedSessionPhase::Committed => Some(ExecutionOutcomeSurface {
-            outcome_kind: ExecutionOutcomeKind::ExecutedResult,
-            outcome_stage: ExecutionOutcomeStage::Executed,
-            class_id: "executed_result".to_string(),
-            lane_reason_code: None,
-            raw_detail: None,
-        }),
+        RuntimeManagedSessionPhase::Committed => Some(execution_outcome_surface_executed_result()),
         RuntimeManagedSessionPhase::Rejected
         | RuntimeManagedSessionPhase::Aborted
         | RuntimeManagedSessionPhase::Expired => {
@@ -853,13 +848,7 @@ fn runtime_execution_outcome_surface_from_commit_decision(
     commit_decision: &AcceptDecision,
 ) -> ExecutionOutcomeSurface {
     match commit_decision {
-        AcceptDecision::Accepted(_) => ExecutionOutcomeSurface {
-            outcome_kind: ExecutionOutcomeKind::ExecutedResult,
-            outcome_stage: ExecutionOutcomeStage::Executed,
-            class_id: "executed_result".to_string(),
-            lane_reason_code: None,
-            raw_detail: None,
-        },
+        AcceptDecision::Accepted(_) => execution_outcome_surface_executed_result(),
         AcceptDecision::Rejected(reject) => {
             runtime_execution_outcome_surface_from_reject_record(reject)
         }
@@ -869,13 +858,7 @@ fn runtime_execution_outcome_surface_from_commit_decision(
 fn runtime_execution_outcome_surface_from_reject_record(
     reject_record: &RejectRecord,
 ) -> ExecutionOutcomeSurface {
-    ExecutionOutcomeSurface {
-        outcome_kind: ExecutionOutcomeKind::Rejected,
-        outcome_stage: ExecutionOutcomeStage::CommitBoundary,
-        class_id: "commit_boundary_reject".to_string(),
-        lane_reason_code: Some(format!("{:?}", reject_record.reject_code)),
-        raw_detail: None,
-    }
+    execution_outcome_surface_commit_boundary_reject(reject_record.reject_code)
 }
 
 fn syntax_diagnostic_execution_error(diagnostics: &[SyntaxDiagnostic]) -> String {
