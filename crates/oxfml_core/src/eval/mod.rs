@@ -1524,30 +1524,46 @@ fn evaluate_if_call(
         false,
         trace,
     )?;
-    let condition_is_true = if matches!(
-        &condition,
-        CallArgValue::Eval(EvalValue::Text(text)) if text.to_string_lossy().is_empty()
-    ) {
-        false
-    } else {
-        let condition_preview = eval_if_surface(
-            &[
-                condition.clone(),
-                CallArgValue::Eval(EvalValue::Number(1.0)),
-                CallArgValue::Eval(EvalValue::Number(0.0)),
-            ],
-            resolver,
-        )
-        .map_err(|error| EvaluationError {
-            message: format!("IF condition evaluation failed: {error:?}"),
-        })?;
-        matches!(condition_preview, EvalValue::Number(n) if n != 0.0)
-    };
-
-    let mut call_args = vec![condition.clone()];
     let mut prepared_arguments = vec![prepared_argument_for_call_arg(
         0, &args[0], &condition, true,
     )];
+    let condition_is_true = match eval_if_surface(
+        &[
+            condition.clone(),
+            CallArgValue::Eval(EvalValue::Number(1.0)),
+            CallArgValue::Eval(EvalValue::Number(0.0)),
+        ],
+        resolver,
+    ) {
+        Ok(EvalValue::Number(n)) => n != 0.0,
+        Ok(EvalValue::Logical(b)) => b,
+        Ok(_) => false,
+        Err(error) => {
+            prepared_arguments.push(lazy_skipped_prepared_argument(
+                1,
+                &args[1],
+                "condition_invalid_lazy",
+            ));
+            if args.len() == 3 {
+                prepared_arguments.push(lazy_skipped_prepared_argument(
+                    2,
+                    &args[2],
+                    "condition_invalid_lazy",
+                ));
+            }
+            push_special_prepared_call(
+                trace,
+                "IF",
+                "FUNC.IF",
+                ArgPreparationProfile::RefsVisibleInAdapter,
+                prepared_arguments,
+                context,
+            );
+            return Ok(EvalValue::Error(map_if_error_to_ws(&error)));
+        }
+    };
+
+    let mut call_args = vec![condition.clone()];
     if condition_is_true {
         let true_arg = evaluate_expr_as_call_arg(
             &args[1],

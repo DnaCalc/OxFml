@@ -610,68 +610,91 @@ fn runtime_environment_emits_effective_display_text_comparison_view_for_programm
 }
 
 #[test]
-fn runtime_environment_executes_foundation_text_date_format_cases() {
+fn runtime_environment_executes_foundation_text_date_format_case_ftc_1021() {
+    assert_runtime_foundation_text_case(
+        "FTC-1021",
+        "=LET(yr,2024,m,3,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),testDate,DATE(yr,m,15),TEXT(testDate,\"[<\"&firstDay&\"] ;[>\"&lastDay&\"] ;dd\"))",
+        text_eval_value("15"),
+        "15",
+    );
+}
+
+#[test]
+fn runtime_environment_executes_foundation_text_date_format_case_ftc_1022() {
+    assert_runtime_foundation_text_case(
+        "FTC-1022",
+        "=LET(yr,2024,m,3,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),testDate,DATE(yr,2,28),result,TEXT(testDate,\"[<\"&firstDay&\"] ;[>\"&lastDay&\"] ;dd\"),LEN(TRIM(result)))",
+        EvalValue::Number(0.0),
+        "0",
+    );
+}
+
+#[test]
+fn runtime_environment_executes_foundation_text_date_format_case_ftc_1023() {
+    assert_runtime_foundation_text_case(
+        "FTC-1023",
+        "=LET(baseSun,DATE(2024,1,7),headers,TEXT(baseSun+SEQUENCE(1,7,,1)-1,\"DDD\"),INDEX(headers,1,1))",
+        text_eval_value("Sun"),
+        "Sun",
+    );
+}
+
+#[test]
+fn runtime_environment_executes_foundation_text_date_format_case_ftc_1024() {
+    assert_runtime_foundation_text_case(
+        "FTC-1024",
+        "=LET(yr,2024,m,2,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),gridStart,firstDay-WEEKDAY(firstDay,1)+1,dates,gridStart+SEQUENCE(7,,0),dayTexts,MAP(dates,LAMBDA(d,IF(AND(d>=firstDay,d<=lastDay),TEXT(DAY(d),\"00\"),\"  \"))),TEXTJOIN(\",\",FALSE,dayTexts))",
+        text_eval_value("  ,  ,  ,  ,01,02,03"),
+        "  ,  ,  ,  ,01,02,03",
+    );
+}
+
+#[test]
+fn runtime_environment_executes_foundation_text_date_format_case_ftc_1028() {
+    assert_runtime_foundation_text_case(
+        "FTC-1028",
+        "=TEXT(DATE(2024,7,1),\"MMMM\")",
+        text_eval_value("July"),
+        "July",
+    );
+}
+
+#[test]
+fn runtime_environment_executes_foundation_text_date_format_case_ftc_1040() {
+    assert_runtime_foundation_text_case(
+        "FTC-1040",
+        "=LET(yr,2024,m,1,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),gridStart,firstDay-WEEKDAY(firstDay,1)+1,dates,gridStart+SEQUENCE(42,,0),dayStrs,MAP(dates,LAMBDA(d,IF(AND(d>=firstDay,d<=lastDay),TEXT(DAY(d),\"00\"),\"  \"))),monthName,TEXT(firstDay,\"MMMM\"),TEXTJOIN(\"|\",FALSE,monthName,INDEX(dayStrs,1),INDEX(dayStrs,2),INDEX(dayStrs,3),INDEX(dayStrs,4),INDEX(dayStrs,5),INDEX(dayStrs,6),INDEX(dayStrs,7)))",
+        text_eval_value("January|  |01|02|03|04|05|06"),
+        "January|  |01|02|03|04|05|06",
+    );
+}
+
+#[test]
+fn runtime_environment_projects_foundation_if_text_true_error_case_ftc_0541() {
     let locale = en_us_context();
-    let cases = [
-        (
-            "FTC-1021",
-            "=LET(yr,2024,m,3,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),testDate,DATE(yr,m,15),TEXT(testDate,\"[<\"&firstDay&\"] ;[>\"&lastDay&\"] ;dd\"))",
-            text_eval_value("15"),
-            "15",
-        ),
-        (
-            "FTC-1022",
-            "=LET(yr,2024,m,3,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),testDate,DATE(yr,2,28),result,TEXT(testDate,\"[<\"&firstDay&\"] ;[>\"&lastDay&\"] ;dd\"),LEN(TRIM(result)))",
-            EvalValue::Number(0.0),
-            "0",
-        ),
-        (
-            "FTC-1023",
-            "=LET(baseSun,DATE(2024,1,7),headers,TEXT(baseSun+SEQUENCE(1,7,,1)-1,\"DDD\"),INDEX(headers,1,1))",
-            text_eval_value("Sun"),
-            "Sun",
-        ),
-        (
-            "FTC-1024",
-            "=LET(yr,2024,m,2,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),gridStart,firstDay-WEEKDAY(firstDay,1)+1,dates,gridStart+SEQUENCE(7,,0),dayTexts,MAP(dates,LAMBDA(d,IF(AND(d>=firstDay,d<=lastDay),TEXT(DAY(d),\"00\"),\"  \"))),TEXTJOIN(\",\",FALSE,dayTexts))",
-            text_eval_value("  ,  ,  ,  ,01,02,03"),
-            "  ,  ,  ,  ,01,02,03",
-        ),
-        (
-            "FTC-1028",
-            "=TEXT(DATE(2024,7,1),\"MMMM\")",
-            text_eval_value("July"),
-            "July",
-        ),
-        (
-            "FTC-1040",
-            "=LET(yr,2024,m,1,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),gridStart,firstDay-WEEKDAY(firstDay,1)+1,dates,gridStart+SEQUENCE(42,,0),dayStrs,MAP(dates,LAMBDA(d,IF(AND(d>=firstDay,d<=lastDay),TEXT(DAY(d),\"00\"),\"  \"))),monthName,TEXT(firstDay,\"MMMM\"),TEXTJOIN(\"|\",FALSE,monthName,INDEX(dayStrs,1),INDEX(dayStrs,2),INDEX(dayStrs,3),INDEX(dayStrs,4),INDEX(dayStrs,5),INDEX(dayStrs,6),INDEX(dayStrs,7)))",
-            text_eval_value("January|  |01|02|03|04|05|06"),
-            "January|  |01|02|03|04|05|06",
-        ),
-    ];
+    let result = RuntimeEnvironment::new()
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new(
+                "runtime:foundation:FTC-0541",
+                1,
+                "=IF(\"TRUE\",\"yes\",\"no\")",
+            ),
+            TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
+        ))
+        .expect("FTC-0541 runtime execution should succeed and project #VALUE!");
 
-    for (case_id, formula, expected_value, expected_text) in cases {
-        let result = RuntimeEnvironment::new()
-            .execute(RuntimeFormulaRequest::new(
-                FormulaSourceRecord::new(&format!("runtime:foundation:{case_id}"), 1, formula),
-                TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
-            ))
-            .unwrap_or_else(|error| panic!("{case_id} runtime execution should succeed: {error}"));
-
-        assert_eq!(
-            result.published_worksheet_value, expected_value,
-            "{case_id} published worksheet value"
-        );
-        assert_eq!(
-            result.verification_publication_surface.visible_value_text, expected_text,
-            "{case_id} visible value text"
-        );
-        assert_eq!(
-            result.verification_publication_surface.effective_display_text, expected_text,
-            "{case_id} effective display text"
-        );
-    }
+    assert_eq!(
+        result.published_worksheet_value,
+        EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Value)
+    );
+    assert_eq!(
+        result.verification_publication_surface.visible_value_text,
+        worksheet_error_text(oxfunc_core::value::WorksheetErrorCode::Value)
+    );
+    assert_eq!(
+        result.verification_publication_surface.effective_display_text,
+        worksheet_error_text(oxfunc_core::value::WorksheetErrorCode::Value)
+    );
 }
 
 #[test]
@@ -822,6 +845,34 @@ fn runtime_session_facade_reports_managed_diagnostics_for_overlay_and_claim_owne
             .expect("managed snapshot")
             .candidate_result_id,
         Some(execution.candidate_result.candidate_result_id)
+    );
+}
+
+fn assert_runtime_foundation_text_case(
+    case_id: &str,
+    formula: &str,
+    expected_value: EvalValue,
+    expected_text: &str,
+) {
+    let locale = en_us_context();
+    let result = RuntimeEnvironment::new()
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new(&format!("runtime:foundation:{case_id}"), 1, formula),
+            TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
+        ))
+        .unwrap_or_else(|error| panic!("{case_id} runtime execution should succeed: {error}"));
+
+    assert_eq!(
+        result.published_worksheet_value, expected_value,
+        "{case_id} published worksheet value"
+    );
+    assert_eq!(
+        result.verification_publication_surface.visible_value_text, expected_text,
+        "{case_id} visible value text"
+    );
+    assert_eq!(
+        result.verification_publication_surface.effective_display_text, expected_text,
+        "{case_id} effective display text"
     );
 }
 

@@ -504,6 +504,26 @@ fn evaluator_matches_current_if_empty_text_excel_outcome() {
 }
 
 #[test]
+fn evaluator_projects_if_text_true_condition_as_worksheet_error_ftc_0541() {
+    let locale = en_us_context();
+    let output = evaluate_with_rtd_provider(
+        "=IF(\"TRUE\",\"yes\",\"no\")",
+        None,
+        None,
+        None,
+        Some(&locale),
+    )
+    .expect("FTC-0541 should project a worksheet error instead of a runtime failure");
+
+    assert_eq!(
+        output.oxfunc_value,
+        EvalValue::Error(WorksheetErrorCode::Value)
+    );
+    assert_eq!(output.result.payload_summary, "Error(Value)");
+    assert_eq!(output.trace.prepared_calls[0].function_id, "FUNC.IF");
+}
+
+#[test]
 fn evaluator_consumes_broader_float_comparison_family_split() {
     let tolerant_operator = evaluate("=0.1+0.2=0.3", None, None, Some(&en_us_context()));
     assert_eq!(tolerant_operator.oxfunc_value, EvalValue::Logical(true));
