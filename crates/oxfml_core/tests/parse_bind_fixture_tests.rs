@@ -447,6 +447,40 @@ fn bind_surfaces_t_builtin_arity_authoring_reject_for_ftc_0444() {
 }
 
 #[test]
+fn bind_surfaces_generic_builtin_arity_authoring_reject_for_plain_sum_zero_arity() {
+    let source = FormulaSourceRecord::new("fixture-builtin-arity-sum-zero", 1, "=SUM()");
+    let parse = parse_formula(ParseRequest {
+        source: source.clone(),
+    });
+    let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
+    let bind = bind_formula(BindRequest {
+        source: source.clone(),
+        green_tree: parse.green_tree,
+        red_projection: red,
+        context: BindContext {
+            structure_context_version: StructureContextVersion("fixture-struct-v1".to_string()),
+            formula_token: source.formula_token(),
+            ..BindContext::default()
+        },
+    });
+
+    assert!(bind.bound_formula.diagnostics.iter().any(|diagnostic| {
+        diagnostic
+            .message
+            .starts_with("built-in function call 'SUM' rejects 0 arguments at the authoring boundary")
+    }));
+    let BoundExpr::FunctionCall {
+        function_name,
+        args,
+    } = &bind.bound_formula.root
+    else {
+        panic!("expected SUM call root, got {:?}", bind.bound_formula.root);
+    };
+    assert_eq!(function_name, "SUM");
+    assert!(args.is_empty());
+}
+
+#[test]
 fn bind_prefers_helper_local_name_over_cell_like_reference_text() {
     let source = FormulaSourceRecord::new(
         "fixture-returned-lambda-helper-name",

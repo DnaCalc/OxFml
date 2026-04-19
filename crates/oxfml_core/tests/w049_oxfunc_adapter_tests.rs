@@ -650,6 +650,33 @@ fn adapter_rejects_plain_t_zero_arity_call_as_bind_mismatch() {
 }
 
 #[test]
+fn adapter_rejects_plain_sum_zero_arity_call_as_bind_mismatch() {
+    let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
+        "plain-sum-zero-arity",
+        "formula:plain-sum-zero-arity",
+        "=SUM()",
+        locus(1, 1),
+        TypedContextQueryBundle::default(),
+    ))
+    .expect("plain SUM adapter run should classify bind mismatch");
+
+    assert_eq!(run.evaluation_artifact.commit_decision_kind, "rejected");
+    assert_eq!(
+        run.evaluation_artifact.execution_outcome_surface.outcome_stage,
+        ExecutionOutcomeStage::BindBoundary
+    );
+    assert_eq!(
+        run.evaluation_artifact.reject_code,
+        Some(oxfml_core::RejectCode::BindMismatch)
+    );
+    assert!(run.preparation_artifact.bind_diagnostics.iter().any(|diagnostic| {
+        diagnostic.message.starts_with(
+            "built-in function call 'SUM' rejects 0 arguments at the authoring boundary",
+        )
+    }));
+}
+
+#[test]
 fn adapter_rejects_lambda_array_constant_authoring_frontier_cases_as_bind_mismatch() {
     let cases = [
         ("S3", "={\"x\",LAMBDA(100)}"),

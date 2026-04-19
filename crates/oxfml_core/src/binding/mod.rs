@@ -804,8 +804,9 @@ impl Binder {
             .any(|name| name.eq_ignore_ascii_case(&function_name));
         let builtin_function_meta = lookup_function_meta(&uppercase_function_name);
         let builtin_function_match = builtin_function_meta.is_some();
+        let binds_as_invocation = (helper_local_match && !builtin_function_match) || context_name_match;
 
-        if uppercase_function_name == "T"
+        if !binds_as_invocation
             && let Some(meta) = builtin_function_meta.as_ref()
             && !meta.arity.accepts(args.len())
         {
@@ -820,7 +821,7 @@ impl Binder {
             });
         }
 
-        if (helper_local_match && !builtin_function_match) || context_name_match {
+        if binds_as_invocation {
             let callee = self.bind_identifier_expr_from_name(&function_name);
             return BoundExpr::Invocation {
                 callee: Box::new(callee),
