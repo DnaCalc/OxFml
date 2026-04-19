@@ -10,7 +10,9 @@ use oxfml_core::semantics::{
 use oxfml_core::test_support::oxfunc_adapter::{
     OxFuncAdapterRequest, OxFuncMismatchOwnerGuess, run_oxfunc_preparation_adapter,
 };
-use oxfml_core::{PreparedSourceClass, PreparedStructureClass};
+use oxfml_core::{
+    ExecutionOutcomeKind, ExecutionOutcomeStage, PreparedSourceClass, PreparedStructureClass,
+};
 use oxfunc_core::functions::call_register_id_family::{
     RegisterIdRequest, RegisteredExternalOriginKind, RegisteredExternalProvider,
     RegisteredExternalProviderError, RegisteredExternalTarget, RegisteredProcedureSpec,
@@ -53,6 +55,14 @@ fn adapter_projects_direct_scalar_and_array_like_preparation_artifacts() {
             .evaluation_result
             .payload_summary,
         "Number(3)"
+    );
+    assert_eq!(
+        scalar_run.evaluation_artifact.execution_outcome_surface.outcome_kind,
+        ExecutionOutcomeKind::ExecutedResult
+    );
+    assert_eq!(
+        scalar_run.evaluation_artifact.execution_outcome_surface.outcome_stage,
+        ExecutionOutcomeStage::Executed
     );
 
     let mut array_like_request = OxFuncAdapterRequest::new(
@@ -506,6 +516,22 @@ fn adapter_rejects_duplicate_let_binding_names_as_bind_mismatch() {
 
     assert_eq!(run.evaluation_artifact.commit_decision_kind, "rejected");
     assert_eq!(
+        run.evaluation_artifact.execution_outcome_surface.outcome_kind,
+        ExecutionOutcomeKind::Rejected
+    );
+    assert_eq!(
+        run.evaluation_artifact.execution_outcome_surface.outcome_stage,
+        ExecutionOutcomeStage::BindBoundary
+    );
+    assert_eq!(
+        run.evaluation_artifact.execution_outcome_surface.class_id,
+        "bind_boundary_reject"
+    );
+    assert_eq!(
+        run.evaluation_artifact.execution_outcome_surface.lane_reason_code.as_deref(),
+        Some("BindMismatch")
+    );
+    assert_eq!(
         run.evaluation_artifact.reject_code,
         Some(oxfml_core::RejectCode::BindMismatch)
     );
@@ -548,6 +574,11 @@ fn adapter_rejects_lambda_array_constant_authoring_frontier_cases_as_bind_mismat
             run.evaluation_artifact.commit_decision_kind,
             "rejected",
             "{case_id} commit decision"
+        );
+        assert_eq!(
+            run.evaluation_artifact.execution_outcome_surface.outcome_stage,
+            ExecutionOutcomeStage::BindBoundary,
+            "{case_id} outcome stage"
         );
         assert_eq!(
             run.evaluation_artifact.reject_code,

@@ -9,7 +9,7 @@ use crate::interface::{
     LibraryContextProvider, LibraryContextSnapshotRef, ReturnedValueSurface, TableCallerRegion,
     TableDescriptor, TableRef, TypedContextQueryBundle, TypedContextQueryBundleSpec,
 };
-use crate::seam::{AcceptDecision, Locus, RejectCode};
+use crate::seam::{AcceptDecision, ExecutionOutcomeSurface, Locus, RejectCode};
 use crate::semantics::{ExecutionProfileSummary, FunctionAvailabilitySummary, SemanticDiagnostic};
 use crate::source::FormulaChannelKind;
 use crate::syntax::token::SyntaxDiagnostic;
@@ -92,6 +92,7 @@ pub struct OxFuncEvaluationArtifact {
     pub evaluation_result: PreparedResult,
     pub worksheet_value: EvalValue,
     pub returned_value_surface: ReturnedValueSurface,
+    pub execution_outcome_surface: ExecutionOutcomeSurface,
     pub candidate_result_id: String,
     pub commit_decision_kind: String,
     pub reject_code: Option<RejectCode>,
@@ -231,6 +232,7 @@ pub fn run_oxfunc_preparation_adapter(
         evaluation_result: host_output.evaluation.result.clone(),
         worksheet_value: host_output.published_worksheet_value.clone(),
         returned_value_surface: host_output.returned_value_surface.clone(),
+        execution_outcome_surface: host_output.execution_outcome_surface.clone(),
         candidate_result_id: host_output.candidate_result.candidate_result_id.clone(),
         commit_decision_kind: match &host_output.commit_decision {
             AcceptDecision::Accepted(_) => "accepted".to_string(),

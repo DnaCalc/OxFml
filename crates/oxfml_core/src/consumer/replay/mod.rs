@@ -7,6 +7,8 @@ use crate::interface::{LibraryContextSnapshotRef, TypedContextQueryBundleSpec};
 use crate::publication::{
     VerificationComparisonView, VerificationPublicationSurface, build_verification_comparison_views,
 };
+use crate::seam::{ExecutionOutcomeKind, ExecutionOutcomeStage, ExecutionOutcomeSurface};
+use serde_json::json;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReplayProjectionFamily {
@@ -183,6 +185,7 @@ pub struct ReplayProjectionResult {
     pub phase: Option<String>,
     pub candidate_result_id: Option<String>,
     pub commit_decision_kind: Option<String>,
+    pub execution_outcome_surface: Option<ExecutionOutcomeSurface>,
     pub trace_event_kinds: Vec<String>,
     pub comparison_views: Option<Vec<ReplayComparisonView>>,
     pub verification_publication_surface: Option<VerificationPublicationSurface>,
@@ -249,6 +252,37 @@ impl ReplayProjectionService {
     }
 }
 
+fn execution_outcome_view(surface: &ExecutionOutcomeSurface) -> ReplayComparisonView {
+    let outcome_kind = match surface.outcome_kind {
+        ExecutionOutcomeKind::ExecutedResult => "executed_result",
+        ExecutionOutcomeKind::Rejected => "rejected",
+    };
+    let outcome_stage = match surface.outcome_stage {
+        ExecutionOutcomeStage::Executed => "executed",
+        ExecutionOutcomeStage::BindBoundary => "bind_boundary",
+        ExecutionOutcomeStage::CommitBoundary => "commit_boundary",
+    };
+
+    ReplayComparisonView {
+        view_family: "execution_outcome".to_string(),
+        value: json!({
+            "outcome_kind": outcome_kind,
+            "outcome_stage": outcome_stage,
+            "class_id": surface.class_id,
+            "lane_reason_code": surface.lane_reason_code,
+            "raw_detail": surface.raw_detail,
+        }),
+    }
+}
+
+fn comparison_views_with_execution_outcome(
+    mut views: Vec<ReplayComparisonView>,
+    execution_outcome_surface: &ExecutionOutcomeSurface,
+) -> Vec<ReplayComparisonView> {
+    views.push(execution_outcome_view(execution_outcome_surface));
+    views
+}
+
 fn project_runtime_result(
     result: &RuntimeFormulaResult,
     source_case_id: Option<String>,
@@ -277,13 +311,15 @@ fn project_runtime_result(
             crate::seam::AcceptDecision::Accepted(_) => "accepted".to_string(),
             crate::seam::AcceptDecision::Rejected(_) => "rejected".to_string(),
         }),
+        execution_outcome_surface: Some(result.execution_outcome_surface.clone()),
         trace_event_kinds: result
             .trace_events
             .iter()
             .map(|event| format!("{:?}", event.event_kind))
             .collect(),
-        comparison_views: Some(build_verification_comparison_views(
-            &result.verification_publication_surface,
+        comparison_views: Some(comparison_views_with_execution_outcome(
+            build_verification_comparison_views(&result.verification_publication_surface),
+            &result.execution_outcome_surface,
         )),
         verification_publication_surface: Some(result.verification_publication_surface.clone()),
         first_host_replay_capture_packet: Some(result.first_host_replay_capture_packet.clone()),
@@ -315,9 +351,11 @@ fn project_first_host_capture(
         phase: Some("CommittedOrRejected".to_string()),
         candidate_result_id: Some(source.packet.candidate_result_id.clone()),
         commit_decision_kind: Some(source.packet.commit_decision_kind.clone()),
+        execution_outcome_surface: Some(source.packet.execution_outcome_surface.clone()),
         trace_event_kinds: source.packet.trace_event_kinds.clone(),
-        comparison_views: Some(build_verification_comparison_views(
-            &source.packet.verification_publication_surface,
+        comparison_views: Some(comparison_views_with_execution_outcome(
+            build_verification_comparison_views(&source.packet.verification_publication_surface),
+            &source.packet.execution_outcome_surface,
         )),
         verification_publication_surface: Some(
             source.packet.verification_publication_surface.clone(),
@@ -351,6 +389,7 @@ fn project_runtime_managed_open(
         phase: Some("Open".to_string()),
         candidate_result_id: None,
         commit_decision_kind: None,
+        execution_outcome_surface: None,
         trace_event_kinds: Vec::new(),
         comparison_views: None,
         verification_publication_surface: None,
@@ -383,6 +422,7 @@ fn project_runtime_managed_execution(
         phase: Some("Executed".to_string()),
         candidate_result_id: Some(result.candidate_result.candidate_result_id.clone()),
         commit_decision_kind: None,
+        execution_outcome_surface: None,
         trace_event_kinds: result
             .trace_events
             .iter()
@@ -432,6 +472,7 @@ fn project_runtime_managed_session(
         ),
         candidate_result_id: result.candidate_result_id.clone(),
         commit_decision_kind: None,
+        execution_outcome_surface: None,
         trace_event_kinds: result
             .trace_events
             .iter()
@@ -478,6 +519,22 @@ fn project_runtime_managed_commit(
             crate::seam::AcceptDecision::Accepted(_) => "accepted".to_string(),
             crate::seam::AcceptDecision::Rejected(_) => "rejected".to_string(),
         }),
+        execution_outcome_surface: Some(match &result.commit_decision {
+            crate::seam::AcceptDecision::Accepted(_) => ExecutionOutcomeSurface {
+                outcome_kind: ExecutionOutcomeKind::ExecutedResult,
+                outcome_stage: ExecutionOutcomeStage::Executed,
+                class_id: "executed_result".to_string(),
+                lane_reason_code: None,
+                raw_detail: None,
+            },
+            crate::seam::AcceptDecision::Rejected(reject) => ExecutionOutcomeSurface {
+                outcome_kind: ExecutionOutcomeKind::Rejected,
+                outcome_stage: ExecutionOutcomeStage::CommitBoundary,
+                class_id: "commit_boundary_reject".to_string(),
+                lane_reason_code: Some(format!("{:?}", reject.reject_code)),
+                raw_detail: None,
+            },
+        }),
         trace_event_kinds: result
             .session
             .trace_events
@@ -523,6 +580,13 @@ fn project_runtime_managed_termination(
         ),
         candidate_result_id: result.session.candidate_result_id.clone(),
         commit_decision_kind: Some("rejected".to_string()),
+        execution_outcome_surface: Some(ExecutionOutcomeSurface {
+            outcome_kind: ExecutionOutcomeKind::Rejected,
+            outcome_stage: ExecutionOutcomeStage::CommitBoundary,
+            class_id: "commit_boundary_reject".to_string(),
+            lane_reason_code: Some(format!("{:?}", result.reject_record.reject_code)),
+            raw_detail: None,
+        }),
         trace_event_kinds: result
             .session
             .trace_events
@@ -560,6 +624,7 @@ fn project_fixture_family(
         phase: None,
         candidate_result_id: None,
         commit_decision_kind: None,
+        execution_outcome_surface: None,
         trace_event_kinds: Vec::new(),
         comparison_views: None,
         verification_publication_surface: None,
@@ -592,6 +657,7 @@ fn project_retained_witness(
         phase: None,
         candidate_result_id: None,
         commit_decision_kind: None,
+        execution_outcome_surface: None,
         trace_event_kinds: Vec::new(),
         comparison_views: None,
         verification_publication_surface: None,

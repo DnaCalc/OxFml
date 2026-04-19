@@ -277,6 +277,28 @@ pub struct RejectRecord {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecutionOutcomeKind {
+    ExecutedResult,
+    Rejected,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecutionOutcomeStage {
+    Executed,
+    BindBoundary,
+    CommitBoundary,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecutionOutcomeSurface {
+    pub outcome_kind: ExecutionOutcomeKind,
+    pub outcome_stage: ExecutionOutcomeStage,
+    pub class_id: String,
+    pub lane_reason_code: Option<String>,
+    pub raw_detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TraceEventKind {
     SessionOpened,
     CapabilityViewEstablished,

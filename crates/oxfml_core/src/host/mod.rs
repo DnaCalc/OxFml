@@ -30,10 +30,11 @@ use crate::red::{RedProjection, project_red_view_incremental};
 use crate::scheduler::{ExecutionContract, build_execution_contract};
 use crate::seam::{
     AcceptDecision, AcceptedCandidateResult, CapabilityEffectFact, CommitRequest,
-    DependencyConsequenceFact, DisplayDelta, Extent, FenceSnapshot, FormatDelta,
-    FormatDependencyFact, Locus, ShapeDelta, ShapeOutcomeClass, SpillEvent, SpillEventKind,
-    TopologyDelta, TraceEvent, TraceEventKind, TracePayload, ValueDelta, ValuePayload,
-    WorksheetValueClass, commit_candidate,
+    DependencyConsequenceFact, DisplayDelta, ExecutionOutcomeKind, ExecutionOutcomeStage,
+    ExecutionOutcomeSurface, Extent, FenceSnapshot, FormatDelta, FormatDependencyFact,
+    Locus, ShapeDelta, ShapeOutcomeClass, SpillEvent, SpillEventKind, TopologyDelta,
+    TraceEvent, TraceEventKind, TracePayload, ValueDelta, ValuePayload, WorksheetValueClass,
+    commit_candidate,
 };
 use crate::semantics::{CompileSemanticPlanRequest, SemanticPlan, compile_semantic_plan};
 use crate::source::{FormulaSourceRecord, StructureContextVersion};
@@ -96,6 +97,7 @@ pub struct HostRecalcOutput {
     pub evaluation: EvaluationOutput,
     pub published_worksheet_value: EvalValue,
     pub returned_value_surface: ReturnedValueSurface,
+    pub execution_outcome_surface: ExecutionOutcomeSurface,
     pub candidate_result: AcceptedCandidateResult,
     pub commit_decision: AcceptDecision,
     pub trace_events: Vec<TraceEvent>,
@@ -112,6 +114,7 @@ pub struct FirstHostReplayCapturePacket {
     pub typed_query_bundle_spec: TypedContextQueryBundleSpec,
     pub returned_value_surface: ReturnedValueSurface,
     pub verification_publication_surface: VerificationPublicationSurface,
+    pub execution_outcome_surface: ExecutionOutcomeSurface,
     pub candidate_result_id: String,
     pub commit_decision_kind: String,
     pub trace_event_kinds: Vec<String>,
@@ -145,6 +148,7 @@ impl HostRecalcOutput {
                 locale_ctx,
                 verification_publication_context,
             ),
+            execution_outcome_surface: self.execution_outcome_surface.clone(),
             candidate_result_id: self.candidate_result.candidate_result_id.clone(),
             commit_decision_kind: match &self.commit_decision {
                 AcceptDecision::Accepted(_) => "accepted".to_string(),
@@ -536,6 +540,7 @@ impl SingleFormulaHost {
         };
         let trace_events =
             build_trace_events(&candidate_result, &commit_decision, &commit_attempt_id);
+        let execution_outcome_surface = execution_outcome_surface(&commit_decision);
 
         Ok(HostRecalcOutput {
             source,
@@ -547,6 +552,7 @@ impl SingleFormulaHost {
             typed_query_bundle_spec,
             published_worksheet_value,
             returned_value_surface,
+            execution_outcome_surface,
             evaluation,
             candidate_result,
             commit_decision,
@@ -1003,6 +1009,43 @@ fn synthetic_bind_mismatch_evaluation(
         trace: crate::eval::EvaluationTrace {
             prepared_calls: Vec::new(),
         },
+    }
+}
+
+fn execution_outcome_surface(commit_decision: &AcceptDecision) -> ExecutionOutcomeSurface {
+    match commit_decision {
+        AcceptDecision::Accepted(_) => ExecutionOutcomeSurface {
+            outcome_kind: ExecutionOutcomeKind::ExecutedResult,
+            outcome_stage: ExecutionOutcomeStage::Executed,
+            class_id: "executed_result".to_string(),
+            lane_reason_code: None,
+            raw_detail: None,
+        },
+        AcceptDecision::Rejected(reject) => {
+            let (outcome_stage, class_id, raw_detail) = match &reject.context {
+                crate::seam::RejectContext::ResourceInvariant(context)
+                    if reject.reject_code == crate::seam::RejectCode::BindMismatch =>
+                {
+                    (
+                        ExecutionOutcomeStage::BindBoundary,
+                        "bind_boundary_reject".to_string(),
+                        Some(context.machine_detail_code.clone()),
+                    )
+                }
+                _ => (
+                    ExecutionOutcomeStage::CommitBoundary,
+                    "commit_boundary_reject".to_string(),
+                    None,
+                ),
+            };
+            ExecutionOutcomeSurface {
+                outcome_kind: ExecutionOutcomeKind::Rejected,
+                outcome_stage,
+                class_id,
+                lane_reason_code: Some(format!("{:?}", reject.reject_code)),
+                raw_detail,
+            }
+        }
     }
 }
 

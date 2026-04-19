@@ -52,6 +52,14 @@
           "source_projection": "spreadsheetml_expression_rules_v1"
         }
       }
+    },
+    {
+      "view_family": "execution_outcome",
+      "value": {
+        "classification": "executed_result",
+        "stage": "executed",
+        "reject_code": null
+      }
     }
   ]
 }

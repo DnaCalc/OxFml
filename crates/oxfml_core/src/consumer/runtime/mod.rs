@@ -21,7 +21,8 @@ use crate::publication::{
 use crate::red::project_red_view;
 use crate::scheduler::ExecutionContract;
 use crate::seam::{
-    AcceptDecision, AcceptedCandidateResult, FenceSnapshot, Locus, RejectRecord, TraceEvent,
+    AcceptDecision, AcceptedCandidateResult, ExecutionOutcomeSurface, FenceSnapshot, Locus,
+    RejectRecord, TraceEvent,
 };
 use crate::semantics::{
     CompileSemanticPlanRequest, LibraryContextSnapshot, SemanticPlan, compile_semantic_plan,
@@ -297,6 +298,7 @@ pub struct RuntimeFormulaResult {
     pub evaluation: EvaluationOutput,
     pub published_worksheet_value: EvalValue,
     pub returned_value_surface: ReturnedValueSurface,
+    pub execution_outcome_surface: ExecutionOutcomeSurface,
     pub comparison_views: Vec<VerificationComparisonView>,
     pub verification_publication_surface: VerificationPublicationSurface,
     pub candidate_result: AcceptedCandidateResult,
@@ -331,6 +333,7 @@ impl RuntimeFormulaResult {
             evaluation: host_output.evaluation,
             published_worksheet_value: host_output.published_worksheet_value,
             returned_value_surface: host_output.returned_value_surface,
+            execution_outcome_surface: host_output.execution_outcome_surface,
             comparison_views,
             verification_publication_surface: first_host_replay_capture_packet
                 .verification_publication_surface

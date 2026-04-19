@@ -21,7 +21,9 @@ use oxfml_core::semantics::{
 use oxfml_core::source::{FormulaChannelKind, FormulaSourceRecord, StructureContextVersion};
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
 use oxfml_core::test_support::host::SingleFormulaHost;
-use oxfml_core::{EvaluationBackend, LibraryContextSnapshotRef};
+use oxfml_core::{
+    EvaluationBackend, ExecutionOutcomeKind, ExecutionOutcomeStage, LibraryContextSnapshotRef,
+};
 
 #[test]
 fn r1c1_channel_translates_absolute_relative_and_area_references() {
@@ -243,6 +245,14 @@ fn first_host_replay_capture_packet_preserves_snapshot_and_provider_outcomes() {
     );
     assert_eq!(info_packet.commit_decision_kind, "accepted");
     assert_eq!(
+        info_packet.execution_outcome_surface.outcome_kind,
+        ExecutionOutcomeKind::ExecutedResult
+    );
+    assert_eq!(
+        info_packet.execution_outcome_surface.outcome_stage,
+        ExecutionOutcomeStage::Executed
+    );
+    assert_eq!(
         info_packet.trace_event_kinds,
         vec![
             "AcceptedCandidateResultBuilt".to_string(),
@@ -296,6 +306,35 @@ fn first_host_replay_capture_packet_preserves_snapshot_and_provider_outcomes() {
             .as_ref()
             .map(|surface| surface.outcome_kind),
         Some(HostProviderOutcomeKind::CapabilityDenied)
+    );
+}
+
+#[test]
+fn first_host_replay_capture_packet_surfaces_bind_boundary_execution_outcome() {
+    let locale = en_us_context();
+    let mut host = SingleFormulaHost::new("host-bind-reject", "={\"x\",LAMBDA(100)}");
+    let output = host
+        .recalc(None, Some(&locale))
+        .expect("bind-boundary host recalc should still project output");
+    let packet = output.to_first_host_replay_capture_packet();
+
+    assert_eq!(packet.commit_decision_kind, "rejected");
+    assert_eq!(
+        packet.execution_outcome_surface.outcome_kind,
+        ExecutionOutcomeKind::Rejected
+    );
+    assert_eq!(
+        packet.execution_outcome_surface.outcome_stage,
+        ExecutionOutcomeStage::BindBoundary
+    );
+    assert_eq!(packet.execution_outcome_surface.class_id, "bind_boundary_reject");
+    assert_eq!(
+        packet.execution_outcome_surface.lane_reason_code.as_deref(),
+        Some("BindMismatch")
+    );
+    assert_eq!(
+        packet.execution_outcome_surface.raw_detail.as_deref(),
+        Some("LAMBDA cannot appear inside array constants")
     );
 }
 

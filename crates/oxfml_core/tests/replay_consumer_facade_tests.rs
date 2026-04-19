@@ -195,7 +195,7 @@ fn replay_projection_service_projects_runtime_and_host_outputs() {
             .comparison_views
             .as_ref()
             .map(|views| views.len()),
-        Some(5)
+        Some(6)
     );
     assert_eq!(
         runtime_projection
@@ -364,6 +364,16 @@ fn replay_projection_service_emits_comparison_value_and_visible_text_without_pub
             {
                 "view_family": "effective_display_text",
                 "value": "6"
+            },
+            {
+                "view_family": "execution_outcome",
+                "value": {
+                    "outcome_kind": "executed_result",
+                    "outcome_stage": "executed",
+                    "class_id": "executed_result",
+                    "lane_reason_code": null,
+                    "raw_detail": null
+                }
             }
         ]))
     );
@@ -404,8 +414,57 @@ fn replay_projection_service_emits_comparison_value_and_visible_text_without_pub
             {
                 "view_family": "effective_display_text",
                 "value": "6"
+            },
+            {
+                "view_family": "execution_outcome",
+                "value": {
+                    "outcome_kind": "executed_result",
+                    "outcome_stage": "executed",
+                    "class_id": "executed_result",
+                    "lane_reason_code": null,
+                    "raw_detail": null
+                }
             }
         ]))
+    );
+}
+
+#[test]
+fn replay_projection_service_surfaces_bind_boundary_execution_outcome() {
+    let locale = en_us_context();
+    let runtime_result = RuntimeEnvironment::new()
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new("replay:bind-boundary", 1, "={\"x\",LAMBDA(100)}"),
+            TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
+        ))
+        .expect("bind-boundary runtime result should project");
+
+    let runtime_projection = ReplayProjectionService::project(
+        ReplayProjectionRequest::runtime_result(&runtime_result)
+            .with_source_case_id("case:bind-boundary")
+            .with_shared_scenario_alias("alias.bind-boundary"),
+    );
+
+    assert_eq!(
+        runtime_projection
+            .execution_outcome_surface
+            .as_ref()
+            .map(|surface| surface.class_id.as_str()),
+        Some("bind_boundary_reject")
+    );
+    assert_eq!(
+        runtime_projection
+            .comparison_views
+            .as_ref()
+            .and_then(|views| views.iter().find(|view| view.view_family == "execution_outcome"))
+            .map(|view| view.value.clone()),
+        Some(serde_json::json!({
+            "outcome_kind": "rejected",
+            "outcome_stage": "bind_boundary",
+            "class_id": "bind_boundary_reject",
+            "lane_reason_code": "BindMismatch",
+            "raw_detail": "LAMBDA cannot appear inside array constants"
+        }))
     );
 }
 

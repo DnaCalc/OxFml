@@ -81,6 +81,7 @@ pub use scheduler::{
 pub use seam::{
     AcceptDecision, AcceptedCandidateResult, CapabilityDenialContext, CapabilityEffectFact,
     CommitBundle, CommitRequest, DependencyConsequenceFact, DisplayDelta, DynamicReferenceFact,
+    ExecutionOutcomeKind, ExecutionOutcomeStage, ExecutionOutcomeSurface,
     DynamicReferenceFailureContext, Extent, FenceMismatchContext, FenceSnapshot, FormatDelta,
     FormatDependencyFact, Locus, RejectCode, RejectContext, RejectRecord, ResourceInvariantContext,
     SessionTerminationContext, ShapeDelta, ShapeOutcomeClass, SpillEvent, SpillEventKind,

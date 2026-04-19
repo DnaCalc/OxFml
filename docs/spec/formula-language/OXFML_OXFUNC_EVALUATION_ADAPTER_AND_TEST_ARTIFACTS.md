@@ -56,6 +56,7 @@ Current exercised local behavior:
    - prepared result
    - worksheet-visible value
    - `ReturnedValueSurface`
+   - explicit typed `execution_outcome_surface` for executed-result versus bind/commit-boundary rejection classification
    - candidate/commit identity and trace-event kinds
 4. structured mismatch artifact projection carrying:
    - fixture case id
@@ -157,7 +158,8 @@ Minimum intended content:
 1. final value or error result,
 2. `ReturnedValueSurface`,
 3. typed host/provider outcome projection where applicable,
-4. selected trace facts needed to explain stage-sensitive or callable-sensitive behavior.
+4. explicit `execution_outcome_surface` carrying adapter-owned execution classification without asking downstream tools to infer bind-boundary rejection from ad hoc error payloads,
+5. selected trace facts needed to explain stage-sensitive or callable-sensitive behavior.
 
 ### 3. Mismatch report artifact
 Enough structured output to drive bounded seam closure when the adapter reveals divergence.
