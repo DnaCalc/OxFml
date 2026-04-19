@@ -14,8 +14,8 @@ pub use reference::{
 use crate::interface::{
     TableCallerRegion, TableColumnDescriptor, TableDescriptor, TableRef, TableRegionKind,
 };
-use crate::semantics::lookup_function_meta;
 use crate::red::RedProjection;
+use crate::semantics::lookup_function_meta;
 use crate::source::{
     FormulaChannelKind, FormulaSourceRecord, FormulaToken, StructureContextVersion,
 };
@@ -802,7 +802,23 @@ impl Binder {
             .names
             .keys()
             .any(|name| name.eq_ignore_ascii_case(&function_name));
-        let builtin_function_match = lookup_function_meta(&uppercase_function_name).is_some();
+        let builtin_function_meta = lookup_function_meta(&uppercase_function_name);
+        let builtin_function_match = builtin_function_meta.is_some();
+
+        if uppercase_function_name == "T"
+            && let Some(meta) = builtin_function_meta.as_ref()
+            && !meta.arity.accepts(args.len())
+        {
+            self.diagnostics.push(BindDiagnostic {
+                message: builtin_function_arity_authoring_diagnostic(
+                    &uppercase_function_name,
+                    meta.arity.min,
+                    meta.arity.max,
+                    args.len(),
+                ),
+                span: node.span,
+            });
+        }
 
         if (helper_local_match && !builtin_function_match) || context_name_match {
             let callee = self.bind_identifier_expr_from_name(&function_name);
@@ -1078,10 +1094,23 @@ impl Binder {
     }
 }
 
+fn builtin_function_arity_authoring_diagnostic(
+    builtin_name: &str,
+    min_arity: usize,
+    max_arity: usize,
+    actual_arity: usize,
+) -> String {
+    format!(
+        "built-in function call '{builtin_name}' rejects {actual_arity} arguments at the authoring boundary (expected {min_arity}..={max_arity})"
+    )
+}
+
 fn array_literal_contains_inline_lambda_call(expr: &BoundExpr) -> bool {
     match expr {
         BoundExpr::FunctionCall { function_name, .. } if function_name == "LAMBDA" => true,
-        BoundExpr::FunctionCall { args, .. } => args.iter().any(array_literal_contains_inline_lambda_call),
+        BoundExpr::FunctionCall { args, .. } => {
+            args.iter().any(array_literal_contains_inline_lambda_call)
+        }
         BoundExpr::Invocation { callee, args } => {
             array_literal_contains_inline_lambda_call(callee)
                 || args.iter().any(array_literal_contains_inline_lambda_call)

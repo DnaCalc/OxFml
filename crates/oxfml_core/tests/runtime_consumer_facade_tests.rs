@@ -13,10 +13,11 @@ use oxfml_core::semantics::{
     RegistrationSourceKind,
 };
 use oxfml_core::{
-    AcceptDecision, FormulaSourceRecord, InMemoryLibraryContextProvider, LibraryContextSnapshotRef,
-    RegisteredExternalCatalogController, RegisteredExternalCatalogMutationRequest,
-    RegisteredExternalCatalogMutationResult, RegisteredExternalHostRegistrationRequest,
-    RegisteredExternalRegistrationChannel, TypedContextQueryBundle, TypedContextQueryFamily,
+    AcceptDecision, ExecutionOutcomeKind, ExecutionOutcomeStage, FormulaSourceRecord,
+    InMemoryLibraryContextProvider, LibraryContextSnapshotRef, RegisteredExternalCatalogController,
+    RegisteredExternalCatalogMutationRequest, RegisteredExternalCatalogMutationResult,
+    RegisteredExternalHostRegistrationRequest, RegisteredExternalRegistrationChannel,
+    TypedContextQueryBundle, TypedContextQueryFamily,
 };
 use oxfunc_core::functions::call_register_id_family::{
     RegisterIdRequest, RegisteredExternalDescriptor, RegisteredExternalOriginKind,
@@ -194,10 +195,7 @@ fn runtime_session_facade_runs_managed_session_through_commit() {
         commit.execution_outcome_surface.outcome_stage,
         oxfml_core::ExecutionOutcomeStage::Executed
     );
-    assert_eq!(
-        commit.execution_outcome_surface.class_id,
-        "executed_result"
-    );
+    assert_eq!(commit.execution_outcome_surface.class_id, "executed_result");
 
     match &commit.commit_decision {
         AcceptDecision::Accepted(bundle) => {
@@ -580,7 +578,7 @@ fn runtime_environment_emits_effective_display_text_comparison_view_for_verifica
 
 #[test]
 fn runtime_environment_emits_effective_display_text_comparison_view_for_programmatic_verification_cases()
-{
+ {
     let locale = en_us_context();
     let cases = [
         ("FTC-0703", "=DATEDIF(\"2020-01-15\",\"2024-03-20\",\"Y\")"),
@@ -611,15 +609,22 @@ fn runtime_environment_emits_effective_display_text_comparison_view_for_programm
             .unwrap_or_else(|error| panic!("{case_id} runtime execution should succeed: {error}"));
 
         assert!(
-            !result.verification_publication_surface.has_publication_context,
+            !result
+                .verification_publication_surface
+                .has_publication_context,
             "{case_id} should remain a no-explicit-publication-context control"
         );
         let expected_value =
             expected_programmatic_comparison_value(&result.published_worksheet_value);
-        let expected_text = result.verification_publication_surface.effective_display_text.clone();
+        let expected_text = result
+            .verification_publication_surface
+            .effective_display_text
+            .clone();
         assert_eq!(
             result.verification_publication_surface.visible_value_text,
-            result.verification_publication_surface.effective_display_text,
+            result
+                .verification_publication_surface
+                .effective_display_text,
             "{case_id} visible value text"
         );
         assert_eq!(
@@ -658,31 +663,105 @@ fn runtime_environment_emits_effective_display_text_comparison_view_for_programm
 }
 
 #[test]
-fn runtime_environment_executes_foundation_let_lambda_success_cases() {
+fn runtime_environment_matches_excel_lambda_array_authoring_frontier_cases() {
+    let locale = en_us_context();
     let cases = [
-        (
-            "FTC-0444",
-            "=LET(THUNK,LAMBDA(x,LAMBDA(x)),t,THUNK(42),t())",
-            EvalValue::Number(42.0),
-            "42",
-        ),
         (
             "FTC-0446",
             "=LET(dict,{\"key1\",LAMBDA({10,20,30});\"key2\",LAMBDA({40,50,60})},keys,INDEX(dict,0,1),INDEX(keys,1,1))",
-            text_eval_value("key1"),
-            "key1",
         ),
         (
             "FTC-0447",
             "=LET(dict,{\"a\",LAMBDA(1);\"b\",LAMBDA(2);\"c\",LAMBDA(3)},keys,TAKE(dict,,1),ROWS(keys))",
-            EvalValue::Number(3.0),
-            "3",
         ),
     ];
 
-    for (case_id, formula, expected_value, expected_text) in cases {
-        assert_runtime_foundation_case(case_id, formula, expected_value, expected_text);
+    for (case_id, formula) in cases {
+        let result = RuntimeEnvironment::new()
+            .execute(RuntimeFormulaRequest::new(
+                FormulaSourceRecord::new(format!("runtime:foundation:{case_id}"), 1, formula),
+                TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
+            ))
+            .unwrap_or_else(|error| {
+                panic!("{case_id} runtime execution should classify bind mismatch: {error:?}")
+            });
+
+        assert_eq!(
+            result.published_worksheet_value,
+            EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Value),
+            "{case_id} published worksheet value"
+        );
+        assert_eq!(
+            result.execution_outcome_surface.outcome_stage,
+            ExecutionOutcomeStage::BindBoundary,
+            "{case_id} outcome stage"
+        );
+        assert!(result.bind_diagnostics.iter().any(|diagnostic| {
+            diagnostic.message == "LAMBDA cannot appear inside array constants"
+        }));
     }
+}
+
+#[test]
+fn runtime_environment_matches_excel_builtin_collision_arity_authoring_frontier_ftc_0444() {
+    let locale = en_us_context();
+    let result = RuntimeEnvironment::new()
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new(
+                "runtime:foundation:FTC-0444",
+                1,
+                "=LET(THUNK,LAMBDA(x,LAMBDA(x)),t,THUNK(42),t())",
+            ),
+            TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
+        ))
+        .expect("FTC-0444 runtime execution should classify bind mismatch");
+
+    assert_eq!(
+        result.published_worksheet_value,
+        EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Value)
+    );
+    assert_eq!(
+        result.verification_publication_surface.visible_value_text,
+        "#VALUE!"
+    );
+    assert_eq!(
+        result
+            .verification_publication_surface
+            .effective_display_text,
+        "#VALUE!"
+    );
+    assert_eq!(
+        result.execution_outcome_surface.outcome_kind,
+        ExecutionOutcomeKind::Rejected
+    );
+    assert_eq!(
+        result.execution_outcome_surface.outcome_stage,
+        ExecutionOutcomeStage::BindBoundary
+    );
+    assert_eq!(
+        result.execution_outcome_surface.class_id,
+        "bind_boundary_reject"
+    );
+    assert_eq!(
+        result.execution_outcome_surface.lane_reason_code.as_deref(),
+        Some("BindMismatch")
+    );
+    assert!(result.bind_diagnostics.iter().any(|diagnostic| {
+        diagnostic
+            .message
+            .starts_with("built-in function call 'T' rejects 0 arguments at the authoring boundary")
+    }));
+    assert!(result.evaluation.trace.prepared_calls.is_empty());
+}
+
+#[test]
+fn runtime_environment_preserves_non_colliding_zero_arg_lambda_thunk_call_ftc_0444_control() {
+    assert_runtime_foundation_case(
+        "FTC-0444-CONTROL",
+        "=LET(THUNK,LAMBDA(x,LAMBDA(x)),tt,THUNK(42),tt())",
+        EvalValue::Number(42.0),
+        "42",
+    );
 }
 
 #[test]
@@ -713,8 +792,16 @@ fn runtime_environment_matches_excel_builtin_colliding_let_recursive_name_fronti
         result.published_worksheet_value,
         EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Value)
     );
-    assert_eq!(result.verification_publication_surface.visible_value_text, "#VALUE!");
-    assert_eq!(result.verification_publication_surface.effective_display_text, "#VALUE!");
+    assert_eq!(
+        result.verification_publication_surface.visible_value_text,
+        "#VALUE!"
+    );
+    assert_eq!(
+        result
+            .verification_publication_surface
+            .effective_display_text,
+        "#VALUE!"
+    );
 }
 
 #[test]
@@ -821,12 +908,17 @@ fn runtime_environment_executes_if_text_true_condition_ftc_0541() {
         ))
         .expect("FTC-0541 runtime execution should succeed");
 
+    assert_eq!(result.published_worksheet_value, text_eval_value("yes"));
     assert_eq!(
-        result.published_worksheet_value,
-        text_eval_value("yes")
+        result.verification_publication_surface.visible_value_text,
+        "yes"
     );
-    assert_eq!(result.verification_publication_surface.visible_value_text, "yes");
-    assert_eq!(result.verification_publication_surface.effective_display_text, "yes");
+    assert_eq!(
+        result
+            .verification_publication_surface
+            .effective_display_text,
+        "yes"
+    );
 }
 
 #[test]
@@ -842,8 +934,16 @@ fn runtime_environment_executes_foundation_helper_array_case_ftc_1031() {
         .expect("FTC-1031 runtime execution should succeed");
 
     assert_eq!(result.published_worksheet_value, EvalValue::Number(21.0));
-    assert_eq!(result.verification_publication_surface.visible_value_text, "21");
-    assert_eq!(result.verification_publication_surface.effective_display_text, "21");
+    assert_eq!(
+        result.verification_publication_surface.visible_value_text,
+        "21"
+    );
+    assert_eq!(
+        result
+            .verification_publication_surface
+            .effective_display_text,
+        "21"
+    );
 }
 
 #[test]
@@ -865,20 +965,14 @@ fn runtime_environment_blocks_no_locale_text_verification_cases() {
             "FTC-1024",
             "=LET(yr,2024,m,2,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),gridStart,firstDay-WEEKDAY(firstDay,1)+1,dates,gridStart+SEQUENCE(7,,0),dayTexts,MAP(dates,LAMBDA(d,IF(AND(d>=firstDay,d<=lastDay),TEXT(DAY(d),\"00\"),\"  \"))),TEXTJOIN(\",\",FALSE,dayTexts))",
         ),
-        (
-            "FTC-1028",
-            "=TEXT(DATE(2024,7,1),\"MMMM\")",
-        ),
+        ("FTC-1028", "=TEXT(DATE(2024,7,1),\"MMMM\")"),
         (
             "FTC-1040",
             "=LET(yr,2024,m,1,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),gridStart,firstDay-WEEKDAY(firstDay,1)+1,dates,gridStart+SEQUENCE(42,,0),dayStrs,MAP(dates,LAMBDA(d,IF(AND(d>=firstDay,d<=lastDay),TEXT(DAY(d),\"00\"),\"  \"))),monthName,TEXT(firstDay,\"MMMM\"),TEXTJOIN(\"|\",FALSE,monthName,INDEX(dayStrs,1),INDEX(dayStrs,2),INDEX(dayStrs,3),INDEX(dayStrs,4),INDEX(dayStrs,5),INDEX(dayStrs,6),INDEX(dayStrs,7)))",
         ),
         // Separator-sensitive TEXT formatting remains blocked without an explicit locale
         // context; OxFml should not silently guess a machine-specific Excel separator profile.
-        (
-            "TEXT-SEPARATORS-UNPINNED",
-            "=TEXT(1234567.89,\"#,##0.00\")",
-        ),
+        ("TEXT-SEPARATORS-UNPINNED", "=TEXT(1234567.89,\"#,##0.00\")"),
     ];
 
     for (case_id, formula) in cases {
@@ -1009,7 +1103,10 @@ fn assert_runtime_foundation_case(
         "{case_id} visible value text"
     );
     assert_eq!(
-        result.verification_publication_surface.effective_display_text, expected_text,
+        result
+            .verification_publication_surface
+            .effective_display_text,
+        expected_text,
         "{case_id} effective display text"
     );
 }
@@ -1037,7 +1134,10 @@ fn assert_runtime_foundation_text_case(
         "{case_id} visible value text"
     );
     assert_eq!(
-        result.verification_publication_surface.effective_display_text, expected_text,
+        result
+            .verification_publication_surface
+            .effective_display_text,
+        expected_text,
         "{case_id} effective display text"
     );
 }

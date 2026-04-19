@@ -390,10 +390,60 @@ fn bind_prefers_builtin_function_over_colliding_helper_local_in_call_position() 
     let BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Name(name))) =
         &invocation_args[0]
     else {
-        panic!("expected helper-local name as first arg, got {:?}", invocation_args[0]);
+        panic!(
+            "expected helper-local name as first arg, got {:?}",
+            invocation_args[0]
+        );
     };
     assert_eq!(name.kind, NameKind::HelperLocal);
     assert_eq!(name.name, "gcd");
+}
+
+#[test]
+fn bind_surfaces_t_builtin_arity_authoring_reject_for_ftc_0444() {
+    let source = FormulaSourceRecord::new(
+        "fixture-builtin-collision-arity-helper-call",
+        1,
+        "=LET(THUNK,LAMBDA(x,LAMBDA(x)),t,THUNK(42),t())",
+    );
+    let parse = parse_formula(ParseRequest {
+        source: source.clone(),
+    });
+    let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
+    let bind = bind_formula(BindRequest {
+        source: source.clone(),
+        green_tree: parse.green_tree,
+        red_projection: red,
+        context: BindContext {
+            structure_context_version: StructureContextVersion("fixture-struct-v1".to_string()),
+            formula_token: source.formula_token(),
+            ..BindContext::default()
+        },
+    });
+
+    assert!(bind.bound_formula.diagnostics.iter().any(|diagnostic| {
+        diagnostic
+            .message
+            .starts_with("built-in function call 'T' rejects 0 arguments at the authoring boundary")
+    }));
+    let BoundExpr::FunctionCall {
+        function_name,
+        args,
+    } = &bind.bound_formula.root
+    else {
+        panic!("expected LET call root, got {:?}", bind.bound_formula.root);
+    };
+    assert_eq!(function_name, "LET");
+
+    let BoundExpr::FunctionCall {
+        function_name,
+        args: invocation_args,
+    } = &args[4]
+    else {
+        panic!("expected builtin function call body, got {:?}", args[4]);
+    };
+    assert_eq!(function_name, "T");
+    assert!(invocation_args.is_empty());
 }
 
 #[test]

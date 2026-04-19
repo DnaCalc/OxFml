@@ -35,8 +35,7 @@ use crate::seam::{
     SpillEventKind, TopologyDelta, TraceEvent, TraceEventKind, TracePayload, ValueDelta,
     ValuePayload, WorksheetValueClass, commit_candidate,
     execution_outcome_surface_bind_boundary_reject,
-    execution_outcome_surface_commit_boundary_reject,
-    execution_outcome_surface_executed_result,
+    execution_outcome_surface_commit_boundary_reject, execution_outcome_surface_executed_result,
 };
 use crate::semantics::{CompileSemanticPlanRequest, SemanticPlan, compile_semantic_plan};
 use crate::source::{FormulaSourceRecord, StructureContextVersion};
@@ -963,6 +962,7 @@ fn bind_mismatch_detail(diagnostics: &[BindDiagnostic]) -> Option<String> {
                     .starts_with("duplicate LAMBDA parameter name ")
                 || diagnostic.message == "LAMBDA parameter did not bind as helper parameter"
                 || diagnostic.message == "LAMBDA cannot appear inside array constants"
+                || diagnostic.message.starts_with("built-in function call '")
         })
         .map(|diagnostic| diagnostic.message.clone())
 }

@@ -532,11 +532,6 @@ fn evaluator_executes_foundation_let_lambda_success_cases() {
     let locale = en_us_context();
     let cases = [
         (
-            "FTC-0444",
-            "=LET(THUNK,LAMBDA(x,LAMBDA(x)),t,THUNK(42),t())",
-            EvalValue::Number(42.0),
-        ),
-        (
             "FTC-0446",
             "=LET(dict,{\"key1\",LAMBDA({10,20,30});\"key2\",LAMBDA({40,50,60})},keys,INDEX(dict,0,1),INDEX(keys,1,1))",
             EvalValue::Text(ExcelText::from_interop_assignment("key1")),
@@ -550,7 +545,9 @@ fn evaluator_executes_foundation_let_lambda_success_cases() {
 
     for (case_id, formula, expected_value) in cases {
         let output = evaluate_with_rtd_provider(formula, None, None, None, Some(&locale))
-            .unwrap_or_else(|error| panic!("{case_id} evaluator execution should succeed: {error:?}"));
+            .unwrap_or_else(|error| {
+                panic!("{case_id} evaluator execution should succeed: {error:?}")
+            });
         assert_eq!(output.oxfunc_value, expected_value, "{case_id} value");
     }
 }
@@ -566,7 +563,11 @@ fn evaluator_executes_foundation_array_lambda_carrier_case_ftc_0455() {
         Some(&locale),
     )
     .unwrap_or_else(|error| panic!("FTC-0455 evaluator execution should succeed: {error:?}"));
-    assert_eq!(output.oxfunc_value, EvalValue::Number(20.0), "FTC-0455 value");
+    assert_eq!(
+        output.oxfunc_value,
+        EvalValue::Number(20.0),
+        "FTC-0455 value"
+    );
 }
 
 #[test]

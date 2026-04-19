@@ -57,11 +57,17 @@ fn adapter_projects_direct_scalar_and_array_like_preparation_artifacts() {
         "Number(3)"
     );
     assert_eq!(
-        scalar_run.evaluation_artifact.execution_outcome_surface.outcome_kind,
+        scalar_run
+            .evaluation_artifact
+            .execution_outcome_surface
+            .outcome_kind,
         ExecutionOutcomeKind::ExecutedResult
     );
     assert_eq!(
-        scalar_run.evaluation_artifact.execution_outcome_surface.outcome_stage,
+        scalar_run
+            .evaluation_artifact
+            .execution_outcome_surface
+            .outcome_stage,
         ExecutionOutcomeStage::Executed
     );
 
@@ -516,11 +522,15 @@ fn adapter_rejects_duplicate_let_binding_names_as_bind_mismatch() {
 
     assert_eq!(run.evaluation_artifact.commit_decision_kind, "rejected");
     assert_eq!(
-        run.evaluation_artifact.execution_outcome_surface.outcome_kind,
+        run.evaluation_artifact
+            .execution_outcome_surface
+            .outcome_kind,
         ExecutionOutcomeKind::Rejected
     );
     assert_eq!(
-        run.evaluation_artifact.execution_outcome_surface.outcome_stage,
+        run.evaluation_artifact
+            .execution_outcome_surface
+            .outcome_stage,
         ExecutionOutcomeStage::BindBoundary
     );
     assert_eq!(
@@ -528,7 +538,10 @@ fn adapter_rejects_duplicate_let_binding_names_as_bind_mismatch() {
         "bind_boundary_reject"
     );
     assert_eq!(
-        run.evaluation_artifact.execution_outcome_surface.lane_reason_code.as_deref(),
+        run.evaluation_artifact
+            .execution_outcome_surface
+            .lane_reason_code
+            .as_deref(),
         Some("BindMismatch")
     );
     assert_eq!(
@@ -548,12 +561,98 @@ fn adapter_rejects_duplicate_let_binding_names_as_bind_mismatch() {
 }
 
 #[test]
+fn adapter_rejects_builtin_collision_arity_helper_local_call_as_bind_mismatch_ftc_0444() {
+    let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
+        "builtin-collision-arity-helper-call",
+        "formula:foundation:FTC-0444",
+        "=LET(THUNK,LAMBDA(x,LAMBDA(x)),t,THUNK(42),t())",
+        locus(1, 1),
+        TypedContextQueryBundle::default(),
+    ))
+    .expect("FTC-0444 adapter run should classify bind mismatch");
+
+    assert_eq!(run.evaluation_artifact.commit_decision_kind, "rejected");
+    assert_eq!(
+        run.evaluation_artifact
+            .execution_outcome_surface
+            .outcome_kind,
+        ExecutionOutcomeKind::Rejected
+    );
+    assert_eq!(
+        run.evaluation_artifact
+            .execution_outcome_surface
+            .outcome_stage,
+        ExecutionOutcomeStage::BindBoundary
+    );
+    assert_eq!(
+        run.evaluation_artifact.execution_outcome_surface.class_id,
+        "bind_boundary_reject"
+    );
+    assert_eq!(
+        run.evaluation_artifact
+            .execution_outcome_surface
+            .lane_reason_code
+            .as_deref(),
+        Some("BindMismatch")
+    );
+    assert_eq!(
+        run.evaluation_artifact.reject_code,
+        Some(oxfml_core::RejectCode::BindMismatch)
+    );
+    assert_eq!(
+        run.evaluation_artifact.worksheet_value,
+        EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Value)
+    );
+    assert!(
+        run.preparation_artifact
+            .bind_diagnostics
+            .iter()
+            .any(|diagnostic| {
+                diagnostic.message.starts_with(
+                    "built-in function call 'T' rejects 0 arguments at the authoring boundary",
+                )
+            })
+    );
+}
+
+#[test]
+fn adapter_rejects_plain_t_zero_arity_call_as_bind_mismatch() {
+    let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
+        "plain-t-zero-arity",
+        "formula:plain-t-zero-arity",
+        "=T()",
+        locus(1, 1),
+        TypedContextQueryBundle::default(),
+    ))
+    .expect("plain T adapter run should classify bind mismatch");
+
+    assert_eq!(run.evaluation_artifact.commit_decision_kind, "rejected");
+    assert_eq!(
+        run.evaluation_artifact
+            .execution_outcome_surface
+            .outcome_stage,
+        ExecutionOutcomeStage::BindBoundary
+    );
+    assert_eq!(
+        run.evaluation_artifact.reject_code,
+        Some(oxfml_core::RejectCode::BindMismatch)
+    );
+    assert!(
+        run.preparation_artifact
+            .bind_diagnostics
+            .iter()
+            .any(|diagnostic| {
+                diagnostic.message.starts_with(
+                    "built-in function call 'T' rejects 0 arguments at the authoring boundary",
+                )
+            })
+    );
+}
+
+#[test]
 fn adapter_rejects_lambda_array_constant_authoring_frontier_cases_as_bind_mismatch() {
     let cases = [
-        (
-            "S3",
-            "={\"x\",LAMBDA(100)}",
-        ),
+        ("S3", "={\"x\",LAMBDA(100)}"),
         (
             "S9",
             "=LET(dict,{\"x\",LAMBDA(100);\"y\",LAMBDA(200)},GETlambda,LAMBDA(d,LAMBDA(key,LET(keys,TAKE(d,,1),objects,DROP(d,,1),obj,XLOOKUP(key,keys,objects,\"not found\"),obj()))),getter,GETlambda(dict),getter(\"y\"))",
@@ -568,15 +667,18 @@ fn adapter_rejects_lambda_array_constant_authoring_frontier_cases_as_bind_mismat
             locus(1, 1),
             TypedContextQueryBundle::default(),
         ))
-        .unwrap_or_else(|error| panic!("{case_id} adapter run should classify bind mismatch: {error}"));
+        .unwrap_or_else(|error| {
+            panic!("{case_id} adapter run should classify bind mismatch: {error}")
+        });
 
         assert_eq!(
-            run.evaluation_artifact.commit_decision_kind,
-            "rejected",
+            run.evaluation_artifact.commit_decision_kind, "rejected",
             "{case_id} commit decision"
         );
         assert_eq!(
-            run.evaluation_artifact.execution_outcome_surface.outcome_stage,
+            run.evaluation_artifact
+                .execution_outcome_surface
+                .outcome_stage,
             ExecutionOutcomeStage::BindBoundary,
             "{case_id} outcome stage"
         );
@@ -594,7 +696,8 @@ fn adapter_rejects_lambda_array_constant_authoring_frontier_cases_as_bind_mismat
             run.preparation_artifact
                 .bind_diagnostics
                 .iter()
-                .any(|diagnostic| diagnostic.message == "LAMBDA cannot appear inside array constants"),
+                .any(|diagnostic| diagnostic.message
+                    == "LAMBDA cannot appear inside array constants"),
             "{case_id} bind diagnostic"
         );
     }
