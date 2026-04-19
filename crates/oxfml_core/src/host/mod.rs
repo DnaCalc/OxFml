@@ -954,6 +954,7 @@ fn bind_mismatch_detail(diagnostics: &[BindDiagnostic]) -> Option<String> {
                     .message
                     .starts_with("duplicate LAMBDA parameter name ")
                 || diagnostic.message == "LAMBDA parameter did not bind as helper parameter"
+                || diagnostic.message == "LAMBDA cannot appear inside array constants"
         })
         .map(|diagnostic| diagnostic.message.clone())
 }

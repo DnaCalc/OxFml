@@ -471,12 +471,16 @@ impl Binder {
 
     fn bind_array_literal(&mut self, node: &GreenNode) -> BoundExpr {
         let mut rows: Vec<Vec<BoundExpr>> = vec![Vec::new()];
+        let mut saw_inline_lambda = false;
         for child in &node.children {
             match child {
-                GreenChild::Node(expr) => rows
-                    .last_mut()
-                    .expect("array literal should have current row")
-                    .push(self.bind_expr(expr)),
+                GreenChild::Node(expr) => {
+                    let bound_expr = self.bind_expr(expr);
+                    saw_inline_lambda |= array_literal_contains_inline_lambda_call(&bound_expr);
+                    rows.last_mut()
+                        .expect("array literal should have current row")
+                        .push(bound_expr);
+                }
                 GreenChild::Token(token)
                     if token.kind == crate::syntax::token::TokenKind::Semicolon =>
                 {
@@ -484,6 +488,12 @@ impl Binder {
                 }
                 GreenChild::Token(_) => {}
             }
+        }
+        if saw_inline_lambda {
+            self.diagnostics.push(BindDiagnostic {
+                message: "LAMBDA cannot appear inside array constants".to_string(),
+                span: node.span,
+            });
         }
         BoundExpr::ArrayLiteral(rows)
     }
@@ -1062,6 +1072,35 @@ impl Binder {
                 source_text: text.to_string(),
             })))
         }
+    }
+}
+
+fn array_literal_contains_inline_lambda_call(expr: &BoundExpr) -> bool {
+    match expr {
+        BoundExpr::FunctionCall { function_name, .. } if function_name == "LAMBDA" => true,
+        BoundExpr::FunctionCall { args, .. } => args.iter().any(array_literal_contains_inline_lambda_call),
+        BoundExpr::Invocation { callee, args } => {
+            array_literal_contains_inline_lambda_call(callee)
+                || args.iter().any(array_literal_contains_inline_lambda_call)
+        }
+        BoundExpr::ImplicitIntersection(inner) | BoundExpr::Unary { expr: inner, .. } => {
+            array_literal_contains_inline_lambda_call(inner)
+        }
+        BoundExpr::Binary { left, right, .. } => {
+            array_literal_contains_inline_lambda_call(left)
+                || array_literal_contains_inline_lambda_call(right)
+        }
+        BoundExpr::ArrayLiteral(rows) => rows
+            .iter()
+            .flatten()
+            .any(array_literal_contains_inline_lambda_call),
+        BoundExpr::NumberLiteral(_)
+        | BoundExpr::StringLiteral(_)
+        | BoundExpr::LogicalLiteral(_)
+        | BoundExpr::OmittedArgument
+        | BoundExpr::HelperParameterName(_)
+        | BoundExpr::HelperOptionalParameterName(_)
+        | BoundExpr::Reference(_) => false,
     }
 }
 

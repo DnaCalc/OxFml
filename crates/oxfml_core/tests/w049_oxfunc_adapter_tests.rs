@@ -521,6 +521,54 @@ fn adapter_rejects_duplicate_let_binding_names_as_bind_mismatch() {
     );
 }
 
+#[test]
+fn adapter_rejects_lambda_array_constant_authoring_frontier_cases_as_bind_mismatch() {
+    let cases = [
+        (
+            "S3",
+            "={\"x\",LAMBDA(100)}",
+        ),
+        (
+            "S9",
+            "=LET(dict,{\"x\",LAMBDA(100);\"y\",LAMBDA(200)},GETlambda,LAMBDA(d,LAMBDA(key,LET(keys,TAKE(d,,1),objects,DROP(d,,1),obj,XLOOKUP(key,keys,objects,\"not found\"),obj()))),getter,GETlambda(dict),getter(\"y\"))",
+        ),
+    ];
+
+    for (case_id, formula) in cases {
+        let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
+            format!("lambda-array-frontier:{case_id}"),
+            format!("formula:lambda-array-frontier:{case_id}"),
+            formula,
+            locus(1, 1),
+            TypedContextQueryBundle::default(),
+        ))
+        .unwrap_or_else(|error| panic!("{case_id} adapter run should classify bind mismatch: {error}"));
+
+        assert_eq!(
+            run.evaluation_artifact.commit_decision_kind,
+            "rejected",
+            "{case_id} commit decision"
+        );
+        assert_eq!(
+            run.evaluation_artifact.reject_code,
+            Some(oxfml_core::RejectCode::BindMismatch),
+            "{case_id} reject code"
+        );
+        assert_eq!(
+            run.evaluation_artifact.worksheet_value,
+            EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Value),
+            "{case_id} worksheet value"
+        );
+        assert!(
+            run.preparation_artifact
+                .bind_diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message == "LAMBDA cannot appear inside array constants"),
+            "{case_id} bind diagnostic"
+        );
+    }
+}
+
 fn test_snapshot(
     snapshot_id: &str,
     snapshot_version: &str,

@@ -556,24 +556,32 @@ fn evaluator_executes_foundation_let_lambda_success_cases() {
 }
 
 #[test]
-fn evaluator_executes_foundation_array_lambda_carrier_cases() {
+fn evaluator_executes_foundation_array_lambda_carrier_case_ftc_0455() {
     let locale = en_us_context();
+    let output = evaluate_with_rtd_provider(
+        "=LET(THUNK,LAMBDA(x,LAMBDA(x)),vals,MAP({1;2;3},LAMBDA(v,THUNK(v*10))),INDEX(vals,2,1)())",
+        None,
+        None,
+        None,
+        Some(&locale),
+    )
+    .unwrap_or_else(|error| panic!("FTC-0455 evaluator execution should succeed: {error:?}"));
+    assert_eq!(output.oxfunc_value, EvalValue::Number(20.0), "FTC-0455 value");
+}
+
+#[test]
+fn evaluator_executes_lambda_array_authoring_frontier_acceptance_baselines() {
     let cases = [
+        ("S1", "=LAMBDA(200)()", EvalValue::Number(200.0)),
         (
-            "FTC-0448",
-            "=LET(dict,{\"x\",LAMBDA(100);\"y\",LAMBDA(200)},GETlambda,LAMBDA(d,LAMBDA(key,LET(keys,TAKE(d,,1),objects,DROP(d,,1),obj,XLOOKUP(key,keys,objects,\"not found\"),obj()))),getter,GETlambda(dict),getter(\"y\"))",
-            EvalValue::Number(200.0),
-        ),
-        (
-            "FTC-0455",
-            "=LET(THUNK,LAMBDA(x,LAMBDA(x)),vals,MAP({1;2;3},LAMBDA(v,THUNK(v*10))),INDEX(vals,2,1)())",
-            EvalValue::Number(20.0),
+            "S4",
+            "=LET(dict,{\"x\",1;\"y\",2},XLOOKUP(\"y\",TAKE(dict,,1),DROP(dict,,1)))",
+            EvalValue::Number(2.0),
         ),
     ];
 
     for (case_id, formula, expected_value) in cases {
-        let output = evaluate_with_rtd_provider(formula, None, None, None, Some(&locale))
-            .unwrap_or_else(|error| panic!("{case_id} evaluator execution should succeed: {error:?}"));
+        let output = evaluate(formula, None, None, Some(&en_us_context()));
         assert_eq!(output.oxfunc_value, expected_value, "{case_id} value");
     }
 }

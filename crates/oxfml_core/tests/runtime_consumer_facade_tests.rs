@@ -638,25 +638,13 @@ fn runtime_environment_executes_foundation_let_lambda_success_cases() {
 }
 
 #[test]
-fn runtime_environment_executes_foundation_array_lambda_carrier_cases() {
-    let cases = [
-        (
-            "FTC-0448",
-            "=LET(dict,{\"x\",LAMBDA(100);\"y\",LAMBDA(200)},GETlambda,LAMBDA(d,LAMBDA(key,LET(keys,TAKE(d,,1),objects,DROP(d,,1),obj,XLOOKUP(key,keys,objects,\"not found\"),obj()))),getter,GETlambda(dict),getter(\"y\"))",
-            EvalValue::Number(200.0),
-            "200",
-        ),
-        (
-            "FTC-0455",
-            "=LET(THUNK,LAMBDA(x,LAMBDA(x)),vals,MAP({1;2;3},LAMBDA(v,THUNK(v*10))),INDEX(vals,2,1)())",
-            EvalValue::Number(20.0),
-            "20",
-        ),
-    ];
-
-    for (case_id, formula, expected_value, expected_text) in cases {
-        assert_runtime_foundation_case(case_id, formula, expected_value, expected_text);
-    }
+fn runtime_environment_executes_foundation_array_lambda_carrier_case_ftc_0455() {
+    assert_runtime_foundation_case(
+        "FTC-0455",
+        "=LET(THUNK,LAMBDA(x,LAMBDA(x)),vals,MAP({1;2;3},LAMBDA(v,THUNK(v*10))),INDEX(vals,2,1)())",
+        EvalValue::Number(20.0),
+        "20",
+    );
 }
 
 #[test]
