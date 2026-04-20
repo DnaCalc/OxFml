@@ -412,6 +412,65 @@ fn replay_projection_service_preserves_first_host_capture_comparison_value_for_t
 }
 
 #[test]
+fn replay_projection_service_prefers_first_host_capture_publication_surface_for_runtime_results() {
+    let locale = current_excel_host_context();
+    let runtime_result = RuntimeEnvironment::new()
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new(
+                "replay:runtime-prefers-host-capture",
+                1,
+                "=TEXT(DATE(2024,7,1),\"MMMM\")",
+            ),
+            TypedContextQueryBundle::new(None, None, Some(&locale), Some(46000.0), Some(0.25)),
+        ))
+        .expect("runtime result should execute");
+
+    let mut mutated = runtime_result.clone();
+    mutated.verification_publication_surface.format_profile = None;
+    mutated.verification_publication_surface.locale_format_context = None;
+    mutated.verification_publication_surface.published_value = EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Value);
+    mutated.verification_publication_surface.visible_value_text = "#VALUE!".to_string();
+    mutated.verification_publication_surface.effective_display_text = "#VALUE!".to_string();
+
+    let projection = ReplayProjectionService::project(
+        ReplayProjectionRequest::runtime_result(&mutated)
+            .with_source_case_id("case:runtime-prefers-host-capture"),
+    );
+
+    assert_eq!(
+        projection
+            .comparison_views
+            .as_ref()
+            .and_then(|views| views.iter().find(|view| view.view_family == "comparison_value"))
+            .map(|view| view.value.clone()),
+        Some(serde_json::json!({"kind": "text", "value": "July"}))
+    );
+    assert_eq!(
+        projection
+            .verification_publication_surface
+            .as_ref()
+            .and_then(|surface| surface.format_profile.as_deref()),
+        Some("locale-format-context")
+    );
+    assert!(
+        projection
+            .verification_publication_surface
+            .as_ref()
+            .and_then(|surface| surface.locale_format_context.as_ref())
+            .is_some()
+    );
+    assert_eq!(
+        projection.verification_publication_surface,
+        Some(
+            mutated
+                .first_host_replay_capture_packet
+                .verification_publication_surface
+                .clone()
+        )
+    );
+}
+
+#[test]
 fn replay_projection_service_emits_comparison_value_and_visible_text_without_publication_context() {
     let environment = RuntimeEnvironment::new();
     let runtime_result = environment

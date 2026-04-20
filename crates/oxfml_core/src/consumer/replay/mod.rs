@@ -288,6 +288,9 @@ fn project_runtime_result(
     source_case_id: Option<String>,
     shared_scenario_alias: Option<String>,
 ) -> ReplayProjectionResult {
+    let verification_publication_surface =
+        result.first_host_replay_capture_packet.verification_publication_surface.clone();
+
     ReplayProjectionResult {
         source_artifact_family: "runtime_formula_result".to_string(),
         source_schema_id: None,
@@ -318,10 +321,10 @@ fn project_runtime_result(
             .map(|event| format!("{:?}", event.event_kind))
             .collect(),
         comparison_views: Some(comparison_views_with_execution_outcome(
-            build_verification_comparison_views(&result.verification_publication_surface),
+            build_verification_comparison_views(&verification_publication_surface),
             &result.execution_outcome_surface,
         )),
-        verification_publication_surface: Some(result.verification_publication_surface.clone()),
+        verification_publication_surface: Some(verification_publication_surface),
         first_host_replay_capture_packet: Some(result.first_host_replay_capture_packet.clone()),
     }
 }
