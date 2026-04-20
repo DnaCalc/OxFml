@@ -199,12 +199,9 @@ impl<'a> RuntimeEnvironment<'a> {
             request.backend(),
             request.typed_query_bundle,
             self.library_context.pinned_view(),
-        )?;
-        Ok(RuntimeFormulaResult::from_host_output(
-            output,
-            request.typed_query_bundle.locale_ctx,
             request.verification_publication_context(),
-        ))
+        )?;
+        Ok(RuntimeFormulaResult::from_host_output(output))
     }
 
     fn build_host(&self, source: &FormulaSourceRecord) -> SingleFormulaHost {
@@ -310,19 +307,10 @@ pub struct RuntimeFormulaResult {
 }
 
 impl RuntimeFormulaResult {
-    fn from_host_output(
-        host_output: HostRecalcOutput,
-        locale_ctx: Option<&oxfunc_core::locale_format::LocaleFormatContext<'_>>,
-        verification_publication_context: Option<&VerificationPublicationContext>,
-    ) -> Self {
-        let first_host_replay_capture_packet = host_output
-            .to_first_host_replay_capture_packet_with_context(
-                locale_ctx,
-                verification_publication_context,
-            );
-        let comparison_views = build_verification_comparison_views(
-            &first_host_replay_capture_packet.verification_publication_surface,
-        );
+    fn from_host_output(host_output: HostRecalcOutput) -> Self {
+        let verification_publication_surface = host_output.verification_publication_surface.clone();
+        let first_host_replay_capture_packet = host_output.to_first_host_replay_capture_packet();
+        let comparison_views = build_verification_comparison_views(&verification_publication_surface);
         Self {
             source: host_output.source,
             syntax_diagnostics: host_output.syntax_diagnostics,
@@ -336,9 +324,7 @@ impl RuntimeFormulaResult {
             returned_value_surface: host_output.returned_value_surface,
             execution_outcome_surface: host_output.execution_outcome_surface,
             comparison_views,
-            verification_publication_surface: first_host_replay_capture_packet
-                .verification_publication_surface
-                .clone(),
+            verification_publication_surface,
             candidate_result: host_output.candidate_result,
             commit_decision: host_output.commit_decision,
             trace_events: host_output.trace_events,

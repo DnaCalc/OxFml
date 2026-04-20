@@ -412,6 +412,101 @@ fn replay_projection_service_preserves_first_host_capture_comparison_value_for_t
 }
 
 #[test]
+fn replay_projection_service_preserves_explicit_verification_context_for_runtime_text_date_family() {
+    let locale = current_excel_host_context();
+    let verification_context = VerificationPublicationContext {
+        format_profile: Some("excel-spreadsheetml-2003-default".to_string()),
+        number_format_code: None,
+        style_id: Some("verify".to_string()),
+        style_hierarchy: vec!["base".to_string(), "verify".to_string()],
+        font_color: None,
+        fill_color: None,
+        conditional_formatting_rules: Vec::new(),
+    };
+    let cases = [
+        (
+            "FTC-1021",
+            "=LET(yr,2024,m,3,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),testDate,DATE(yr,m,15),TEXT(testDate,\"[<\"&firstDay&\"] ;[>\"&lastDay&\"] ;dd\"))",
+            serde_json::json!({"kind": "text", "value": "15"}),
+        ),
+        (
+            "FTC-1022",
+            "=LET(yr,2024,m,3,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),testDate,DATE(yr,2,28),result,TEXT(testDate,\"[<\"&firstDay&\"] ;[>\"&lastDay&\"] ;dd\"),LEN(TRIM(result)))",
+            serde_json::json!({"kind": "number", "value": 0.0}),
+        ),
+        (
+            "FTC-1023",
+            "=LET(baseSun,DATE(2024,1,7),headers,TEXT(baseSun+SEQUENCE(1,7,,1)-1,\"DDD\"),INDEX(headers,1,1))",
+            serde_json::json!({"kind": "text", "value": "Sun"}),
+        ),
+        (
+            "FTC-1024",
+            "=LET(yr,2024,m,2,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),gridStart,firstDay-WEEKDAY(firstDay,1)+1,dates,gridStart+SEQUENCE(7,,0),dayTexts,MAP(dates,LAMBDA(d,IF(AND(d>=firstDay,d<=lastDay),TEXT(DAY(d),\"00\"),\"  \"))),TEXTJOIN(\",\",FALSE,dayTexts))",
+            serde_json::json!({"kind": "text", "value": "  ,  ,  ,  ,01,02,03"}),
+        ),
+        (
+            "FTC-1028",
+            "=TEXT(DATE(2024,7,1),\"MMMM\")",
+            serde_json::json!({"kind": "text", "value": "July"}),
+        ),
+        (
+            "FTC-1040",
+            "=LET(yr,2024,m,1,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),gridStart,firstDay-WEEKDAY(firstDay,1)+1,dates,gridStart+SEQUENCE(42,,0),dayStrs,MAP(dates,LAMBDA(d,IF(AND(d>=firstDay,d<=lastDay),TEXT(DAY(d),\"00\"),\"  \"))),monthName,TEXT(firstDay,\"MMMM\"),TEXTJOIN(\"|\",FALSE,monthName,INDEX(dayStrs,1),INDEX(dayStrs,2),INDEX(dayStrs,3),INDEX(dayStrs,4),INDEX(dayStrs,5),INDEX(dayStrs,6),INDEX(dayStrs,7)))",
+            serde_json::json!({"kind": "text", "value": "January|  |01|02|03|04|05|06"}),
+        ),
+    ];
+
+    for (case_id, formula, expected_comparison_value) in cases {
+        let runtime_result = RuntimeEnvironment::new()
+            .execute(
+                RuntimeFormulaRequest::new(
+                    FormulaSourceRecord::new(
+                        &format!("replay:verification-context:{case_id}"),
+                        1,
+                        formula,
+                    ),
+                    TypedContextQueryBundle::new(None, None, Some(&locale), Some(46000.0), Some(0.25)),
+                )
+                .with_verification_publication_context(verification_context.clone()),
+            )
+            .unwrap_or_else(|error| {
+                panic!("{case_id} runtime execution with verification context should succeed: {error}")
+            });
+
+        let projection = ReplayProjectionService::project(
+            ReplayProjectionRequest::runtime_result(&runtime_result)
+                .with_source_case_id(case_id),
+        );
+
+        assert_eq!(
+            projection
+                .comparison_views
+                .as_ref()
+                .and_then(|views| views.iter().find(|view| view.view_family == "comparison_value"))
+                .map(|view| view.value.clone()),
+            Some(expected_comparison_value),
+            "{case_id} comparison_value"
+        );
+        assert_eq!(
+            projection
+                .verification_publication_surface
+                .as_ref()
+                .and_then(|surface| surface.format_profile.as_deref()),
+            Some("excel-spreadsheetml-2003-default"),
+            "{case_id} format_profile"
+        );
+        assert!(
+            projection
+                .verification_publication_surface
+                .as_ref()
+                .and_then(|surface| surface.locale_format_context.as_ref())
+                .is_some(),
+            "{case_id} locale_format_context"
+        );
+    }
+}
+
+#[test]
 fn replay_projection_service_prefers_first_host_capture_publication_surface_for_runtime_results() {
     let locale = current_excel_host_context();
     let runtime_result = RuntimeEnvironment::new()

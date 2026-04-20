@@ -56,9 +56,11 @@
     {
       "view_family": "execution_outcome",
       "value": {
-        "classification": "executed_result",
-        "stage": "executed",
-        "reject_code": null
+        "class_id": "executed_result",
+        "lane_reason_code": null,
+        "outcome_kind": "executed_result",
+        "outcome_stage": "executed",
+        "raw_detail": null
       }
     }
   ]

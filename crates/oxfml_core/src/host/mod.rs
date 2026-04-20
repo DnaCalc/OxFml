@@ -358,6 +358,7 @@ impl SingleFormulaHost {
             backend,
             query_bundle,
             PinnedLibraryContextView::new(library_context_provider, None, None),
+            None,
         )
     }
 
@@ -376,6 +377,7 @@ impl SingleFormulaHost {
                 library_context_snapshot_ref,
                 None,
             ),
+            None,
         )
     }
 
@@ -384,6 +386,7 @@ impl SingleFormulaHost {
         backend: EvaluationBackend,
         query_bundle: TypedContextQueryBundle<'_>,
         library_context_view: PinnedLibraryContextView<'_>,
+        verification_publication_context: Option<&VerificationPublicationContext>,
     ) -> Result<HostRecalcOutput, String> {
         let effective_query_bundle = effective_query_bundle(query_bundle, self);
         let typed_query_bundle_spec = effective_query_bundle.freeze_candidate_spec();
@@ -575,7 +578,7 @@ impl SingleFormulaHost {
             candidate_result.format_delta.as_ref(),
             candidate_result.display_delta.as_ref(),
             effective_query_bundle.locale_ctx,
-            None,
+            verification_publication_context,
         );
         let execution_outcome_surface = execution_outcome_surface(&commit_decision);
 
