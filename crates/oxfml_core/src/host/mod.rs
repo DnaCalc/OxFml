@@ -26,6 +26,7 @@ use crate::publication::{
     VerificationPublicationContext, VerificationPublicationSurface,
     build_verification_publication_surface,
 };
+use crate::format::canonicalize_locale_context;
 use crate::red::{RedProjection, project_red_view_incremental};
 use crate::scheduler::{ExecutionContract, build_execution_contract};
 use crate::seam::{
@@ -389,6 +390,13 @@ impl SingleFormulaHost {
         verification_publication_context: Option<&VerificationPublicationContext>,
     ) -> Result<HostRecalcOutput, String> {
         let effective_query_bundle = effective_query_bundle(query_bundle, self);
+        let canonical_locale_ctx = effective_query_bundle
+            .locale_ctx
+            .map(canonicalize_locale_context);
+        let effective_query_bundle = TypedContextQueryBundle {
+            locale_ctx: canonical_locale_ctx.as_ref(),
+            ..effective_query_bundle
+        };
         let typed_query_bundle_spec = effective_query_bundle.freeze_candidate_spec();
         let mut source = FormulaSourceRecord::new(
             self.formula_stable_id.clone(),

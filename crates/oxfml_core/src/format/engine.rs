@@ -34,6 +34,17 @@ pub fn current_excel_host_context() -> LocaleFormatContext<'static> {
     }
 }
 
+pub fn canonicalize_locale_context<'a>(
+    locale_ctx: &'a LocaleFormatContext<'a>,
+) -> LocaleFormatContext<'a> {
+    LocaleFormatContext {
+        profile: locale_ctx.profile,
+        date_system: locale_ctx.date_system,
+        parser: &OXFML_LOCALE_VALUE_PARSER,
+        formatter: &OXFML_FORMAT_CODE_ENGINE,
+    }
+}
+
 pub fn parse_value_text(
     profile: &FormatProfile,
     date_system: WorkbookDateSystem,

@@ -26,6 +26,10 @@ use oxfunc_core::functions::call_register_id_family::{
 };
 use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult, RtdRequest};
 use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
+use oxfunc_core::locale_format::{
+    FormatCodeEngine, FormatFailure, FormatProfile, LocaleFormatContext, LocaleProfileId,
+    LocaleValueParser, ParseFailure, WorkbookDateSystem, format_profile,
+};
 use oxfunc_core::value::EvalValue;
 use oxfunc_core::value::{CallArgValue, ExcelText};
 use serde_json::Value;
@@ -1151,6 +1155,92 @@ fn runtime_environment_matches_dnaonecalc_exact_request_shape_for_text_date_fami
 }
 
 #[test]
+fn runtime_environment_canonicalizes_en_us_locale_context_engines_for_text_date_family() {
+    let locale = foreign_en_us_context_with_rejecting_formatter();
+    let verification_context = VerificationPublicationContext {
+        format_profile: Some("en-US".to_string()),
+        number_format_code: None,
+        style_id: None,
+        style_hierarchy: Vec::new(),
+        font_color: None,
+        fill_color: None,
+        conditional_formatting_rules: Vec::new(),
+    };
+    let cases = [
+        (
+            "FTC-1021",
+            "=LET(yr,2024,m,3,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),testDate,DATE(yr,m,15),TEXT(testDate,\"[<\"&firstDay&\"] ;[>\"&lastDay&\"] ;dd\"))",
+            text_eval_value("15"),
+        ),
+        (
+            "FTC-1022",
+            "=LET(yr,2024,m,3,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),testDate,DATE(yr,2,28),result,TEXT(testDate,\"[<\"&firstDay&\"] ;[>\"&lastDay&\"] ;dd\"),LEN(TRIM(result)))",
+            EvalValue::Number(0.0),
+        ),
+        (
+            "FTC-1023",
+            "=LET(baseSun,DATE(2024,1,7),headers,TEXT(baseSun+SEQUENCE(1,7,,1)-1,\"DDD\"),INDEX(headers,1,1))",
+            text_eval_value("Sun"),
+        ),
+        (
+            "FTC-1024",
+            "=LET(yr,2024,m,2,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),gridStart,firstDay-WEEKDAY(firstDay,1)+1,dates,gridStart+SEQUENCE(7,,0),dayTexts,MAP(dates,LAMBDA(d,IF(AND(d>=firstDay,d<=lastDay),TEXT(DAY(d),\"00\"),\"  \"))),TEXTJOIN(\",\",FALSE,dayTexts))",
+            text_eval_value("  ,  ,  ,  ,01,02,03"),
+        ),
+        (
+            "FTC-1028",
+            "=TEXT(DATE(2024,7,1),\"MMMM\")",
+            text_eval_value("July"),
+        ),
+        (
+            "FTC-1040",
+            "=LET(yr,2024,m,1,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),gridStart,firstDay-WEEKDAY(firstDay,1)+1,dates,gridStart+SEQUENCE(42,,0),dayStrs,MAP(dates,LAMBDA(d,IF(AND(d>=firstDay,d<=lastDay),TEXT(DAY(d),\"00\"),\"  \"))),monthName,TEXT(firstDay,\"MMMM\"),TEXTJOIN(\"|\",FALSE,monthName,INDEX(dayStrs,1),INDEX(dayStrs,2),INDEX(dayStrs,3),INDEX(dayStrs,4),INDEX(dayStrs,5),INDEX(dayStrs,6),INDEX(dayStrs,7)))",
+            text_eval_value("January|  |01|02|03|04|05|06"),
+        ),
+    ];
+
+    for (case_id, formula, expected_value) in cases {
+        let result = RuntimeEnvironment::new()
+            .execute(
+                RuntimeFormulaRequest::new(
+                    FormulaSourceRecord::new(
+                        &format!("runtime:foreign-locale:{case_id}"),
+                        1,
+                        formula,
+                    )
+                    .with_formula_channel_kind(FormulaChannelKind::WorksheetA1),
+                    TypedContextQueryBundle::new(
+                        None,
+                        None,
+                        Some(&locale),
+                        Some(46000.0),
+                        Some(0.25),
+                    ),
+                )
+                .with_verification_publication_context(verification_context.clone()),
+            )
+            .unwrap_or_else(|error| {
+                panic!("{case_id} runtime execution with foreign locale engines should succeed: {error}")
+            });
+
+        assert_eq!(result.published_worksheet_value, expected_value, "{case_id} published worksheet value");
+        assert_eq!(
+            result.verification_publication_surface.published_value,
+            expected_value,
+            "{case_id} verification surface published_value"
+        );
+        assert_eq!(
+            result
+                .first_host_replay_capture_packet
+                .verification_publication_surface
+                .published_value,
+            expected_value,
+            "{case_id} first-host capture published_value"
+        );
+    }
+}
+
+#[test]
 fn runtime_environment_executes_if_text_true_condition_ftc_0541() {
     let locale = en_us_context();
     let result = RuntimeEnvironment::new()
@@ -1422,6 +1512,63 @@ fn runtime_snapshot_v1() -> LibraryContextSnapshot {
             runtime_capability_state: Some(LibraryAvailabilityState::CatalogKnown),
             post_dispatch_state: None,
         }],
+    }
+}
+
+struct ForeignLocaleValueParser;
+struct RejectingFormatCodeEngine;
+
+static FOREIGN_LOCALE_VALUE_PARSER: ForeignLocaleValueParser = ForeignLocaleValueParser;
+static REJECTING_FORMAT_CODE_ENGINE: RejectingFormatCodeEngine = RejectingFormatCodeEngine;
+
+impl LocaleValueParser for ForeignLocaleValueParser {
+    fn parse_value_text(
+        &self,
+        profile: &FormatProfile,
+        date_system: WorkbookDateSystem,
+        text: &str,
+    ) -> Result<f64, ParseFailure> {
+        oxfml_core::format::parse_value_text(profile, date_system, text)
+    }
+}
+
+impl FormatCodeEngine for RejectingFormatCodeEngine {
+    fn render_with_code(
+        &self,
+        _profile: &FormatProfile,
+        _date_system: WorkbookDateSystem,
+        _value: f64,
+        code: &str,
+    ) -> Result<ExcelText, FormatFailure> {
+        Err(FormatFailure::UnsupportedCode(code.to_string()))
+    }
+
+    fn render_currency(
+        &self,
+        _profile: &FormatProfile,
+        _value: f64,
+        _decimals: i32,
+    ) -> Result<ExcelText, FormatFailure> {
+        Err(FormatFailure::UnsupportedCode("currency".to_string()))
+    }
+
+    fn render_fixed(
+        &self,
+        _profile: &FormatProfile,
+        _value: f64,
+        _decimals: i32,
+        _no_commas: bool,
+    ) -> Result<ExcelText, FormatFailure> {
+        Err(FormatFailure::UnsupportedCode("fixed".to_string()))
+    }
+}
+
+fn foreign_en_us_context_with_rejecting_formatter() -> LocaleFormatContext<'static> {
+    LocaleFormatContext {
+        profile: format_profile(LocaleProfileId::EnUs),
+        date_system: WorkbookDateSystem::System1900,
+        parser: &FOREIGN_LOCALE_VALUE_PARSER,
+        formatter: &REJECTING_FORMAT_CODE_ENGINE,
     }
 }
 
