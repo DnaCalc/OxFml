@@ -412,13 +412,13 @@ fn replay_projection_service_preserves_first_host_capture_comparison_value_for_t
 }
 
 #[test]
-fn replay_projection_service_preserves_explicit_verification_context_for_runtime_text_date_family() {
-    let locale = current_excel_host_context();
+fn replay_projection_service_preserves_dnaonecalc_exact_verification_context_for_runtime_text_date_family() {
+    let locale = en_us_context();
     let verification_context = VerificationPublicationContext {
-        format_profile: Some("excel-spreadsheetml-2003-default".to_string()),
+        format_profile: Some("en-US".to_string()),
         number_format_code: None,
-        style_id: Some("verify".to_string()),
-        style_hierarchy: vec!["base".to_string(), "verify".to_string()],
+        style_id: None,
+        style_hierarchy: Vec::new(),
         font_color: None,
         fill_color: None,
         conditional_formatting_rules: Vec::new(),
@@ -492,7 +492,7 @@ fn replay_projection_service_preserves_explicit_verification_context_for_runtime
                 .verification_publication_surface
                 .as_ref()
                 .and_then(|surface| surface.format_profile.as_deref()),
-            Some("excel-spreadsheetml-2003-default"),
+            Some("en-US"),
             "{case_id} format_profile"
         );
         assert!(

@@ -1034,13 +1034,13 @@ fn runtime_environment_executes_foundation_text_date_format_case_ftc_1040() {
 }
 
 #[test]
-fn runtime_environment_preserves_explicit_verification_context_for_text_date_family() {
+fn runtime_environment_preserves_dnaonecalc_exact_verification_context_for_text_date_family() {
     let locale = en_us_context();
     let verification_context = VerificationPublicationContext {
-        format_profile: Some("excel-spreadsheetml-2003-default".to_string()),
+        format_profile: Some("en-US".to_string()),
         number_format_code: None,
-        style_id: Some("verify".to_string()),
-        style_hierarchy: vec!["base".to_string(), "verify".to_string()],
+        style_id: None,
+        style_hierarchy: Vec::new(),
         font_color: None,
         fill_color: None,
         conditional_formatting_rules: Vec::new(),
@@ -1113,7 +1113,7 @@ fn runtime_environment_preserves_explicit_verification_context_for_text_date_fam
         );
         assert_eq!(
             result.verification_publication_surface.format_profile.as_deref(),
-            Some("excel-spreadsheetml-2003-default"),
+            Some("en-US"),
             "{case_id} format_profile"
         );
         assert!(
