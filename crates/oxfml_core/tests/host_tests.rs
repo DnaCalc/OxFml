@@ -433,6 +433,24 @@ fn locale_sensitive_host_run_surfaces_format_dependency_fact() {
 }
 
 #[test]
+fn single_formula_host_executes_text_with_scientific_format_pattern_ftc_0655() {
+    let mut host = SingleFormulaHost::new(
+        "host:scientific-text",
+        "=TEXT(12345.6789,\"0.00E+00\")",
+    );
+    let run = host
+        .recalc(None, Some(&en_us_context()))
+        .expect("recalc should succeed");
+
+    assert_eq!(
+        run.published_worksheet_value,
+        EvalValue::Text(ExcelText::from_interop_assignment("1.23E+04"))
+    );
+    assert_eq!(run.evaluation.result.payload_summary, "Text(1.23E+04)");
+    assert_eq!(run.returned_value_surface.payload_summary, "Text");
+}
+
+#[test]
 fn single_formula_host_uses_pinned_snapshot_ref_over_provider_current_snapshot() {
     let pinned_snapshot = host_library_context_snapshot_v1();
     let selected_snapshot_ref = LibraryContextSnapshotRef::from(&pinned_snapshot);

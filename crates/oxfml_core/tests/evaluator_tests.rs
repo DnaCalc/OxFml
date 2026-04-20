@@ -79,6 +79,33 @@ fn evaluator_runs_text_with_pinned_grouping_separator_context() {
 }
 
 #[test]
+fn evaluator_runs_text_with_scientific_format_patterns() {
+    for (formula, expected) in [
+        ("=TEXT(12345.6789,\"0.0E+0\")", "1.2E+4"),
+        ("=TEXT(12345.6789,\"0.00E+00\")", "1.23E+04"),
+        ("=TEXT(12345.6789,\"#.##E+00\")", "1.23E+04"),
+    ] {
+        let output = evaluate(formula, None, None, Some(&en_us_context()));
+        assert_eq!(
+            output.oxfunc_value,
+            EvalValue::Text(ExcelText::from_interop_assignment(expected)),
+            "formula {formula}"
+        );
+        assert_eq!(
+            output.result.payload_summary,
+            format!("Text({expected})"),
+            "formula {formula}"
+        );
+        assert_eq!(
+            output.result.format_hint.as_deref(),
+            Some("locale_format_semantics"),
+            "formula {formula}"
+        );
+        assert_eq!(output.trace.prepared_calls[0].function_id, "FUNC.TEXT");
+    }
+}
+
+#[test]
 fn evaluator_runs_cell_with_host_info_provider() {
     let output = evaluate(
         "=CELL(\"filename\",A1)",

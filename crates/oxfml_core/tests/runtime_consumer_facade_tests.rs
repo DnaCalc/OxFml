@@ -974,6 +974,16 @@ fn runtime_environment_executes_text_with_pinned_grouping_separator_context() {
 }
 
 #[test]
+fn runtime_environment_executes_text_with_scientific_format_pattern_ftc_0655() {
+    assert_runtime_foundation_text_case(
+        "FTC-0655",
+        "=TEXT(12345.6789,\"0.00E+00\")",
+        text_eval_value("1.23E+04"),
+        "1.23E+04",
+    );
+}
+
+#[test]
 fn runtime_environment_executes_foundation_text_date_format_case_ftc_1022() {
     assert_runtime_foundation_text_case(
         "FTC-1022",

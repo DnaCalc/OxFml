@@ -123,20 +123,23 @@ pub(crate) fn parse_numeric_section(section: &str) -> Option<ParsedNumericSectio
     let prefix = cleaned[..first_placeholder].replace('*', "");
     let suffix = cleaned[last_placeholder + 1..].replace('*', "");
     let placeholder_region = &cleaned[first_placeholder..=last_placeholder];
-    let decimals = placeholder_region
+    let mantissa_region = placeholder_region
+        .split_once(['E', 'e'])
+        .map(|(mantissa, _)| mantissa)
+        .unwrap_or(placeholder_region);
+    let decimals = mantissa_region
         .split_once('.')
         .map(|(_, fractional)| {
             fractional
                 .chars()
-                .take_while(|ch| matches!(ch, '0' | '#' | '?' | 'E' | 'e' | '+' | '-'))
-                .filter(|ch| matches!(ch, '0' | '#' | '?'))
+                .take_while(|ch| matches!(ch, '0' | '#' | '?'))
                 .count() as i32
         })
         .unwrap_or(0);
-    let integer_region = placeholder_region
+    let integer_region = mantissa_region
         .split_once('.')
         .map(|(integer, _)| integer)
-        .unwrap_or(placeholder_region);
+        .unwrap_or(mantissa_region);
     let use_grouping = integer_region.contains(',');
     let trailing_commas = integer_region
         .chars()

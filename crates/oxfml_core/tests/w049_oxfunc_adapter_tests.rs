@@ -107,6 +107,38 @@ fn adapter_projects_direct_scalar_and_array_like_preparation_artifacts() {
 }
 
 #[test]
+fn adapter_executes_text_with_scientific_format_pattern_ftc_0655() {
+    let locale = oxfml_core::format::en_us_context();
+    let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
+        "ftc-0655-scientific-text",
+        "formula:foundation:FTC-0655",
+        "=TEXT(12345.6789,\"0.00E+00\")",
+        locus(1, 1),
+        TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
+    ))
+    .expect("FTC-0655 adapter run should succeed");
+
+    assert_eq!(
+        run.evaluation_artifact.worksheet_value,
+        EvalValue::Text(ExcelText::from_interop_assignment("1.23E+04"))
+    );
+    assert_eq!(
+        run.evaluation_artifact.evaluation_result.payload_summary,
+        "Text(1.23E+04)"
+    );
+    assert_eq!(
+        run.evaluation_artifact.returned_value_surface.payload_summary,
+        "Text"
+    );
+    assert!(
+        run.preparation_artifact
+            .typed_query_bundle_spec
+            .families
+            .contains(&TypedContextQueryFamily::LocaleFormatContext)
+    );
+}
+
+#[test]
 fn adapter_preserves_randarray_width_for_columns_ftc_0505_without_explicit_random_bundle() {
     let locale = oxfml_core::format::en_us_context();
     let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
