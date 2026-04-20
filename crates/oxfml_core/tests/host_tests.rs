@@ -11,7 +11,7 @@ use oxfunc_core::value::{
 };
 use serde::Deserialize;
 
-use oxfml_core::format::en_us_context;
+use oxfml_core::format::{current_excel_host_context, en_us_context};
 use oxfml_core::seam::{AcceptDecision, TraceEventKind};
 use oxfml_core::semantics::{
     LibraryAvailabilityState, LibraryContextSnapshot, LibraryContextSnapshotEntry,
@@ -448,6 +448,71 @@ fn single_formula_host_executes_text_with_scientific_format_pattern_ftc_0655() {
     );
     assert_eq!(run.evaluation.result.payload_summary, "Text(1.23E+04)");
     assert_eq!(run.returned_value_surface.payload_summary, "Text");
+}
+
+#[test]
+fn first_host_replay_packet_preserves_locale_sensitive_text_date_family_publication_context() {
+    let locale = current_excel_host_context();
+    let cases = [
+        (
+            "FTC-1021",
+            "=LET(yr,2024,m,3,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),testDate,DATE(yr,m,15),TEXT(testDate,\"[<\"&firstDay&\"] ;[>\"&lastDay&\"] ;dd\"))",
+            EvalValue::Text(ExcelText::from_interop_assignment("15")),
+        ),
+        (
+            "FTC-1022",
+            "=LET(yr,2024,m,3,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),testDate,DATE(yr,2,28),result,TEXT(testDate,\"[<\"&firstDay&\"] ;[>\"&lastDay&\"] ;dd\"),LEN(TRIM(result)))",
+            EvalValue::Number(0.0),
+        ),
+        (
+            "FTC-1023",
+            "=LET(baseSun,DATE(2024,1,7),headers,TEXT(baseSun+SEQUENCE(1,7,,1)-1,\"DDD\"),INDEX(headers,1,1))",
+            EvalValue::Text(ExcelText::from_interop_assignment("Sun")),
+        ),
+        (
+            "FTC-1024",
+            "=LET(yr,2024,m,2,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),gridStart,firstDay-WEEKDAY(firstDay,1)+1,dates,gridStart+SEQUENCE(7,,0),dayTexts,MAP(dates,LAMBDA(d,IF(AND(d>=firstDay,d<=lastDay),TEXT(DAY(d),\"00\"),\"  \"))),TEXTJOIN(\",\",FALSE,dayTexts))",
+            EvalValue::Text(ExcelText::from_interop_assignment("  ,  ,  ,  ,01,02,03")),
+        ),
+        (
+            "FTC-1028",
+            "=TEXT(DATE(2024,7,1),\"MMMM\")",
+            EvalValue::Text(ExcelText::from_interop_assignment("July")),
+        ),
+        (
+            "FTC-1040",
+            "=LET(yr,2024,m,1,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),gridStart,firstDay-WEEKDAY(firstDay,1)+1,dates,gridStart+SEQUENCE(42,,0),dayStrs,MAP(dates,LAMBDA(d,IF(AND(d>=firstDay,d<=lastDay),TEXT(DAY(d),\"00\"),\"  \"))),monthName,TEXT(firstDay,\"MMMM\"),TEXTJOIN(\"|\",FALSE,monthName,INDEX(dayStrs,1),INDEX(dayStrs,2),INDEX(dayStrs,3),INDEX(dayStrs,4),INDEX(dayStrs,5),INDEX(dayStrs,6),INDEX(dayStrs,7)))",
+            EvalValue::Text(ExcelText::from_interop_assignment("January|  |01|02|03|04|05|06")),
+        ),
+    ];
+
+    for (case_id, formula, expected_value) in cases {
+        let mut host = SingleFormulaHost::new(format!("host:{case_id}"), formula);
+        host.now_serial = Some(46000.0);
+        host.random_value = Some(0.25);
+        let run = host
+            .recalc(None, Some(&locale))
+            .expect("recalc should succeed");
+        let packet = run.to_first_host_replay_capture_packet();
+
+        assert_eq!(
+            packet.verification_publication_surface.published_value,
+            expected_value,
+            "{case_id} published value"
+        );
+        assert_eq!(
+            packet.verification_publication_surface.format_profile.as_deref(),
+            Some("locale-format-context"),
+            "{case_id} format profile"
+        );
+        assert!(
+            packet
+                .verification_publication_surface
+                .locale_format_context
+                .is_some(),
+            "{case_id} locale format context"
+        );
+    }
 }
 
 #[test]

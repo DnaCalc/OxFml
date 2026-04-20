@@ -98,6 +98,7 @@ pub struct HostRecalcOutput {
     pub evaluation: EvaluationOutput,
     pub published_worksheet_value: EvalValue,
     pub returned_value_surface: ReturnedValueSurface,
+    pub verification_publication_surface: VerificationPublicationSurface,
     pub execution_outcome_surface: ExecutionOutcomeSurface,
     pub candidate_result: AcceptedCandidateResult,
     pub commit_decision: AcceptDecision,
@@ -123,7 +124,27 @@ pub struct FirstHostReplayCapturePacket {
 
 impl HostRecalcOutput {
     pub fn to_first_host_replay_capture_packet(&self) -> FirstHostReplayCapturePacket {
-        self.to_first_host_replay_capture_packet_with_context(None, None)
+        FirstHostReplayCapturePacket {
+            adapter_id: "oxfml.replay_adapter.v1".to_string(),
+            formula_stable_id: self.source.formula_stable_id.0.clone(),
+            formula_channel_kind: self.source.formula_channel_kind,
+            formula_token: self.source.formula_token().0,
+            library_context_snapshot_ref: self.library_context_snapshot_ref.clone(),
+            typed_query_bundle_spec: self.typed_query_bundle_spec.clone(),
+            returned_value_surface: self.returned_value_surface.clone(),
+            verification_publication_surface: self.verification_publication_surface.clone(),
+            execution_outcome_surface: self.execution_outcome_surface.clone(),
+            candidate_result_id: self.candidate_result.candidate_result_id.clone(),
+            commit_decision_kind: match &self.commit_decision {
+                AcceptDecision::Accepted(_) => "accepted".to_string(),
+                AcceptDecision::Rejected(_) => "rejected".to_string(),
+            },
+            trace_event_kinds: self
+                .trace_events
+                .iter()
+                .map(|event| format!("{:?}", event.event_kind))
+                .collect(),
+        }
     }
 
     pub fn to_first_host_replay_capture_packet_with_context(
@@ -131,6 +152,10 @@ impl HostRecalcOutput {
         locale_ctx: Option<&LocaleFormatContext<'_>>,
         verification_publication_context: Option<&VerificationPublicationContext>,
     ) -> FirstHostReplayCapturePacket {
+        if locale_ctx.is_none() && verification_publication_context.is_none() {
+            return self.to_first_host_replay_capture_packet();
+        }
+
         FirstHostReplayCapturePacket {
             adapter_id: "oxfml.replay_adapter.v1".to_string(),
             formula_stable_id: self.source.formula_stable_id.0.clone(),
@@ -542,6 +567,16 @@ impl SingleFormulaHost {
         };
         let trace_events =
             build_trace_events(&candidate_result, &commit_decision, &commit_attempt_id);
+        let verification_publication_surface = build_verification_publication_surface(
+            &source,
+            &published_worksheet_value,
+            &returned_value_surface,
+            &candidate_result.topology_delta,
+            candidate_result.format_delta.as_ref(),
+            candidate_result.display_delta.as_ref(),
+            effective_query_bundle.locale_ctx,
+            None,
+        );
         let execution_outcome_surface = execution_outcome_surface(&commit_decision);
 
         Ok(HostRecalcOutput {
@@ -554,6 +589,7 @@ impl SingleFormulaHost {
             typed_query_bundle_spec,
             published_worksheet_value,
             returned_value_surface,
+            verification_publication_surface,
             execution_outcome_surface,
             evaluation,
             candidate_result,
