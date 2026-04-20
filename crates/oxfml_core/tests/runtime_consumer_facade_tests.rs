@@ -13,11 +13,11 @@ use oxfml_core::semantics::{
     RegistrationSourceKind,
 };
 use oxfml_core::{
-    AcceptDecision, ExecutionOutcomeKind, ExecutionOutcomeStage, FormulaSourceRecord,
-    InMemoryLibraryContextProvider, LibraryContextSnapshotRef, RegisteredExternalCatalogController,
-    RegisteredExternalCatalogMutationRequest, RegisteredExternalCatalogMutationResult,
-    RegisteredExternalHostRegistrationRequest, RegisteredExternalRegistrationChannel,
-    TypedContextQueryBundle, TypedContextQueryFamily,
+    AcceptDecision, ExecutionOutcomeKind, ExecutionOutcomeStage, FormulaChannelKind,
+    FormulaSourceRecord, InMemoryLibraryContextProvider, LibraryContextSnapshotRef,
+    RegisteredExternalCatalogController, RegisteredExternalCatalogMutationRequest,
+    RegisteredExternalCatalogMutationResult, RegisteredExternalHostRegistrationRequest,
+    RegisteredExternalRegistrationChannel, TypedContextQueryBundle, TypedContextQueryFamily,
 };
 use oxfunc_core::functions::call_register_id_family::{
     RegisterIdRequest, RegisteredExternalDescriptor, RegisteredExternalOriginKind,
@@ -1034,7 +1034,7 @@ fn runtime_environment_executes_foundation_text_date_format_case_ftc_1040() {
 }
 
 #[test]
-fn runtime_environment_preserves_dnaonecalc_exact_verification_context_for_text_date_family() {
+fn runtime_environment_matches_dnaonecalc_exact_request_shape_for_text_date_family() {
     let locale = en_us_context();
     let verification_context = VerificationPublicationContext {
         format_profile: Some("en-US".to_string()),
@@ -1092,7 +1092,8 @@ fn runtime_environment_preserves_dnaonecalc_exact_verification_context_for_text_
                         &format!("runtime:verification-context:{case_id}"),
                         1,
                         formula,
-                    ),
+                    )
+                    .with_formula_channel_kind(FormulaChannelKind::WorksheetA1),
                     TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
                 )
                 .with_verification_publication_context(verification_context.clone()),
@@ -1101,6 +1102,11 @@ fn runtime_environment_preserves_dnaonecalc_exact_verification_context_for_text_
                 panic!("{case_id} runtime execution with verification context should succeed: {error}")
             });
 
+        assert_eq!(
+            result.source.formula_channel_kind,
+            FormulaChannelKind::WorksheetA1,
+            "{case_id} formula channel"
+        );
         assert_eq!(result.published_worksheet_value, expected_value, "{case_id} published worksheet value");
         assert_eq!(
             result
@@ -1122,6 +1128,19 @@ fn runtime_environment_preserves_dnaonecalc_exact_verification_context_for_text_
                 .locale_format_context
                 .is_some(),
             "{case_id} locale_format_context"
+        );
+        assert_eq!(
+            result.verification_publication_surface.published_value,
+            expected_value,
+            "{case_id} verification surface published_value"
+        );
+        assert_eq!(
+            result
+                .first_host_replay_capture_packet
+                .verification_publication_surface
+                .published_value,
+            expected_value,
+            "{case_id} first-host capture published_value"
         );
         assert_eq!(
             result.first_host_replay_capture_packet.verification_publication_surface,

@@ -412,7 +412,7 @@ fn replay_projection_service_preserves_first_host_capture_comparison_value_for_t
 }
 
 #[test]
-fn replay_projection_service_preserves_dnaonecalc_exact_verification_context_for_runtime_text_date_family() {
+fn replay_projection_service_matches_dnaonecalc_exact_request_shape_for_runtime_text_date_family() {
     let locale = en_us_context();
     let verification_context = VerificationPublicationContext {
         format_profile: Some("en-US".to_string()),
@@ -464,7 +464,8 @@ fn replay_projection_service_preserves_dnaonecalc_exact_verification_context_for
                         &format!("replay:verification-context:{case_id}"),
                         1,
                         formula,
-                    ),
+                    )
+                    .with_formula_channel_kind(FormulaChannelKind::WorksheetA1),
                     TypedContextQueryBundle::new(None, None, Some(&locale), Some(46000.0), Some(0.25)),
                 )
                 .with_verification_publication_context(verification_context.clone()),
@@ -473,6 +474,11 @@ fn replay_projection_service_preserves_dnaonecalc_exact_verification_context_for
                 panic!("{case_id} runtime execution with verification context should succeed: {error}")
             });
 
+        assert_eq!(
+            runtime_result.source.formula_channel_kind,
+            FormulaChannelKind::WorksheetA1,
+            "{case_id} formula channel"
+        );
         let projection = ReplayProjectionService::project(
             ReplayProjectionRequest::runtime_result(&runtime_result)
                 .with_source_case_id(case_id),
