@@ -32,6 +32,17 @@ fn array_numbers(values: &[f64]) -> EvalValue {
     )
 }
 
+fn array_number_false_number(lhs: f64, rhs: f64) -> EvalValue {
+    EvalValue::Array(
+        EvalArray::from_rows(vec![vec![
+            ArrayCellValue::Number(lhs),
+            ArrayCellValue::Logical(false),
+            ArrayCellValue::Number(rhs),
+        ]])
+        .expect("row array"),
+    )
+}
+
 #[test]
 fn evaluator_characterizes_ftc_0176_if_array_condition_family() {
     let cases = [
@@ -56,9 +67,19 @@ fn evaluator_characterizes_ftc_0176_if_array_condition_family() {
             array_numbers(&[10.0, 20.0, 30.0]),
         ),
         (
+            "if-array-cond-array-values-omitted-false",
+            "=IF({TRUE,FALSE,TRUE},{10,20,30})",
+            array_number_false_number(10.0, 30.0),
+        ),
+        (
             "sum-if-array-cond-scalars",
             "=SUM(IF({TRUE,FALSE,TRUE},1,0))",
             EvalValue::Number(2.0),
+        ),
+        (
+            "FTC-0878",
+            "=SUM(IF({TRUE,FALSE,TRUE},{10,20,30}))",
+            EvalValue::Number(40.0),
         ),
         (
             "sum-if-scalar-cond-array-values",
@@ -97,9 +118,19 @@ fn runtime_characterizes_ftc_0176_if_array_condition_family() {
             array_numbers(&[10.0, 20.0, 30.0]),
         ),
         (
+            "if-array-cond-array-values-omitted-false",
+            "=IF({TRUE,FALSE,TRUE},{10,20,30})",
+            array_number_false_number(10.0, 30.0),
+        ),
+        (
             "sum-if-array-cond-scalars",
             "=SUM(IF({TRUE,FALSE,TRUE},1,0))",
             EvalValue::Number(2.0),
+        ),
+        (
+            "FTC-0878",
+            "=SUM(IF({TRUE,FALSE,TRUE},{10,20,30}))",
+            EvalValue::Number(40.0),
         ),
         (
             "sum-if-scalar-cond-array-values",
