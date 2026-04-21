@@ -307,7 +307,9 @@ impl CallableRegistry {
     }
 
     fn value(&self, token: &str) -> Option<OxLambdaValue> {
-        self.bindings.get(token).map(|binding| binding.value.clone())
+        self.bindings
+            .get(token)
+            .map(|binding| binding.value.clone())
     }
 }
 
@@ -1562,11 +1564,59 @@ fn evaluate_if_call(
     let mut prepared_arguments = vec![prepared_argument_for_call_arg(
         0, &args[0], &condition, true,
     )];
-    let normalized_condition = if let Some(value) = coerce_excel_if_text_condition(&condition, resolver)? {
-        CallArgValue::Eval(EvalValue::Logical(value))
-    } else {
-        condition.clone()
-    };
+    let normalized_condition =
+        if let Some(value) = coerce_excel_if_text_condition(&condition, resolver)? {
+            CallArgValue::Eval(EvalValue::Logical(value))
+        } else {
+            condition.clone()
+        };
+
+    if if_condition_resolves_to_array(&normalized_condition, resolver) {
+        let true_arg = evaluate_expr_as_call_arg(
+            &args[1],
+            context,
+            resolver,
+            helper_bindings,
+            callable_registry,
+            true,
+            false,
+            trace,
+        )?;
+        prepared_arguments.push(prepared_argument_for_call_arg(1, &args[1], &true_arg, true));
+        let false_arg = if args.len() == 3 {
+            let false_arg = evaluate_expr_as_call_arg(
+                &args[2],
+                context,
+                resolver,
+                helper_bindings,
+                callable_registry,
+                true,
+                false,
+                trace,
+            )?;
+            prepared_arguments.push(prepared_argument_for_call_arg(
+                2, &args[2], &false_arg, true,
+            ));
+            false_arg
+        } else {
+            CallArgValue::MissingArg
+        };
+
+        push_special_prepared_call(
+            trace,
+            "IF",
+            "FUNC.IF",
+            ArgPreparationProfile::RefsVisibleInAdapter,
+            prepared_arguments,
+            context,
+        );
+        return Ok(eval_if_surface(
+            &[normalized_condition.clone(), true_arg, false_arg],
+            resolver,
+        )
+        .unwrap_or_else(|error| EvalValue::Error(map_if_error_to_ws(&error))));
+    }
+
     let condition_is_true = match eval_if_surface(
         &[
             normalized_condition.clone(),
@@ -1660,6 +1710,16 @@ fn evaluate_if_call(
     );
     Ok(eval_if_surface(&call_args, resolver)
         .unwrap_or_else(|error| EvalValue::Error(map_if_error_to_ws(&error))))
+}
+
+fn if_condition_resolves_to_array(
+    condition: &CallArgValue,
+    resolver: &mut LocalReferenceResolver<'_>,
+) -> bool {
+    matches!(
+        prepare_arg_values_only(condition, resolver),
+        Ok(PreparedArgValue::Eval(EvalValue::Array(_)))
+    )
 }
 
 fn evaluate_iferror_call(
@@ -3125,7 +3185,9 @@ fn prepared_arg_from_eval_value(value: EvalValue) -> PreparedArgValue {
 
 fn encode_callable_array_transport_value(value: EvalValue) -> EvalValue {
     match value {
-        EvalValue::Lambda(lambda) => EvalValue::Text(callable_array_carrier_text(&lambda.callable_token)),
+        EvalValue::Lambda(lambda) => {
+            EvalValue::Text(callable_array_carrier_text(&lambda.callable_token))
+        }
         other => other,
     }
 }
@@ -3146,8 +3208,9 @@ fn decode_callable_carrier_scalar(
     callable_registry: &RefCell<CallableRegistry>,
 ) -> EvalValue {
     match value {
-        EvalValue::Text(text) => decode_callable_carrier_text(&text, callable_registry)
-            .unwrap_or(EvalValue::Text(text)),
+        EvalValue::Text(text) => {
+            decode_callable_carrier_text(&text, callable_registry).unwrap_or(EvalValue::Text(text))
+        }
         other => other,
     }
 }
@@ -3157,8 +3220,9 @@ fn sanitize_final_output_value(
     callable_registry: &RefCell<CallableRegistry>,
 ) -> EvalValue {
     match value {
-        EvalValue::Text(text) => decode_callable_carrier_text(&text, callable_registry)
-            .unwrap_or(EvalValue::Text(text)),
+        EvalValue::Text(text) => {
+            decode_callable_carrier_text(&text, callable_registry).unwrap_or(EvalValue::Text(text))
+        }
         EvalValue::Array(array) => {
             let shape = array.shape();
             let mut cells = Vec::with_capacity(shape.rows * shape.cols);

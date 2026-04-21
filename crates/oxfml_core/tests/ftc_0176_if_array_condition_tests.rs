@@ -32,39 +32,33 @@ fn array_numbers(values: &[f64]) -> EvalValue {
     )
 }
 
-fn array_mixed_logical_number_false() -> EvalValue {
-    EvalValue::Array(
-        EvalArray::from_rows(vec![vec![
-            ArrayCellValue::Logical(false),
-            ArrayCellValue::Number(0.0),
-            ArrayCellValue::Logical(false),
-        ]])
-        .expect("row array"),
-    )
-}
-
 #[test]
 fn evaluator_characterizes_ftc_0176_if_array_condition_family() {
     let cases = [
         (
             "FTC-0176",
             "=SUM(IF({TRUE,FALSE,TRUE},{10,20,30},0))",
-            EvalValue::Number(0.0),
+            EvalValue::Number(40.0),
         ),
         (
             "if-array-cond-scalars",
             "=IF({TRUE,FALSE,TRUE},1,0)",
-            array_mixed_logical_number_false(),
+            array_numbers(&[1.0, 0.0, 1.0]),
         ),
         (
             "if-array-cond-array-values",
             "=IF({TRUE,FALSE,TRUE},{10,20,30},0)",
-            array_mixed_logical_number_false(),
+            array_numbers(&[10.0, 0.0, 30.0]),
         ),
         (
             "if-scalar-cond-array-values",
             "=IF(TRUE,{10,20,30},0)",
             array_numbers(&[10.0, 20.0, 30.0]),
+        ),
+        (
+            "sum-if-array-cond-scalars",
+            "=SUM(IF({TRUE,FALSE,TRUE},1,0))",
+            EvalValue::Number(2.0),
         ),
         (
             "sum-if-scalar-cond-array-values",
@@ -85,22 +79,27 @@ fn runtime_characterizes_ftc_0176_if_array_condition_family() {
         (
             "FTC-0176",
             "=SUM(IF({TRUE,FALSE,TRUE},{10,20,30},0))",
-            EvalValue::Number(0.0),
+            EvalValue::Number(40.0),
         ),
         (
             "if-array-cond-scalars",
             "=IF({TRUE,FALSE,TRUE},1,0)",
-            array_mixed_logical_number_false(),
+            array_numbers(&[1.0, 0.0, 1.0]),
         ),
         (
             "if-array-cond-array-values",
             "=IF({TRUE,FALSE,TRUE},{10,20,30},0)",
-            array_mixed_logical_number_false(),
+            array_numbers(&[10.0, 0.0, 30.0]),
         ),
         (
             "if-scalar-cond-array-values",
             "=IF(TRUE,{10,20,30},0)",
             array_numbers(&[10.0, 20.0, 30.0]),
+        ),
+        (
+            "sum-if-array-cond-scalars",
+            "=SUM(IF({TRUE,FALSE,TRUE},1,0))",
+            EvalValue::Number(2.0),
         ),
         (
             "sum-if-scalar-cond-array-values",
