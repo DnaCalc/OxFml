@@ -3,13 +3,21 @@ use oxfunc_core::locale_format::{FormatFailure, FormatProfile, WorkbookDateSyste
 use crate::format::datetime;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum IntegerSeparatorSemantics {
+    None,
+    RecursiveGrouping,
+    LiteralPattern,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ParsedNumericSection {
     pub prefix: String,
     pub suffix: String,
     pub decimals: i32,
-    pub use_grouping: bool,
+    pub integer_pattern: String,
+    pub integer_separator_semantics: IntegerSeparatorSemantics,
     pub percent_count: i32,
-    pub trailing_commas: i32,
+    pub scale_commas: i32,
     pub negative_parentheses: bool,
     pub is_currency: bool,
     pub scientific_exponent_digits: Option<usize>,
@@ -73,7 +81,7 @@ pub fn render_with_number_format_code(
         return render_two_digit_integer(value);
     }
 
-    let numeric = parse_numeric_section(trimmed)
+    let numeric = parse_numeric_section(trimmed, profile)
         .ok_or_else(|| FormatFailure::UnsupportedCode(number_format_code.to_string()))?;
     let scaled_value = apply_scaling(value, &numeric);
 
@@ -86,19 +94,7 @@ pub fn render_with_number_format_code(
         return Ok(apply_numeric_affixes(rendered, &numeric));
     }
 
-    let base = if numeric.is_currency
-        && numeric.prefix == profile.currency_symbol
-        && numeric.suffix.is_empty()
-    {
-        render_currency(profile, scaled_value, numeric.decimals)
-    } else {
-        render_fixed(
-            profile,
-            scaled_value.abs(),
-            numeric.decimals,
-            !numeric.use_grouping,
-        )
-    };
+    let base = render_fixed_with_numeric_section(profile, scaled_value.abs(), &numeric);
 
     let body = if scaled_value.is_sign_negative() && !base.starts_with('-') {
         format!("-{base}")
@@ -109,24 +105,42 @@ pub fn render_with_number_format_code(
 }
 
 pub fn render_currency(profile: &FormatProfile, value: f64, decimals: i32) -> String {
-    render_fixed_common(profile, value, decimals, true, profile.currency_symbol)
+    render_fixed_common(
+        profile,
+        value,
+        decimals,
+        IntegerRenderStyle::RecursiveGrouping,
+        profile.currency_symbol,
+    )
 }
 
 pub fn render_fixed(profile: &FormatProfile, value: f64, decimals: i32, no_commas: bool) -> String {
-    render_fixed_common(profile, value, decimals, !no_commas, "")
+    let integer_render_style = if no_commas {
+        IntegerRenderStyle::Plain
+    } else {
+        IntegerRenderStyle::RecursiveGrouping
+    };
+    render_fixed_common(profile, value, decimals, integer_render_style, "")
 }
 
-pub(crate) fn parse_numeric_section(section: &str) -> Option<ParsedNumericSection> {
+pub(crate) fn parse_numeric_section(
+    section: &str,
+    profile: &FormatProfile,
+) -> Option<ParsedNumericSection> {
     let cleaned = expand_literal_tokens(section);
     let first_placeholder = cleaned.find(['#', '0', '?'])?;
-    let last_placeholder = cleaned.rfind(['#', '0', '?'])?;
+    let numeric_region_end = cleaned[first_placeholder..]
+        .char_indices()
+        .take_while(|(_, ch)| is_numeric_format_token(*ch))
+        .last()
+        .map(|(index, ch)| first_placeholder + index + ch.len_utf8())?;
     let prefix = cleaned[..first_placeholder].replace('*', "");
-    let suffix = cleaned[last_placeholder + 1..].replace('*', "");
-    let placeholder_region = &cleaned[first_placeholder..=last_placeholder];
-    let mantissa_region = placeholder_region
+    let suffix = cleaned[numeric_region_end..].replace('*', "");
+    let numeric_region = &cleaned[first_placeholder..numeric_region_end];
+    let mantissa_region = numeric_region
         .split_once(['E', 'e'])
         .map(|(mantissa, _)| mantissa)
-        .unwrap_or(placeholder_region);
+        .unwrap_or(numeric_region);
     let decimals = mantissa_region
         .split_once('.')
         .map(|(_, fractional)| {
@@ -140,13 +154,29 @@ pub(crate) fn parse_numeric_section(section: &str) -> Option<ParsedNumericSectio
         .split_once('.')
         .map(|(integer, _)| integer)
         .unwrap_or(mantissa_region);
-    let use_grouping = integer_region.contains(',');
-    let trailing_commas = integer_region
-        .chars()
-        .rev()
-        .take_while(|ch| *ch == ',')
-        .count() as i32;
-    let scientific_exponent_digits = placeholder_region
+    let comma_is_semantic_separator = profile.thousands_separator == ",";
+    let scale_commas = if comma_is_semantic_separator {
+        integer_region
+            .chars()
+            .rev()
+            .take_while(|ch| *ch == ',')
+            .count() as i32
+    } else {
+        0
+    };
+    let integer_pattern = if comma_is_semantic_separator {
+        integer_region.trim_end_matches(',').to_string()
+    } else {
+        integer_region.to_string()
+    };
+    let integer_separator_semantics = if !integer_pattern.contains(',') {
+        IntegerSeparatorSemantics::None
+    } else if comma_is_semantic_separator {
+        IntegerSeparatorSemantics::RecursiveGrouping
+    } else {
+        IntegerSeparatorSemantics::LiteralPattern
+    };
+    let scientific_exponent_digits = numeric_region
         .to_ascii_uppercase()
         .split_once('E')
         .map(|(_, exponent)| exponent.chars().filter(|ch| *ch == '0').count())
@@ -160,9 +190,10 @@ pub(crate) fn parse_numeric_section(section: &str) -> Option<ParsedNumericSectio
         prefix,
         suffix,
         decimals,
-        use_grouping,
+        integer_pattern,
+        integer_separator_semantics,
         percent_count,
-        trailing_commas,
+        scale_commas,
         negative_parentheses,
         is_currency,
         scientific_exponent_digits,
@@ -175,14 +206,44 @@ fn profile_currency_tokens() -> [char; 2] {
 
 fn apply_scaling(value: f64, numeric: &ParsedNumericSection) -> f64 {
     let percent_scaled = value * 100f64.powi(numeric.percent_count);
-    percent_scaled / 1000f64.powi(numeric.trailing_commas)
+    percent_scaled / 1000f64.powi(numeric.scale_commas)
+}
+
+fn render_fixed_with_numeric_section(
+    profile: &FormatProfile,
+    value: f64,
+    numeric: &ParsedNumericSection,
+) -> String {
+    let integer_render_style = match numeric.integer_separator_semantics {
+        IntegerSeparatorSemantics::None => IntegerRenderStyle::Plain,
+        IntegerSeparatorSemantics::RecursiveGrouping => IntegerRenderStyle::RecursiveGrouping,
+        IntegerSeparatorSemantics::LiteralPattern => {
+            IntegerRenderStyle::LiteralPattern(&numeric.integer_pattern)
+        }
+    };
+    let prefix = if numeric.is_currency
+        && numeric.prefix == profile.currency_symbol
+        && numeric.suffix.is_empty()
+    {
+        profile.currency_symbol
+    } else {
+        ""
+    };
+
+    render_fixed_common(profile, value, numeric.decimals, integer_render_style, prefix)
+}
+
+enum IntegerRenderStyle<'a> {
+    Plain,
+    RecursiveGrouping,
+    LiteralPattern(&'a str),
 }
 
 fn render_fixed_common(
     profile: &FormatProfile,
     value: f64,
     decimals: i32,
-    use_grouping: bool,
+    integer_render_style: IntegerRenderStyle<'_>,
     prefix: &str,
 ) -> String {
     let rounded = format!("{:.*}", decimals.max(0) as usize, value.abs());
@@ -191,10 +252,14 @@ fn render_fixed_common(
         Some((lhs, rhs)) => (lhs.to_string(), Some(rhs.to_string())),
         None => (rounded, None),
     };
-    let grouped = if use_grouping {
-        grouped_integer_string(&int_part, profile.thousands_separator)
-    } else {
-        int_part
+    let grouped = match integer_render_style {
+        IntegerRenderStyle::Plain => int_part,
+        IntegerRenderStyle::RecursiveGrouping => {
+            grouped_integer_string(&int_part, profile.thousands_separator)
+        }
+        IntegerRenderStyle::LiteralPattern(pattern) => {
+            render_integer_pattern_with_literal_commas(&int_part, pattern)
+        }
     };
 
     let mut rendered = String::new();
@@ -229,6 +294,68 @@ fn render_scientific(value: f64, decimals: usize, exponent_digits: usize) -> Str
         abs_exponent = exponent.unsigned_abs(),
         width = exponent_digits
     )
+}
+
+fn render_integer_pattern_with_literal_commas(int_part: &str, pattern: &str) -> String {
+    let segments: Vec<&str> = pattern.split(',').collect();
+    if segments.len() <= 1 {
+        return int_part.to_string();
+    }
+
+    let digits: Vec<char> = int_part.chars().collect();
+    let mut next_digit = digits.len();
+    let mut rendered_segments = Vec::with_capacity(segments.len());
+
+    for segment in segments.iter().rev() {
+        rendered_segments.push(render_placeholder_segment(segment, &digits, &mut next_digit));
+    }
+    rendered_segments.reverse();
+
+    if next_digit > 0 {
+        let leading_digits: String = digits[..next_digit].iter().collect();
+        if let Some(first) = rendered_segments.first_mut() {
+            first.insert_str(0, &leading_digits);
+        }
+    }
+
+    let first_visible = rendered_segments
+        .iter()
+        .position(|segment| segment.chars().any(|ch| ch != ' '))
+        .unwrap_or(rendered_segments.len().saturating_sub(1));
+
+    rendered_segments[first_visible..].join(",")
+}
+
+fn render_placeholder_segment(segment: &str, digits: &[char], next_digit: &mut usize) -> String {
+    let mut rendered = String::new();
+    for ch in segment.chars().rev() {
+        match ch {
+            '#' => {
+                if *next_digit > 0 {
+                    *next_digit -= 1;
+                    rendered.push(digits[*next_digit]);
+                }
+            }
+            '0' => {
+                if *next_digit > 0 {
+                    *next_digit -= 1;
+                    rendered.push(digits[*next_digit]);
+                } else {
+                    rendered.push('0');
+                }
+            }
+            '?' => {
+                if *next_digit > 0 {
+                    *next_digit -= 1;
+                    rendered.push(digits[*next_digit]);
+                } else {
+                    rendered.push(' ');
+                }
+            }
+            other => rendered.push(other),
+        }
+    }
+    rendered.chars().rev().collect()
 }
 
 fn grouped_integer_string(int_part: &str, sep: &str) -> String {
@@ -273,7 +400,9 @@ pub(crate) fn select_number_format_section(code: &str, value: f64) -> Option<Str
         return None;
     }
 
-    let has_explicit_condition = sections.iter().any(|section| extract_condition(section).is_some());
+    let has_explicit_condition = sections
+        .iter()
+        .any(|section| extract_condition(section).is_some());
     if has_explicit_condition {
         let mut fallback = None;
         for section in &sections {
@@ -408,6 +537,10 @@ pub(crate) fn expand_literal_tokens(section: &str) -> String {
     }
 
     result
+}
+
+fn is_numeric_format_token(ch: char) -> bool {
+    matches!(ch, '#' | '0' | '?' | ',' | '.' | 'E' | 'e' | '+' | '-')
 }
 
 fn extract_condition(section: &str) -> Option<String> {

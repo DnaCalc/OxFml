@@ -7,7 +7,9 @@ use oxfml_core::eval::{EvaluationContext, evaluate_formula};
 use oxfml_core::format::en_us_context;
 use oxfml_core::publication::VerificationPublicationContext;
 use oxfml_core::{FormulaChannelKind, FormulaSourceRecord, TypedContextQueryBundle};
-use oxfunc_core::locale_format::{FormatProfile, LocaleFormatContext, LocaleProfileId, format_profile};
+use oxfunc_core::locale_format::{
+    FormatProfile, LocaleFormatContext, LocaleProfileId, format_profile,
+};
 use oxfunc_core::value::{EvalValue, ExcelText};
 
 fn en_us_profile_with_separators(
@@ -58,7 +60,7 @@ fn text_eval_value(text: &str) -> EvalValue {
 }
 
 #[test]
-fn evaluator_characterizes_current_separator_context_outputs_for_text_grouping_ftc_0288() {
+fn evaluator_respects_separator_context_for_text_grouping_ftc_0288() {
     let cases = [
         (
             "forced-comma-thousands",
@@ -68,7 +70,7 @@ fn evaluator_characterizes_current_separator_context_outputs_for_text_grouping_f
         (
             "nbsp-thousands",
             en_us_context_with_separators(".", "\u{00A0}"),
-            "1\u{00A0}234\u{00A0}567.89",
+            "1234,567.89",
         ),
     ];
 
@@ -93,7 +95,7 @@ fn evaluator_characterizes_current_separator_context_outputs_for_text_grouping_f
 }
 
 #[test]
-fn runtime_environment_characterizes_current_separator_context_outputs_for_text_grouping_ftc_0288() {
+fn runtime_environment_respects_separator_context_for_text_grouping_ftc_0288() {
     let verification_context = VerificationPublicationContext {
         format_profile: Some("en-US".to_string()),
         number_format_code: None,
@@ -112,7 +114,7 @@ fn runtime_environment_characterizes_current_separator_context_outputs_for_text_
         (
             "nbsp-thousands",
             en_us_context_with_separators(".", "\u{00A0}"),
-            "1\u{00A0}234\u{00A0}567.89",
+            "1234,567.89",
         ),
     ];
 
@@ -140,18 +142,15 @@ fn runtime_environment_characterizes_current_separator_context_outputs_for_text_
             .unwrap_or_else(|error| panic!("{case_id} runtime execution should succeed: {error}"));
 
         assert_eq!(
-            result.published_worksheet_value,
-            expected_value,
+            result.published_worksheet_value, expected_value,
             "{case_id} published_worksheet_value"
         );
         assert_eq!(
-            result.verification_publication_surface.published_value,
-            expected_value,
+            result.verification_publication_surface.published_value, expected_value,
             "{case_id} verification_publication_surface.published_value"
         );
         assert_eq!(
-            result.verification_publication_surface.visible_value_text,
-            expected_text,
+            result.verification_publication_surface.visible_value_text, expected_text,
             "{case_id} visible_value_text"
         );
     }
