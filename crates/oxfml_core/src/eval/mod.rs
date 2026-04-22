@@ -2929,11 +2929,21 @@ fn map_resolution_error(error: RefResolutionError) -> EvaluationError {
 }
 
 fn error_code_for_error_ref(error: &ErrorRef) -> WorksheetErrorCode {
-    match error.error_class.as_str() {
-        "#REF!" => WorksheetErrorCode::Ref,
+    match error.error_class.to_ascii_uppercase().as_str() {
         "#NULL!" => WorksheetErrorCode::Null,
-        "#NAME?" => WorksheetErrorCode::Name,
+        "#DIV/0!" => WorksheetErrorCode::Div0,
         "#VALUE!" => WorksheetErrorCode::Value,
+        "#REF!" => WorksheetErrorCode::Ref,
+        "#NAME?" => WorksheetErrorCode::Name,
+        "#NUM!" => WorksheetErrorCode::Num,
+        "#N/A" => WorksheetErrorCode::NA,
+        "#BUSY!" => WorksheetErrorCode::Busy,
+        "#GETTING_DATA" => WorksheetErrorCode::GettingData,
+        "#SPILL!" => WorksheetErrorCode::Spill,
+        "#CALC!" => WorksheetErrorCode::Calc,
+        "#FIELD!" => WorksheetErrorCode::Field,
+        "#BLOCKED!" => WorksheetErrorCode::Blocked,
+        "#CONNECT!" => WorksheetErrorCode::Connect,
         _ => WorksheetErrorCode::Value,
     }
 }

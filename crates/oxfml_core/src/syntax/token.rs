@@ -34,6 +34,7 @@ pub enum TokenKind {
     GreaterEqual,
     Number,
     Identifier,
+    ErrorLiteral,
     QuotedIdentifier,
     BracketedQualifier,
     StringLiteral,

@@ -322,7 +322,10 @@ impl Parser {
                 SyntaxKind::StringLiteralExpr,
                 vec![GreenChild::Token(self.bump())],
             ),
-            TokenKind::Identifier | TokenKind::QuotedIdentifier | TokenKind::BracketedQualifier => {
+            TokenKind::Identifier
+            | TokenKind::ErrorLiteral
+            | TokenKind::QuotedIdentifier
+            | TokenKind::BracketedQualifier => {
                 let ident = self.bump();
                 if self.at(TokenKind::Bang) {
                     let bang = self.bump();

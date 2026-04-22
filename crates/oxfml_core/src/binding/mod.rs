@@ -415,6 +415,14 @@ impl Binder {
         if text.eq_ignore_ascii_case("FALSE") {
             return BoundExpr::LogicalLiteral(false);
         }
+        if is_worksheet_error_literal(&text) {
+            return BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Error(
+                ErrorRef {
+                    error_class: text.clone(),
+                    source_text: text,
+                },
+            )));
+        }
         if let Some(structured) = bind_structured_reference_text(
             &text,
             &self.context,
@@ -804,7 +812,8 @@ impl Binder {
             .any(|name| name.eq_ignore_ascii_case(&function_name));
         let builtin_function_meta = lookup_function_meta(&uppercase_function_name);
         let builtin_function_match = builtin_function_meta.is_some();
-        let binds_as_invocation = (helper_local_match && !builtin_function_match) || context_name_match;
+        let binds_as_invocation =
+            (helper_local_match && !builtin_function_match) || context_name_match;
 
         if !binds_as_invocation
             && let Some(meta) = builtin_function_meta.as_ref()
@@ -1175,6 +1184,26 @@ struct ParsedStructuredReference {
     section_qualifiers: Vec<StructuredSectionKind>,
     column_names: Vec<String>,
     caller_row_sensitive: bool,
+}
+
+fn is_worksheet_error_literal(text: &str) -> bool {
+    matches!(
+        text.to_ascii_uppercase().as_str(),
+        "#NULL!"
+            | "#DIV/0!"
+            | "#VALUE!"
+            | "#REF!"
+            | "#NAME?"
+            | "#NUM!"
+            | "#N/A"
+            | "#BUSY!"
+            | "#GETTING_DATA"
+            | "#SPILL!"
+            | "#CALC!"
+            | "#FIELD!"
+            | "#BLOCKED!"
+            | "#CONNECT!"
+    )
 }
 
 fn bind_structured_reference_text(

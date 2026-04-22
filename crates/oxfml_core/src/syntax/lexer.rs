@@ -41,7 +41,18 @@ pub fn lex(input: &str) -> Vec<Token> {
             '*' => simple(TokenKind::Star, ch, start),
             '/' => simple(TokenKind::Slash, ch, start),
             '@' => simple(TokenKind::At, ch, start),
-            '#' => simple(TokenKind::Hash, ch, start),
+            '#' => {
+                if let Some(end) = consume_error_literal(&chars, start) {
+                    index = end;
+                    Token::new(
+                        TokenKind::ErrorLiteral,
+                        chars[start..index].iter().collect::<String>(),
+                        TextSpan::new(start, index - start),
+                    )
+                } else {
+                    simple(TokenKind::Hash, ch, start)
+                }
+            }
             '!' => simple(TokenKind::Bang, ch, start),
             '{' => simple(TokenKind::LBrace, ch, start),
             '}' => simple(TokenKind::RBrace, ch, start),
@@ -78,10 +89,15 @@ pub fn lex(input: &str) -> Vec<Token> {
             }
             '"' => {
                 index += 1;
-                while index < chars.len() && chars[index] != '"' {
-                    index += 1;
-                }
-                if index < chars.len() {
+                while index < chars.len() {
+                    if chars[index] == '"' {
+                        if index + 1 < chars.len() && chars[index + 1] == '"' {
+                            index += 2;
+                            continue;
+                        }
+                        index += 1;
+                        break;
+                    }
                     index += 1;
                 }
                 Token::new(
@@ -148,6 +164,38 @@ pub fn lex(input: &str) -> Vec<Token> {
 
 fn simple(kind: TokenKind, ch: char, start: usize) -> Token {
     Token::new(kind, ch.to_string(), TextSpan::new(start, 1))
+}
+
+fn consume_error_literal(chars: &[char], start: usize) -> Option<usize> {
+    const ERROR_LITERALS: &[&str] = &[
+        "#GETTING_DATA",
+        "#BLOCKED!",
+        "#CONNECT!",
+        "#FIELD!",
+        "#SPILL!",
+        "#VALUE!",
+        "#DIV/0!",
+        "#NAME?",
+        "#CALC!",
+        "#BUSY!",
+        "#NULL!",
+        "#REF!",
+        "#NUM!",
+        "#N/A",
+    ];
+
+    for literal in ERROR_LITERALS {
+        let end = start + literal.chars().count();
+        if end > chars.len() {
+            continue;
+        }
+        let candidate = chars[start..end].iter().collect::<String>();
+        if candidate.eq_ignore_ascii_case(literal) {
+            return Some(end);
+        }
+    }
+
+    None
 }
 
 fn peek_is_ascii_digit(chars: &[char], index: usize) -> bool {

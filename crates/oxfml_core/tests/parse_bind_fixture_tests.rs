@@ -465,9 +465,9 @@ fn bind_surfaces_generic_builtin_arity_authoring_reject_for_plain_gcd_zero_arity
     });
 
     assert!(bind.bound_formula.diagnostics.iter().any(|diagnostic| {
-        diagnostic
-            .message
-            .starts_with("built-in function call 'GCD' rejects 0 arguments at the authoring boundary")
+        diagnostic.message.starts_with(
+            "built-in function call 'GCD' rejects 0 arguments at the authoring boundary",
+        )
     }));
     let BoundExpr::FunctionCall {
         function_name,
@@ -478,6 +478,137 @@ fn bind_surfaces_generic_builtin_arity_authoring_reject_for_plain_gcd_zero_arity
     };
     assert_eq!(function_name, "GCD");
     assert!(args.is_empty());
+}
+
+#[test]
+fn bind_accepts_error_literal_inside_array_call_for_ftc_0837() {
+    let source = FormulaSourceRecord::new(
+        "fixture-ftc-0837-error-literal-array",
+        1,
+        "=SUM(TOCOL({1,2,#N/A;4,5,6},1))",
+    );
+    let parse = parse_formula(ParseRequest {
+        source: source.clone(),
+    });
+    assert!(parse.green_tree.diagnostics.is_empty());
+    let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
+    let bind = bind_formula(BindRequest {
+        source: source.clone(),
+        green_tree: parse.green_tree,
+        red_projection: red,
+        context: BindContext {
+            structure_context_version: StructureContextVersion("fixture-struct-v1".to_string()),
+            formula_token: source.formula_token(),
+            ..BindContext::default()
+        },
+    });
+
+    assert!(bind.bound_formula.diagnostics.is_empty());
+
+    let BoundExpr::FunctionCall {
+        function_name,
+        args,
+    } = &bind.bound_formula.root
+    else {
+        panic!("expected SUM call root, got {:?}", bind.bound_formula.root);
+    };
+    assert_eq!(function_name, "SUM");
+
+    let BoundExpr::FunctionCall {
+        function_name,
+        args: tocol_args,
+    } = &args[0]
+    else {
+        panic!("expected TOCOL inner call, got {:?}", args[0]);
+    };
+    assert_eq!(function_name, "TOCOL");
+
+    let BoundExpr::ArrayLiteral(rows) = &tocol_args[0] else {
+        panic!("expected TOCOL array argument, got {:?}", tocol_args[0]);
+    };
+    let BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Error(error))) = &rows[0][2]
+    else {
+        panic!("expected #N/A error literal cell, got {:?}", rows[0][2]);
+    };
+    assert_eq!(error.error_class, "#N/A");
+    assert_eq!(error.source_text, "#N/A");
+}
+
+#[test]
+fn bind_accepts_filterxml_embedded_quoted_xml_string_for_ftc_1041() {
+    let source = FormulaSourceRecord::new(
+        "fixture-ftc-1041-filterxml-quoted-xml",
+        1,
+        "=FILTERXML(\"<items><item id=\"\"1\"\">apple</item><item id=\"\"2\"\">banana</item></items>\",\"//item[@id=2]\")",
+    );
+    let parse = parse_formula(ParseRequest {
+        source: source.clone(),
+    });
+    assert!(parse.green_tree.diagnostics.is_empty());
+    let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
+    let bind = bind_formula(BindRequest {
+        source: source.clone(),
+        green_tree: parse.green_tree,
+        red_projection: red,
+        context: BindContext {
+            structure_context_version: StructureContextVersion("fixture-struct-v1".to_string()),
+            formula_token: source.formula_token(),
+            ..BindContext::default()
+        },
+    });
+
+    assert!(bind.bound_formula.diagnostics.is_empty());
+
+    let BoundExpr::FunctionCall {
+        function_name,
+        args,
+    } = &bind.bound_formula.root
+    else {
+        panic!("expected FILTERXML call root, got {:?}", bind.bound_formula.root);
+    };
+    assert_eq!(function_name, "FILTERXML");
+    assert_eq!(args.len(), 2);
+    assert_eq!(
+        args[0],
+        BoundExpr::StringLiteral(
+            "\"<items><item id=\"\"1\"\">apple</item><item id=\"\"2\"\">banana</item></items>\""
+                .to_string()
+        )
+    );
+    assert_eq!(
+        args[1],
+        BoundExpr::StringLiteral("\"//item[@id=2]\"".to_string())
+    );
+}
+
+#[test]
+fn parse_rejects_unbalanced_deep_parenthesis_family_for_ftc_0916_and_ftc_0987() {
+    let source = FormulaSourceRecord::new(
+        "fixture-ftc-0916-ftc-0987-deep-parenthesis",
+        1,
+        "=((((((((((((((((1+1)+1)+1)+1)+1)+1)+1)+1)+1)+1)+1)+1)+1)+1)+1)",
+    );
+    let parse = parse_formula(ParseRequest {
+        source: source.clone(),
+    });
+
+    assert_eq!(parse.green_tree.diagnostics.len(), 1);
+    assert_eq!(parse.green_tree.diagnostics[0].message, "expected ')'".to_string());
+
+    let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
+    let bind = bind_formula(BindRequest {
+        source: source.clone(),
+        green_tree: parse.green_tree,
+        red_projection: red,
+        context: BindContext {
+            structure_context_version: StructureContextVersion("fixture-struct-v1".to_string()),
+            formula_token: source.formula_token(),
+            ..BindContext::default()
+        },
+    });
+
+    assert!(bind.bound_formula.diagnostics.is_empty());
+    assert!(matches!(bind.bound_formula.root, BoundExpr::Binary { .. }));
 }
 
 #[test]
