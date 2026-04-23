@@ -3286,7 +3286,7 @@ fn sanitize_final_output_value(
                         Some(ArrayCellValue::Text(text))
                             if decode_callable_carrier_text(text, callable_registry).is_some() =>
                         {
-                            ArrayCellValue::Error(WorksheetErrorCode::Value)
+                            ArrayCellValue::Error(WorksheetErrorCode::Calc)
                         }
                         Some(cell) => cell.clone(),
                         None => ArrayCellValue::EmptyCell,
