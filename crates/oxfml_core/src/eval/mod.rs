@@ -3134,7 +3134,10 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
         args: &[PreparedArgValue],
     ) -> Result<PreparedArgValue, CallableInvocationError> {
         if callable.origin_kind == OxCallableOriginKind::BuiltInCallable {
-            let call_args = args.iter().map(call_arg_from_prepared).collect::<Vec<_>>();
+            let call_args = args
+                .iter()
+                .map(|arg| call_arg_from_prepared(arg, self.callable_registry))
+                .collect::<Vec<_>>();
             let mut resolver = LocalReferenceResolver {
                 cell_values: &self.context.cell_values,
                 defined_names: &self.context.defined_names,
@@ -3171,7 +3174,7 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
             insert_helper_binding(
                 &mut local_bindings,
                 param.name.clone(),
-                HelperBinding::Arg(call_arg_from_prepared(arg)),
+                HelperBinding::Arg(call_arg_from_prepared(arg, self.callable_registry)),
             );
         }
         for param in binding.lambda.params.iter().skip(args.len()) {
@@ -3184,7 +3187,7 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
         let recursion_cost_units = LOCAL_CALLABLE_RECURSION_BASE_COST_UNITS
             + args
                 .iter()
-                .filter(|arg| matches!(arg, PreparedArgValue::Eval(EvalValue::Lambda(_))))
+                .filter(|arg| prepared_arg_contains_lambda(arg, self.callable_registry))
                 .count()
                 * LOCAL_CALLABLE_RECURSION_LAMBDA_ARG_COST_UNITS;
         let Some(_recursion_guard) = try_enter_callable_recursion(
@@ -3225,12 +3228,27 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
     }
 }
 
-fn call_arg_from_prepared(prepared: &PreparedArgValue) -> CallArgValue {
+fn call_arg_from_prepared(
+    prepared: &PreparedArgValue,
+    callable_registry: &RefCell<CallableRegistry>,
+) -> CallArgValue {
     match prepared {
-        PreparedArgValue::Eval(value) => CallArgValue::Eval(value.clone()),
+        PreparedArgValue::Eval(value) => {
+            CallArgValue::Eval(decode_callable_carrier_scalar(value.clone(), callable_registry))
+        }
         PreparedArgValue::MissingArg => CallArgValue::MissingArg,
         PreparedArgValue::EmptyCell => CallArgValue::EmptyCell,
     }
+}
+
+fn prepared_arg_contains_lambda(
+    prepared: &PreparedArgValue,
+    callable_registry: &RefCell<CallableRegistry>,
+) -> bool {
+    matches!(
+        call_arg_from_prepared(prepared, callable_registry),
+        CallArgValue::Eval(EvalValue::Lambda(_))
+    )
 }
 
 fn prepared_arg_from_eval_value(value: EvalValue) -> PreparedArgValue {
