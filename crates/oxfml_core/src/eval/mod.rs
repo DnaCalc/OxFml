@@ -233,6 +233,40 @@ enum HelperBinding {
     },
 }
 
+fn helper_name_key(name: &str) -> String {
+    name.to_ascii_uppercase()
+}
+
+fn helper_binding_contains(helper_bindings: &BTreeMap<String, HelperBinding>, name: &str) -> bool {
+    helper_bindings
+        .keys()
+        .any(|binding_name| binding_name.eq_ignore_ascii_case(name))
+}
+
+fn helper_binding_get<'a>(
+    helper_bindings: &'a BTreeMap<String, HelperBinding>,
+    name: &str,
+) -> Option<&'a HelperBinding> {
+    helper_bindings.iter().find_map(|(binding_name, binding)| {
+        binding_name.eq_ignore_ascii_case(name).then_some(binding)
+    })
+}
+
+fn insert_helper_binding(
+    helper_bindings: &mut BTreeMap<String, HelperBinding>,
+    name: String,
+    binding: HelperBinding,
+) {
+    if let Some(existing_name) = helper_bindings
+        .keys()
+        .find(|binding_name| binding_name.eq_ignore_ascii_case(&name))
+        .cloned()
+    {
+        helper_bindings.remove(&existing_name);
+    }
+    helper_bindings.insert(name, binding);
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct LambdaParam {
     name: String,
@@ -1347,7 +1381,7 @@ fn call_arg_for_name(
     helper_bindings: &BTreeMap<String, HelperBinding>,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> Result<CallArgValue, EvaluationError> {
-    if let Some(binding) = helper_bindings.get(&name.name) {
+    if let Some(binding) = helper_binding_get(helper_bindings, &name.name) {
         return match binding {
             HelperBinding::Arg(CallArgValue::Reference(reference)) => {
                 if preserve_reference {
@@ -1488,7 +1522,7 @@ fn evaluate_let_call(
             &local_bindings,
             callable_registry,
         );
-        local_bindings.insert(name.clone(), helper_binding);
+        insert_helper_binding(&mut local_bindings, name.clone(), helper_binding);
         index += 2;
     }
     let body_arg = evaluate_expr_as_call_arg(
@@ -1969,10 +2003,11 @@ fn evaluate_invocation(
         prepared_arguments.push(prepared_argument_for_call_arg(
             ordinal, arg, &prepared, true,
         ));
-        local_bindings.insert(param.name.clone(), HelperBinding::Arg(prepared));
+        insert_helper_binding(&mut local_bindings, param.name.clone(), HelperBinding::Arg(prepared));
     }
     for param in lambda.params.iter().skip(args.len()) {
-        local_bindings.insert(
+        insert_helper_binding(
+            &mut local_bindings,
             param.name.clone(),
             HelperBinding::Arg(CallArgValue::MissingArg),
         );
@@ -2015,7 +2050,8 @@ fn is_missing_helper_local_callee_name(
         BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Name(name)))
             if matches!(name.kind, NameKind::HelperLocal) =>
         {
-            !helper_bindings.contains_key(&name.name) && !defined_names.contains_key(&name.name)
+            !helper_binding_contains(helper_bindings, &name.name)
+                && !defined_names.contains_key(&name.name)
         }
         _ => false,
     }
@@ -2174,7 +2210,7 @@ fn lambda_binding_for_callee(
         BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Name(name)))
             if matches!(name.kind, crate::binding::NameKind::HelperLocal) =>
         {
-            match helper_bindings.get(&name.name) {
+            match helper_binding_get(helper_bindings, &name.name) {
                 Some(HelperBinding::Lambda {
                     params,
                     body,
@@ -2310,7 +2346,10 @@ fn helper_capture_names(
     parameter_names: &[String],
     helper_bindings: &BTreeMap<String, HelperBinding>,
 ) -> BTreeSet<String> {
-    let mut bound_names = parameter_names.iter().cloned().collect::<BTreeSet<_>>();
+    let mut bound_names = parameter_names
+        .iter()
+        .map(|name| helper_name_key(name))
+        .collect::<BTreeSet<_>>();
     helper_free_names_in_expr(body, &mut bound_names, helper_bindings)
 }
 
@@ -2412,7 +2451,7 @@ fn helper_free_names_in_let(
             helper_bindings,
         ));
         if let Some(name) = helper_parameter_name(&args[index]) {
-            local_bound.insert(name);
+            local_bound.insert(helper_name_key(&name));
         }
         index += 2;
     }
@@ -2437,7 +2476,7 @@ fn helper_free_names_in_lambda(
     let mut nested_bound = bound_names.clone();
     for arg in &args[..body_index] {
         if let Some(name) = helper_parameter_name(arg) {
-            nested_bound.insert(name);
+            nested_bound.insert(helper_name_key(&name));
         }
     }
     helper_free_names_in_expr(&args[body_index], &mut nested_bound, helper_bindings)
@@ -2451,8 +2490,8 @@ fn helper_free_names_in_reference(
     match reference {
         ReferenceExpr::Atom(NormalizedReference::Name(name))
             if matches!(name.kind, crate::binding::NameKind::HelperLocal)
-                && !bound_names.contains(&name.name)
-                && helper_bindings.contains_key(&name.name) =>
+                && !bound_names.contains(&helper_name_key(&name.name))
+                && helper_binding_contains(helper_bindings, &name.name) =>
         {
             BTreeSet::from([name.name.clone()])
         }
@@ -2487,7 +2526,10 @@ fn helper_closure_from_names(
     helper_bindings
         .iter()
         .filter_map(|(name, binding)| {
-            if capture_names.contains(name) {
+            if capture_names
+                .iter()
+                .any(|capture_name| capture_name.eq_ignore_ascii_case(name))
+            {
                 Some((name.clone(), binding.clone()))
             } else {
                 None
@@ -3126,13 +3168,15 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
             })?;
         let mut local_bindings = binding.lambda.closure;
         for (param, arg) in binding.lambda.params.iter().zip(args.iter()) {
-            local_bindings.insert(
+            insert_helper_binding(
+                &mut local_bindings,
                 param.name.clone(),
                 HelperBinding::Arg(call_arg_from_prepared(arg)),
             );
         }
         for param in binding.lambda.params.iter().skip(args.len()) {
-            local_bindings.insert(
+            insert_helper_binding(
+                &mut local_bindings,
                 param.name.clone(),
                 HelperBinding::Arg(CallArgValue::MissingArg),
             );
