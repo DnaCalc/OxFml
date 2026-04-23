@@ -81,6 +81,10 @@ pub fn render_with_number_format_code(
         return render_two_digit_integer(value);
     }
 
+    if contains_fraction_placeholder_pattern(trimmed) {
+        return Err(FormatFailure::UnsupportedCode(number_format_code.to_string()));
+    }
+
     let numeric = parse_numeric_section(trimmed, profile)
         .ok_or_else(|| FormatFailure::UnsupportedCode(number_format_code.to_string()))?;
     let scaled_value = apply_scaling(value, &numeric);
@@ -230,7 +234,13 @@ fn render_fixed_with_numeric_section(
         ""
     };
 
-    render_fixed_common(profile, value, numeric.decimals, integer_render_style, prefix)
+    render_fixed_common(
+        profile,
+        value,
+        numeric.decimals,
+        integer_render_style,
+        prefix,
+    )
 }
 
 enum IntegerRenderStyle<'a> {
@@ -307,7 +317,11 @@ fn render_integer_pattern_with_literal_commas(int_part: &str, pattern: &str) -> 
     let mut rendered_segments = Vec::with_capacity(segments.len());
 
     for segment in segments.iter().rev() {
-        rendered_segments.push(render_placeholder_segment(segment, &digits, &mut next_digit));
+        rendered_segments.push(render_placeholder_segment(
+            segment,
+            &digits,
+            &mut next_digit,
+        ));
     }
     rendered_segments.reverse();
 
@@ -582,6 +596,20 @@ fn condition_matches(condition: &str, value: f64) -> bool {
         "<>" => (value - threshold).abs() >= f64::EPSILON,
         _ => false,
     }
+}
+
+fn contains_fraction_placeholder_pattern(section: &str) -> bool {
+    let expanded = expand_literal_tokens(section);
+    expanded.split('/').collect::<Vec<_>>().windows(2).any(|parts| {
+        let left = parts[0].trim_end();
+        let right = parts[1].trim_start();
+        left.chars().last().is_some_and(is_fraction_placeholder)
+            && right.chars().next().is_some_and(is_fraction_placeholder)
+    })
+}
+
+fn is_fraction_placeholder(ch: char) -> bool {
+    matches!(ch, '#' | '0' | '?')
 }
 
 fn is_two_digit_integer_code(section: &str) -> bool {
