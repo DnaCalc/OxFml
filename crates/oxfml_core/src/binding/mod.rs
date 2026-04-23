@@ -16,6 +16,7 @@ use crate::interface::{
 };
 use crate::red::RedProjection;
 use crate::semantics::lookup_function_meta;
+use oxfunc_core::function::{ArgPreparationProfile, FecDependencyProfile, FunctionMeta};
 use crate::source::{
     FormulaChannelKind, FormulaSourceRecord, FormulaToken, StructureContextVersion,
 };
@@ -817,15 +818,14 @@ impl Binder {
 
         if !binds_as_invocation
             && let Some(meta) = builtin_function_meta.as_ref()
-            && !meta.arity.accepts(args.len())
+            && let Some(message) = builtin_function_call_authoring_diagnostic(
+                &uppercase_function_name,
+                meta,
+                &args,
+            )
         {
             self.diagnostics.push(BindDiagnostic {
-                message: builtin_function_arity_authoring_diagnostic(
-                    &uppercase_function_name,
-                    meta.arity.min,
-                    meta.arity.max,
-                    args.len(),
-                ),
+                message,
                 span: node.span,
             });
         }
@@ -1104,6 +1104,27 @@ impl Binder {
     }
 }
 
+fn builtin_function_call_authoring_diagnostic(
+    builtin_name: &str,
+    meta: &FunctionMeta,
+    args: &[BoundExpr],
+) -> Option<String> {
+    if !meta.arity.accepts(args.len()) {
+        return Some(builtin_function_arity_authoring_diagnostic(
+            builtin_name,
+            meta.arity.min,
+            meta.arity.max,
+            args.len(),
+        ));
+    }
+
+    if builtin_requires_reference_locator_authoring_reject(meta, args) {
+        return Some(builtin_reference_locator_authoring_diagnostic(builtin_name));
+    }
+
+    None
+}
+
 fn builtin_function_arity_authoring_diagnostic(
     builtin_name: &str,
     min_arity: usize,
@@ -1113,6 +1134,52 @@ fn builtin_function_arity_authoring_diagnostic(
     format!(
         "built-in function call '{builtin_name}' rejects {actual_arity} arguments at the authoring boundary (expected {min_arity}..={max_arity})"
     )
+}
+
+fn builtin_requires_reference_locator_authoring_reject(
+    meta: &FunctionMeta,
+    args: &[BoundExpr],
+) -> bool {
+    meta.fec_dependency_profile == FecDependencyProfile::CallerContext
+        && meta.arg_preparation_profile == ArgPreparationProfile::RefsVisibleInAdapter
+        && meta.arity.min == 0
+        && meta.arity.max == 1
+        && args.len() == 1
+        && !builtin_reference_locator_argument_is_reference_like(&args[0])
+}
+
+fn builtin_reference_locator_authoring_diagnostic(builtin_name: &str) -> String {
+    format!(
+        "built-in function call '{builtin_name}' rejects non-reference arguments at the authoring boundary for caller-context locator functions"
+    )
+}
+
+fn builtin_reference_locator_argument_is_reference_like(expr: &BoundExpr) -> bool {
+    match expr {
+        BoundExpr::Reference(reference) => match reference {
+            ReferenceExpr::Atom(NormalizedReference::Cell(_))
+            | ReferenceExpr::Atom(NormalizedReference::Area(_))
+            | ReferenceExpr::Atom(NormalizedReference::WholeRow(_))
+            | ReferenceExpr::Atom(NormalizedReference::WholeColumn(_))
+            | ReferenceExpr::Atom(NormalizedReference::Structured(_))
+            | ReferenceExpr::Atom(NormalizedReference::External(_)) => true,
+            ReferenceExpr::Atom(NormalizedReference::Name(name)) => {
+                matches!(name.kind, NameKind::ReferenceLike | NameKind::MixedOrDeferred)
+            }
+            ReferenceExpr::Spill { anchor } => {
+                let anchor_expr = BoundExpr::Reference((**anchor).clone());
+                builtin_reference_locator_argument_is_reference_like(&anchor_expr)
+            }
+            ReferenceExpr::Range { .. }
+            | ReferenceExpr::Union { .. }
+            | ReferenceExpr::Intersection { .. } => true,
+            ReferenceExpr::Atom(NormalizedReference::Error(_)) => false,
+        },
+        BoundExpr::ImplicitIntersection(inner) => {
+            builtin_reference_locator_argument_is_reference_like(inner)
+        }
+        _ => false,
+    }
 }
 
 fn array_literal_contains_inline_lambda_call(expr: &BoundExpr) -> bool {
