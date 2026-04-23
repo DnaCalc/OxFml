@@ -226,6 +226,7 @@ pub enum DefinedNameBinding {
 #[derive(Debug, Clone, PartialEq)]
 enum HelperBinding {
     Arg(CallArgValue),
+    EmptyHstackCarrier(CallArgValue),
     Lambda {
         params: Vec<LambdaParam>,
         body: BoundExpr,
@@ -804,6 +805,12 @@ fn evaluate_function_call(
         call_args.push(call_arg);
     }
 
+    let collapse_hstack_empty_carrier = function_name == "HSTACK"
+        && args
+            .iter()
+            .zip(call_args.iter())
+            .any(|(arg, call_arg)| hstack_arg_should_collapse(arg, call_arg, helper_bindings));
+
     // Excel trailing omitted arguments behave like absent optional arguments at the
     // function-surface boundary. Preserve interior omissions as `MissingArg`, but do not
     // force trailing omitted placeholders into OxFunc's optional-argument lanes.
@@ -846,6 +853,10 @@ fn evaluate_function_call(
             .map(|ctx| format!("{:?}", ctx.date_system)),
         host_query_enabled: context.host_info.is_some(),
     });
+
+    if collapse_hstack_empty_carrier {
+        return Ok(EvalValue::Error(WorksheetErrorCode::Calc));
+    }
 
     let callable_invoker = OxFmlCallableInvoker {
         context,
@@ -1383,7 +1394,8 @@ fn call_arg_for_name(
 ) -> Result<CallArgValue, EvaluationError> {
     if let Some(binding) = helper_binding_get(helper_bindings, &name.name) {
         return match binding {
-            HelperBinding::Arg(CallArgValue::Reference(reference)) => {
+            HelperBinding::Arg(CallArgValue::Reference(reference))
+            | HelperBinding::EmptyHstackCarrier(CallArgValue::Reference(reference)) => {
                 if preserve_reference {
                     Ok(CallArgValue::Reference(reference.clone()))
                 } else {
@@ -1393,7 +1405,9 @@ fn call_arg_for_name(
                         .map_err(map_resolution_error)
                 }
             }
-            HelperBinding::Arg(other) => Ok(other.clone()),
+            HelperBinding::Arg(other) | HelperBinding::EmptyHstackCarrier(other) => {
+                Ok(other.clone())
+            }
             HelperBinding::Lambda {
                 params,
                 body,
@@ -2165,9 +2179,71 @@ fn helper_binding_from_expr(
                     };
                 }
             }
+            if matches!(fallback, CallArgValue::Eval(EvalValue::Error(WorksheetErrorCode::Calc)))
+                && expr_is_hstack_empty_carrier(expr, helper_bindings)
+            {
+                return HelperBinding::EmptyHstackCarrier(fallback);
+            }
             HelperBinding::Arg(fallback)
         }
     }
+}
+
+fn expr_is_hstack_empty_carrier(
+    expr: &BoundExpr,
+    helper_bindings: &BTreeMap<String, HelperBinding>,
+) -> bool {
+    match expr {
+        BoundExpr::FunctionCall {
+            function_name,
+            args,
+        } if function_name == "TAKE" => take_call_has_zero_column_extent(args),
+        BoundExpr::FunctionCall {
+            function_name,
+            args,
+        } if function_name == "IF" => args
+            .iter()
+            .skip(1)
+            .any(|arg| expr_is_hstack_empty_carrier(arg, helper_bindings)),
+        BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Name(name)))
+            if matches!(name.kind, crate::binding::NameKind::HelperLocal) =>
+        {
+            matches!(
+                helper_binding_get(helper_bindings, &name.name),
+                Some(HelperBinding::EmptyHstackCarrier(_))
+            )
+        }
+        BoundExpr::ImplicitIntersection(inner) => expr_is_hstack_empty_carrier(inner, helper_bindings),
+        _ => false,
+    }
+}
+
+fn take_call_has_zero_column_extent(args: &[BoundExpr]) -> bool {
+    matches!(args.get(2), Some(expr) if expr_is_numeric_zero(expr))
+}
+
+fn expr_is_numeric_zero(expr: &BoundExpr) -> bool {
+    match expr {
+        BoundExpr::NumberLiteral(text) => text.trim() == "0",
+        BoundExpr::Unary {
+            op: crate::binding::UnaryOp::Plus,
+            expr,
+        }
+        | BoundExpr::Unary {
+            op: crate::binding::UnaryOp::Negate,
+            expr,
+        } => expr_is_numeric_zero(expr),
+        _ => false,
+    }
+}
+
+fn hstack_arg_should_collapse(
+    expr: &BoundExpr,
+    call_arg: &CallArgValue,
+    helper_bindings: &BTreeMap<String, HelperBinding>,
+) -> bool {
+    matches!(call_arg, CallArgValue::Eval(EvalValue::Error(WorksheetErrorCode::Calc)))
+        && expr_is_hstack_empty_carrier(expr, helper_bindings)
 }
 
 fn lambda_binding_for_callee(
