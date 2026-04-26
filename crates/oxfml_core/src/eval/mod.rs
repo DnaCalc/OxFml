@@ -40,8 +40,8 @@ use oxfunc_core::value::{
 use stacker::maybe_grow;
 
 use crate::binding::{
-    AreaRef, BoundExpr, BoundFormula, CellRef, ErrorRef, NameKind, NameRef, NormalizedReference,
-    ReferenceExpr, StructuredResolvedRef,
+    AreaRef, BinaryOp, BoundExpr, BoundFormula, CellRef, ErrorRef, NameKind, NameRef,
+    NormalizedReference, ReferenceExpr, StructuredResolvedRef,
 };
 use crate::interface::{ReturnedValueSurface, TypedContextQueryBundle};
 use crate::semantics::{SemanticPlan, lookup_function_meta};
@@ -425,7 +425,7 @@ pub fn evaluate_formula(
     };
     let helper_bindings = BTreeMap::new();
 
-    let value = evaluate_expr_value(
+    let value = evaluate_root_expr_value(
         &context.bind_formula.root,
         &context,
         &mut resolver,
@@ -603,6 +603,47 @@ fn build_top_level_call_args(
         .collect()
 }
 
+fn evaluate_root_expr_value(
+    expr: &BoundExpr,
+    context: &EvaluationContext<'_>,
+    resolver: &mut LocalReferenceResolver<'_>,
+    helper_bindings: &BTreeMap<String, HelperBinding>,
+    callable_registry: &RefCell<CallableRegistry>,
+    trace: &mut EvaluationTrace,
+) -> Result<EvalValue, EvaluationError> {
+    if !context.bind_formula.root_expression_is_grouped {
+        if let BoundExpr::Binary { op, left, right } = expr {
+            if matches!(op, BinaryOp::Add | BinaryOp::Subtract) {
+                let evaluation = evaluate_binary_operator_call_evaluation(
+                    *op,
+                    left,
+                    right,
+                    context,
+                    resolver,
+                    helper_bindings,
+                    callable_registry,
+                    trace,
+                )?;
+                return Ok(publish_root_add_subtract_zero_reaching_result(
+                    *op,
+                    &evaluation.lhs,
+                    &evaluation.rhs,
+                    evaluation.value,
+                ));
+            }
+        }
+    }
+
+    evaluate_expr_value(
+        expr,
+        context,
+        resolver,
+        helper_bindings,
+        callable_registry,
+        trace,
+    )
+}
+
 fn evaluate_expr_value(
     expr: &BoundExpr,
     context: &EvaluationContext<'_>,
@@ -612,13 +653,11 @@ fn evaluate_expr_value(
     trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
     match expr {
-        BoundExpr::NumberLiteral(text) => {
-            text.parse::<f64>()
-                .map(EvalValue::Number)
-                .map_err(|_| EvaluationError {
-                    message: format!("failed to parse numeric literal {text}"),
-                })
-        }
+        BoundExpr::NumberLiteral(text) => parse_excel_numeric_literal(text)
+            .map(EvalValue::Number)
+            .map_err(|_| EvaluationError {
+                message: format!("failed to parse numeric literal {text}"),
+            }),
         BoundExpr::LogicalLiteral(value) => Ok(EvalValue::Logical(*value)),
         BoundExpr::StringLiteral(text) => Ok(EvalValue::Text(ExcelText::from_utf16_code_units(
             decode_string_literal(text).encode_utf16().collect(),
@@ -911,6 +950,76 @@ fn allow_host_query_worksheet_error_fallback(
         ),
         _ => false,
     }
+}
+
+fn parse_excel_numeric_literal(text: &str) -> Result<f64, std::num::ParseFloatError> {
+    let value = text.parse::<f64>()?;
+    if numeric_literal_underflows_excel_admission_floor(text) {
+        Ok(0.0)
+    } else {
+        Ok(value)
+    }
+}
+
+fn numeric_literal_underflows_excel_admission_floor(raw: &str) -> bool {
+    let mut text = raw.trim();
+    if let Some(rest) = text.strip_prefix('+') {
+        text = rest;
+    } else if let Some(rest) = text.strip_prefix('-') {
+        text = rest;
+    }
+
+    let (coefficient, exponent) = match text.find(|ch| ch == 'e' || ch == 'E') {
+        Some(index) => {
+            let exponent = match text[index + 1..].parse::<i32>() {
+                Ok(exponent) => exponent,
+                Err(_) => return false,
+            };
+            (&text[..index], exponent)
+        }
+        None => (text, 0),
+    };
+
+    let mut digits = Vec::new();
+    let mut integer_digit_count = 0usize;
+    let mut seen_decimal_point = false;
+    for byte in coefficient.bytes() {
+        match byte {
+            b'0'..=b'9' => {
+                if !seen_decimal_point {
+                    integer_digit_count += 1;
+                }
+                digits.push(byte);
+            }
+            b'.' if !seen_decimal_point => seen_decimal_point = true,
+            _ => return false,
+        }
+    }
+
+    let Some(first_significant_digit) = digits.iter().position(|digit| *digit != b'0') else {
+        return false;
+    };
+
+    let adjusted_exponent =
+        exponent + integer_digit_count as i32 - first_significant_digit as i32 - 1;
+    if adjusted_exponent < -308 {
+        return true;
+    }
+    if adjusted_exponent > -308 {
+        return false;
+    }
+
+    let significand = &digits[first_significant_digit..];
+    let threshold = b"222507385850721";
+    let width = significand.len().max(threshold.len());
+    for index in 0..width {
+        let actual = significand.get(index).copied().unwrap_or(b'0');
+        let minimum = threshold.get(index).copied().unwrap_or(b'0');
+        if actual != minimum {
+            return actual < minimum;
+        }
+    }
+    false
 }
 
 fn evaluate_expr_as_call_arg(
@@ -1241,7 +1350,7 @@ fn evaluate_array_literal(
 }
 
 fn evaluate_binary_operator_call(
-    op: crate::binding::BinaryOp,
+    op: BinaryOp,
     left: &BoundExpr,
     right: &BoundExpr,
     context: &EvaluationContext<'_>,
@@ -1250,6 +1359,87 @@ fn evaluate_binary_operator_call(
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
+    evaluate_binary_operator_call_evaluation(
+        op,
+        left,
+        right,
+        context,
+        resolver,
+        helper_bindings,
+        callable_registry,
+        trace,
+    )
+    .map(|evaluation| evaluation.value)
+}
+
+struct BinaryOperatorCallEvaluation {
+    lhs: CallArgValue,
+    rhs: CallArgValue,
+    value: EvalValue,
+}
+
+fn publish_root_add_subtract_zero_reaching_result(
+    op: BinaryOp,
+    lhs: &CallArgValue,
+    rhs: &CallArgValue,
+    value: EvalValue,
+) -> EvalValue {
+    let EvalValue::Number(result) = value else {
+        return value;
+    };
+    let (Some(lhs), Some(rhs)) = (scalar_number_call_arg(lhs), scalar_number_call_arg(rhs)) else {
+        return EvalValue::Number(result);
+    };
+    if excel_root_add_subtract_reaches_zero(op, lhs, rhs, result) {
+        EvalValue::Number(0.0)
+    } else {
+        EvalValue::Number(result)
+    }
+}
+
+fn scalar_number_call_arg(arg: &CallArgValue) -> Option<f64> {
+    match arg {
+        CallArgValue::Eval(EvalValue::Number(number)) => Some(*number),
+        _ => None,
+    }
+}
+
+fn excel_root_add_subtract_reaches_zero(op: BinaryOp, lhs: f64, rhs: f64, result: f64) -> bool {
+    if !lhs.is_finite()
+        || !rhs.is_finite()
+        || !result.is_finite()
+        || lhs == 0.0
+        || rhs == 0.0
+        || result == 0.0
+    {
+        return false;
+    }
+
+    let is_cancellation = match op {
+        BinaryOp::Add => lhs.is_sign_negative() != rhs.is_sign_negative(),
+        BinaryOp::Subtract => lhs.is_sign_negative() == rhs.is_sign_negative(),
+        _ => false,
+    };
+    if !is_cancellation {
+        return false;
+    }
+
+    // Excel's documented "value reaches zero" compensation is shape-sensitive:
+    // COM probes show it applies to the root add/sub publication, while the
+    // same residual remains observable when consumed by an outer expression.
+    result.abs() <= 5.0e-16 && result.abs() <= lhs.abs().max(rhs.abs()) * f64::EPSILON * 5.0
+}
+
+fn evaluate_binary_operator_call_evaluation(
+    op: BinaryOp,
+    left: &BoundExpr,
+    right: &BoundExpr,
+    context: &EvaluationContext<'_>,
+    resolver: &mut LocalReferenceResolver<'_>,
+    helper_bindings: &BTreeMap<String, HelperBinding>,
+    callable_registry: &RefCell<CallableRegistry>,
+    trace: &mut EvaluationTrace,
+) -> Result<BinaryOperatorCallEvaluation, EvaluationError> {
     let (function_name, function_id) = binary_operator_identity(op);
     let lhs = evaluate_expr_as_call_arg(
         left,
@@ -1288,9 +1478,10 @@ fn evaluate_binary_operator_call(
         context,
         callable_registry,
     };
+    let args = [lhs.clone(), rhs.clone()];
     let result = eval_surface_value_call_with_callable(
         function_id,
-        &[lhs, rhs],
+        &args,
         resolver,
         context.now_serial,
         context.random_value,
@@ -1300,10 +1491,11 @@ fn evaluate_binary_operator_call(
         context.rtd_provider,
         context.registered_external_provider,
     );
-    match result {
-        Ok(value) => Ok(value),
-        Err(code) => Ok(EvalValue::Error(code)),
-    }
+    let value = match result {
+        Ok(value) => value,
+        Err(code) => EvalValue::Error(code),
+    };
+    Ok(BinaryOperatorCallEvaluation { lhs, rhs, value })
 }
 
 fn evaluate_unary_operator_call(
@@ -1358,20 +1550,20 @@ fn evaluate_unary_operator_call(
     }
 }
 
-fn binary_operator_identity(op: crate::binding::BinaryOp) -> (&'static str, &'static str) {
+fn binary_operator_identity(op: BinaryOp) -> (&'static str, &'static str) {
     match op {
-        crate::binding::BinaryOp::Add => ("OP_ADD", FUNC_ID_OP_ADD),
-        crate::binding::BinaryOp::Subtract => ("OP_SUBTRACT", FUNC_ID_OP_SUBTRACT),
-        crate::binding::BinaryOp::Power => ("OP_POWER", FUNC_ID_OP_POWER),
-        crate::binding::BinaryOp::Multiply => ("OP_MULTIPLY", FUNC_ID_OP_MULTIPLY),
-        crate::binding::BinaryOp::Divide => ("OP_DIVIDE", FUNC_ID_OP_DIVIDE),
-        crate::binding::BinaryOp::Concat => ("OP_CONCAT", FUNC_ID_OP_CONCAT),
-        crate::binding::BinaryOp::Equal => ("OP_EQUAL", FUNC_ID_OP_EQUAL),
-        crate::binding::BinaryOp::NotEqual => ("OP_NOT_EQUAL", FUNC_ID_OP_NOT_EQUAL),
-        crate::binding::BinaryOp::LessThan => ("OP_LESS_THAN", FUNC_ID_OP_LESS_THAN),
-        crate::binding::BinaryOp::LessEqual => ("OP_LESS_EQUAL", FUNC_ID_OP_LESS_EQUAL),
-        crate::binding::BinaryOp::GreaterThan => ("OP_GREATER_THAN", FUNC_ID_OP_GREATER_THAN),
-        crate::binding::BinaryOp::GreaterEqual => ("OP_GREATER_EQUAL", FUNC_ID_OP_GREATER_EQUAL),
+        BinaryOp::Add => ("OP_ADD", FUNC_ID_OP_ADD),
+        BinaryOp::Subtract => ("OP_SUBTRACT", FUNC_ID_OP_SUBTRACT),
+        BinaryOp::Power => ("OP_POWER", FUNC_ID_OP_POWER),
+        BinaryOp::Multiply => ("OP_MULTIPLY", FUNC_ID_OP_MULTIPLY),
+        BinaryOp::Divide => ("OP_DIVIDE", FUNC_ID_OP_DIVIDE),
+        BinaryOp::Concat => ("OP_CONCAT", FUNC_ID_OP_CONCAT),
+        BinaryOp::Equal => ("OP_EQUAL", FUNC_ID_OP_EQUAL),
+        BinaryOp::NotEqual => ("OP_NOT_EQUAL", FUNC_ID_OP_NOT_EQUAL),
+        BinaryOp::LessThan => ("OP_LESS_THAN", FUNC_ID_OP_LESS_THAN),
+        BinaryOp::LessEqual => ("OP_LESS_EQUAL", FUNC_ID_OP_LESS_EQUAL),
+        BinaryOp::GreaterThan => ("OP_GREATER_THAN", FUNC_ID_OP_GREATER_THAN),
+        BinaryOp::GreaterEqual => ("OP_GREATER_EQUAL", FUNC_ID_OP_GREATER_EQUAL),
     }
 }
 
@@ -2017,7 +2209,11 @@ fn evaluate_invocation(
         prepared_arguments.push(prepared_argument_for_call_arg(
             ordinal, arg, &prepared, true,
         ));
-        insert_helper_binding(&mut local_bindings, param.name.clone(), HelperBinding::Arg(prepared));
+        insert_helper_binding(
+            &mut local_bindings,
+            param.name.clone(),
+            HelperBinding::Arg(prepared),
+        );
     }
     for param in lambda.params.iter().skip(args.len()) {
         insert_helper_binding(
@@ -2179,8 +2375,10 @@ fn helper_binding_from_expr(
                     };
                 }
             }
-            if matches!(fallback, CallArgValue::Eval(EvalValue::Error(WorksheetErrorCode::Calc)))
-                && expr_is_hstack_empty_carrier(expr, helper_bindings)
+            if matches!(
+                fallback,
+                CallArgValue::Eval(EvalValue::Error(WorksheetErrorCode::Calc))
+            ) && expr_is_hstack_empty_carrier(expr, helper_bindings)
             {
                 return HelperBinding::EmptyHstackCarrier(fallback);
             }
@@ -2213,7 +2411,9 @@ fn expr_is_hstack_empty_carrier(
                 Some(HelperBinding::EmptyHstackCarrier(_))
             )
         }
-        BoundExpr::ImplicitIntersection(inner) => expr_is_hstack_empty_carrier(inner, helper_bindings),
+        BoundExpr::ImplicitIntersection(inner) => {
+            expr_is_hstack_empty_carrier(inner, helper_bindings)
+        }
         _ => false,
     }
 }
@@ -2242,8 +2442,10 @@ fn hstack_arg_should_collapse(
     call_arg: &CallArgValue,
     helper_bindings: &BTreeMap<String, HelperBinding>,
 ) -> bool {
-    matches!(call_arg, CallArgValue::Eval(EvalValue::Error(WorksheetErrorCode::Calc)))
-        && expr_is_hstack_empty_carrier(expr, helper_bindings)
+    matches!(
+        call_arg,
+        CallArgValue::Eval(EvalValue::Error(WorksheetErrorCode::Calc))
+    ) && expr_is_hstack_empty_carrier(expr, helper_bindings)
 }
 
 fn lambda_binding_for_callee(
@@ -3309,9 +3511,10 @@ fn call_arg_from_prepared(
     callable_registry: &RefCell<CallableRegistry>,
 ) -> CallArgValue {
     match prepared {
-        PreparedArgValue::Eval(value) => {
-            CallArgValue::Eval(decode_callable_carrier_scalar(value.clone(), callable_registry))
-        }
+        PreparedArgValue::Eval(value) => CallArgValue::Eval(decode_callable_carrier_scalar(
+            value.clone(),
+            callable_registry,
+        )),
         PreparedArgValue::MissingArg => CallArgValue::MissingArg,
         PreparedArgValue::EmptyCell => CallArgValue::EmptyCell,
     }

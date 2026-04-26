@@ -1061,6 +1061,7 @@ fn build_candidate_result(
                     bind_context_fingerprint: String::new(),
                     bind_hash: semantic_plan.bind_hash.clone(),
                     root: crate::binding::BoundExpr::NumberLiteral("0".to_string()),
+                    root_expression_is_grouped: false,
                     normalized_references: Vec::new(),
                     dependency_seeds: Vec::new(),
                     unresolved_references: Vec::new(),

@@ -25,22 +25,39 @@ fn evaluator_characterizes_ftc_0630_subnormal_boundary_family() {
         (
             "FTC-0630",
             "=2.2250738585072014E-308/10",
-            EvalValue::Number(2.225073858507203e-309),
+            EvalValue::Number(0.0),
         ),
         (
             "nearby-div2",
             "=2.2250738585072014E-308/2",
-            EvalValue::Number(1.1125369292536007e-308),
+            EvalValue::Number(0.0),
         ),
         (
             "nearby-div100",
             "=2.2250738585072014E-308/100",
-            EvalValue::Number(2.2250738585072e-310),
+            EvalValue::Number(0.0),
         ),
         (
             "nearby-double-div10",
             "=4.450147717014403E-308/10",
-            EvalValue::Number(4.4501477170144e-309),
+            EvalValue::Number(0.0),
+        ),
+        (
+            "literal-boundary-preserved",
+            "=2.2250738585072100E-308",
+            EvalValue::Number(2.22507385850721e-308),
+        ),
+        (
+            "preserved-boundary-div2",
+            "=2.2250738585072100E-308/2",
+            EvalValue::Number(0.0),
+        ),
+        ("nonzero-control", "=5E-308/2", EvalValue::Number(2.5e-308)),
+        ("power-underflow", "=POWER(2,-1023)", EvalValue::Number(0.0)),
+        (
+            "power-min-normal",
+            "=POWER(2,-1022)",
+            EvalValue::Number(f64::MIN_POSITIVE),
         ),
     ];
 
@@ -64,22 +81,39 @@ fn runtime_characterizes_ftc_0630_subnormal_boundary_family() {
         (
             "FTC-0630",
             "=2.2250738585072014E-308/10",
-            EvalValue::Number(2.225073858507203e-309),
+            EvalValue::Number(0.0),
         ),
         (
             "nearby-div2",
             "=2.2250738585072014E-308/2",
-            EvalValue::Number(1.1125369292536007e-308),
+            EvalValue::Number(0.0),
         ),
         (
             "nearby-div100",
             "=2.2250738585072014E-308/100",
-            EvalValue::Number(2.2250738585072e-310),
+            EvalValue::Number(0.0),
         ),
         (
             "nearby-double-div10",
             "=4.450147717014403E-308/10",
-            EvalValue::Number(4.4501477170144e-309),
+            EvalValue::Number(0.0),
+        ),
+        (
+            "literal-boundary-preserved",
+            "=2.2250738585072100E-308",
+            EvalValue::Number(2.22507385850721e-308),
+        ),
+        (
+            "preserved-boundary-div2",
+            "=2.2250738585072100E-308/2",
+            EvalValue::Number(0.0),
+        ),
+        ("nonzero-control", "=5E-308/2", EvalValue::Number(2.5e-308)),
+        ("power-underflow", "=POWER(2,-1023)", EvalValue::Number(0.0)),
+        (
+            "power-min-normal",
+            "=POWER(2,-1022)",
+            EvalValue::Number(f64::MIN_POSITIVE),
         ),
     ];
 
@@ -91,10 +125,12 @@ fn runtime_characterizes_ftc_0630_subnormal_boundary_family() {
             ))
             .expect("runtime execution should succeed");
 
-        assert_eq!(result.published_worksheet_value, expected, "{case_id} runtime value");
         assert_eq!(
-            result.verification_publication_surface.published_value,
-            expected,
+            result.published_worksheet_value, expected,
+            "{case_id} runtime value"
+        );
+        assert_eq!(
+            result.verification_publication_surface.published_value, expected,
             "{case_id} publication value"
         );
     }

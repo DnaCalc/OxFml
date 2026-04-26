@@ -673,6 +673,48 @@ fn evaluator_consumes_broader_float_comparison_family_split() {
 }
 
 #[test]
+fn evaluator_publishes_excel_root_add_subtract_zero_reaching_result() {
+    let root_zero = evaluate("=0.1+0.2-0.3", None, None, Some(&en_us_context()));
+    assert_eq!(root_zero.oxfunc_value, EvalValue::Number(0.0));
+
+    let grouped_root = evaluate("=(0.1+0.2-0.3)", None, None, Some(&en_us_context()));
+    assert_eq!(
+        grouped_root.oxfunc_value,
+        EvalValue::Number(5.551115123125783e-17)
+    );
+
+    let scaled = evaluate("=(0.1+0.2-0.3)*1E17", None, None, Some(&en_us_context()));
+    assert_eq!(scaled.oxfunc_value, EvalValue::Number(5.551115123125783));
+
+    let condition = evaluate("=IF(0.1+0.2-0.3,1,0)", None, None, Some(&en_us_context()));
+    assert_eq!(condition.oxfunc_value, EvalValue::Number(1.0));
+
+    let comparison = evaluate("=(0.1+0.2-0.3)=0", None, None, Some(&en_us_context()));
+    assert_eq!(comparison.oxfunc_value, EvalValue::Logical(false));
+
+    let small_intended_delta = evaluate("=1E-17+(-2E-17)", None, None, Some(&en_us_context()));
+    assert_eq!(
+        small_intended_delta.oxfunc_value,
+        EvalValue::Number(-1.0e-17)
+    );
+
+    let larger_residue = evaluate("=0.300000000000001-0.3", None, None, Some(&en_us_context()));
+    assert_eq!(
+        larger_residue.oxfunc_value,
+        EvalValue::Number(9.992007221626409e-16)
+    );
+
+    let large_exact_delta = evaluate("=(1E15+1)-1E15", None, None, Some(&en_us_context()));
+    assert_eq!(large_exact_delta.oxfunc_value, EvalValue::Number(1.0));
+
+    let larger_absolute_residue = evaluate("=43.1-43.2+0.1", None, None, Some(&en_us_context()));
+    assert_eq!(
+        larger_absolute_residue.oxfunc_value,
+        EvalValue::Number(-1.4155343563970746e-15)
+    );
+}
+
+#[test]
 fn evaluator_dispatches_range_and_intersection_reference_operators_to_oxfunc() {
     let range = evaluate("=SUM(A1:B2)", None, None, Some(&en_us_context()));
     assert_eq!(range.oxfunc_value, EvalValue::Number(31.0));

@@ -101,6 +101,7 @@ pub struct BoundFormula {
     pub bind_context_fingerprint: String,
     pub bind_hash: String,
     pub root: BoundExpr,
+    pub root_expression_is_grouped: bool,
     pub normalized_references: Vec<NormalizedReference>,
     pub dependency_seeds: Vec<DependencySeed>,
     pub unresolved_references: Vec<UnresolvedReferenceRecord>,
@@ -194,8 +195,9 @@ pub fn bind_formula(request: BindRequest) -> BindResult {
         })
         .expect("formula root should contain an expression node");
 
+    let root_expression_is_grouped = expr_node.kind == SyntaxKind::GroupingExpr;
     let root = binder.bind_expr(expr_node);
-    let bind_hash = hash_debug(&root);
+    let bind_hash = hash_debug(&(root_expression_is_grouped, &root));
 
     BindResult {
         bound_formula: BoundFormula {
@@ -205,6 +207,7 @@ pub fn bind_formula(request: BindRequest) -> BindResult {
             bind_context_fingerprint,
             bind_hash,
             root,
+            root_expression_is_grouped,
             normalized_references: binder.normalized_references,
             dependency_seeds: binder.dependency_seeds,
             unresolved_references: binder.unresolved_references,
