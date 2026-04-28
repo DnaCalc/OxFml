@@ -288,8 +288,10 @@ fn project_runtime_result(
     source_case_id: Option<String>,
     shared_scenario_alias: Option<String>,
 ) -> ReplayProjectionResult {
-    let verification_publication_surface =
-        result.first_host_replay_capture_packet.verification_publication_surface.clone();
+    let verification_publication_surface = result
+        .first_host_replay_capture_packet
+        .verification_publication_surface
+        .clone();
 
     ReplayProjectionResult {
         source_artifact_family: "runtime_formula_result".to_string(),

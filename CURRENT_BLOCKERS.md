@@ -1,14 +1,22 @@
 # CURRENT_BLOCKERS.md — OxFml
 
-Status: no active blockers.
+Status: 1 active blocker.
 
-Last reviewed: 2026-04-06 after `W056` replay comparison-view projection validation.
+Last reviewed: 2026-04-19 after `FTC-0902` callable-boundary decomposition review.
 
 ---
 
 ## Active Blockers
 
-(none)
+### BLK-FML-004: `FTC-0902` exact reduced `row(...)` witnesses currently collapse into the existing built-in-collision frontier
+
+- **Status**: active
+- **Impact**: blocks any safe OxFml patch for the current exact `FTC-0902` reduced witness set
+- **Current state**: repo-local probes show the retained blocked witnesses use LET binder name `row`, which collides with built-in `ROW`; the exact blocked forms fail locally, but the same self-application / returned-lambda forms succeed immediately when renamed to a non-colliding helper such as `grow`, so the current evidence does not support a new generic higher-order callable patch
+- **Exact unblock steps**: obtain one of: (a) a non-built-in exact witness that still fails, or (b) authoritative host evidence that built-in-colliding `row` should shadow `ROW` in this callable self-application lane despite the existing `FTC-0443/0444` collision frontier
+- **Recommendation**: wait
+
+---
 
 ---
 

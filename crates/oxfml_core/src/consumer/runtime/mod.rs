@@ -186,7 +186,11 @@ impl<'a> RuntimeEnvironment<'a> {
         request: RuntimeFormulaRequest<'q>,
     ) -> Result<RuntimeFormulaResult, String> {
         let compiled = compile_runtime_prepare_request(self, &request)?;
-        if compiled.prepare_request.semantic_plan.execution_profile.requires_locale
+        if compiled
+            .prepare_request
+            .semantic_plan
+            .execution_profile
+            .requires_locale
             && request.typed_query_bundle.locale_ctx.is_none()
         {
             return Err(
@@ -310,7 +314,8 @@ impl RuntimeFormulaResult {
     fn from_host_output(host_output: HostRecalcOutput) -> Self {
         let verification_publication_surface = host_output.verification_publication_surface.clone();
         let first_host_replay_capture_packet = host_output.to_first_host_replay_capture_packet();
-        let comparison_views = build_verification_comparison_views(&verification_publication_surface);
+        let comparison_views =
+            build_verification_comparison_views(&verification_publication_surface);
         Self {
             source: host_output.source,
             syntax_diagnostics: host_output.syntax_diagnostics,

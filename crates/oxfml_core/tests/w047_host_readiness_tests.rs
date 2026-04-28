@@ -327,7 +327,10 @@ fn first_host_replay_capture_packet_surfaces_bind_boundary_execution_outcome() {
         packet.execution_outcome_surface.outcome_stage,
         ExecutionOutcomeStage::BindBoundary
     );
-    assert_eq!(packet.execution_outcome_surface.class_id, "bind_boundary_reject");
+    assert_eq!(
+        packet.execution_outcome_surface.class_id,
+        "bind_boundary_reject"
+    );
     assert_eq!(
         packet.execution_outcome_surface.lane_reason_code.as_deref(),
         Some("BindMismatch")

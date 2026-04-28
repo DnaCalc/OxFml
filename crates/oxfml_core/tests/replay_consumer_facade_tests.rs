@@ -379,15 +379,16 @@ fn replay_projection_service_preserves_first_host_capture_comparison_value_for_t
             session_id: output.candidate_result.session_id.clone(),
             packet: output.to_first_host_replay_capture_packet(),
         };
-        let projection = ReplayProjectionService::project(
-            ReplayProjectionRequest::first_host_capture(&source),
-        );
+        let projection =
+            ReplayProjectionService::project(ReplayProjectionRequest::first_host_capture(&source));
 
         assert_eq!(
             projection
                 .comparison_views
                 .as_ref()
-                .and_then(|views| views.iter().find(|view| view.view_family == "comparison_value"))
+                .and_then(|views| views
+                    .iter()
+                    .find(|view| view.view_family == "comparison_value"))
                 .map(|view| view.value.clone()),
             Some(expected_comparison_value),
             "{case_id} comparison_value"
@@ -466,12 +467,20 @@ fn replay_projection_service_matches_dnaonecalc_exact_request_shape_for_runtime_
                         formula,
                     )
                     .with_formula_channel_kind(FormulaChannelKind::WorksheetA1),
-                    TypedContextQueryBundle::new(None, None, Some(&locale), Some(46000.0), Some(0.25)),
+                    TypedContextQueryBundle::new(
+                        None,
+                        None,
+                        Some(&locale),
+                        Some(46000.0),
+                        Some(0.25),
+                    ),
                 )
                 .with_verification_publication_context(verification_context.clone()),
             )
             .unwrap_or_else(|error| {
-                panic!("{case_id} runtime execution with verification context should succeed: {error}")
+                panic!(
+                    "{case_id} runtime execution with verification context should succeed: {error}"
+                )
             });
 
         assert_eq!(
@@ -480,15 +489,16 @@ fn replay_projection_service_matches_dnaonecalc_exact_request_shape_for_runtime_
             "{case_id} formula channel"
         );
         let projection = ReplayProjectionService::project(
-            ReplayProjectionRequest::runtime_result(&runtime_result)
-                .with_source_case_id(case_id),
+            ReplayProjectionRequest::runtime_result(&runtime_result).with_source_case_id(case_id),
         );
 
         assert_eq!(
             projection
                 .comparison_views
                 .as_ref()
-                .and_then(|views| views.iter().find(|view| view.view_family == "comparison_value"))
+                .and_then(|views| views
+                    .iter()
+                    .find(|view| view.view_family == "comparison_value"))
                 .map(|view| view.value.clone()),
             Some(expected_comparison_value),
             "{case_id} comparison_value"
@@ -528,10 +538,15 @@ fn replay_projection_service_prefers_first_host_capture_publication_surface_for_
 
     let mut mutated = runtime_result.clone();
     mutated.verification_publication_surface.format_profile = None;
-    mutated.verification_publication_surface.locale_format_context = None;
-    mutated.verification_publication_surface.published_value = EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Value);
+    mutated
+        .verification_publication_surface
+        .locale_format_context = None;
+    mutated.verification_publication_surface.published_value =
+        EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Value);
     mutated.verification_publication_surface.visible_value_text = "#VALUE!".to_string();
-    mutated.verification_publication_surface.effective_display_text = "#VALUE!".to_string();
+    mutated
+        .verification_publication_surface
+        .effective_display_text = "#VALUE!".to_string();
 
     let projection = ReplayProjectionService::project(
         ReplayProjectionRequest::runtime_result(&mutated)
@@ -542,7 +557,9 @@ fn replay_projection_service_prefers_first_host_capture_publication_surface_for_
         projection
             .comparison_views
             .as_ref()
-            .and_then(|views| views.iter().find(|view| view.view_family == "comparison_value"))
+            .and_then(|views| views
+                .iter()
+                .find(|view| view.view_family == "comparison_value"))
             .map(|view| view.value.clone()),
         Some(serde_json::json!({"kind": "text", "value": "July"}))
     );
@@ -699,7 +716,9 @@ fn replay_projection_service_surfaces_bind_boundary_execution_outcome() {
         runtime_projection
             .comparison_views
             .as_ref()
-            .and_then(|views| views.iter().find(|view| view.view_family == "execution_outcome"))
+            .and_then(|views| views
+                .iter()
+                .find(|view| view.view_family == "execution_outcome"))
             .map(|view| view.value.clone()),
         Some(serde_json::json!({
             "outcome_kind": "rejected",
@@ -750,15 +769,16 @@ fn replay_projection_service_emits_effective_display_text_for_programmatic_verif
             .effective_display_text
             .clone();
 
-        let runtime_projection =
-            ReplayProjectionService::project(ReplayProjectionRequest::runtime_result(&runtime_result));
+        let runtime_projection = ReplayProjectionService::project(
+            ReplayProjectionRequest::runtime_result(&runtime_result),
+        );
 
         assert_eq!(
             runtime_projection
                 .comparison_views
                 .as_ref()
                 .map(|views| views.len()),
-            Some(3),
+            Some(4),
             "{case_id} runtime projection view count"
         );
         assert_eq!(
@@ -802,19 +822,16 @@ fn replay_projection_service_emits_effective_display_text_for_programmatic_verif
                 .comparison_views
                 .as_ref()
                 .map(|views| views.len()),
-            Some(3),
+            Some(4),
             "{case_id} first-host projection view count"
         );
         assert_eq!(
-            host_projection
-                .comparison_views
-                .as_ref()
-                .and_then(|views| {
-                    views
-                        .iter()
-                        .find(|view| view.view_family == "effective_display_text")
-                        .map(|view| view.value.clone())
-                }),
+            host_projection.comparison_views.as_ref().and_then(|views| {
+                views
+                    .iter()
+                    .find(|view| view.view_family == "effective_display_text")
+                    .map(|view| view.value.clone())
+            }),
             Some(Value::String(expected_text)),
             "{case_id} first-host projection effective_display_text"
         );
@@ -995,10 +1012,7 @@ fn replay_projection_service_projects_runtime_managed_session_results() {
         commit_projection.commit_decision_kind.as_deref(),
         Some("accepted")
     );
-    assert_eq!(
-        commit.execution_outcome_surface.class_id,
-        "executed_result"
-    );
+    assert_eq!(commit.execution_outcome_surface.class_id, "executed_result");
     assert_eq!(
         commit_projection.execution_outcome_surface,
         Some(commit.execution_outcome_surface.clone())

@@ -27,7 +27,10 @@ fn bind_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::bind
     })
 }
 
-fn runtime_execute(formula_stable_id: &str, formula: &str) -> oxfml_core::consumer::runtime::RuntimeFormulaResult {
+fn runtime_execute(
+    formula_stable_id: &str,
+    formula: &str,
+) -> oxfml_core::consumer::runtime::RuntimeFormulaResult {
     let locale = en_us_context();
     RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
@@ -50,7 +53,11 @@ fn bind_surfaces_caller_context_locator_authoring_frontier_for_colliding_row_cal
         )
     }));
 
-    let BoundExpr::FunctionCall { function_name, args } = &bind.bound_formula.root else {
+    let BoundExpr::FunctionCall {
+        function_name,
+        args,
+    } = &bind.bound_formula.root
+    else {
         panic!("expected LET root, got {:?}", bind.bound_formula.root);
     };
     assert_eq!(function_name, "LET");
@@ -63,10 +70,14 @@ fn bind_surfaces_caller_context_locator_authoring_frontier_for_colliding_row_cal
         args: row_args,
     } = callee.as_ref()
     else {
-        panic!("expected built-in ROW callable-position call, got {:?}", callee);
+        panic!(
+            "expected built-in ROW callable-position call, got {:?}",
+            callee
+        );
     };
     assert_eq!(function_name, "ROW");
-    let BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Name(name))) = &row_args[0] else {
+    let BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Name(name))) = &row_args[0]
+    else {
         panic!("expected helper-local ROW arg, got {:?}", row_args[0]);
     };
     assert_eq!(name.kind, NameKind::HelperLocal);
@@ -161,10 +172,12 @@ fn runtime_preserves_alias_escape_hatch_for_colliding_row_callables() {
             ExecutionOutcomeKind::ExecutedResult,
             "{case_id} outcome kind"
         );
-        assert_eq!(result.published_worksheet_value, expected_value, "{case_id} value");
         assert_eq!(
-            result.verification_publication_surface.visible_value_text,
-            expected_text,
+            result.published_worksheet_value, expected_value,
+            "{case_id} value"
+        );
+        assert_eq!(
+            result.verification_publication_surface.visible_value_text, expected_text,
             "{case_id} visible text"
         );
     }

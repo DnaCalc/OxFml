@@ -67,18 +67,33 @@ fn text_eval_value(text: &str) -> EvalValue {
 fn evaluator_characterizes_ftc_0288_rule_edges() {
     let contexts = [
         ("comma-thousands", en_us_context_with_separators(".", ",")),
-        ("nbsp-thousands", en_us_context_with_separators(".", "\u{00A0}")),
+        (
+            "nbsp-thousands",
+            en_us_context_with_separators(".", "\u{00A0}"),
+        ),
         ("decimal-comma", en_us_context_with_separators(",", ".")),
     ];
     let cases = [
-        ("hash-triple-comma", "=TEXT(123456789,\"#,,,\")", ["0", "123456789,,,", "123456789,,,"]),
-        ("zero-triple-comma", "=TEXT(123456789,\"0,,,\")", ["0", "123456789,,,", "123456789,,,"]),
+        (
+            "hash-triple-comma",
+            "=TEXT(123456789,\"#,,,\")",
+            ["0", "123456789,,,", "123456789,,,"],
+        ),
+        (
+            "zero-triple-comma",
+            "=TEXT(123456789,\"0,,,\")",
+            ["0", "123456789,,,", "123456789,,,"],
+        ),
         (
             "grouped-triple-comma",
             "=TEXT(123456789,\"#,##0,,,\")",
             ["0", "123456,789,,,", "123456,789,,,"],
         ),
-        ("hash-decimal-zero-comma", "=TEXT(1234.5,\"#.0,\")", ["1234.5", "1234.5", "1234,5"]),
+        (
+            "hash-decimal-zero-comma",
+            "=TEXT(1234.5,\"#.0,\")",
+            ["1234.5", "1234.5", "1234,5"],
+        ),
         (
             "hash-decimal-double-hash",
             "=TEXT(1234567.89,\"#.##\")",
@@ -117,7 +132,10 @@ fn evaluator_characterizes_ftc_0288_rule_edges() {
 fn formatter_characterizes_ftc_0288_decimal_scaling_suffix_edges() {
     let contexts = [
         ("comma-thousands", en_us_context_with_separators(".", ",")),
-        ("nbsp-thousands", en_us_context_with_separators(".", "\u{00A0}")),
+        (
+            "nbsp-thousands",
+            en_us_context_with_separators(".", "\u{00A0}"),
+        ),
         ("decimal-comma", en_us_context_with_separators(",", ".")),
     ];
 
@@ -129,7 +147,12 @@ fn formatter_characterizes_ftc_0288_decimal_scaling_suffix_edges() {
             _ => unreachable!(),
         };
         assert_eq!(
-            render_with_code(&locale.profile, locale.date_system, 1234567.89, "0.0,,\"M\""),
+            render_with_code(
+                &locale.profile,
+                locale.date_system,
+                1234567.89,
+                "0.0,,\"M\""
+            ),
             Ok(expected_text.to_string()),
             "{context_id} formatter output"
         );
@@ -149,18 +172,33 @@ fn runtime_characterizes_ftc_0288_rule_edges() {
     };
     let contexts = [
         ("comma-thousands", en_us_context_with_separators(".", ",")),
-        ("nbsp-thousands", en_us_context_with_separators(".", "\u{00A0}")),
+        (
+            "nbsp-thousands",
+            en_us_context_with_separators(".", "\u{00A0}"),
+        ),
         ("decimal-comma", en_us_context_with_separators(",", ".")),
     ];
     let cases = [
-        ("hash-triple-comma", "=TEXT(123456789,\"#,,,\")", ["0", "123456789,,,", "123456789,,,"]),
-        ("zero-triple-comma", "=TEXT(123456789,\"0,,,\")", ["0", "123456789,,,", "123456789,,,"]),
+        (
+            "hash-triple-comma",
+            "=TEXT(123456789,\"#,,,\")",
+            ["0", "123456789,,,", "123456789,,,"],
+        ),
+        (
+            "zero-triple-comma",
+            "=TEXT(123456789,\"0,,,\")",
+            ["0", "123456789,,,", "123456789,,,"],
+        ),
         (
             "grouped-triple-comma",
             "=TEXT(123456789,\"#,##0,,,\")",
             ["0", "123456,789,,,", "123456,789,,,"],
         ),
-        ("hash-decimal-zero-comma", "=TEXT(1234.5,\"#.0,\")", ["1234.5", "1234.5", "1234,5"]),
+        (
+            "hash-decimal-zero-comma",
+            "=TEXT(1234.5,\"#.0,\")",
+            ["1234.5", "1234.5", "1234,5"],
+        ),
         (
             "hash-decimal-double-hash",
             "=TEXT(1234567.89,\"#.##\")",
@@ -196,18 +234,15 @@ fn runtime_characterizes_ftc_0288_rule_edges() {
                 });
 
             assert_eq!(
-                result.published_worksheet_value,
-                expected_value,
+                result.published_worksheet_value, expected_value,
                 "{context_id}/{case_id} published_worksheet_value"
             );
             assert_eq!(
-                result.verification_publication_surface.published_value,
-                expected_value,
+                result.verification_publication_surface.published_value, expected_value,
                 "{context_id}/{case_id} verification_publication_surface.published_value"
             );
             assert_eq!(
-                result.verification_publication_surface.visible_value_text,
-                expected_text,
+                result.verification_publication_surface.visible_value_text, expected_text,
                 "{context_id}/{case_id} visible_value_text"
             );
         }

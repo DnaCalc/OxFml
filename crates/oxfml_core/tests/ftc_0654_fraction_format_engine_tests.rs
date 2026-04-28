@@ -5,7 +5,9 @@ mod common;
 use oxfml_core::consumer::runtime::{RuntimeEnvironment, RuntimeFormulaRequest};
 use oxfml_core::eval::{EvaluationContext, evaluate_formula};
 use oxfml_core::format::{en_us_context, render_with_code};
-use oxfml_core::test_support::oxfunc_adapter::{OxFuncAdapterRequest, run_oxfunc_preparation_adapter};
+use oxfml_core::test_support::oxfunc_adapter::{
+    OxFuncAdapterRequest, run_oxfunc_preparation_adapter,
+};
 use oxfml_core::{FormulaSourceRecord, TypedContextQueryBundle};
 use oxfunc_core::locale_format::FormatFailure;
 use oxfunc_core::value::WorksheetErrorCode;
@@ -36,7 +38,10 @@ fn format_engine_rejects_unsupported_fraction_placeholder_text_code_ftc_0654() {
 #[test]
 fn evaluator_rejects_unsupported_fraction_placeholder_text_code_ftc_0654() {
     let output = evaluate_formula_text("ftc-0654:evaluator", "=TEXT(0.25,\"# ?/?\")");
-    assert_eq!(output.oxfunc_value, EvalValue::Error(WorksheetErrorCode::Value));
+    assert_eq!(
+        output.oxfunc_value,
+        EvalValue::Error(WorksheetErrorCode::Value)
+    );
 }
 
 #[test]
@@ -49,8 +54,14 @@ fn runtime_rejects_unsupported_fraction_placeholder_text_code_ftc_0654() {
         ))
         .expect("runtime execution should succeed");
 
-    assert_eq!(result.published_worksheet_value, EvalValue::Error(WorksheetErrorCode::Value));
-    assert_eq!(result.verification_publication_surface.visible_value_text, "#VALUE!");
+    assert_eq!(
+        result.published_worksheet_value,
+        EvalValue::Error(WorksheetErrorCode::Value)
+    );
+    assert_eq!(
+        result.verification_publication_surface.visible_value_text,
+        "#VALUE!"
+    );
 }
 
 #[test]

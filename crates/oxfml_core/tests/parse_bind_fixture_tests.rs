@@ -564,7 +564,10 @@ fn bind_accepts_filterxml_embedded_quoted_xml_string_for_ftc_1041() {
         args,
     } = &bind.bound_formula.root
     else {
-        panic!("expected FILTERXML call root, got {:?}", bind.bound_formula.root);
+        panic!(
+            "expected FILTERXML call root, got {:?}",
+            bind.bound_formula.root
+        );
     };
     assert_eq!(function_name, "FILTERXML");
     assert_eq!(args.len(), 2);
@@ -593,7 +596,10 @@ fn parse_rejects_unbalanced_deep_parenthesis_family_for_ftc_0916_and_ftc_0987() 
     });
 
     assert_eq!(parse.green_tree.diagnostics.len(), 1);
-    assert_eq!(parse.green_tree.diagnostics[0].message, "expected ')'".to_string());
+    assert_eq!(
+        parse.green_tree.diagnostics[0].message,
+        "expected ')'".to_string()
+    );
 
     let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
     let bind = bind_formula(BindRequest {

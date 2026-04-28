@@ -667,15 +667,12 @@ fn runtime_environment_emits_effective_display_text_comparison_view_for_programm
 }
 
 #[test]
-fn runtime_environment_preserves_randarray_width_for_columns_ftc_0505_without_explicit_random_bundle() {
+fn runtime_environment_preserves_randarray_width_for_columns_ftc_0505_without_explicit_random_bundle()
+ {
     let locale = en_us_context();
     let result = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
-            FormulaSourceRecord::new(
-                "runtime:foundation:FTC-0505",
-                1,
-                "=COLUMNS(RANDARRAY(5,3))",
-            ),
+            FormulaSourceRecord::new("runtime:foundation:FTC-0505", 1, "=COLUMNS(RANDARRAY(5,3))"),
             TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
         ))
         .expect("FTC-0505 runtime execution should succeed");
@@ -686,13 +683,20 @@ fn runtime_environment_preserves_randarray_width_for_columns_ftc_0505_without_ex
         ExecutionOutcomeKind::ExecutedResult
     );
     assert_eq!(
-        result.comparison_views.iter().find(|view| view.view_family == "comparison_value").map(|view| view.value.clone()),
+        result
+            .comparison_views
+            .iter()
+            .find(|view| view.view_family == "comparison_value")
+            .map(|view| view.value.clone()),
         Some(serde_json::json!({
             "kind": "number",
             "value": 3.0
         }))
     );
-    assert_eq!(result.verification_publication_surface.visible_value_text, "3");
+    assert_eq!(
+        result.verification_publication_surface.visible_value_text,
+        "3"
+    );
     assert!(
         result
             .typed_query_bundle_spec
@@ -842,7 +846,12 @@ fn runtime_environment_mirrors_builtin_frontier_for_colliding_let_call_shapes() 
             text_eval_value("x"),
             "x",
         ),
-        ("plain-gcd-two", "=GCD(48,36)", EvalValue::Number(12.0), "12"),
+        (
+            "plain-gcd-two",
+            "=GCD(48,36)",
+            EvalValue::Number(12.0),
+            "12",
+        ),
         (
             "colliding-gcd-two",
             "=LET(gcd,LAMBDA(42),gcd(48,36))",
@@ -863,17 +872,21 @@ fn runtime_environment_mirrors_builtin_frontier_for_colliding_let_call_shapes() 
                 FormulaSourceRecord::new(format!("runtime:{case_id}"), 1, formula),
                 TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
             ))
-            .unwrap_or_else(|error| panic!("{case_id} runtime execution should succeed: {error:?}"));
+            .unwrap_or_else(|error| {
+                panic!("{case_id} runtime execution should succeed: {error:?}")
+            });
 
         assert_eq!(
             result.execution_outcome_surface.outcome_kind,
             ExecutionOutcomeKind::ExecutedResult,
             "{case_id} outcome kind"
         );
-        assert_eq!(result.published_worksheet_value, expected_value, "{case_id} value");
         assert_eq!(
-            result.verification_publication_surface.visible_value_text,
-            expected_text,
+            result.published_worksheet_value, expected_value,
+            "{case_id} value"
+        );
+        assert_eq!(
+            result.verification_publication_surface.visible_value_text, expected_text,
             "{case_id} visible text"
         );
     }
@@ -1103,7 +1116,9 @@ fn runtime_environment_matches_dnaonecalc_exact_request_shape_for_text_date_fami
                 .with_verification_publication_context(verification_context.clone()),
             )
             .unwrap_or_else(|error| {
-                panic!("{case_id} runtime execution with verification context should succeed: {error}")
+                panic!(
+                    "{case_id} runtime execution with verification context should succeed: {error}"
+                )
             });
 
         assert_eq!(
@@ -1111,7 +1126,10 @@ fn runtime_environment_matches_dnaonecalc_exact_request_shape_for_text_date_fami
             FormulaChannelKind::WorksheetA1,
             "{case_id} formula channel"
         );
-        assert_eq!(result.published_worksheet_value, expected_value, "{case_id} published worksheet value");
+        assert_eq!(
+            result.published_worksheet_value, expected_value,
+            "{case_id} published worksheet value"
+        );
         assert_eq!(
             result
                 .comparison_views
@@ -1122,7 +1140,10 @@ fn runtime_environment_matches_dnaonecalc_exact_request_shape_for_text_date_fami
             "{case_id} comparison_value"
         );
         assert_eq!(
-            result.verification_publication_surface.format_profile.as_deref(),
+            result
+                .verification_publication_surface
+                .format_profile
+                .as_deref(),
             Some("en-US"),
             "{case_id} format_profile"
         );
@@ -1134,8 +1155,7 @@ fn runtime_environment_matches_dnaonecalc_exact_request_shape_for_text_date_fami
             "{case_id} locale_format_context"
         );
         assert_eq!(
-            result.verification_publication_surface.published_value,
-            expected_value,
+            result.verification_publication_surface.published_value, expected_value,
             "{case_id} verification surface published_value"
         );
         assert_eq!(
@@ -1147,7 +1167,9 @@ fn runtime_environment_matches_dnaonecalc_exact_request_shape_for_text_date_fami
             "{case_id} first-host capture published_value"
         );
         assert_eq!(
-            result.first_host_replay_capture_packet.verification_publication_surface,
+            result
+                .first_host_replay_capture_packet
+                .verification_publication_surface,
             result.verification_publication_surface,
             "{case_id} first-host capture surface"
         );
@@ -1223,10 +1245,12 @@ fn runtime_environment_canonicalizes_en_us_locale_context_engines_for_text_date_
                 panic!("{case_id} runtime execution with foreign locale engines should succeed: {error}")
             });
 
-        assert_eq!(result.published_worksheet_value, expected_value, "{case_id} published worksheet value");
         assert_eq!(
-            result.verification_publication_surface.published_value,
-            expected_value,
+            result.published_worksheet_value, expected_value,
+            "{case_id} published worksheet value"
+        );
+        assert_eq!(
+            result.verification_publication_surface.published_value, expected_value,
             "{case_id} verification surface published_value"
         );
         assert_eq!(

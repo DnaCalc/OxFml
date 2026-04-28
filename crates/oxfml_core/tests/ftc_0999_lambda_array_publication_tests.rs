@@ -23,8 +23,11 @@ fn evaluate_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::
 
 fn calc_error_row(width: usize) -> EvalValue {
     EvalValue::Array(
-        EvalArray::from_rows(vec![vec![ArrayCellValue::Error(WorksheetErrorCode::Calc); width]])
-            .expect("row array"),
+        EvalArray::from_rows(vec![vec![
+            ArrayCellValue::Error(WorksheetErrorCode::Calc);
+            width
+        ]])
+        .expect("row array"),
     )
 }
 
@@ -50,7 +53,9 @@ fn host_and_runtime_publish_calc_for_lambda_valued_map_array_ftc_0999() {
         .expect("host recalc should succeed");
     assert_eq!(host_output.published_worksheet_value, expected);
     assert_eq!(
-        host_output.verification_publication_surface.visible_value_text,
+        host_output
+            .verification_publication_surface
+            .visible_value_text,
         "#CALC!"
     );
 
@@ -61,7 +66,10 @@ fn host_and_runtime_publish_calc_for_lambda_valued_map_array_ftc_0999() {
         ))
         .expect("runtime execution should succeed");
     assert_eq!(runtime.published_worksheet_value, expected);
-    assert_eq!(runtime.verification_publication_surface.visible_value_text, "#CALC!");
+    assert_eq!(
+        runtime.verification_publication_surface.visible_value_text,
+        "#CALC!"
+    );
 }
 
 #[test]
@@ -79,5 +87,8 @@ fn lambda_array_selector_control_remains_green_ftc_0999() {
         ))
         .expect("runtime execution should succeed");
     assert_eq!(runtime.published_worksheet_value, EvalValue::Number(10.0));
-    assert_eq!(runtime.verification_publication_surface.visible_value_text, "10");
+    assert_eq!(
+        runtime.verification_publication_surface.visible_value_text,
+        "10"
+    );
 }

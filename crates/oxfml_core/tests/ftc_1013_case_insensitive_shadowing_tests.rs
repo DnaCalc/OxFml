@@ -49,7 +49,10 @@ fn evaluator_respects_case_insensitive_lambda_parameter_shadowing_ftc_1013() {
     let shadow_formula = "=LET(N,4,ks,SEQUENCE(N,,0),MAP(ks,LAMBDA(n,1/N)))";
 
     let control = evaluate_formula_text("ftc-1013:control", control_formula);
-    assert_eq!(control.oxfunc_value, array_numbers(&[0.25, 0.25, 0.25, 0.25]));
+    assert_eq!(
+        control.oxfunc_value,
+        array_numbers(&[0.25, 0.25, 0.25, 0.25])
+    );
 
     let shadow = evaluate_formula_text("ftc-1013:shadow", shadow_formula);
     assert_eq!(shadow.oxfunc_value, array_shadow_expected());
@@ -61,7 +64,10 @@ fn evaluator_respects_case_insensitive_lambda_parameter_shadowing_simple_invocat
     assert_eq!(hit.oxfunc_value, EvalValue::Number(0.5));
 
     let zero = evaluate_formula_text("ftc-1013:simple-zero", "=LET(N,4,LAMBDA(n,1/N)(0))");
-    assert_eq!(zero.oxfunc_value, EvalValue::Error(WorksheetErrorCode::Div0));
+    assert_eq!(
+        zero.oxfunc_value,
+        EvalValue::Error(WorksheetErrorCode::Div0)
+    );
 }
 
 #[test]
@@ -87,7 +93,14 @@ fn runtime_respects_case_insensitive_lambda_parameter_shadowing_ftc_1013() {
             ))
             .expect("runtime execution should succeed");
 
-        assert_eq!(result.bind_diagnostics, Vec::new(), "{case_id} bind diagnostics");
-        assert_eq!(result.published_worksheet_value, expected, "{case_id} runtime value");
+        assert_eq!(
+            result.bind_diagnostics,
+            Vec::new(),
+            "{case_id} bind diagnostics"
+        );
+        assert_eq!(
+            result.published_worksheet_value, expected,
+            "{case_id} runtime value"
+        );
     }
 }

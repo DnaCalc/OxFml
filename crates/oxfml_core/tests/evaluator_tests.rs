@@ -1012,6 +1012,21 @@ fn evaluator_runs_indirect_offset_and_iferror() {
 }
 
 #[test]
+fn evaluator_maps_unknown_function_call_to_name_error() {
+    let output = evaluate("=NOSUCH(1)", None, None, Some(&en_us_context()));
+    assert_eq!(
+        output.oxfunc_value,
+        EvalValue::Error(WorksheetErrorCode::Name)
+    );
+}
+
+#[test]
+fn evaluator_iferror_catches_unknown_function_name_error() {
+    let output = evaluate("=IFERROR(NOSUCH(1),0)", None, None, Some(&en_us_context()));
+    assert_eq!(output.oxfunc_value, EvalValue::Number(0.0));
+}
+
+#[test]
 fn evaluator_preserves_if_branch_laziness_locally() {
     let output = evaluate("=IF(TRUE,1,1/0)", None, None, Some(&en_us_context()));
     assert_eq!(output.oxfunc_value, EvalValue::Number(1.0));

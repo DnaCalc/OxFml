@@ -83,8 +83,7 @@ fn runtime_rehydrates_callable_map_parameters_ftc_0999() {
             "{case_id} runtime value"
         );
         assert_eq!(
-            runtime.verification_publication_surface.visible_value_text,
-            "10",
+            runtime.verification_publication_surface.visible_value_text, "10",
             "{case_id} visible text"
         );
     }
@@ -95,7 +94,10 @@ fn nested_callable_map_reuse_projects_calc_ftc_0999() {
     let formula = "=LET(fns,MAP({1,2,3},LAMBDA(n,LAMBDA(x,x*n))),MAP(fns,LAMBDA(f,MAP({10,20,30},LAMBDA(x,f(x))))))";
 
     let eval = evaluate_formula_text("ftc-0999:nested", formula);
-    assert_eq!(eval.oxfunc_value, EvalValue::Error(WorksheetErrorCode::Calc));
+    assert_eq!(
+        eval.oxfunc_value,
+        EvalValue::Error(WorksheetErrorCode::Calc)
+    );
 
     let locale = en_us_context();
     let runtime = RuntimeEnvironment::new()
@@ -108,5 +110,8 @@ fn nested_callable_map_reuse_projects_calc_ftc_0999() {
         runtime.published_worksheet_value,
         EvalValue::Error(WorksheetErrorCode::Calc)
     );
-    assert_eq!(runtime.verification_publication_surface.visible_value_text, "#CALC!");
+    assert_eq!(
+        runtime.verification_publication_surface.visible_value_text,
+        "#CALC!"
+    );
 }

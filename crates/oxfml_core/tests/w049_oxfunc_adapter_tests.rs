@@ -127,7 +127,9 @@ fn adapter_executes_text_with_scientific_format_pattern_ftc_0655() {
         "Text(1.23E+04)"
     );
     assert_eq!(
-        run.evaluation_artifact.returned_value_surface.payload_summary,
+        run.evaluation_artifact
+            .returned_value_surface
+            .payload_summary,
         "Text"
     );
     assert!(
@@ -150,7 +152,10 @@ fn adapter_preserves_randarray_width_for_columns_ftc_0505_without_explicit_rando
     ))
     .expect("FTC-0505 adapter run should succeed");
 
-    assert_eq!(run.evaluation_artifact.worksheet_value, EvalValue::Number(3.0));
+    assert_eq!(
+        run.evaluation_artifact.worksheet_value,
+        EvalValue::Number(3.0)
+    );
     assert_eq!(
         run.evaluation_artifact.evaluation_result.payload_summary,
         "Number(3)"
@@ -723,18 +728,25 @@ fn adapter_rejects_plain_gcd_zero_arity_call_as_bind_mismatch() {
 
     assert_eq!(run.evaluation_artifact.commit_decision_kind, "rejected");
     assert_eq!(
-        run.evaluation_artifact.execution_outcome_surface.outcome_stage,
+        run.evaluation_artifact
+            .execution_outcome_surface
+            .outcome_stage,
         ExecutionOutcomeStage::BindBoundary
     );
     assert_eq!(
         run.evaluation_artifact.reject_code,
         Some(oxfml_core::RejectCode::BindMismatch)
     );
-    assert!(run.preparation_artifact.bind_diagnostics.iter().any(|diagnostic| {
-        diagnostic.message.starts_with(
-            "built-in function call 'GCD' rejects 0 arguments at the authoring boundary",
-        )
-    }));
+    assert!(
+        run.preparation_artifact
+            .bind_diagnostics
+            .iter()
+            .any(|diagnostic| {
+                diagnostic.message.starts_with(
+                    "built-in function call 'GCD' rejects 0 arguments at the authoring boundary",
+                )
+            })
+    );
 }
 
 #[test]
@@ -764,13 +776,14 @@ fn adapter_executes_colliding_let_calls_when_builtin_frontier_accepts_shape() {
 
         assert_eq!(run.evaluation_artifact.commit_decision_kind, "accepted");
         assert_eq!(
-            run.evaluation_artifact.execution_outcome_surface.outcome_kind,
+            run.evaluation_artifact
+                .execution_outcome_surface
+                .outcome_kind,
             ExecutionOutcomeKind::ExecutedResult,
             "{case_id} outcome kind"
         );
         assert_eq!(
-            run.evaluation_artifact.worksheet_value,
-            expected_value,
+            run.evaluation_artifact.worksheet_value, expected_value,
             "{case_id} worksheet value"
         );
     }

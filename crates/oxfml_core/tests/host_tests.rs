@@ -434,10 +434,7 @@ fn locale_sensitive_host_run_surfaces_format_dependency_fact() {
 
 #[test]
 fn single_formula_host_executes_text_with_scientific_format_pattern_ftc_0655() {
-    let mut host = SingleFormulaHost::new(
-        "host:scientific-text",
-        "=TEXT(12345.6789,\"0.00E+00\")",
-    );
+    let mut host = SingleFormulaHost::new("host:scientific-text", "=TEXT(12345.6789,\"0.00E+00\")");
     let run = host
         .recalc(None, Some(&en_us_context()))
         .expect("recalc should succeed");
@@ -482,7 +479,9 @@ fn first_host_replay_packet_preserves_locale_sensitive_text_date_family_publicat
         (
             "FTC-1040",
             "=LET(yr,2024,m,1,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),gridStart,firstDay-WEEKDAY(firstDay,1)+1,dates,gridStart+SEQUENCE(42,,0),dayStrs,MAP(dates,LAMBDA(d,IF(AND(d>=firstDay,d<=lastDay),TEXT(DAY(d),\"00\"),\"  \"))),monthName,TEXT(firstDay,\"MMMM\"),TEXTJOIN(\"|\",FALSE,monthName,INDEX(dayStrs,1),INDEX(dayStrs,2),INDEX(dayStrs,3),INDEX(dayStrs,4),INDEX(dayStrs,5),INDEX(dayStrs,6),INDEX(dayStrs,7)))",
-            EvalValue::Text(ExcelText::from_interop_assignment("January|  |01|02|03|04|05|06")),
+            EvalValue::Text(ExcelText::from_interop_assignment(
+                "January|  |01|02|03|04|05|06",
+            )),
         ),
     ];
 
@@ -496,12 +495,14 @@ fn first_host_replay_packet_preserves_locale_sensitive_text_date_family_publicat
         let packet = run.to_first_host_replay_capture_packet();
 
         assert_eq!(
-            packet.verification_publication_surface.published_value,
-            expected_value,
+            packet.verification_publication_surface.published_value, expected_value,
             "{case_id} published value"
         );
         assert_eq!(
-            packet.verification_publication_surface.format_profile.as_deref(),
+            packet
+                .verification_publication_surface
+                .format_profile
+                .as_deref(),
             Some("locale-format-context"),
             "{case_id} format profile"
         );

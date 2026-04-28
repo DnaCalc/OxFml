@@ -82,7 +82,9 @@ pub fn render_with_number_format_code(
     }
 
     if contains_fraction_placeholder_pattern(trimmed) {
-        return Err(FormatFailure::UnsupportedCode(number_format_code.to_string()));
+        return Err(FormatFailure::UnsupportedCode(
+            number_format_code.to_string(),
+        ));
     }
 
     let numeric = parse_numeric_section(trimmed, profile)
@@ -600,12 +602,16 @@ fn condition_matches(condition: &str, value: f64) -> bool {
 
 fn contains_fraction_placeholder_pattern(section: &str) -> bool {
     let expanded = expand_literal_tokens(section);
-    expanded.split('/').collect::<Vec<_>>().windows(2).any(|parts| {
-        let left = parts[0].trim_end();
-        let right = parts[1].trim_start();
-        left.chars().last().is_some_and(is_fraction_placeholder)
-            && right.chars().next().is_some_and(is_fraction_placeholder)
-    })
+    expanded
+        .split('/')
+        .collect::<Vec<_>>()
+        .windows(2)
+        .any(|parts| {
+            let left = parts[0].trim_end();
+            let right = parts[1].trim_start();
+            left.chars().last().is_some_and(is_fraction_placeholder)
+                && right.chars().next().is_some_and(is_fraction_placeholder)
+        })
 }
 
 fn is_fraction_placeholder(ch: char) -> bool {

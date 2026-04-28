@@ -147,10 +147,12 @@ fn runtime_characterizes_ftc_0176_if_array_condition_family() {
             ))
             .expect("runtime execution should succeed");
 
-        assert_eq!(result.published_worksheet_value, expected, "{case_id} runtime value");
         assert_eq!(
-            result.verification_publication_surface.published_value,
-            expected,
+            result.published_worksheet_value, expected,
+            "{case_id} runtime value"
+        );
+        assert_eq!(
+            result.verification_publication_surface.published_value, expected,
             "{case_id} publication value"
         );
     }

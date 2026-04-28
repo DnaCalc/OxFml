@@ -807,9 +807,9 @@ fn evaluate_function_call(
         _ => {}
     }
 
-    let meta = lookup_function_meta(function_name).ok_or_else(|| EvaluationError {
-        message: format!("no registered function metadata for {function_name}"),
-    })?;
+    let Some(meta) = lookup_function_meta(function_name) else {
+        return Ok(EvalValue::Error(WorksheetErrorCode::Name));
+    };
 
     if context.backend == EvaluationBackend::LocalBootstrap {
         return Err(EvaluationError {
@@ -1651,9 +1651,11 @@ fn built_in_callable_arg_for_name(name: &NameRef) -> Result<CallArgValue, Evalua
 fn built_in_callable_arg_for_function_name(
     function_name: &str,
 ) -> Result<CallArgValue, EvaluationError> {
-    let meta = lookup_function_meta(function_name).ok_or_else(|| EvaluationError {
-        message: format!("no registered built-in callable metadata for {function_name}"),
-    })?;
+    let Some(meta) = lookup_function_meta(function_name) else {
+        return Ok(CallArgValue::Eval(EvalValue::Error(
+            WorksheetErrorCode::Name,
+        )));
+    };
     Ok(CallArgValue::Eval(EvalValue::Lambda(OxLambdaValue::new(
         meta.function_id,
         OxCallableOriginKind::BuiltInCallable,

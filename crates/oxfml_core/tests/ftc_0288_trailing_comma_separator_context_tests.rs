@@ -67,18 +67,37 @@ fn text_eval_value(text: &str) -> EvalValue {
 fn evaluator_characterizes_trailing_comma_scaling_patterns_across_separator_contexts() {
     let contexts = [
         ("comma-thousands", en_us_context_with_separators(".", ",")),
-        ("nbsp-thousands", en_us_context_with_separators(".", "\u{00A0}")),
+        (
+            "nbsp-thousands",
+            en_us_context_with_separators(".", "\u{00A0}"),
+        ),
     ];
     let cases = [
-        ("hash-double-comma-small", "=TEXT(1234,\"#,,\")", ["0", "1234,,"]),
-        ("hash-double-comma-mid", "=TEXT(12345,\"#,,\")", ["0", "12345,,"]),
+        (
+            "hash-double-comma-small",
+            "=TEXT(1234,\"#,,\")",
+            ["0", "1234,,"],
+        ),
+        (
+            "hash-double-comma-mid",
+            "=TEXT(12345,\"#,,\")",
+            ["0", "12345,,"],
+        ),
         (
             "hash-double-comma-large",
             "=TEXT(1234567.89,\"#,,\")",
             ["1", "1234568,,"],
         ),
-        ("zero-double-comma-small", "=TEXT(1234,\"0,,\")", ["0", "1234,,"]),
-        ("zero-double-comma-mid", "=TEXT(12345,\"0,,\")", ["0", "12345,,"]),
+        (
+            "zero-double-comma-small",
+            "=TEXT(1234,\"0,,\")",
+            ["0", "1234,,"],
+        ),
+        (
+            "zero-double-comma-mid",
+            "=TEXT(12345,\"0,,\")",
+            ["0", "12345,,"],
+        ),
         (
             "zero-double-comma-large",
             "=TEXT(1234567.89,\"0,,\")",
@@ -104,11 +123,8 @@ fn evaluator_characterizes_trailing_comma_scaling_patterns_across_separator_cont
     for (context_index, (context_id, locale)) in contexts.iter().enumerate() {
         for (case_id, formula, expected_texts) in cases {
             let expected_text = expected_texts[context_index];
-            let output = evaluate_text_formula(
-                &format!("ftc-0288:{context_id}:{case_id}"),
-                formula,
-                locale,
-            );
+            let output =
+                evaluate_text_formula(&format!("ftc-0288:{context_id}:{case_id}"), formula, locale);
             assert_eq!(
                 output.oxfunc_value,
                 text_eval_value(expected_text),
@@ -141,18 +157,37 @@ fn runtime_characterizes_trailing_comma_scaling_patterns_across_separator_contex
     };
     let contexts = [
         ("comma-thousands", en_us_context_with_separators(".", ",")),
-        ("nbsp-thousands", en_us_context_with_separators(".", "\u{00A0}")),
+        (
+            "nbsp-thousands",
+            en_us_context_with_separators(".", "\u{00A0}"),
+        ),
     ];
     let cases = [
-        ("hash-double-comma-small", "=TEXT(1234,\"#,,\")", ["0", "1234,,"]),
-        ("hash-double-comma-mid", "=TEXT(12345,\"#,,\")", ["0", "12345,,"]),
+        (
+            "hash-double-comma-small",
+            "=TEXT(1234,\"#,,\")",
+            ["0", "1234,,"],
+        ),
+        (
+            "hash-double-comma-mid",
+            "=TEXT(12345,\"#,,\")",
+            ["0", "12345,,"],
+        ),
         (
             "hash-double-comma-large",
             "=TEXT(1234567.89,\"#,,\")",
             ["1", "1234568,,"],
         ),
-        ("zero-double-comma-small", "=TEXT(1234,\"0,,\")", ["0", "1234,,"]),
-        ("zero-double-comma-mid", "=TEXT(12345,\"0,,\")", ["0", "12345,,"]),
+        (
+            "zero-double-comma-small",
+            "=TEXT(1234,\"0,,\")",
+            ["0", "1234,,"],
+        ),
+        (
+            "zero-double-comma-mid",
+            "=TEXT(12345,\"0,,\")",
+            ["0", "12345,,"],
+        ),
         (
             "zero-double-comma-large",
             "=TEXT(1234567.89,\"0,,\")",
@@ -203,18 +238,15 @@ fn runtime_characterizes_trailing_comma_scaling_patterns_across_separator_contex
                 });
 
             assert_eq!(
-                result.published_worksheet_value,
-                expected_value,
+                result.published_worksheet_value, expected_value,
                 "{context_id}/{case_id} published_worksheet_value"
             );
             assert_eq!(
-                result.verification_publication_surface.published_value,
-                expected_value,
+                result.verification_publication_surface.published_value, expected_value,
                 "{context_id}/{case_id} verification_publication_surface.published_value"
             );
             assert_eq!(
-                result.verification_publication_surface.visible_value_text,
-                expected_text,
+                result.verification_publication_surface.visible_value_text, expected_text,
                 "{context_id}/{case_id} visible_value_text"
             );
         }

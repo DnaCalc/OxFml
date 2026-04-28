@@ -15,6 +15,7 @@ use crate::eval::{
     CallableDefinedNameBinding, DefinedNameBinding, EvaluationBackend, EvaluationContext,
     EvaluationOutput, evaluate_formula,
 };
+use crate::format::canonicalize_locale_context;
 use crate::interface::{
     LibraryContextProvider, LibraryContextSnapshotRef, PinnedLibraryContextView,
     RegisteredExternalCatalogController, RegisteredExternalCatalogMutationRequest,
@@ -26,7 +27,6 @@ use crate::publication::{
     VerificationPublicationContext, VerificationPublicationSurface,
     build_verification_publication_surface,
 };
-use crate::format::canonicalize_locale_context;
 use crate::red::{RedProjection, project_red_view_incremental};
 use crate::scheduler::{ExecutionContract, build_execution_contract};
 use crate::seam::{

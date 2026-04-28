@@ -16,12 +16,12 @@ use crate::interface::{
 };
 use crate::red::RedProjection;
 use crate::semantics::lookup_function_meta;
-use oxfunc_core::function::{ArgPreparationProfile, FecDependencyProfile, FunctionMeta};
 use crate::source::{
     FormulaChannelKind, FormulaSourceRecord, FormulaToken, StructureContextVersion,
 };
 use crate::syntax::green::{GreenChild, GreenNode, GreenTreeRoot, SyntaxKind};
 use crate::syntax::token::TextSpan;
+use oxfunc_core::function::{ArgPreparationProfile, FecDependencyProfile, FunctionMeta};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BindDiagnostic {
@@ -821,11 +821,8 @@ impl Binder {
 
         if !binds_as_invocation
             && let Some(meta) = builtin_function_meta.as_ref()
-            && let Some(message) = builtin_function_call_authoring_diagnostic(
-                &uppercase_function_name,
-                meta,
-                &args,
-            )
+            && let Some(message) =
+                builtin_function_call_authoring_diagnostic(&uppercase_function_name, meta, &args)
         {
             self.diagnostics.push(BindDiagnostic {
                 message,
@@ -1167,7 +1164,10 @@ fn builtin_reference_locator_argument_is_reference_like(expr: &BoundExpr) -> boo
             | ReferenceExpr::Atom(NormalizedReference::Structured(_))
             | ReferenceExpr::Atom(NormalizedReference::External(_)) => true,
             ReferenceExpr::Atom(NormalizedReference::Name(name)) => {
-                matches!(name.kind, NameKind::ReferenceLike | NameKind::MixedOrDeferred)
+                matches!(
+                    name.kind,
+                    NameKind::ReferenceLike | NameKind::MixedOrDeferred
+                )
             }
             ReferenceExpr::Spill { anchor } => {
                 let anchor_expr = BoundExpr::Reference((**anchor).clone());

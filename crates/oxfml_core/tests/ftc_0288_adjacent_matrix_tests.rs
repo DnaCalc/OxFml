@@ -67,18 +67,37 @@ fn text_eval_value(text: &str) -> EvalValue {
 fn evaluator_matches_ftc_0288_excel_adjacent_matrix() {
     let contexts = [
         ("comma-thousands", en_us_context_with_separators(".", ",")),
-        ("nbsp-thousands", en_us_context_with_separators(".", "\u{00A0}")),
+        (
+            "nbsp-thousands",
+            en_us_context_with_separators(".", "\u{00A0}"),
+        ),
     ];
     let cases = [
-        ("hash-double-comma", "=TEXT(123456789,\"#,,\")", ["123", "123456789,,"]),
-        ("zero-double-comma", "=TEXT(123456789,\"0,,\")", ["123", "123456789,,"]),
+        (
+            "hash-double-comma",
+            "=TEXT(123456789,\"#,,\")",
+            ["123", "123456789,,"],
+        ),
+        (
+            "zero-double-comma",
+            "=TEXT(123456789,\"0,,\")",
+            ["123", "123456789,,"],
+        ),
         (
             "grouped-double-comma",
             "=TEXT(123456789,\"#,##0,,\")",
             ["123", "123456,789,,"],
         ),
-        ("hash-comma-###", "=TEXT(1234567.89,\"#,###\")", ["1,234,568", "1234,568"]),
-        ("hash-comma-##", "=TEXT(1234567.89,\"#,##\")", ["1,234,568", "12345,68"]),
+        (
+            "hash-comma-###",
+            "=TEXT(1234567.89,\"#,###\")",
+            ["1,234,568", "1234,568"],
+        ),
+        (
+            "hash-comma-##",
+            "=TEXT(1234567.89,\"#,##\")",
+            ["1,234,568", "12345,68"],
+        ),
         (
             "double-hash-comma-group",
             "=TEXT(1234567.89,\"##,##0.00\")",
@@ -126,18 +145,37 @@ fn runtime_matches_ftc_0288_excel_adjacent_matrix() {
     };
     let contexts = [
         ("comma-thousands", en_us_context_with_separators(".", ",")),
-        ("nbsp-thousands", en_us_context_with_separators(".", "\u{00A0}")),
+        (
+            "nbsp-thousands",
+            en_us_context_with_separators(".", "\u{00A0}"),
+        ),
     ];
     let cases = [
-        ("hash-double-comma", "=TEXT(123456789,\"#,,\")", ["123", "123456789,,"]),
-        ("zero-double-comma", "=TEXT(123456789,\"0,,\")", ["123", "123456789,,"]),
+        (
+            "hash-double-comma",
+            "=TEXT(123456789,\"#,,\")",
+            ["123", "123456789,,"],
+        ),
+        (
+            "zero-double-comma",
+            "=TEXT(123456789,\"0,,\")",
+            ["123", "123456789,,"],
+        ),
         (
             "grouped-double-comma",
             "=TEXT(123456789,\"#,##0,,\")",
             ["123", "123456,789,,"],
         ),
-        ("hash-comma-###", "=TEXT(1234567.89,\"#,###\")", ["1,234,568", "1234,568"]),
-        ("hash-comma-##", "=TEXT(1234567.89,\"#,##\")", ["1,234,568", "12345,68"]),
+        (
+            "hash-comma-###",
+            "=TEXT(1234567.89,\"#,###\")",
+            ["1,234,568", "1234,568"],
+        ),
+        (
+            "hash-comma-##",
+            "=TEXT(1234567.89,\"#,##\")",
+            ["1,234,568", "12345,68"],
+        ),
         (
             "double-hash-comma-group",
             "=TEXT(1234567.89,\"##,##0.00\")",
@@ -173,18 +211,15 @@ fn runtime_matches_ftc_0288_excel_adjacent_matrix() {
                 });
 
             assert_eq!(
-                result.published_worksheet_value,
-                expected_value,
+                result.published_worksheet_value, expected_value,
                 "{context_id}/{case_id} published_worksheet_value"
             );
             assert_eq!(
-                result.verification_publication_surface.published_value,
-                expected_value,
+                result.verification_publication_surface.published_value, expected_value,
                 "{context_id}/{case_id} verification_publication_surface.published_value"
             );
             assert_eq!(
-                result.verification_publication_surface.visible_value_text,
-                expected_text,
+                result.verification_publication_surface.visible_value_text, expected_text,
                 "{context_id}/{case_id} visible_value_text"
             );
         }
