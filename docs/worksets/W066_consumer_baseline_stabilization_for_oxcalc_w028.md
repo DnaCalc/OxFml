@@ -153,19 +153,64 @@ Baseline recommendation remains quarantine-to-committed-HEAD because the dirty r
    - comparison views: dirty workspace failed focused replay validation (`FTC-0703` view count mismatch), so dirty workspace fails; committed `9aca95a` remains the recommended baseline.
    - trace/replay sidecar refs: partial/pass for current floor via trace event kinds, first-host capture packet, and replay metadata; broader sidecar breadth remains open-lane.
 
-Net result:
-1. Committed `9aca95a` is the recommended OxCalc W028 baseline.
-2. Dirty workspace fails the OxCalc-consumer verification list because focused replay projection validation failed.
-3. Do not promote or consume dirty W066-local state for W028.
+Initial net result:
+1. Committed `9aca95a` was the recommended OxCalc W028 baseline during the initial quarantine window.
+2. Dirty workspace failed the OxCalc-consumer verification list because focused replay projection validation failed.
+3. Dirty W066-local state was not promotable for W028 until the replay projection expectation was reconciled and validation rerun.
 
-## 9. Status
+## 9. Reconciliation Pass
 
-- `execution_state`: `in_progress`
-- `scope_completeness`: `scope_partial`
-- `target_completeness`: `target_partial`
-- `integration_completeness`: `partial`
-- `open_lanes`:
-  - optional later repair of the dirty replay consumer projection mismatch
-  - full promote path remains closed until focused replay consumer gate passes
-  - OxCalc baseline notification: pin `9aca95a` for W028 under the current quarantine decision
-- `claim_confidence`: `provisional`
+A later W066 reconciliation pass resolved the quarantine by promoting the dirty workspace only after the focused replay mismatch was repaired and validation reran.
+
+Promoted baseline packet:
+1. `625255a` — `Stabilize OxFml consumer baseline after quarantine`.
+
+Reconciliation actions:
+1. Kept the public `OxFml_V1` runtime/replay facade shape stable.
+2. Preserved replay `execution_outcome` comparison-view surfacing and updated the stale replay view-count expectation from `3` to `4`.
+3. Preserved the `#NAME?` worksheet-visible unknown-function behavior and its `IFERROR` evidence.
+4. Recorded `BLK-FML-004` as active but non-blocking for ordinary OxCalc W028 facade consumption.
+5. Ran rustfmt and retained formatting-only normalization produced by the validation cleanup.
+
+Validation after reconciliation:
+1. `cargo fmt --all -- --check`: passed.
+2. `git diff --check`: passed with line-ending warnings only.
+3. `cargo test -p oxfml_core --test runtime_consumer_facade_tests`: passed, 41 passed.
+4. `cargo test -p oxfml_core --test replay_consumer_facade_tests`: passed, 14 passed.
+5. `cargo test -p oxfml_core`: passed.
+
+Final W066 baseline instruction:
+1. OxCalc may consume the normal `../OxFml` path dependency after the reconciliation commit is present.
+2. The temporary `../OxFml_W028_9aca95a` worktree is no longer required for W028 validation.
+3. `BLK-FML-004` remains non-blocking unless W028 specifically targets exact `FTC-0902` built-in-colliding `row(...)` callable witnesses.
+
+## 10. Pre-Closure Verification Checklist
+
+| # | Check | Yes/No |
+|---|-------|--------|
+| 1 | Spec text updated for all in-scope items? | Yes — W066 workset/status text updated; no shared seam spec change required. |
+| 2 | Conformance matrix rows updated? | Yes — not applicable for this baseline-selection workset. |
+| 3 | At least one deterministic replay artifact exists per in-scope behavior? | Yes — consumer/runtime/replay deterministic tests exercised the baseline; no new replay-pack behavior claimed. |
+| 4 | Cross-repo impact assessed and handoff filed if needed? | Yes — OxCalc baseline instruction recorded; no new handoff required. |
+| 5 | All required tests pass? | Yes — focused consumer tests, rustfmt check, diff check, and full `cargo test -p oxfml_core` passed. |
+| 6 | No known semantic gaps remain in declared scope? | Yes — baseline selection/quarantine scope is resolved; broader callable and W028 semantic breadth remain outside this scope. |
+| 7 | Completion language audit passed? | Yes. |
+| 8 | IN_PROGRESS_FEATURE_WORKLIST.md updated? | Yes — no feature-register change required for this repo-local baseline workset. |
+| 9 | CURRENT_BLOCKERS.md updated? | Yes — `BLK-FML-004` recorded and classified. |
+
+## 11. Completion Claim Self-Audit
+
+1. Scope re-read: pass — the workset only covered dirty baseline audit, validation, promote-vs-quarantine decision, and OxCalc baseline instruction.
+2. Gate criteria re-read: pass — focused gates ran before promotion; full gate ran before final baseline instruction.
+3. Silent scope reduction check: pass — broad callable repair and W028 publication/topology work stayed out of scope.
+4. "Looks done but is not" pattern check: pass — the initial quarantine was not promoted until replay validation passed.
+5. Result: pass for W066 baseline-stabilization scope.
+
+## 12. Status
+
+- `execution_state`: `complete`
+- `scope_completeness`: `scope_complete`
+- `target_completeness`: `target_complete`
+- `integration_completeness`: `integrated`
+- `open_lanes`: none for W066 baseline-stabilization scope
+- `claim_confidence`: `validated`
