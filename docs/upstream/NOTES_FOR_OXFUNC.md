@@ -26,10 +26,12 @@ The main current points for OxFunc are:
 8. the current numeric-comparison family split from `HO-FN-008` is now the OxFml read for the sibling workspace:
    - operators, criteria/database selection, and `SWITCH` use the tolerant lane,
    - `MATCH`, `XMATCH`, and `DELTA` remain exact.
+9. OxFml acknowledges `HO-FN-009` / OxFunc `W082`: OxFunc owns locale-sensitive function semantics and the typed locale/format seam, while OxFml/FEC owns the concrete parser/formatter capability bundle supplied through `LocaleFormatContext`.
 
 Current acknowledged follow-on packet:
 1. `docs/handoffs/HANDOFF-OXFUNC-003_CORPUS_IF_EMPTY_TEXT_AND_FLOAT_COMPARE.md`
 2. `../OxFunc/docs/handoffs/HO-FN-008_corpus_if_correction_and_numeric_comparison_tolerance.md`
+3. `../OxFunc/docs/handoffs/HO-FN-009_locale_format_seam_ownership_realignment.md`
 
 ## 3. Current Evidence In OxFml
 
@@ -257,6 +259,21 @@ impl ReferenceLike {
     pub fn area_count(&self) -> usize { ... }
 }
 ```
+
+### 7.4 Locale/format seam ownership acknowledgement (`HO-FN-009`)
+
+Current OxFml acknowledgement:
+1. OxFml agrees that OxFunc owns `TEXT`, `DOLLAR`, `FIXED`, `VALUE`, and adjacent locale-sensitive function semantics, plus the typed seam vocabulary: `LocaleFormatContext`, `FormatProfile`, `WorkbookDateSystem`, `LocaleValueParser`, and `FormatCodeEngine`.
+2. OxFml/FEC owns the concrete parser/formatter implementation supplied into that seam. The current implementation owner is `crates/oxfml_core/src/format/engine.rs`, specifically `OxFmlLocaleValueParser`, `OxFmlFormatCodeEngine`, the OxFml-owned format-profile constructors, and `oxfml_locale_context(...)`.
+3. OxFml must not pre-render `TEXT`, `DOLLAR`, or `FIXED` outside OxFunc. OxFml supplies the capability bundle; OxFunc evaluates the function.
+4. OxFml direct runtime, managed runtime, proving host, replay fixtures, runtime/replay consumer facade tests, and `test_support::oxfunc_adapter` are the active OxFml call paths that need explicit `LocaleFormatContext` support for locale-sensitive OxFunc calls.
+5. Downstream callers, including DNA OneCalc, own supplying the workbook/host locale profile and date system into `TypedContextQueryBundle`; missing locale context remains an explicit missing-capability path rather than a hidden fallback.
+6. No OxFunc-side seam change is requested from this acknowledgement.
+
+Adjacent array-support observation:
+1. The current OxFml adapter path does not scalarize ordinary array-valued arguments before they reach OxFunc. `crates/oxfml_core/tests/w049_oxfunc_adapter_tests.rs` already exercises `=SUM(A1:A2)` with the prepared argument classified as `ArrayLike`, and the evaluator passes `CallArgValue::Eval(EvalValue::Array(...))` for ordinary value-required area arguments.
+2. Scalarization remains tied to explicit implicit-intersection/caller-context paths such as `@` / `_xlfn.SINGLE`, not ordinary array-valued OxFunc arguments.
+3. This is recorded as a non-blocking W080-style validation observation, not as part of the `HO-FN-009` locale-format acknowledgement.
 
 The intended behavior of those helpers is:
 1. `multi_area(...)` rejects empty inputs and single-target pseudo-multi-area construction,

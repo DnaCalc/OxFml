@@ -10,3 +10,4 @@ HANDOFF-OXFUNC-002,outbound,MultiArea Value Materialization Through OxFunc Resol
 HANDOFF-OXFUNC-003,outbound,Corpus IF Empty-Text Condition And Floating Comparison Follow-On,acknowledged,W061,OxFunc/W077,2026-04-08,2026-04-08
 HO-FN-008,inbound,Corpus IF Correction And Numeric Comparison Tolerance,acknowledged,OxFunc/W077,W061,2026-04-08,2026-04-08
 HANDOFF-OXFUNC-004,outbound,TAKE Omitted Row Count In Complex Helper Lambda,filed,local-direct-investigation,OxFunc-TBD,2026-04-10,
+HO-FN-009,inbound,Locale/format Seam Ownership Realignment,acknowledged,OxFunc/W082,IP-05,2026-04-10,2026-04-29

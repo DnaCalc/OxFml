@@ -12,7 +12,9 @@ use oxfml_core::consumer::replay::{
 use oxfml_core::consumer::runtime::{
     RuntimeEnvironment, RuntimeFormulaRequest, RuntimeSessionFacade,
 };
-use oxfml_core::format::{current_excel_host_context, en_us_context, worksheet_error_text};
+use oxfml_core::format::{
+    oxfml_current_excel_host_locale_context, oxfml_en_us_locale_context, worksheet_error_text,
+};
 use oxfml_core::interface::{
     InMemoryLibraryContextProvider, LibraryContextProvider, LibraryContextSnapshotRef,
 };
@@ -135,7 +137,7 @@ fn editor_edit_service_validates_manual_completion_text_through_facade() {
 #[test]
 fn replay_projection_service_projects_runtime_and_host_outputs() {
     let environment = RuntimeEnvironment::new();
-    let locale_ctx = en_us_context();
+    let locale_ctx = oxfml_en_us_locale_context();
     let verification_context = VerificationPublicationContext {
         format_profile: Some("excel-spreadsheetml-2003-default".to_string()),
         number_format_code: Some("$#,##0.00".to_string()),
@@ -330,7 +332,7 @@ fn replay_projection_service_projects_runtime_and_host_outputs() {
 
 #[test]
 fn replay_projection_service_preserves_first_host_capture_comparison_value_for_text_date_family() {
-    let locale = current_excel_host_context();
+    let locale = oxfml_current_excel_host_locale_context();
     let cases = [
         (
             "FTC-1021",
@@ -414,7 +416,7 @@ fn replay_projection_service_preserves_first_host_capture_comparison_value_for_t
 
 #[test]
 fn replay_projection_service_matches_dnaonecalc_exact_request_shape_for_runtime_text_date_family() {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let verification_context = VerificationPublicationContext {
         format_profile: Some("en-US".to_string()),
         number_format_code: None,
@@ -524,7 +526,7 @@ fn replay_projection_service_matches_dnaonecalc_exact_request_shape_for_runtime_
 
 #[test]
 fn replay_projection_service_prefers_first_host_capture_publication_surface_for_runtime_results() {
-    let locale = current_excel_host_context();
+    let locale = oxfml_current_excel_host_locale_context();
     let runtime_result = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
             FormulaSourceRecord::new(
@@ -691,7 +693,7 @@ fn replay_projection_service_emits_comparison_value_and_visible_text_without_pub
 
 #[test]
 fn replay_projection_service_surfaces_bind_boundary_execution_outcome() {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let runtime_result = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
             FormulaSourceRecord::new("replay:bind-boundary", 1, "={\"x\",LAMBDA(100)}"),
@@ -732,7 +734,7 @@ fn replay_projection_service_surfaces_bind_boundary_execution_outcome() {
 
 #[test]
 fn replay_projection_service_emits_effective_display_text_for_programmatic_verification_cases() {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let cases = [
         ("FTC-0703", "=DATEDIF(\"2020-01-15\",\"2024-03-20\",\"Y\")"),
         (

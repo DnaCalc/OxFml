@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use oxfml_core::binding::NameKind;
 use oxfml_core::eval::EvaluationContext;
-use oxfml_core::format::en_us_context;
+use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::interface::{
     HostProviderOutcomeKind, InMemoryLibraryContextProvider, LibraryContextProvider,
     LibraryContextSnapshotRef, PinnedLibraryContextView, ReturnedValueSurface,
@@ -28,7 +28,7 @@ mod common;
 
 #[test]
 fn typed_context_query_bundle_freeze_candidate_stays_capability_scoped() {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let bundle = TypedContextQueryBundle::new(
         Some(&MockHostInfoProvider),
         Some(&MockRtdProvider),
@@ -69,7 +69,7 @@ fn evaluation_context_round_trips_typed_context_query_bundle() {
         "struct:v1",
         "oxfunc:test",
     );
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let mut context = EvaluationContext::new(&compiled.bound_formula, &compiled.semantic_plan);
     let bundle = TypedContextQueryBundle::new(
         Some(&MockHostInfoProvider),
@@ -212,7 +212,7 @@ fn pinned_library_context_view_prefers_pinned_snapshot_ref_over_provider_current
 #[test]
 fn single_formula_host_can_consume_runtime_library_context_provider() {
     let provider = InMemoryLibraryContextProvider::new(test_snapshot());
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let mut host = SingleFormulaHost::new("formula:sum", "=SUM(1,2)");
 
     let output = host
@@ -248,7 +248,7 @@ fn library_context_field_classification_preserves_runtime_vs_export_split() {
 
 #[test]
 fn grouped_query_family_runs_surface_bundle_specs_and_return_packets() {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let cases = vec![
         (
             "host-info-info",

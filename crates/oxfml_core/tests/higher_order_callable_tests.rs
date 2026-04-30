@@ -7,7 +7,7 @@ use oxfml_core::eval::{
     CallableDefinedNameBinding, CallableValueCarrier, CallableValueProfile, DefinedNameBinding,
     EvaluationBackend,
 };
-use oxfml_core::format::en_us_context;
+use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::red::project_red_view;
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
@@ -53,7 +53,7 @@ fn higher_order_callable_fixtures_match_expected_snapshots() {
         let output = host.recalc_with_backend(
             EvaluationBackend::OxFuncBacked,
             None,
-            Some(&en_us_context()),
+            Some(&oxfml_en_us_locale_context()),
         );
 
         if let Some(expected_message) = &fixture.expected.evaluation_error_contains {

@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use oxfml_core::format::en_us_context;
+use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
 use oxfunc_core::value::{EvalValue, ExcelText, ReferenceLike};
 use serde::Deserialize;
@@ -701,11 +701,11 @@ fn single_formula_host_replay_fixtures_match_expected_snapshots() {
             .as_deref()
             .map(|_| &ReplayHostInfoProvider as &dyn HostInfoProvider);
         let output = match fixture.backend.as_str() {
-            "OxFuncBacked" => host.recalc(host_info, Some(&en_us_context())),
+            "OxFuncBacked" => host.recalc(host_info, Some(&oxfml_en_us_locale_context())),
             "LocalBootstrap" => host.recalc_with_backend(
                 oxfml_core::EvaluationBackend::LocalBootstrap,
                 host_info,
-                Some(&en_us_context()),
+                Some(&oxfml_en_us_locale_context()),
             ),
             other => panic!("unexpected backend {other}"),
         }
@@ -1128,7 +1128,7 @@ fn evaluate_fixture_formula(
     .semantic_plan;
 
     let mut context = EvaluationContext::new(&bind.bound_formula, &plan);
-    let locale_ctx = en_us_context();
+    let locale_ctx = oxfml_en_us_locale_context();
     context.defined_names = binding_map;
     context
         .cell_values

@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 mod common;
 
-use oxfml_core::format::en_us_context;
+use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult};
 use oxfunc_core::host_info::{
     CellInfoQuery, HostInfoError, HostInfoProvider, ImageProviderResult, ImageRequest,
@@ -32,7 +32,7 @@ fn evaluator_runs_text_with_locale_format_context() {
         "=TEXT(1234.567,\"0.00\")",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Text(1234.57)");
     assert_eq!(
@@ -49,7 +49,12 @@ fn evaluator_runs_text_with_locale_format_context() {
 
 #[test]
 fn evaluator_runs_value_with_locale_parser() {
-    let output = evaluate("=VALUE(\"12%\")", None, None, Some(&en_us_context()));
+    let output = evaluate(
+        "=VALUE(\"12%\")",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(output.result.payload_summary, "Number(0.12)");
     assert_eq!(output.trace.prepared_calls[0].function_id, "FUNC.VALUE");
 }
@@ -60,7 +65,7 @@ fn evaluator_runs_text_with_pinned_grouping_separator_context() {
         "=TEXT(1234567.89,\"#,##0.00\")",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(
         output.oxfunc_value,
@@ -85,7 +90,7 @@ fn evaluator_runs_text_with_scientific_format_patterns() {
         ("=TEXT(12345.6789,\"0.00E+00\")", "1.23E+04"),
         ("=TEXT(12345.6789,\"#.##E+00\")", "1.23E+04"),
     ] {
-        let output = evaluate(formula, None, None, Some(&en_us_context()));
+        let output = evaluate(formula, None, None, Some(&oxfml_en_us_locale_context()));
         assert_eq!(
             output.oxfunc_value,
             EvalValue::Text(ExcelText::from_interop_assignment(expected)),
@@ -111,7 +116,7 @@ fn evaluator_runs_cell_with_host_info_provider() {
         "=CELL(\"filename\",A1)",
         None,
         Some(&MockHostInfoProvider),
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Text([Book1]Sheet1)");
     assert_eq!(
@@ -144,7 +149,7 @@ fn evaluator_runs_info_with_host_info_provider() {
         "=INFO(\"directory\")",
         None,
         Some(&MockHostInfoProvider),
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Text(C:\\Work)");
     assert_eq!(output.trace.prepared_calls[0].function_id, "FUNC.INFO");
@@ -156,7 +161,7 @@ fn evaluator_preserves_hyperlink_publication_intent() {
         "=HYPERLINK(\"https://example.com\",\"Go\")",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(
         output.oxfunc_value,
@@ -174,7 +179,7 @@ fn evaluator_preserves_hyperlink_publication_intent() {
 
 #[test]
 fn evaluator_preserves_today_presentation_hint_through_generic_extended_path() {
-    let output = evaluate("=TODAY()", None, None, Some(&en_us_context()));
+    let output = evaluate("=TODAY()", None, None, Some(&oxfml_en_us_locale_context()));
     assert_eq!(output.oxfunc_value, EvalValue::Number(46000.0));
     assert_eq!(
         output.returned_value_surface.kind,
@@ -192,7 +197,7 @@ fn evaluator_preserves_image_rich_value_surface_through_host_query_lane() {
         "=IMAGE(\"https://example.com/sphere.png\",\"Sphere\")",
         None,
         Some(&ImageHostInfoProvider),
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(
         output.oxfunc_value,
@@ -217,7 +222,7 @@ fn evaluator_maps_image_provider_denial_to_blocked_error() {
         "=IMAGE(\"https://example.com/sphere.png\")",
         None,
         Some(&BlockedImageHostInfoProvider),
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(
         output.oxfunc_value,
@@ -239,7 +244,7 @@ fn evaluator_projects_info_unsupported_query_as_typed_host_provider_outcome() {
         "=INFO(\"system\")",
         None,
         Some(&MockHostInfoProvider),
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Error(Value)");
     assert_eq!(
@@ -263,7 +268,7 @@ fn evaluator_projects_cell_provider_failure_as_typed_host_provider_outcome() {
         "=CELL(\"filename\",A1)",
         None,
         Some(&FailingHostInfoProvider),
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Error(Value)");
     assert_eq!(
@@ -288,7 +293,7 @@ fn evaluator_projects_rtd_value_as_typed_host_provider_outcome() {
         None,
         None,
         Some(&ValueRtdProvider),
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     )
     .expect("evaluation should succeed");
     assert_eq!(output.result.payload_summary, "Number(7)");
@@ -314,7 +319,7 @@ fn evaluator_projects_rtd_capability_denied_as_typed_host_provider_outcome() {
         None,
         None,
         Some(&CapabilityDeniedRtdProvider),
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     )
     .expect("evaluation should succeed");
     assert_eq!(output.result.payload_summary, "Error(Blocked)");
@@ -335,7 +340,7 @@ fn evaluator_projects_rtd_capability_denied_as_typed_host_provider_outcome() {
 
 #[test]
 fn evaluator_runs_row_and_column_with_caller_context() {
-    let row_output = evaluate("=ROW()", None, None, Some(&en_us_context()));
+    let row_output = evaluate("=ROW()", None, None, Some(&oxfml_en_us_locale_context()));
     assert_eq!(row_output.result.payload_summary, "Number(1)");
     assert_eq!(row_output.trace.prepared_calls[0].function_id, "FUNC.ROW");
     assert_eq!(
@@ -343,7 +348,12 @@ fn evaluator_runs_row_and_column_with_caller_context() {
         vec!["caller_context".to_string()]
     );
 
-    let column_output = evaluate("=COLUMN(A1:B2)", None, None, Some(&en_us_context()));
+    let column_output = evaluate(
+        "=COLUMN(A1:B2)",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(column_output.result.payload_summary, "Array(1x2)");
     assert_eq!(
         column_output.trace.prepared_calls[0].function_id,
@@ -353,16 +363,26 @@ fn evaluator_runs_row_and_column_with_caller_context() {
 
 #[test]
 fn evaluator_runs_unary_negative_literal_through_function_calls() {
-    let sign_output = evaluate("=SIGN(-5)", None, None, Some(&en_us_context()));
+    let sign_output = evaluate("=SIGN(-5)", None, None, Some(&oxfml_en_us_locale_context()));
     assert_eq!(sign_output.oxfunc_value, EvalValue::Number(-1.0));
 
-    let pv_output = evaluate("=PV(0.05,10,-100)", None, None, Some(&en_us_context()));
+    let pv_output = evaluate(
+        "=PV(0.05,10,-100)",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     match pv_output.oxfunc_value {
         EvalValue::Number(value) => assert!((value - 772.1734929184818).abs() < 1e-9),
         other => panic!("expected numeric PV result, got {other:?}"),
     }
 
-    let fv_output = evaluate("=FV(0.05,10,-100)", None, None, Some(&en_us_context()));
+    let fv_output = evaluate(
+        "=FV(0.05,10,-100)",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     match fv_output.oxfunc_value {
         EvalValue::Number(value) => assert!((value - 1257.789253554884).abs() < 1e-9),
         other => panic!("expected numeric FV result, got {other:?}"),
@@ -371,7 +391,7 @@ fn evaluator_runs_unary_negative_literal_through_function_calls() {
 
 #[test]
 fn evaluator_matches_current_exponentiation_empirical_baseline() {
-    let chained = evaluate("=2^3^2", None, None, Some(&en_us_context()));
+    let chained = evaluate("=2^3^2", None, None, Some(&oxfml_en_us_locale_context()));
     assert_eq!(chained.oxfunc_value, EvalValue::Number(64.0));
     assert_eq!(
         chained
@@ -383,7 +403,7 @@ fn evaluator_matches_current_exponentiation_empirical_baseline() {
         vec!["FUNC.OP_POWER", "FUNC.OP_POWER"]
     );
 
-    let unary = evaluate("=-2^2", None, None, Some(&en_us_context()));
+    let unary = evaluate("=-2^2", None, None, Some(&oxfml_en_us_locale_context()));
     assert_eq!(unary.oxfunc_value, EvalValue::Number(4.0));
     assert_eq!(
         unary
@@ -395,7 +415,7 @@ fn evaluator_matches_current_exponentiation_empirical_baseline() {
         vec!["FUNC.OP_NEGATE", "FUNC.OP_POWER"]
     );
 
-    let multiplied = evaluate("=2^2*3", None, None, Some(&en_us_context()));
+    let multiplied = evaluate("=2^2*3", None, None, Some(&oxfml_en_us_locale_context()));
     assert_eq!(multiplied.oxfunc_value, EvalValue::Number(12.0));
     assert_eq!(
         multiplied
@@ -407,7 +427,7 @@ fn evaluator_matches_current_exponentiation_empirical_baseline() {
         vec!["FUNC.OP_POWER", "FUNC.OP_MULTIPLY"]
     );
 
-    let additive = evaluate("=1+2*3^2", None, None, Some(&en_us_context()));
+    let additive = evaluate("=1+2*3^2", None, None, Some(&oxfml_en_us_locale_context()));
     assert_eq!(additive.oxfunc_value, EvalValue::Number(19.0));
     assert_eq!(
         additive
@@ -422,7 +442,7 @@ fn evaluator_matches_current_exponentiation_empirical_baseline() {
 
 #[test]
 fn evaluator_dispatches_percent_concat_and_comparison_operators_to_oxfunc() {
-    let percent = evaluate("=50%", None, None, Some(&en_us_context()));
+    let percent = evaluate("=50%", None, None, Some(&oxfml_en_us_locale_context()));
     assert_eq!(percent.oxfunc_value, EvalValue::Number(0.5));
     assert_eq!(
         percent
@@ -434,7 +454,7 @@ fn evaluator_dispatches_percent_concat_and_comparison_operators_to_oxfunc() {
         vec!["FUNC.OP_PERCENT"]
     );
 
-    let concat = evaluate("=1&2", None, None, Some(&en_us_context()));
+    let concat = evaluate("=1&2", None, None, Some(&oxfml_en_us_locale_context()));
     assert_eq!(
         concat.oxfunc_value,
         EvalValue::Text(ExcelText::from_interop_assignment("12"))
@@ -449,7 +469,12 @@ fn evaluator_dispatches_percent_concat_and_comparison_operators_to_oxfunc() {
         vec!["FUNC.OP_CONCAT"]
     );
 
-    let compared = evaluate("=\"1\"&\"2\"=\"12\"", None, None, Some(&en_us_context()));
+    let compared = evaluate(
+        "=\"1\"&\"2\"=\"12\"",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(compared.oxfunc_value, EvalValue::Logical(true));
     assert_eq!(
         compared
@@ -461,7 +486,7 @@ fn evaluator_dispatches_percent_concat_and_comparison_operators_to_oxfunc() {
         vec!["FUNC.OP_CONCAT", "FUNC.OP_EQUAL"]
     );
 
-    let ordered = evaluate("=1<2", None, None, Some(&en_us_context()));
+    let ordered = evaluate("=1<2", None, None, Some(&oxfml_en_us_locale_context()));
     assert_eq!(ordered.oxfunc_value, EvalValue::Logical(true));
     assert_eq!(
         ordered
@@ -473,7 +498,7 @@ fn evaluator_dispatches_percent_concat_and_comparison_operators_to_oxfunc() {
         vec!["FUNC.OP_LESS_THAN"]
     );
 
-    let not_equal = evaluate("=1<>2", None, None, Some(&en_us_context()));
+    let not_equal = evaluate("=1<>2", None, None, Some(&oxfml_en_us_locale_context()));
     assert_eq!(not_equal.oxfunc_value, EvalValue::Logical(true));
     assert_eq!(
         not_equal
@@ -485,7 +510,7 @@ fn evaluator_dispatches_percent_concat_and_comparison_operators_to_oxfunc() {
         vec!["FUNC.OP_NOT_EQUAL"]
     );
 
-    let greater_equal = evaluate("=2>=1", None, None, Some(&en_us_context()));
+    let greater_equal = evaluate("=2>=1", None, None, Some(&oxfml_en_us_locale_context()));
     assert_eq!(greater_equal.oxfunc_value, EvalValue::Logical(true));
     assert_eq!(
         greater_equal
@@ -497,7 +522,12 @@ fn evaluator_dispatches_percent_concat_and_comparison_operators_to_oxfunc() {
         vec!["FUNC.OP_GREATER_EQUAL"]
     );
 
-    let bool_concat = evaluate("=TRUE&FALSE", None, None, Some(&en_us_context()));
+    let bool_concat = evaluate(
+        "=TRUE&FALSE",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(
         bool_concat.oxfunc_value,
         EvalValue::Text(ExcelText::from_interop_assignment("TRUEFALSE"))
@@ -506,7 +536,7 @@ fn evaluator_dispatches_percent_concat_and_comparison_operators_to_oxfunc() {
 
 #[test]
 fn evaluator_supports_scientific_numeric_literals() {
-    let literal = evaluate("=1E+3+2", None, None, Some(&en_us_context()));
+    let literal = evaluate("=1E+3+2", None, None, Some(&oxfml_en_us_locale_context()));
     assert_eq!(literal.oxfunc_value, EvalValue::Number(1002.0));
     assert_eq!(
         literal
@@ -518,13 +548,13 @@ fn evaluator_supports_scientific_numeric_literals() {
         vec!["FUNC.OP_ADD"]
     );
 
-    let leading_decimal = evaluate("=.5E+1", None, None, Some(&en_us_context()));
+    let leading_decimal = evaluate("=.5E+1", None, None, Some(&oxfml_en_us_locale_context()));
     assert_eq!(leading_decimal.oxfunc_value, EvalValue::Number(5.0));
 }
 
 #[test]
 fn evaluator_maps_negative_fractional_power_to_num_error() {
-    let output = evaluate("=(-1)^0.5", None, None, Some(&en_us_context()));
+    let output = evaluate("=(-1)^0.5", None, None, Some(&oxfml_en_us_locale_context()));
     assert_eq!(
         output.oxfunc_value,
         EvalValue::Error(WorksheetErrorCode::Num)
@@ -534,7 +564,12 @@ fn evaluator_maps_negative_fractional_power_to_num_error() {
 
 #[test]
 fn evaluator_projects_ordinary_worksheet_errors_as_values() {
-    let output = evaluate("=ABS(\"x\")", None, None, Some(&en_us_context()));
+    let output = evaluate(
+        "=ABS(\"x\")",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(
         output.oxfunc_value,
         EvalValue::Error(WorksheetErrorCode::Value)
@@ -545,7 +580,12 @@ fn evaluator_projects_ordinary_worksheet_errors_as_values() {
 
 #[test]
 fn evaluator_matches_current_if_empty_text_excel_outcome() {
-    let output = evaluate("=IF(\"\",1,2)", None, None, Some(&en_us_context()));
+    let output = evaluate(
+        "=IF(\"\",1,2)",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(
         output.oxfunc_value,
         EvalValue::Error(WorksheetErrorCode::Value)
@@ -556,7 +596,7 @@ fn evaluator_matches_current_if_empty_text_excel_outcome() {
 
 #[test]
 fn evaluator_executes_foundation_let_lambda_success_cases() {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let cases = [
         (
             "FTC-0446",
@@ -581,7 +621,7 @@ fn evaluator_executes_foundation_let_lambda_success_cases() {
 
 #[test]
 fn evaluator_executes_foundation_array_lambda_carrier_case_ftc_0455() {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let output = evaluate_with_rtd_provider(
         "=LET(THUNK,LAMBDA(x,LAMBDA(x)),vals,MAP({1;2;3},LAMBDA(v,THUNK(v*10))),INDEX(vals,2,1)())",
         None,
@@ -609,14 +649,14 @@ fn evaluator_executes_lambda_array_authoring_frontier_acceptance_baselines() {
     ];
 
     for (case_id, formula, expected_value) in cases {
-        let output = evaluate(formula, None, None, Some(&en_us_context()));
+        let output = evaluate(formula, None, None, Some(&oxfml_en_us_locale_context()));
         assert_eq!(output.oxfunc_value, expected_value, "{case_id} value");
     }
 }
 
 #[test]
 fn evaluator_executes_if_text_true_condition_ftc_0541() {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let output = evaluate_with_rtd_provider(
         "=IF(\"TRUE\",\"yes\",\"no\")",
         None,
@@ -636,14 +676,24 @@ fn evaluator_executes_if_text_true_condition_ftc_0541() {
 
 #[test]
 fn evaluator_executes_if_text_false_condition() {
-    let output = evaluate("=IF(\"FALSE\",1,2)", None, None, Some(&en_us_context()));
+    let output = evaluate(
+        "=IF(\"FALSE\",1,2)",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(output.oxfunc_value, EvalValue::Number(2.0));
     assert_eq!(output.result.payload_summary, "Number(2)");
 }
 
 #[test]
 fn evaluator_consumes_broader_float_comparison_family_split() {
-    let tolerant_operator = evaluate("=0.1+0.2=0.3", None, None, Some(&en_us_context()));
+    let tolerant_operator = evaluate(
+        "=0.1+0.2=0.3",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(tolerant_operator.oxfunc_value, EvalValue::Logical(true));
     assert_eq!(
         tolerant_operator
@@ -659,7 +709,7 @@ fn evaluator_consumes_broader_float_comparison_family_split() {
         "=SWITCH(((123456789012345*10)+5)/1E25,((123456789012345*10)+4)/1E25,1,0)",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(tolerant_switch.oxfunc_value, EvalValue::Number(1.0));
 
@@ -667,47 +717,92 @@ fn evaluator_consumes_broader_float_comparison_family_split() {
         "=DELTA(((123456789012345*10)+5)/1E25,((123456789012345*10)+4)/1E25)",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(exact_delta.oxfunc_value, EvalValue::Number(0.0));
 }
 
 #[test]
 fn evaluator_publishes_excel_root_add_subtract_zero_reaching_result() {
-    let root_zero = evaluate("=0.1+0.2-0.3", None, None, Some(&en_us_context()));
+    let root_zero = evaluate(
+        "=0.1+0.2-0.3",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(root_zero.oxfunc_value, EvalValue::Number(0.0));
 
-    let grouped_root = evaluate("=(0.1+0.2-0.3)", None, None, Some(&en_us_context()));
+    let grouped_root = evaluate(
+        "=(0.1+0.2-0.3)",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(
         grouped_root.oxfunc_value,
         EvalValue::Number(5.551115123125783e-17)
     );
 
-    let scaled = evaluate("=(0.1+0.2-0.3)*1E17", None, None, Some(&en_us_context()));
+    let scaled = evaluate(
+        "=(0.1+0.2-0.3)*1E17",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(scaled.oxfunc_value, EvalValue::Number(5.551115123125783));
 
-    let condition = evaluate("=IF(0.1+0.2-0.3,1,0)", None, None, Some(&en_us_context()));
+    let condition = evaluate(
+        "=IF(0.1+0.2-0.3,1,0)",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(condition.oxfunc_value, EvalValue::Number(1.0));
 
-    let comparison = evaluate("=(0.1+0.2-0.3)=0", None, None, Some(&en_us_context()));
+    let comparison = evaluate(
+        "=(0.1+0.2-0.3)=0",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(comparison.oxfunc_value, EvalValue::Logical(false));
 
-    let small_intended_delta = evaluate("=1E-17+(-2E-17)", None, None, Some(&en_us_context()));
+    let small_intended_delta = evaluate(
+        "=1E-17+(-2E-17)",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(
         small_intended_delta.oxfunc_value,
         EvalValue::Number(-1.0e-17)
     );
 
-    let larger_residue = evaluate("=0.300000000000001-0.3", None, None, Some(&en_us_context()));
+    let larger_residue = evaluate(
+        "=0.300000000000001-0.3",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(
         larger_residue.oxfunc_value,
         EvalValue::Number(9.992007221626409e-16)
     );
 
-    let large_exact_delta = evaluate("=(1E15+1)-1E15", None, None, Some(&en_us_context()));
+    let large_exact_delta = evaluate(
+        "=(1E15+1)-1E15",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(large_exact_delta.oxfunc_value, EvalValue::Number(1.0));
 
-    let larger_absolute_residue = evaluate("=43.1-43.2+0.1", None, None, Some(&en_us_context()));
+    let larger_absolute_residue = evaluate(
+        "=43.1-43.2+0.1",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(
         larger_absolute_residue.oxfunc_value,
         EvalValue::Number(-1.4155343563970746e-15)
@@ -716,7 +811,12 @@ fn evaluator_publishes_excel_root_add_subtract_zero_reaching_result() {
 
 #[test]
 fn evaluator_dispatches_range_and_intersection_reference_operators_to_oxfunc() {
-    let range = evaluate("=SUM(A1:B2)", None, None, Some(&en_us_context()));
+    let range = evaluate(
+        "=SUM(A1:B2)",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(range.oxfunc_value, EvalValue::Number(31.0));
     assert_eq!(
         range
@@ -728,7 +828,12 @@ fn evaluator_dispatches_range_and_intersection_reference_operators_to_oxfunc() {
         vec!["FUNC.SUM"]
     );
 
-    let intersection = evaluate("=SUM((A1:B2 A2:B2))", None, None, Some(&en_us_context()));
+    let intersection = evaluate(
+        "=SUM((A1:B2 A2:B2))",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(intersection.oxfunc_value, EvalValue::Number(24.0));
     assert_eq!(
         intersection
@@ -740,7 +845,12 @@ fn evaluator_dispatches_range_and_intersection_reference_operators_to_oxfunc() {
         vec!["FUNC.OP_INTERSECTION_REF", "FUNC.SUM"]
     );
 
-    let union = evaluate("=SUM((A1:A2,B2))", None, None, Some(&en_us_context()));
+    let union = evaluate(
+        "=SUM((A1:A2,B2))",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(union.oxfunc_value, EvalValue::Number(31.0));
     assert_eq!(
         union
@@ -883,7 +993,12 @@ fn evaluator_rejects_sheet_qualified_whole_column_reference_in_local_value_only_
 
 #[test]
 fn evaluator_lifts_binary_arithmetic_over_array_literals_and_scalar_negation() {
-    let output = evaluate("={1,2,3;2,3,4}*-1", None, None, Some(&en_us_context()));
+    let output = evaluate(
+        "={1,2,3;2,3,4}*-1",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(output.result.payload_summary, "Array(2x3)");
     assert_eq!(
         array_numbers(&output.oxfunc_value),
@@ -902,7 +1017,12 @@ fn evaluator_lifts_binary_arithmetic_over_array_literals_and_scalar_negation() {
 
 #[test]
 fn evaluator_lifts_unary_minus_over_array_literals_via_unary_dispatch() {
-    let output = evaluate("=-{1,2,3;2,3,4}", None, None, Some(&en_us_context()));
+    let output = evaluate(
+        "=-{1,2,3;2,3,4}",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(output.result.payload_summary, "Array(2x3)");
     assert_eq!(
         array_numbers(&output.oxfunc_value),
@@ -916,7 +1036,7 @@ fn evaluator_lifts_binary_arithmetic_over_same_shape_arrays() {
         "={1,2;3,4}+{10,20;30,40}",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Array(2x2)");
     assert_eq!(
@@ -927,7 +1047,12 @@ fn evaluator_lifts_binary_arithmetic_over_same_shape_arrays() {
 
 #[test]
 fn evaluator_lifts_division_over_arrays_and_preserves_element_errors() {
-    let output = evaluate("={8,6;4,2}/{2,0;1,2}", None, None, Some(&en_us_context()));
+    let output = evaluate(
+        "={8,6;4,2}/{2,0;1,2}",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     let EvalValue::Array(array) = &output.oxfunc_value else {
         panic!("expected array result, got {:?}", output.oxfunc_value);
     };
@@ -957,7 +1082,12 @@ fn evaluator_operator_array_arithmetic_fixture_corpus_matches_expected_values() 
         load_json_fixture("operator_array_arithmetic_cases.json");
 
     for fixture in fixtures {
-        let output = evaluate(&fixture.formula, None, None, Some(&en_us_context()));
+        let output = evaluate(
+            &fixture.formula,
+            None,
+            None,
+            Some(&oxfml_en_us_locale_context()),
+        );
         assert_eq!(
             output.result.payload_summary, fixture.expected_payload_summary,
             "payload summary mismatch for {}",
@@ -974,25 +1104,40 @@ fn evaluator_operator_array_arithmetic_fixture_corpus_matches_expected_values() 
 
 #[test]
 fn evaluator_treats_absent_single_cell_reference_as_true_blank() {
-    let isblank_output = evaluate("=ISBLANK(A9)", None, None, Some(&en_us_context()));
+    let isblank_output = evaluate(
+        "=ISBLANK(A9)",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(isblank_output.oxfunc_value, EvalValue::Logical(true));
 
-    let n_output = evaluate("=N(A9)", None, None, Some(&en_us_context()));
+    let n_output = evaluate("=N(A9)", None, None, Some(&oxfml_en_us_locale_context()));
     assert_eq!(n_output.oxfunc_value, EvalValue::Number(0.0));
 
-    let type_output = evaluate("=TYPE(A9)", None, None, Some(&en_us_context()));
+    let type_output = evaluate("=TYPE(A9)", None, None, Some(&oxfml_en_us_locale_context()));
     assert_eq!(type_output.oxfunc_value, EvalValue::Number(1.0));
 }
 
 #[test]
 fn evaluator_runs_indirect_offset_and_iferror() {
-    let indirect_output = evaluate("=INDIRECT(\"A1\")", None, None, Some(&en_us_context()));
+    let indirect_output = evaluate(
+        "=INDIRECT(\"A1\")",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(
         indirect_output.trace.prepared_calls[0].function_id,
         "FUNC.INDIRECT"
     );
 
-    let offset_output = evaluate("=OFFSET(A1,0,0)", None, None, Some(&en_us_context()));
+    let offset_output = evaluate(
+        "=OFFSET(A1,0,0)",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(
         offset_output.trace.prepared_calls[0].function_id,
         "FUNC.OFFSET"
@@ -1002,7 +1147,7 @@ fn evaluator_runs_indirect_offset_and_iferror() {
         "=IFERROR(UnknownName,2)",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(iferror_output.result.payload_summary, "Number(2)");
     assert_eq!(
@@ -1013,7 +1158,12 @@ fn evaluator_runs_indirect_offset_and_iferror() {
 
 #[test]
 fn evaluator_maps_unknown_function_call_to_name_error() {
-    let output = evaluate("=NOSUCH(1)", None, None, Some(&en_us_context()));
+    let output = evaluate(
+        "=NOSUCH(1)",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(
         output.oxfunc_value,
         EvalValue::Error(WorksheetErrorCode::Name)
@@ -1022,28 +1172,43 @@ fn evaluator_maps_unknown_function_call_to_name_error() {
 
 #[test]
 fn evaluator_iferror_catches_unknown_function_name_error() {
-    let output = evaluate("=IFERROR(NOSUCH(1),0)", None, None, Some(&en_us_context()));
+    let output = evaluate(
+        "=IFERROR(NOSUCH(1),0)",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(output.oxfunc_value, EvalValue::Number(0.0));
 }
 
 #[test]
 fn evaluator_preserves_if_branch_laziness_locally() {
-    let output = evaluate("=IF(TRUE,1,1/0)", None, None, Some(&en_us_context()));
+    let output = evaluate(
+        "=IF(TRUE,1,1/0)",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(output.oxfunc_value, EvalValue::Number(1.0));
 }
 
 #[test]
 fn evaluator_preserves_iferror_fallback_laziness_locally() {
-    let output = evaluate("=IFERROR(1,1/0)", None, None, Some(&en_us_context()));
+    let output = evaluate(
+        "=IFERROR(1,1/0)",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(output.oxfunc_value, EvalValue::Number(1.0));
 }
 
 #[test]
 fn evaluator_runs_now_and_today_with_supplied_serial() {
-    let now_output = evaluate("=NOW()", None, None, Some(&en_us_context()));
+    let now_output = evaluate("=NOW()", None, None, Some(&oxfml_en_us_locale_context()));
     assert_eq!(now_output.result.payload_summary, "Number(46000)");
 
-    let today_output = evaluate("=TODAY()", None, None, Some(&en_us_context()));
+    let today_output = evaluate("=TODAY()", None, None, Some(&oxfml_en_us_locale_context()));
     assert_eq!(today_output.result.payload_summary, "Number(46000)");
 }
 
@@ -1059,7 +1224,7 @@ fn evaluator_uses_defined_name_bindings_for_sum() {
         "=SUM(InputValue,2)",
         Some(bindings),
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Number(7)");
     assert_eq!(output.trace.prepared_calls[0].function_id, "FUNC.SUM");
@@ -1080,32 +1245,52 @@ fn evaluator_uses_defined_name_reference_for_cell_contents() {
         "=CELL(\"contents\",InputRef)",
         Some(bindings),
         Some(&MockHostInfoProvider),
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Number(7)");
 }
 
 #[test]
 fn evaluator_runs_let_with_helper_bindings() {
-    let output = evaluate("=LET(x,1,x+2)", None, None, Some(&en_us_context()));
+    let output = evaluate(
+        "=LET(x,1,x+2)",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(output.result.payload_summary, "Number(3)");
 }
 
 #[test]
 fn evaluator_runs_let_with_reference_preserved_binding() {
-    let output = evaluate("=LET(r,A1,SUM(r,2))", None, None, Some(&en_us_context()));
+    let output = evaluate(
+        "=LET(r,A1,SUM(r,2))",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(output.result.payload_summary, "Number(9)");
 }
 
 #[test]
 fn evaluator_runs_legacy_single_compat() {
-    let output = evaluate("=_xlfn.SINGLE(A1)", None, None, Some(&en_us_context()));
+    let output = evaluate(
+        "=_xlfn.SINGLE(A1)",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(output.result.payload_summary, "Number(7)");
 }
 
 #[test]
 fn evaluator_returns_lambda_value_summary() {
-    let output = evaluate("=LAMBDA(x,x+1)", None, None, Some(&en_us_context()));
+    let output = evaluate(
+        "=LAMBDA(x,x+1)",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(
         output.result.payload_summary,
         "Lambda(arity=1;required_arity=1;params=x;optional_params=-;captures=-;body=Binary)"
@@ -1151,7 +1336,7 @@ fn evaluator_returns_lambda_value_summary_with_lexical_capture_metadata() {
         "=LET(x,10,LAMBDA(y,x+y))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(
         output.result.payload_summary,
@@ -1194,7 +1379,12 @@ fn evaluator_returns_lambda_value_summary_with_lexical_capture_metadata() {
 
 #[test]
 fn evaluator_runs_immediate_lambda_invocation() {
-    let output = evaluate("=LAMBDA(x,x+1)(2)", None, None, Some(&en_us_context()));
+    let output = evaluate(
+        "=LAMBDA(x,x+1)(2)",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(output.result.payload_summary, "Number(3)");
     assert_eq!(
         output
@@ -1213,7 +1403,7 @@ fn evaluator_runs_helper_bound_lambda_invocation() {
         "=LET(f,LAMBDA(x,x+1),f(2))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Number(3)");
     let function_ids = output
@@ -1239,7 +1429,7 @@ fn evaluator_runs_helper_bound_lambda_power_invocation() {
         "=LET(f,LAMBDA(x,x^2),f(3))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Number(9)");
     let function_ids = output
@@ -1265,7 +1455,7 @@ fn evaluator_resolves_helper_bound_lambda_arguments_in_caller_scope() {
         "=LET(a,3,f,LAMBDA(x,x^2),f(a))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Number(9)");
     let function_ids = output
@@ -1291,7 +1481,7 @@ fn evaluator_uses_lexical_not_dynamic_scope_for_helper_bound_lambda() {
         "=LET(x,10,f,LAMBDA(y,x+y),LET(x,20,f(2)))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Number(12)");
 }
@@ -1317,7 +1507,7 @@ fn evaluator_invokes_defined_name_callable_binding() {
         "=NamedLambda(2)",
         Some(bindings),
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Number(3)");
     assert_eq!(
@@ -1357,7 +1547,7 @@ fn evaluator_preserves_defined_name_callable_as_first_class_value() {
         "=NamedLambda",
         Some(bindings.clone()),
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(
         value_output.result.payload_summary,
@@ -1386,7 +1576,7 @@ fn evaluator_preserves_defined_name_callable_as_first_class_value() {
         "=NamedLambda(2)",
         Some(bindings),
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(invoke_output.result.payload_summary, "Number(12)");
 }
@@ -1397,7 +1587,7 @@ fn evaluator_lambda_summary_ignores_unused_helper_bindings() {
         "=LET(x,10,unused,99,LAMBDA(y,x+y))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(
         output.result.payload_summary,
@@ -1417,7 +1607,7 @@ fn evaluator_lambda_summary_respects_parameter_shadowing() {
         "=LET(x,10,LAMBDA(x,x+1))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(
         output.result.payload_summary,
@@ -1442,7 +1632,12 @@ fn evaluator_lambda_summary_respects_parameter_shadowing() {
 
 #[test]
 fn evaluator_surfaces_typed_external_reference_deferment() {
-    let output = evaluate("=[Book.xlsx]Sheet2!A1", None, None, Some(&en_us_context()));
+    let output = evaluate(
+        "=[Book.xlsx]Sheet2!A1",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(output.result.payload_summary, "Error(Ref)");
     assert_eq!(
         output.result.deferred_reason.as_deref(),
@@ -1471,7 +1666,12 @@ fn evaluator_surfaces_typed_external_reference_deferment() {
 
 #[test]
 fn evaluator_runs_index_and_xmatch_catalog_lanes() {
-    let index_output = evaluate("=INDEX(SEQUENCE(3),2)", None, None, Some(&en_us_context()));
+    let index_output = evaluate(
+        "=INDEX(SEQUENCE(3),2)",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(index_output.result.payload_summary, "Number(2)");
     assert_eq!(
         index_output.trace.prepared_calls[0].function_id,
@@ -1482,7 +1682,12 @@ fn evaluator_runs_index_and_xmatch_catalog_lanes() {
         "FUNC.INDEX"
     );
 
-    let xmatch_output = evaluate("=XMATCH(3,SEQUENCE(5))", None, None, Some(&en_us_context()));
+    let xmatch_output = evaluate(
+        "=XMATCH(3,SEQUENCE(5))",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(xmatch_output.result.payload_summary, "Number(3)");
     assert_eq!(
         xmatch_output.trace.prepared_calls[0].function_id,
@@ -1500,7 +1705,7 @@ fn evaluator_executes_map_with_local_lambda_callable() {
         "=MAP(SEQUENCE(3),LAMBDA(x,x+1))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Array(3x1)");
     assert_eq!(array_numbers(&output.oxfunc_value), vec![2.0, 3.0, 4.0]);
@@ -1522,7 +1727,7 @@ fn evaluator_executes_reduce_with_local_lambda_callable() {
         "=REDUCE(0,SEQUENCE(3),LAMBDA(a,b,a+b))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Number(6)");
     assert_eq!(output.oxfunc_value, EvalValue::Number(6.0));
@@ -1534,7 +1739,7 @@ fn evaluator_executes_scan_with_local_lambda_callable() {
         "=SCAN(0,SEQUENCE(3),LAMBDA(a,b,a+b))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Array(3x1)");
     assert_eq!(array_numbers(&output.oxfunc_value), vec![1.0, 3.0, 6.0]);
@@ -1546,7 +1751,7 @@ fn evaluator_executes_map_with_helper_bound_lambda_callable() {
         "=LET(f,LAMBDA(x,x+1),MAP(SEQUENCE(3),f))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Array(3x1)");
     assert_eq!(array_numbers(&output.oxfunc_value), vec![2.0, 3.0, 4.0]);
@@ -1583,7 +1788,7 @@ fn evaluator_executes_map_with_defined_name_callable() {
         "=MAP(SEQUENCE(3),NamedLambda)",
         Some(bindings),
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Array(3x1)");
     assert_eq!(array_numbers(&output.oxfunc_value), vec![2.0, 3.0, 4.0]);
@@ -1595,7 +1800,7 @@ fn evaluator_executes_byrow_with_local_lambda_callable() {
         "=BYROW(SEQUENCE(2,2),LAMBDA(r,SUM(r)))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Array(2x1)");
     assert_eq!(array_numbers(&output.oxfunc_value), vec![3.0, 7.0]);
@@ -1607,7 +1812,7 @@ fn evaluator_executes_bycol_with_local_lambda_callable() {
         "=BYCOL(SEQUENCE(2,2),LAMBDA(c,SUM(c)))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Array(1x2)");
     assert_eq!(array_numbers(&output.oxfunc_value), vec![4.0, 6.0]);
@@ -1619,7 +1824,7 @@ fn evaluator_executes_makearray_with_local_lambda_callable() {
         "=MAKEARRAY(2,3,LAMBDA(r,c,r+c))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Array(2x3)");
     assert_eq!(
@@ -1630,7 +1835,12 @@ fn evaluator_executes_makearray_with_local_lambda_callable() {
 
 #[test]
 fn evaluator_runs_isomitted_with_present_arg() {
-    let output = evaluate("=ISOMITTED(1)", None, None, Some(&en_us_context()));
+    let output = evaluate(
+        "=ISOMITTED(1)",
+        None,
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(output.result.payload_summary, "Logical(false)");
     assert_eq!(output.trace.prepared_calls[0].function_id, "FUNC.ISOMITTED");
 }
@@ -1641,7 +1851,7 @@ fn evaluator_distinguishes_lambda_underapplication_from_isomitted() {
         "=LAMBDA(a,ISOMITTED(a))(3)",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(present.result.payload_summary, "Logical(false)");
 
@@ -1650,7 +1860,7 @@ fn evaluator_distinguishes_lambda_underapplication_from_isomitted() {
         None,
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     let error = underapplied.expect_err("underapplication should fail before ISOMITTED is useful");
     assert!(error.message.contains("lambda invocation arity mismatch"));
@@ -1662,7 +1872,7 @@ fn evaluator_executes_map_with_isomitted_for_present_args() {
         "=MAP(SEQUENCE(2),LAMBDA(a,ISOMITTED(a)))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Array(2x1)");
     assert_eq!(array_logicals(&output.oxfunc_value), vec![false, false]);
@@ -1674,7 +1884,7 @@ fn evaluator_preserves_explicit_omitted_placeholder_for_plain_lambda_params() {
         "=LAMBDA(a,b,ISOMITTED(b))(1,)",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Logical(true)");
 }
@@ -1685,7 +1895,7 @@ fn evaluator_executes_direct_lambda_with_optional_bracket_parameter() {
         "=LAMBDA(x,[y],IF(ISOMITTED(y),x*2,x+y))(5)",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(omitted.result.payload_summary, "Number(10)");
     assert_eq!(omitted.oxfunc_value, EvalValue::Number(10.0));
@@ -1694,7 +1904,7 @@ fn evaluator_executes_direct_lambda_with_optional_bracket_parameter() {
         "=LAMBDA(x,[y],IF(ISOMITTED(y),x*2,x+y))(5,3)",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(present.result.payload_summary, "Number(8)");
     assert_eq!(present.oxfunc_value, EvalValue::Number(8.0));
@@ -1706,7 +1916,7 @@ fn evaluator_executes_helper_bound_lambda_with_optional_bracket_parameter() {
         "=LET(f,LAMBDA(x,[y],IF(ISOMITTED(y),x*2,x+y)),f(5))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(omitted.result.payload_summary, "Number(10)");
     assert_eq!(omitted.oxfunc_value, EvalValue::Number(10.0));
@@ -1715,7 +1925,7 @@ fn evaluator_executes_helper_bound_lambda_with_optional_bracket_parameter() {
         "=LET(f,LAMBDA(x,[y],IF(ISOMITTED(y),x*2,x+y)),f(5,3))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(present.result.payload_summary, "Number(8)");
     assert_eq!(present.oxfunc_value, EvalValue::Number(8.0));
@@ -1727,7 +1937,7 @@ fn evaluator_executes_map_with_optional_lambda_parameter_omitted_by_helper() {
         "=MAP(SEQUENCE(2),LAMBDA(x,[y],IF(ISOMITTED(y),x*2,x+y)))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Array(2x1)");
     assert_eq!(array_numbers(&output.oxfunc_value), vec![2.0, 4.0]);
@@ -1739,7 +1949,7 @@ fn evaluator_executes_helper_bound_returned_lambda_invocation() {
         "=LET(adder,LAMBDA(n,LAMBDA(x,x+n)),add5,adder(5),add5(10))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.oxfunc_value, EvalValue::Number(15.0));
     assert_eq!(
@@ -1766,7 +1976,7 @@ fn evaluator_returns_lambda_value_from_helper_bound_returned_lambda() {
         "=LET(adder,LAMBDA(n,LAMBDA(x,x+n)),adder(5))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert!(matches!(output.oxfunc_value, EvalValue::Lambda(_)));
     assert_eq!(
@@ -1785,7 +1995,7 @@ fn evaluator_executes_nested_returned_lambda_invocation() {
         "=LAMBDA(n,LAMBDA(x,x+n))(5)(10)",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.oxfunc_value, EvalValue::Number(15.0));
     assert_eq!(
@@ -1810,7 +2020,7 @@ fn evaluator_executes_returned_lambda_with_lexical_capture() {
         "=LET(base,100,adder,LAMBDA(n,LAMBDA(x,x+n+base)),add5,adder(5),add5(10))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.oxfunc_value, EvalValue::Number(115.0));
 }
@@ -1831,7 +2041,12 @@ fn evaluator_projects_runaway_recursive_defined_name_callable_as_num_error() {
         )),
     );
 
-    let output = evaluate("=Loop()", Some(bindings), None, Some(&en_us_context()));
+    let output = evaluate(
+        "=Loop()",
+        Some(bindings),
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(
         output.oxfunc_value,
         EvalValue::Error(WorksheetErrorCode::Num)
@@ -1873,7 +2088,12 @@ fn evaluator_executes_bounded_recursive_defined_name_callable() {
         )),
     );
 
-    let output = evaluate("=Fact(5)", Some(bindings), None, Some(&en_us_context()));
+    let output = evaluate(
+        "=Fact(5)",
+        Some(bindings),
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
     assert_eq!(output.oxfunc_value, EvalValue::Number(120.0));
 }
 
@@ -1916,7 +2136,7 @@ fn evaluator_matches_excel_named_recursion_success_boundary() {
         "=CountDown(5460)",
         Some(bindings),
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.oxfunc_value, EvalValue::Number(5460.0));
 }
@@ -1960,7 +2180,7 @@ fn evaluator_matches_excel_named_recursion_failure_boundary() {
         "=CountDown(5461)",
         Some(bindings),
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(
         output.oxfunc_value,
@@ -1974,7 +2194,7 @@ fn evaluator_matches_excel_builtin_colliding_let_recursive_name_frontier_ftc_044
         "=LET(gcd,LAMBDA(self,a,b,IF(b=0,a,self(self,b,MOD(a,b)))),gcd(gcd,48,36))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(
         output.oxfunc_value,
@@ -1988,7 +2208,7 @@ fn evaluator_preserves_non_builtin_let_recursive_name_self_application() {
         "=LET(zzgcd,LAMBDA(self,a,b,IF(b=0,a,self(self,b,MOD(a,b)))),zzgcd(zzgcd,48,36))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.oxfunc_value, EvalValue::Number(12.0));
 }
@@ -1999,7 +2219,7 @@ fn evaluator_preserves_generic_recursive_self_application_baseline() {
         "=LET(f,LAMBDA(self,n,IF(n<=0,0,1+self(self,n-1))),f(f,3))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.oxfunc_value, EvalValue::Number(3.0));
 }
@@ -2010,7 +2230,7 @@ fn evaluator_matches_excel_let_self_application_recursion_success_boundary() {
         "=LET(F,LAMBDA(self,n,IF(n<=0,0,1+self(self,n-1))),F(F,4094))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.oxfunc_value, EvalValue::Number(4094.0));
 }
@@ -2021,7 +2241,7 @@ fn evaluator_matches_excel_let_self_application_recursion_failure_boundary() {
         "=LET(F,LAMBDA(self,n,IF(n<=0,0,1+self(self,n-1))),F(F,4095))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(
         output.oxfunc_value,
@@ -2035,7 +2255,7 @@ fn evaluator_projects_direct_helper_local_self_recursion_as_name_error() {
         "=LET(F,LAMBDA(n,IF(n<=0,0,1+F(n-1))),F(5))",
         None,
         None,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(
         output.oxfunc_value,
@@ -2083,7 +2303,7 @@ fn evaluate_with_cells_result(
         .cell_values
         .insert("B2".to_string(), EvalValue::Number(13.0));
     context.cell_values.extend(extra_cells);
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     context.apply_typed_context_query_bundle(TypedContextQueryBundle::new(
         None,
         None,

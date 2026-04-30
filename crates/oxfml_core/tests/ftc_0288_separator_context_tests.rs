@@ -4,12 +4,10 @@ mod common;
 
 use oxfml_core::consumer::runtime::{RuntimeEnvironment, RuntimeFormulaRequest};
 use oxfml_core::eval::{EvaluationContext, evaluate_formula};
-use oxfml_core::format::en_us_context;
+use oxfml_core::format::{oxfml_en_us_format_profile, oxfml_en_us_locale_context};
 use oxfml_core::publication::VerificationPublicationContext;
 use oxfml_core::{FormulaChannelKind, FormulaSourceRecord, TypedContextQueryBundle};
-use oxfunc_core::locale_format::{
-    FormatProfile, LocaleFormatContext, LocaleProfileId, format_profile,
-};
+use oxfunc_core::locale_format::{FormatProfile, LocaleFormatContext};
 use oxfunc_core::value::{EvalValue, ExcelText};
 
 fn en_us_profile_with_separators(
@@ -19,7 +17,7 @@ fn en_us_profile_with_separators(
     FormatProfile {
         decimal_separator,
         thousands_separator,
-        ..format_profile(LocaleProfileId::EnUs).clone()
+        ..oxfml_en_us_format_profile()
     }
 }
 
@@ -27,7 +25,7 @@ fn en_us_context_with_separators(
     decimal_separator: &'static str,
     thousands_separator: &'static str,
 ) -> LocaleFormatContext<'static> {
-    let base = en_us_context();
+    let base = oxfml_en_us_locale_context();
     LocaleFormatContext {
         profile: en_us_profile_with_separators(decimal_separator, thousands_separator),
         ..base

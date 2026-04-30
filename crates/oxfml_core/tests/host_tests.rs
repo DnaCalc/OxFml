@@ -11,7 +11,7 @@ use oxfunc_core::value::{
 };
 use serde::Deserialize;
 
-use oxfml_core::format::{current_excel_host_context, en_us_context};
+use oxfml_core::format::{oxfml_current_excel_host_locale_context, oxfml_en_us_locale_context};
 use oxfml_core::seam::{AcceptDecision, TraceEventKind};
 use oxfml_core::semantics::{
     LibraryAvailabilityState, LibraryContextSnapshot, LibraryContextSnapshotEntry,
@@ -28,7 +28,7 @@ fn single_formula_host_recalc_updates_defined_name_inputs() {
     let mut host = SingleFormulaHost::new("host:sum", "=SUM(InputValue,2)");
     host.set_defined_name_value("InputValue", EvalValue::Number(5.0));
     let first = host
-        .recalc(None, Some(&en_us_context()))
+        .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("first recalc");
     assert!(!first.artifact_reuse.green_tree_reused);
     assert!(!first.artifact_reuse.red_projection_reused);
@@ -46,7 +46,7 @@ fn single_formula_host_recalc_updates_defined_name_inputs() {
 
     host.set_defined_name_value("InputValue", EvalValue::Number(8.0));
     let second = host
-        .recalc(None, Some(&en_us_context()))
+        .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("second recalc");
     assert!(second.artifact_reuse.green_tree_reused);
     assert!(second.artifact_reuse.red_projection_reused);
@@ -67,7 +67,7 @@ fn single_formula_host_recalc_updates_defined_name_inputs() {
 fn single_formula_host_invalidates_bind_reuse_when_name_kind_changes() {
     let mut host = SingleFormulaHost::new("host:reuse-invalidate", "=SUM(InputValue,2)");
     host.set_defined_name_value("InputValue", EvalValue::Number(5.0));
-    host.recalc(None, Some(&en_us_context()))
+    host.recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("first recalc should succeed");
 
     host.set_defined_name_reference(
@@ -79,7 +79,7 @@ fn single_formula_host_invalidates_bind_reuse_when_name_kind_changes() {
     );
     host.set_cell_value("A1", EvalValue::Number(5.0));
     let run = host
-        .recalc(None, Some(&en_us_context()))
+        .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("second recalc should succeed");
 
     assert!(run.artifact_reuse.green_tree_reused);
@@ -92,7 +92,7 @@ fn single_formula_host_invalidates_bind_reuse_when_name_kind_changes() {
 fn single_formula_host_captures_candidate_and_commit_trace() {
     let mut host = SingleFormulaHost::new("host:text", "=TEXT(1234.567,\"0.00\")");
     let run = host
-        .recalc(None, Some(&en_us_context()))
+        .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("recalc should succeed");
     assert_eq!(run.trace_events.len(), 2);
     assert_eq!(
@@ -109,7 +109,10 @@ fn single_formula_host_captures_candidate_and_commit_trace() {
 fn single_formula_host_runs_host_query_formula() {
     let mut host = SingleFormulaHost::new("host:info", "=INFO(\"directory\")");
     let run = host
-        .recalc(Some(&MockHostInfoProvider), Some(&en_us_context()))
+        .recalc(
+            Some(&MockHostInfoProvider),
+            Some(&oxfml_en_us_locale_context()),
+        )
         .expect("recalc should succeed");
     assert_eq!(
         run.candidate_result
@@ -136,7 +139,7 @@ fn single_formula_host_preserves_hyperlink_publication_intent() {
         "=HYPERLINK(\"https://example.com\",\"Go\")",
     );
     let run = host
-        .recalc(None, Some(&en_us_context()))
+        .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("recalc should succeed");
 
     assert_eq!(
@@ -166,7 +169,7 @@ fn single_formula_host_preserves_hyperlink_publication_intent() {
 fn single_formula_host_preserves_today_presentation_hint() {
     let mut host = SingleFormulaHost::new("host:today", "=TODAY()");
     let run = host
-        .recalc(None, Some(&en_us_context()))
+        .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("recalc should succeed");
 
     assert_eq!(
@@ -203,7 +206,10 @@ fn single_formula_host_preserves_image_rich_value_surface() {
         "=IMAGE(\"https://example.com/sphere.png\",\"Sphere\")",
     );
     let run = host
-        .recalc(Some(&ImageHostInfoProvider), Some(&en_us_context()))
+        .recalc(
+            Some(&ImageHostInfoProvider),
+            Some(&oxfml_en_us_locale_context()),
+        )
         .expect("recalc should succeed");
 
     assert_eq!(
@@ -241,7 +247,7 @@ fn single_formula_host_supports_local_bootstrap_backend_for_basic_formulae() {
         .recalc_with_backend(
             EvaluationBackend::LocalBootstrap,
             None,
-            Some(&en_us_context()),
+            Some(&oxfml_en_us_locale_context()),
         )
         .expect("bootstrap recalc should succeed");
     match &run.commit_decision {
@@ -259,7 +265,7 @@ fn single_formula_host_supports_local_bootstrap_backend_for_basic_formulae() {
 fn single_formula_host_rejects_execution_when_syntax_diagnostics_exist() {
     let mut host = SingleFormulaHost::new("host:syntax-reject", "=1~2");
     let error = host
-        .recalc(None, Some(&en_us_context()))
+        .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect_err("unsupported syntax should reject execution");
 
     assert!(error.contains("syntax diagnostics"));
@@ -273,7 +279,7 @@ fn single_formula_host_can_capture_commit_reject_trace() {
     let run = host
         .recalc_with_observed_fence_override(
             None,
-            Some(&en_us_context()),
+            Some(&oxfml_en_us_locale_context()),
             FenceSnapshot {
                 formula_token: "mismatch".to_string(),
                 snapshot_epoch: "epoch:1".to_string(),
@@ -327,7 +333,7 @@ fn empirical_oracle_scenarios_execute_through_single_formula_host() {
                 host_query_profile: scenario.host_query_profile.clone(),
             },
             host_info,
-            Some(&en_us_context()),
+            Some(&oxfml_en_us_locale_context()),
         )
         .expect("empirical scenario should execute");
         assert_eq!(
@@ -410,7 +416,7 @@ fn locale_sensitive_host_run_surfaces_format_dependency_fact() {
     let mut host = SingleFormulaHost::new("host:locale", "=TEXT(InputValue,\"0.00\")");
     host.set_defined_name_value("InputValue", EvalValue::Number(12.5));
     let run = host
-        .recalc(None, Some(&en_us_context()))
+        .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("recalc should succeed");
     assert_eq!(
         run.candidate_result
@@ -436,7 +442,7 @@ fn locale_sensitive_host_run_surfaces_format_dependency_fact() {
 fn single_formula_host_executes_text_with_scientific_format_pattern_ftc_0655() {
     let mut host = SingleFormulaHost::new("host:scientific-text", "=TEXT(12345.6789,\"0.00E+00\")");
     let run = host
-        .recalc(None, Some(&en_us_context()))
+        .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("recalc should succeed");
 
     assert_eq!(
@@ -449,7 +455,7 @@ fn single_formula_host_executes_text_with_scientific_format_pattern_ftc_0655() {
 
 #[test]
 fn first_host_replay_packet_preserves_locale_sensitive_text_date_family_publication_context() {
-    let locale = current_excel_host_context();
+    let locale = oxfml_current_excel_host_locale_context();
     let cases = [
         (
             "FTC-1021",
@@ -526,7 +532,7 @@ fn single_formula_host_uses_pinned_snapshot_ref_over_provider_current_snapshot()
         current_snapshot_ref,
         vec![pinned_snapshot, current_snapshot],
     );
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let bundle = oxfml_core::TypedContextQueryBundle::new(
         None,
         None,

@@ -108,7 +108,7 @@ fn adapter_projects_direct_scalar_and_array_like_preparation_artifacts() {
 
 #[test]
 fn adapter_executes_text_with_scientific_format_pattern_ftc_0655() {
-    let locale = oxfml_core::format::en_us_context();
+    let locale = oxfml_core::format::oxfml_en_us_locale_context();
     let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
         "ftc-0655-scientific-text",
         "formula:foundation:FTC-0655",
@@ -142,7 +142,7 @@ fn adapter_executes_text_with_scientific_format_pattern_ftc_0655() {
 
 #[test]
 fn adapter_preserves_randarray_width_for_columns_ftc_0505_without_explicit_random_bundle() {
-    let locale = oxfml_core::format::en_us_context();
+    let locale = oxfml_core::format::oxfml_en_us_locale_context();
     let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
         "ftc-0505-randarray-width",
         "formula:foundation:FTC-0505",

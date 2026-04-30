@@ -2,7 +2,7 @@ use oxfml_core::binding::{
     BindContext, BindRequest, BoundExpr, NameKind, NormalizedReference, ReferenceExpr, bind_formula,
 };
 use oxfml_core::consumer::runtime::{RuntimeEnvironment, RuntimeFormulaRequest};
-use oxfml_core::format::en_us_context;
+use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::red::project_red_view;
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
@@ -31,7 +31,7 @@ fn runtime_execute(
     formula_stable_id: &str,
     formula: &str,
 ) -> oxfml_core::consumer::runtime::RuntimeFormulaResult {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
             FormulaSourceRecord::new(formula_stable_id, 1, formula),

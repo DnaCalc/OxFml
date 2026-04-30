@@ -3,7 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use oxfml_core::EvaluationBackend;
-use oxfml_core::format::en_us_context;
+use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::seam::AcceptDecision;
 use oxfml_core::test_support::host::{
     EmpiricalOracleScenario, HostRecalcOutput, SingleFormulaHost,
@@ -754,7 +754,7 @@ fn replay_host_case(fixture: &HostReplayFixture) -> HostRecalcOutput {
         other => panic!("unexpected backend: {other}"),
     };
 
-    host.recalc_with_backend(backend, host_info, Some(&en_us_context()))
+    host.recalc_with_backend(backend, host_info, Some(&oxfml_en_us_locale_context()))
         .expect("replayed host case should execute")
 }
 
@@ -777,7 +777,7 @@ fn replay_empirical_oracle_case(scenario: &EmpiricalOracleScenarioWire) -> HostR
             host_query_profile: scenario.host_query_profile.clone(),
         },
         host_info,
-        Some(&en_us_context()),
+        Some(&oxfml_en_us_locale_context()),
     )
     .expect("replayed empirical oracle case should execute")
 }

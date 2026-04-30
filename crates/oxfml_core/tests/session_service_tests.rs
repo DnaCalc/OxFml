@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use oxfml_core::format::en_us_context;
+use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
 use oxfunc_core::value::{EvalValue, ExcelText, ReferenceLike};
 
@@ -615,7 +615,7 @@ fn session_query_bundle<'a>(
 }
 
 fn session_locale_context() -> &'static oxfunc_core::locale_format::LocaleFormatContext<'static> {
-    Box::leak(Box::new(en_us_context()))
+    Box::leak(Box::new(oxfml_en_us_locale_context()))
 }
 
 fn test_snapshot() -> LibraryContextSnapshot {

@@ -4,7 +4,7 @@ mod common;
 
 use oxfml_core::consumer::runtime::{RuntimeEnvironment, RuntimeFormulaRequest};
 use oxfml_core::eval::{EvaluationContext, evaluate_formula};
-use oxfml_core::format::{en_us_context, render_with_code};
+use oxfml_core::format::{oxfml_en_us_locale_context, render_with_code};
 use oxfml_core::test_support::oxfunc_adapter::{
     OxFuncAdapterRequest, run_oxfunc_preparation_adapter,
 };
@@ -27,7 +27,7 @@ fn evaluate_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::
 
 #[test]
 fn format_engine_rejects_unsupported_fraction_placeholder_text_code_ftc_0654() {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let rendered = render_with_code(&locale.profile, locale.date_system, 0.25, "# ?/?");
     assert_eq!(
         rendered,
@@ -46,7 +46,7 @@ fn evaluator_rejects_unsupported_fraction_placeholder_text_code_ftc_0654() {
 
 #[test]
 fn runtime_rejects_unsupported_fraction_placeholder_text_code_ftc_0654() {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let result = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
             FormulaSourceRecord::new("ftc-0654:runtime", 1, "=TEXT(0.25,\"# ?/?\")"),
@@ -66,7 +66,7 @@ fn runtime_rejects_unsupported_fraction_placeholder_text_code_ftc_0654() {
 
 #[test]
 fn adapter_rejects_unsupported_fraction_placeholder_text_code_ftc_0654() {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
         "ftc-0654-fraction-text",
         "formula:foundation:FTC-0654",
@@ -92,7 +92,7 @@ fn adapter_rejects_unsupported_fraction_placeholder_text_code_ftc_0654() {
 
 #[test]
 fn scientific_text_control_remains_green_after_ftc_0654_fix() {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let result = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
             FormulaSourceRecord::new("ftc-0654:control", 1, "=TEXT(12345.6789,\"0.00E+00\")"),

@@ -4,7 +4,7 @@ mod common;
 
 use oxfml_core::consumer::runtime::{RuntimeEnvironment, RuntimeFormulaRequest};
 use oxfml_core::eval::{EvaluationContext, evaluate_formula};
-use oxfml_core::format::en_us_context;
+use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::{FormulaSourceRecord, TypedContextQueryBundle};
 use oxfunc_core::value::{ArrayCellValue, EvalArray, EvalValue, WorksheetErrorCode};
 
@@ -57,7 +57,7 @@ fn evaluator_rehydrates_callable_map_parameters_ftc_0999() {
 
 #[test]
 fn runtime_rehydrates_callable_map_parameters_ftc_0999() {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let cases = [
         (
             "direct",
@@ -99,7 +99,7 @@ fn nested_callable_map_reuse_projects_calc_ftc_0999() {
         EvalValue::Error(WorksheetErrorCode::Calc)
     );
 
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let runtime = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
             FormulaSourceRecord::new("runtime:ftc-0999:nested", 1, formula),

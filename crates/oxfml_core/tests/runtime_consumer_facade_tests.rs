@@ -4,7 +4,9 @@ use oxfml_core::consumer::runtime::{
     RuntimeEnvironment, RuntimeFormulaRequest, RuntimeManagedSessionError,
     RuntimeManagedSessionPhase, RuntimeSessionFacade,
 };
-use oxfml_core::format::{en_us_context, worksheet_error_text};
+use oxfml_core::format::{
+    oxfml_en_us_format_profile, oxfml_en_us_locale_context, worksheet_error_text,
+};
 use oxfml_core::publication::{
     VerificationConditionalFormattingRule, VerificationPublicationContext,
 };
@@ -27,8 +29,8 @@ use oxfunc_core::functions::call_register_id_family::{
 use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult, RtdRequest};
 use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
 use oxfunc_core::locale_format::{
-    FormatCodeEngine, FormatFailure, FormatProfile, LocaleFormatContext, LocaleProfileId,
-    LocaleValueParser, ParseFailure, WorkbookDateSystem, format_profile,
+    FormatCodeEngine, FormatFailure, FormatProfile, LocaleFormatContext, LocaleValueParser,
+    ParseFailure, WorkbookDateSystem,
 };
 use oxfunc_core::value::EvalValue;
 use oxfunc_core::value::{CallArgValue, ExcelText};
@@ -458,7 +460,7 @@ fn runtime_session_facade_executes_and_commits_managed_in_one_step() {
 
 #[test]
 fn runtime_environment_executes_rtd_formula_through_typed_query_bundle() {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let request = RuntimeFormulaRequest::new(
         FormulaSourceRecord::new("runtime:rtd", 1, "=RTD(\"prog\",\"server\",\"topic\")"),
         TypedContextQueryBundle::new(None, Some(&ValueRtdProvider), Some(&locale), None, None),
@@ -522,7 +524,7 @@ fn runtime_environment_executes_registered_external_formula_through_typed_query_
 
 #[test]
 fn runtime_environment_emits_effective_display_text_comparison_view_for_verification_context() {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let request = RuntimeFormulaRequest::new(
         FormulaSourceRecord::new("runtime:verification-comparison-views", 1, "=SUM(1,2,3)"),
         TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
@@ -583,7 +585,7 @@ fn runtime_environment_emits_effective_display_text_comparison_view_for_verifica
 #[test]
 fn runtime_environment_emits_effective_display_text_comparison_view_for_programmatic_verification_cases()
  {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let cases = [
         ("FTC-0703", "=DATEDIF(\"2020-01-15\",\"2024-03-20\",\"Y\")"),
         (
@@ -669,7 +671,7 @@ fn runtime_environment_emits_effective_display_text_comparison_view_for_programm
 #[test]
 fn runtime_environment_preserves_randarray_width_for_columns_ftc_0505_without_explicit_random_bundle()
  {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let result = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
             FormulaSourceRecord::new("runtime:foundation:FTC-0505", 1, "=COLUMNS(RANDARRAY(5,3))"),
@@ -711,7 +713,7 @@ fn runtime_environment_preserves_randarray_width_for_columns_ftc_0505_without_ex
 
 #[test]
 fn runtime_environment_matches_excel_lambda_array_authoring_frontier_cases() {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let cases = [
         (
             "FTC-0446",
@@ -751,7 +753,7 @@ fn runtime_environment_matches_excel_lambda_array_authoring_frontier_cases() {
 
 #[test]
 fn runtime_environment_matches_excel_builtin_collision_arity_authoring_frontier_ftc_0444() {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let result = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
             FormulaSourceRecord::new(
@@ -803,7 +805,7 @@ fn runtime_environment_matches_excel_builtin_collision_arity_authoring_frontier_
 
 #[test]
 fn runtime_environment_mirrors_builtin_frontier_for_colliding_let_call_shapes() {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let reject_cases = [
         ("plain-t-zero", "=T()", "T"),
         ("colliding-t-zero", "=LET(t,LAMBDA(42),t())", "T"),
@@ -914,7 +916,7 @@ fn runtime_environment_executes_foundation_array_lambda_carrier_case_ftc_0455() 
 
 #[test]
 fn runtime_environment_matches_excel_builtin_colliding_let_recursive_name_frontier_ftc_0443() {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let result = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
             FormulaSourceRecord::new(
@@ -1052,7 +1054,7 @@ fn runtime_environment_executes_foundation_text_date_format_case_ftc_1040() {
 
 #[test]
 fn runtime_environment_matches_dnaonecalc_exact_request_shape_for_text_date_family() {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let verification_context = VerificationPublicationContext {
         format_profile: Some("en-US".to_string()),
         number_format_code: None,
@@ -1266,7 +1268,7 @@ fn runtime_environment_canonicalizes_en_us_locale_context_engines_for_text_date_
 
 #[test]
 fn runtime_environment_executes_if_text_true_condition_ftc_0541() {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let result = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
             FormulaSourceRecord::new(
@@ -1293,7 +1295,7 @@ fn runtime_environment_executes_if_text_true_condition_ftc_0541() {
 
 #[test]
 fn runtime_environment_executes_foundation_helper_array_case_ftc_1031() {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let formula = "=LET(yr,2024,m,1,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),gridStart,firstDay-WEEKDAY(firstDay,1)+1,week1,gridStart+SEQUENCE(1,7,,1)-1,dayNums,MAP(week1,LAMBDA(d,IF(AND(d>=firstDay,d<=lastDay),DAY(d),0))),SUM(dayNums))";
 
     let result = RuntimeEnvironment::new()
@@ -1410,7 +1412,7 @@ fn runtime_environment_applies_registered_external_catalog_mutation() {
 fn runtime_session_facade_reports_managed_diagnostics_for_overlay_and_claim_owner() {
     let environment = RuntimeEnvironment::new();
     let mut session = RuntimeSessionFacade::new(environment);
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let request = RuntimeFormulaRequest::new(
         FormulaSourceRecord::new("runtime:managed-diagnostics", 1, "=INFO(\"directory\")"),
         TypedContextQueryBundle::new(
@@ -1456,7 +1458,7 @@ fn assert_runtime_foundation_case(
     expected_value: EvalValue,
     expected_text: &str,
 ) {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let result = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
             FormulaSourceRecord::new(&format!("runtime:foundation:{case_id}"), 1, formula),
@@ -1487,7 +1489,7 @@ fn assert_runtime_foundation_text_case(
     expected_value: EvalValue,
     expected_text: &str,
 ) {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let result = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
             FormulaSourceRecord::new(&format!("runtime:foundation:{case_id}"), 1, formula),
@@ -1589,7 +1591,7 @@ impl FormatCodeEngine for RejectingFormatCodeEngine {
 
 fn foreign_en_us_context_with_rejecting_formatter() -> LocaleFormatContext<'static> {
     LocaleFormatContext {
-        profile: format_profile(LocaleProfileId::EnUs),
+        profile: oxfml_en_us_format_profile(),
         date_system: WorkbookDateSystem::System1900,
         parser: &FOREIGN_LOCALE_VALUE_PARSER,
         formatter: &REJECTING_FORMAT_CODE_ENGINE,

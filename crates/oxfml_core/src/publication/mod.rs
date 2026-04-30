@@ -575,14 +575,14 @@ mod tests {
         VerificationConditionalFormattingRule, VerificationPublicationContext,
         build_verification_publication_surface,
     };
-    use crate::format::{en_us_context, render_with_code};
+    use crate::format::{oxfml_en_us_locale_context, render_with_code};
     use crate::interface::ReturnedValueSurface;
     use crate::seam::TopologyDelta;
     use crate::source::FormulaSourceRecord;
 
     #[test]
     fn number_format_code_heuristics_cover_grouping_percent_date_and_negative_sections() {
-        let locale = en_us_context();
+        let locale = oxfml_en_us_locale_context();
         assert_eq!(
             render_with_code(&locale.profile, locale.date_system, 6.0, "$#,##0.00"),
             Ok("$6.00".to_string())
@@ -616,7 +616,7 @@ mod tests {
 
     #[test]
     fn verification_publication_surface_applies_evaluable_conditional_formatting() {
-        let locale = en_us_context();
+        let locale = oxfml_en_us_locale_context();
         let source = FormulaSourceRecord::new("publication:test", 1, "=SUM(1,2,3)");
         let returned_value_surface =
             ReturnedValueSurface::from_extended_value(&ExtendedValue::Core(EvalValue::Number(6.0)));

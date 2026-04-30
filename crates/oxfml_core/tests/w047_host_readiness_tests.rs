@@ -8,7 +8,7 @@ use oxfml_core::carrier::{
     DataValidationCarrierSpec, validate_conditional_formatting_formula,
     validate_data_validation_formula,
 };
-use oxfml_core::format::en_us_context;
+use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::interface::{
     HostProviderOutcomeKind, InMemoryLibraryContextProvider, ReturnedValueSurfaceKind,
     TypedContextQueryBundle,
@@ -192,7 +192,7 @@ fn cf_and_dv_carriers_preserve_host_fields_and_restrictions() {
 #[test]
 fn first_host_replay_capture_packet_preserves_snapshot_and_provider_outcomes() {
     let provider = InMemoryLibraryContextProvider::new(snapshot_with_entry("INFO"));
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let bundle = TypedContextQueryBundle::new(
         Some(&W047HostInfoProvider),
         None,
@@ -311,7 +311,7 @@ fn first_host_replay_capture_packet_preserves_snapshot_and_provider_outcomes() {
 
 #[test]
 fn first_host_replay_capture_packet_surfaces_bind_boundary_execution_outcome() {
-    let locale = en_us_context();
+    let locale = oxfml_en_us_locale_context();
     let mut host = SingleFormulaHost::new("host-bind-reject", "={\"x\",LAMBDA(100)}");
     let output = host
         .recalc(None, Some(&locale))

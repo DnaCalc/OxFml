@@ -1,6 +1,6 @@
 use oxfunc_core::locale_format::{
     FormatCodeEngine, FormatFailure, FormatProfile, LocaleFormatContext, LocaleProfileId,
-    LocaleValueParser, ParseFailure, WorkbookDateSystem, excel_serial_from_ymd, format_profile,
+    LocaleValueParser, ParseFailure, WorkbookDateSystem, excel_serial_from_ymd,
 };
 use oxfunc_core::value::ExcelText;
 
@@ -16,22 +16,53 @@ pub struct OxFmlFormatCodeEngine;
 pub static OXFML_LOCALE_VALUE_PARSER: OxFmlLocaleValueParser = OxFmlLocaleValueParser;
 pub static OXFML_FORMAT_CODE_ENGINE: OxFmlFormatCodeEngine = OxFmlFormatCodeEngine;
 
-pub fn en_us_context() -> LocaleFormatContext<'static> {
+pub const fn oxfml_en_us_format_profile() -> FormatProfile {
+    FormatProfile {
+        id: LocaleProfileId::EnUs,
+        decimal_separator: ".",
+        thousands_separator: ",",
+        list_separator: ",",
+        currency_symbol: "$",
+        date_separator: "/",
+        time_separator: ":",
+        currency_decimals: 2,
+    }
+}
+
+pub const fn oxfml_current_excel_host_format_profile() -> FormatProfile {
+    FormatProfile {
+        id: LocaleProfileId::CurrentExcelHost,
+        decimal_separator: ".",
+        thousands_separator: " ",
+        list_separator: ",",
+        currency_symbol: "R",
+        date_separator: "/",
+        time_separator: ":",
+        currency_decimals: 2,
+    }
+}
+
+pub fn oxfml_locale_context(
+    profile: FormatProfile,
+    date_system: WorkbookDateSystem,
+) -> LocaleFormatContext<'static> {
     LocaleFormatContext {
-        profile: format_profile(LocaleProfileId::EnUs),
-        date_system: WorkbookDateSystem::System1900,
+        profile,
+        date_system,
         parser: &OXFML_LOCALE_VALUE_PARSER,
         formatter: &OXFML_FORMAT_CODE_ENGINE,
     }
 }
 
-pub fn current_excel_host_context() -> LocaleFormatContext<'static> {
-    LocaleFormatContext {
-        profile: format_profile(LocaleProfileId::CurrentExcelHost),
-        date_system: WorkbookDateSystem::System1900,
-        parser: &OXFML_LOCALE_VALUE_PARSER,
-        formatter: &OXFML_FORMAT_CODE_ENGINE,
-    }
+pub fn oxfml_en_us_locale_context() -> LocaleFormatContext<'static> {
+    oxfml_locale_context(oxfml_en_us_format_profile(), WorkbookDateSystem::System1900)
+}
+
+pub fn oxfml_current_excel_host_locale_context() -> LocaleFormatContext<'static> {
+    oxfml_locale_context(
+        oxfml_current_excel_host_format_profile(),
+        WorkbookDateSystem::System1900,
+    )
 }
 
 pub fn canonicalize_locale_context<'a>(
