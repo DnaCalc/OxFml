@@ -24,6 +24,15 @@ pub struct EditorToken {
     pub span: TextSpan,
 }
 
+/// Full-fidelity editor token projection for a formula source.
+///
+/// Invariant for ordinary consumers: concatenating each token's
+/// `leading_trivia` text, then token `text`, in source order, plus the
+/// final token's `trailing_trivia`, reproduces the original source text
+/// character-for-character. The projection is built from the lexer token
+/// stream rather than semantic parse ownership so editor rendering does not
+/// drop characters that are skipped, syntax-significant, or invalid in the
+/// parser.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EditorSyntaxSnapshot {
     pub formula_stable_id: String,

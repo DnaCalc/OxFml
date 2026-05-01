@@ -34,6 +34,65 @@ use oxfunc_core::locale_format::{
 };
 use oxfunc_core::value::EvalValue;
 use oxfunc_core::value::{CallArgValue, ExcelText};
+
+#[test]
+fn runtime_environment_evaluates_non_formula_worksheet_entries() {
+    let cases = [
+        (
+            "ABC",
+            EvalValue::Text(ExcelText::from_interop_assignment("ABC")),
+        ),
+        (
+            "'=123",
+            EvalValue::Text(ExcelText::from_interop_assignment("=123")),
+        ),
+        (
+            "12.1.1",
+            EvalValue::Text(ExcelText::from_interop_assignment("12.1.1")),
+        ),
+        (
+            "x y z = 12.3",
+            EvalValue::Text(ExcelText::from_interop_assignment("x y z = 12.3")),
+        ),
+        (
+            "\"ABC\"",
+            EvalValue::Text(ExcelText::from_interop_assignment("ABC")),
+        ),
+        ("123.4", EvalValue::Number(123.4)),
+        ("TRUE", EvalValue::Logical(true)),
+        ("FALSE", EvalValue::Logical(false)),
+    ];
+
+    let environment = RuntimeEnvironment::new();
+
+    for (entry_text, expected_value) in cases {
+        let source =
+            FormulaSourceRecord::new(format!("runtime:entry:{entry_text:?}"), 1, entry_text)
+                .with_formula_channel_kind(FormulaChannelKind::WorksheetA1);
+        let result = environment
+            .execute(RuntimeFormulaRequest::new(
+                source,
+                TypedContextQueryBundle::default(),
+            ))
+            .expect("literal cell entry should execute through OxFml runtime");
+
+        assert_eq!(result.source.entered_formula_text, entry_text);
+        assert!(
+            result.syntax_diagnostics.is_empty(),
+            "syntax diagnostics for {entry_text:?}: {:?}",
+            result.syntax_diagnostics
+        );
+        assert!(
+            result.bind_diagnostics.is_empty(),
+            "bind diagnostics for {entry_text:?}: {:?}",
+            result.bind_diagnostics
+        );
+        assert_eq!(
+            result.published_worksheet_value, expected_value,
+            "published value mismatch for {entry_text:?}"
+        );
+    }
+}
 use serde_json::Value;
 
 #[test]

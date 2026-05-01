@@ -68,6 +68,17 @@ H0 does not require:
 6. registered-external providers,
 7. capability view or fence basis beyond the default single-formula path.
 
+### 2.1A WorksheetA1 Cell-Entry Classification
+For `FormulaChannelKind::WorksheetA1`, OxFml accepts Excel-style single-cell entry text before formula parsing:
+1. entries whose first character is `=` are formula entries and continue through normal formula parse/bind/evaluate behavior,
+2. entries whose first character is apostrophe (`'`) are forced text entries; the apostrophe is an entry escape and is not part of the evaluated text value,
+3. non-formula entries that parse exactly as finite numbers are number literal values,
+4. non-formula entries equal to `TRUE` or `FALSE` case-insensitively are logical literal values,
+5. non-formula entries that are quoted string literals continue to decode through the existing string-literal path,
+6. every other non-formula entry is a text literal value, preserving the entered text exactly.
+
+This classification is OxFml-owned for the DNA OneCalc H0/H1 single-cell host path so DNA OneCalc does not need a host-side fallback evaluator for ordinary literal cell entries.
+
 ### 2.2 OC-H1 Mandatory Fields (Explicit-Input Host)
 OC-H1 adds these fields on top of H0:
 

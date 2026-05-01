@@ -15,7 +15,7 @@ use crate::semantics::{
 use crate::source::{FormulaChannelKind, FormulaSourceRecord, FormulaTextVersion};
 use crate::syntax::green::{GreenChild, GreenNode, GreenTreeRoot, SyntaxKind};
 use crate::syntax::parser::{ParseRequest, parse_formula_incremental};
-use crate::syntax::token::{SyntaxTrivia, SyntaxTriviaKind, TextSpan, TokenKind};
+use crate::syntax::token::{TextSpan, Token, TokenKind};
 
 #[derive(Debug, Clone)]
 pub struct FormulaEditRequest<'a> {
@@ -99,14 +99,11 @@ pub(crate) fn build_editor_syntax_snapshot(
     source: &FormulaSourceRecord,
     green_tree: &GreenTreeRoot,
 ) -> EditorSyntaxSnapshot {
-    let mut tokens = Vec::new();
-    collect_editor_tokens(&green_tree.root, &mut tokens);
-
     EditorSyntaxSnapshot {
         formula_stable_id: source.formula_stable_id.0.clone(),
         formula_channel_kind: source.formula_channel_kind,
         green_tree_key: green_tree.green_tree_key.clone(),
-        tokens,
+        tokens: collect_editor_tokens_from_full_fidelity(source, green_tree),
     }
 }
 
@@ -512,43 +509,63 @@ pub(crate) fn signature_help_context_at_cursor(
     })
 }
 
-fn editor_trivia_kind(trivia_kind: SyntaxTriviaKind) -> EditorTriviaKind {
-    match trivia_kind {
-        SyntaxTriviaKind::Whitespace => EditorTriviaKind::Whitespace,
-        SyntaxTriviaKind::Unknown => EditorTriviaKind::Unknown,
-    }
-}
+fn collect_editor_tokens_from_full_fidelity(
+    source: &FormulaSourceRecord,
+    green_tree: &GreenTreeRoot,
+) -> Vec<EditorToken> {
+    let mut tokens: Vec<EditorToken> = Vec::new();
+    let mut pending_trivia: Vec<EditorTrivia> = Vec::new();
 
-fn collect_editor_tokens(node: &GreenNode, tokens: &mut Vec<EditorToken>) {
-    for child in &node.children {
-        match child {
-            GreenChild::Node(child_node) => collect_editor_tokens(child_node, tokens),
-            GreenChild::Token(token) if token.kind != TokenKind::Eof && !token.kind.is_trivia() => {
-                tokens.push(EditorToken {
-                    kind: token.kind,
-                    text: token.text.clone(),
-                    leading_trivia: token
-                        .leading_trivia
-                        .iter()
-                        .map(editor_trivia_from_syntax)
-                        .collect(),
-                    trailing_trivia: token
-                        .trailing_trivia
-                        .iter()
-                        .map(editor_trivia_from_syntax)
-                        .collect(),
-                    span: token.span,
-                });
-            }
-            GreenChild::Token(_) => {}
+    for token in green_tree
+        .full_fidelity_tokens
+        .iter()
+        .filter(|token| token.kind != TokenKind::Eof)
+    {
+        if token.kind.is_trivia() {
+            pending_trivia.push(editor_trivia_from_token(token));
+            continue;
+        }
+
+        if let Some(previous_token) = tokens.last_mut() {
+            previous_token
+                .trailing_trivia
+                .extend(pending_trivia.iter().cloned());
+        }
+
+        let leading_trivia = std::mem::take(&mut pending_trivia);
+        tokens.push(EditorToken {
+            kind: token.kind,
+            text: token.text.clone(),
+            leading_trivia,
+            trailing_trivia: Vec::new(),
+            span: token.span,
+        });
+    }
+
+    if !pending_trivia.is_empty() {
+        if let Some(previous_token) = tokens.last_mut() {
+            previous_token.trailing_trivia.extend(pending_trivia);
+        } else {
+            tokens.push(EditorToken {
+                kind: TokenKind::Unknown,
+                text: String::new(),
+                leading_trivia: pending_trivia,
+                trailing_trivia: Vec::new(),
+                span: TextSpan::new(source.entered_formula_text.chars().count(), 0),
+            });
         }
     }
+
+    tokens
 }
 
-fn editor_trivia_from_syntax(trivia: &SyntaxTrivia) -> EditorTrivia {
+fn editor_trivia_from_token(token: &Token) -> EditorTrivia {
     EditorTrivia {
-        kind: editor_trivia_kind(trivia.kind),
-        text: trivia.text.clone(),
+        kind: match token.kind {
+            TokenKind::Whitespace => EditorTriviaKind::Whitespace,
+            _ => EditorTriviaKind::Unknown,
+        },
+        text: token.text.clone(),
     }
 }
 

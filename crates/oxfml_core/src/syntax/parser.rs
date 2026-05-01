@@ -23,6 +23,12 @@ pub struct IncrementalParseResult {
 
 pub fn parse_formula(request: ParseRequest) -> ParseResult {
     let full_tokens = lex(&request.source.entered_formula_text);
+    if let Some(root) = worksheet_cell_entry_literal_root(&request.source, &full_tokens) {
+        return ParseResult {
+            green_tree: GreenTreeRoot::from_parts(root, full_tokens, Vec::new()),
+        };
+    }
+
     let mut parser = Parser::new(full_tokens.clone());
     let root = attach_trivia_to_green_tree(parser.parse_formula_root(), &full_tokens);
     ParseResult {
@@ -54,6 +60,97 @@ pub fn parse_formula_incremental(
         green_tree: parse.green_tree,
         reused_green_tree: false,
     }
+}
+
+fn worksheet_cell_entry_literal_root(
+    source: &FormulaSourceRecord,
+    full_tokens: &[Token],
+) -> Option<GreenNode> {
+    if source.formula_channel_kind != crate::source::FormulaChannelKind::WorksheetA1 {
+        return None;
+    }
+
+    let raw = source.entered_formula_text.as_str();
+    if raw.is_empty() || raw.starts_with('=') {
+        return None;
+    }
+
+    let span = TextSpan::new(0, raw.chars().count());
+    let expr = if let Some(forced_text) = raw.strip_prefix('\'') {
+        literal_expr_node(
+            SyntaxKind::StringLiteralExpr,
+            TokenKind::StringLiteral,
+            encode_string_literal_text(forced_text),
+            span,
+        )
+    } else if raw.eq_ignore_ascii_case("TRUE") || raw.eq_ignore_ascii_case("FALSE") {
+        literal_expr_node(
+            SyntaxKind::IdentifierExpr,
+            TokenKind::Identifier,
+            raw.to_string(),
+            span,
+        )
+    } else if raw.parse::<f64>().is_ok_and(f64::is_finite) {
+        literal_expr_node(
+            SyntaxKind::NumberLiteralExpr,
+            TokenKind::Number,
+            raw.to_string(),
+            span,
+        )
+    } else if is_single_quoted_string_literal_token(full_tokens) {
+        literal_expr_node(
+            SyntaxKind::StringLiteralExpr,
+            TokenKind::StringLiteral,
+            raw.to_string(),
+            span,
+        )
+    } else {
+        literal_expr_node(
+            SyntaxKind::StringLiteralExpr,
+            TokenKind::StringLiteral,
+            encode_string_literal_text(raw),
+            span,
+        )
+    };
+
+    let eof = full_tokens.last().cloned().unwrap_or_else(|| {
+        Token::new(
+            TokenKind::Eof,
+            String::new(),
+            TextSpan::new(raw.chars().count(), 0),
+        )
+    });
+
+    Some(GreenNode::new(
+        SyntaxKind::FormulaRoot,
+        vec![GreenChild::Node(Box::new(expr)), GreenChild::Token(eof)],
+    ))
+}
+
+fn literal_expr_node(
+    syntax_kind: SyntaxKind,
+    token_kind: TokenKind,
+    text: String,
+    span: TextSpan,
+) -> GreenNode {
+    GreenNode::new(
+        syntax_kind,
+        vec![GreenChild::Token(Token::new(token_kind, text, span))],
+    )
+}
+
+fn is_single_quoted_string_literal_token(full_tokens: &[Token]) -> bool {
+    let mut non_eof_tokens = full_tokens
+        .iter()
+        .filter(|token| token.kind != TokenKind::Eof && !token.kind.is_trivia());
+    matches!(
+        (non_eof_tokens.next(), non_eof_tokens.next()),
+        (Some(token), None) if token.kind == TokenKind::StringLiteral
+    )
+}
+
+fn encode_string_literal_text(value: &str) -> String {
+    format!("\"{}\"", value.replace('"', "\"\""))
 }
 
 struct Parser {

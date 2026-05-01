@@ -1,7 +1,7 @@
-use oxfml_core::binding::{BindContext, NameKind};
+use oxfml_core::binding::{BindContext, BoundExpr, NameKind};
 use oxfml_core::consumer::editor::{
     CompletionProposalKind, EditorAnalysisStage, EditorEditService, EditorEnvironment,
-    EditorPlanOptions, FormulaTextChangeRange,
+    EditorPlanOptions, EditorSyntaxSnapshot, FormulaTextChangeRange,
 };
 use oxfml_core::interface::{
     InMemoryLibraryContextProvider, LibraryContextProvider, LibraryContextSnapshotRef,
@@ -62,7 +62,12 @@ fn editor_syntax_snapshot_tracks_leading_and_trailing_trivia() {
 fn editor_syntax_snapshot_preserves_tokens_after_leading_whitespace() {
     let cases = [
         ("leading-newline", "\n=aaa", "\n", vec!["=", "aaa"]),
-        ("leading-multiple-newlines", "\n\n=aaa", "\n\n", vec!["=", "aaa"]),
+        (
+            "leading-multiple-newlines",
+            "\n\n=aaa",
+            "\n\n",
+            vec!["=", "aaa"],
+        ),
         ("leading-space", " =aaa", " ", vec!["=", "aaa"]),
         ("leading-tab", "\t=aaa", "\t", vec!["=", "aaa"]),
         (
@@ -88,8 +93,16 @@ fn editor_syntax_snapshot_preserves_tokens_after_leading_whitespace() {
 
         assert_eq!(actual_texts, expected_texts, "case {case_id}");
         assert_eq!(tokens[0].kind, TokenKind::Equals, "case {case_id}");
-        assert_eq!(tokens[0].span.start, expected_leading_trivia.len(), "case {case_id}");
-        assert_eq!(tokens[0].span.end(), expected_leading_trivia.len() + 1, "case {case_id}");
+        assert_eq!(
+            tokens[0].span.start,
+            expected_leading_trivia.len(),
+            "case {case_id}"
+        );
+        assert_eq!(
+            tokens[0].span.end(),
+            expected_leading_trivia.len() + 1,
+            "case {case_id}"
+        );
         assert_eq!(
             tokens[0]
                 .leading_trivia
@@ -141,6 +154,139 @@ fn editor_syntax_snapshot_preserves_unexpected_trailing_tokens() {
                 .any(|diagnostic| diagnostic.message.contains("unexpected trailing token")),
             "case {case_id}"
         );
+    }
+}
+
+#[test]
+fn editor_syntax_snapshot_preserves_inter_reference_whitespace() {
+    let cases = [
+        ("inter-identifiers", "= a a", vec!["=", "a", "a"]),
+        ("adjacent-identifiers", "=A A", vec!["=", "A", "A"]),
+        (
+            "identifier-chain",
+            "= a b c d",
+            vec!["=", "a", "b", "c", "d"],
+        ),
+        ("cell-intersection", "=A1 B1", vec!["=", "A1", "B1"]),
+        (
+            "multi-letter-identifiers",
+            "= ABC DEF",
+            vec!["=", "ABC", "DEF"],
+        ),
+        (
+            "multi-space-intersection",
+            "=A1   B1",
+            vec!["=", "A1", "B1"],
+        ),
+        ("tab-intersection", "=a\tb", vec!["=", "a", "b"]),
+    ];
+
+    let service = EditorEditService::new(EditorEnvironment::new(BindContext::default()));
+
+    for (case_id, text, expected_texts) in cases {
+        let source = FormulaSourceRecord::new(case_id, 1, text)
+            .with_formula_channel_kind(FormulaChannelKind::WorksheetA1);
+
+        let result = service.apply_edit(source, None, EditorAnalysisStage::SyntaxOnly, None);
+        let snapshot = &result.document.editor_syntax_snapshot;
+        let actual_texts = snapshot
+            .tokens
+            .iter()
+            .map(|token| token.text.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(actual_texts, expected_texts, "case {case_id}");
+        assert_eq!(snapshot_source_text(snapshot), text, "case {case_id}");
+    }
+}
+
+#[test]
+fn editor_syntax_snapshot_tiles_source_text_for_broad_editor_inputs() {
+    let cases = [
+        "",
+        " ",
+        "\t",
+        "\n",
+        "\n=aaa",
+        "= a a",
+        "=A A",
+        "=SUM( A1 ) ",
+        "=A1   B1",
+        "=a\tb",
+        "=1)",
+        "=SUM(1,2))",
+        "=",
+        "=(",
+        "=A1+",
+        "=@A1#",
+        "=\"a b\"",
+        "=#VALUE!",
+        "=A1&\" text \"",
+        "=1 @ 2",
+    ];
+
+    let service = EditorEditService::new(EditorEnvironment::new(BindContext::default()));
+
+    for text in cases {
+        let source = FormulaSourceRecord::new(format!("tile-{text:?}"), 1, text)
+            .with_formula_channel_kind(FormulaChannelKind::WorksheetA1);
+
+        let result = service.apply_edit(source, None, EditorAnalysisStage::SyntaxOnly, None);
+
+        assert_eq!(
+            snapshot_source_text(&result.document.editor_syntax_snapshot),
+            text,
+            "source tiling mismatch for {text:?}"
+        );
+    }
+}
+
+#[test]
+fn editor_treats_non_formula_cell_entries_as_literals() {
+    let cases = [
+        ("ABC", "text"),
+        ("'=123", "text"),
+        ("12.1.1", "text"),
+        ("x y z = 12.3", "text"),
+        ("\"ABC\"", "text"),
+        ("123.4", "number"),
+        ("TRUE", "logical"),
+        ("FALSE", "logical"),
+    ];
+
+    let service = EditorEditService::new(EditorEnvironment::new(BindContext::default()));
+
+    for (text, expected_kind) in cases {
+        let source = FormulaSourceRecord::new(format!("entry-{text:?}"), 1, text)
+            .with_formula_channel_kind(FormulaChannelKind::WorksheetA1);
+
+        let result = service.apply_edit(source, None, EditorAnalysisStage::SyntaxAndBind, None);
+
+        assert_eq!(
+            snapshot_source_text(&result.document.editor_syntax_snapshot),
+            text,
+            "source tiling mismatch for {text:?}"
+        );
+        assert!(
+            result.document.live_diagnostics.diagnostics.is_empty(),
+            "literal cell entry should not produce diagnostics for {text:?}: {:?}",
+            result.document.live_diagnostics.diagnostics
+        );
+
+        let bound = result
+            .document
+            .bound_formula
+            .as_ref()
+            .expect("syntax-and-bind should produce a bound formula");
+        match (expected_kind, &bound.root) {
+            ("text", BoundExpr::StringLiteral(_)) => {}
+            ("number", BoundExpr::NumberLiteral(_)) => {}
+            ("logical", BoundExpr::LogicalLiteral(_)) => {}
+            _ => panic!(
+                "unexpected bound literal kind for {text:?}: {:?}",
+                bound.root
+            ),
+        }
     }
 }
 
@@ -515,6 +661,25 @@ fn apply_completion_proposal_preserves_proposal_identity() {
             .entered_formula_text,
         "=SUM"
     );
+}
+
+fn snapshot_source_text(snapshot: &EditorSyntaxSnapshot) -> String {
+    let mut text = String::new();
+    let last_index = snapshot.tokens.len().saturating_sub(1);
+
+    for (index, token) in snapshot.tokens.iter().enumerate() {
+        for trivia in &token.leading_trivia {
+            text.push_str(&trivia.text);
+        }
+        text.push_str(&token.text);
+        if index == last_index {
+            for trivia in &token.trailing_trivia {
+                text.push_str(&trivia.text);
+            }
+        }
+    }
+
+    text
 }
 
 fn editor_bind_context(source: FormulaSourceRecord) -> BindContext {
