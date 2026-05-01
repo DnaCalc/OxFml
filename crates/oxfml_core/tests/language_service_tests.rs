@@ -14,7 +14,7 @@ use oxfml_core::semantics::{
 use oxfml_core::source::{FormulaChannelKind, FormulaSourceRecord, StructureContextVersion};
 use oxfml_core::syntax::green::{GreenChild, GreenNode};
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
-use oxfml_core::syntax::token::TextSpan;
+use oxfml_core::syntax::token::{TextSpan, TokenKind};
 
 #[test]
 fn editor_syntax_snapshot_tracks_leading_and_trailing_trivia() {
@@ -56,6 +56,92 @@ fn editor_syntax_snapshot_tracks_leading_and_trailing_trivia() {
         document.editor_syntax_snapshot.tokens[4].trailing_trivia[0].text,
         " "
     );
+}
+
+#[test]
+fn editor_syntax_snapshot_preserves_tokens_after_leading_whitespace() {
+    let cases = [
+        ("leading-newline", "\n=aaa", "\n", vec!["=", "aaa"]),
+        ("leading-multiple-newlines", "\n\n=aaa", "\n\n", vec!["=", "aaa"]),
+        ("leading-space", " =aaa", " ", vec!["=", "aaa"]),
+        ("leading-tab", "\t=aaa", "\t", vec!["=", "aaa"]),
+        (
+            "leading-newline-call",
+            "\n=SUM(1,2)",
+            "\n",
+            vec!["=", "SUM", "(", "1", ",", "2", ")"],
+        ),
+    ];
+
+    let service = EditorEditService::new(EditorEnvironment::new(BindContext::default()));
+
+    for (case_id, text, expected_leading_trivia, expected_texts) in cases {
+        let source = FormulaSourceRecord::new(case_id, 1, text)
+            .with_formula_channel_kind(FormulaChannelKind::WorksheetA1);
+
+        let result = service.apply_edit(source, None, EditorAnalysisStage::SyntaxOnly, None);
+        let tokens = &result.document.editor_syntax_snapshot.tokens;
+        let actual_texts = tokens
+            .iter()
+            .map(|token| token.text.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(actual_texts, expected_texts, "case {case_id}");
+        assert_eq!(tokens[0].kind, TokenKind::Equals, "case {case_id}");
+        assert_eq!(tokens[0].span.start, expected_leading_trivia.len(), "case {case_id}");
+        assert_eq!(tokens[0].span.end(), expected_leading_trivia.len() + 1, "case {case_id}");
+        assert_eq!(
+            tokens[0]
+                .leading_trivia
+                .iter()
+                .map(|trivia| trivia.text.as_str())
+                .collect::<String>(),
+            expected_leading_trivia,
+            "case {case_id}"
+        );
+    }
+}
+
+#[test]
+fn editor_syntax_snapshot_preserves_unexpected_trailing_tokens() {
+    let cases = [
+        ("extra-close-after-number", "=1)", vec!["=", "1", ")"]),
+        (
+            "extra-close-after-call",
+            "=SUM(1,2))",
+            vec!["=", "SUM", "(", "1", ",", "2", ")", ")"],
+        ),
+        (
+            "trailing-operator-tail",
+            "=1 + 2)",
+            vec!["=", "1", "+", "2", ")"],
+        ),
+    ];
+
+    let service = EditorEditService::new(EditorEnvironment::new(BindContext::default()));
+
+    for (case_id, text, expected_texts) in cases {
+        let source = FormulaSourceRecord::new(case_id, 1, text)
+            .with_formula_channel_kind(FormulaChannelKind::WorksheetA1);
+
+        let result = service.apply_edit(source, None, EditorAnalysisStage::SyntaxOnly, None);
+        let tokens = &result.document.editor_syntax_snapshot.tokens;
+        let actual_texts = tokens
+            .iter()
+            .map(|token| token.text.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(actual_texts, expected_texts, "case {case_id}");
+        assert!(
+            result
+                .document
+                .live_diagnostics
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains("unexpected trailing token")),
+            "case {case_id}"
+        );
+    }
 }
 
 #[test]

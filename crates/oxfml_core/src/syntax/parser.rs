@@ -73,18 +73,21 @@ impl Parser {
 
     fn parse_formula_root(&mut self) -> GreenNode {
         let mut children = Vec::new();
+        self.skip_whitespace();
         if self.at(TokenKind::Equals) {
             children.push(GreenChild::Token(self.bump()));
         }
         self.skip_whitespace();
         children.push(GreenChild::Node(Box::new(self.parse_expression(true))));
         self.skip_whitespace();
-        if !self.at(TokenKind::Eof) {
+        while !self.at(TokenKind::Eof) {
             let token = self.current().clone();
             self.diagnostics.push(SyntaxDiagnostic {
                 message: format!("unexpected trailing token {:?}", token.kind),
                 span: token.span,
             });
+            children.push(GreenChild::Token(self.bump()));
+            self.skip_whitespace();
         }
         children.push(GreenChild::Token(
             self.expect(TokenKind::Eof, "expected end of formula"),
