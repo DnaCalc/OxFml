@@ -85,7 +85,7 @@ pub enum PreparedBlanknessClass {
     EmptyText,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PreparedArgument {
     pub ordinal: usize,
     pub structure_class: PreparedStructureClass,
@@ -95,6 +95,14 @@ pub struct PreparedArgument {
     pub caller_context_sensitive: bool,
     pub reference_target: Option<String>,
     pub opaque_reason: Option<String>,
+    /// Value this argument resolved to before being passed to the
+    /// function. `Some` for `EagerValue` / `CallerContextScalarized`
+    /// args where the function actually receives a value; `None` for
+    /// `ReferencePreserved` args, omitted/missing args, helper-parameter
+    /// name slots, and lambda-body expression slots where the function
+    /// receives the raw expression / reference rather than a resolved
+    /// value.
+    pub resolved_value: Option<EvalValue>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -108,6 +116,12 @@ pub struct PreparedCall {
     pub locale_profile_id: Option<String>,
     pub date_system: Option<String>,
     pub host_query_enabled: bool,
+    /// Value this call evaluated to. `Some` when the call ran to
+    /// completion (including completing with an error code); `None`
+    /// when the call short-circuited before its trace entry was
+    /// finalised (very rare — only LAMBDA carrier construction, which
+    /// returns a registry handle rather than a computed value).
+    pub returned_value: Option<EvalValue>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -877,6 +891,7 @@ fn evaluate_function_call(
         None
     };
 
+    let prepared_call_index = trace.prepared_calls.len();
     trace.prepared_calls.push(PreparedCall {
         function_name: function_name.to_string(),
         function_id: meta.function_id,
@@ -891,46 +906,50 @@ fn evaluate_function_call(
             .locale_ctx
             .map(|ctx| format!("{:?}", ctx.date_system)),
         host_query_enabled: context.host_info.is_some(),
+        returned_value: None,
     });
 
-    if collapse_hstack_empty_carrier {
-        return Ok(EvalValue::Error(WorksheetErrorCode::Calc));
-    }
+    let returned_value = if collapse_hstack_empty_carrier {
+        EvalValue::Error(WorksheetErrorCode::Calc)
+    } else {
+        let callable_invoker = OxFmlCallableInvoker {
+            context,
+            callable_registry,
+        };
 
-    let callable_invoker = OxFmlCallableInvoker {
-        context,
-        callable_registry,
+        match eval_surface_value_call_with_callable(
+            meta.function_id,
+            &call_args,
+            resolver,
+            context.now_serial,
+            context.random_value,
+            context.locale_ctx,
+            context.host_info,
+            Some(&callable_invoker),
+            context.rtd_provider,
+            context.registered_external_provider,
+        ) {
+            Ok(value) => decode_callable_carrier_function_result(
+                function_name,
+                value,
+                callable_registry,
+            ),
+            Err(_error)
+                if allow_host_query_worksheet_error_fallback(
+                    function_name,
+                    &call_args,
+                    resolver,
+                    context.host_info,
+                ) =>
+            {
+                EvalValue::Error(WorksheetErrorCode::Value)
+            }
+            Err(code) => EvalValue::Error(code),
+        }
     };
 
-    match eval_surface_value_call_with_callable(
-        meta.function_id,
-        &call_args,
-        resolver,
-        context.now_serial,
-        context.random_value,
-        context.locale_ctx,
-        context.host_info,
-        Some(&callable_invoker),
-        context.rtd_provider,
-        context.registered_external_provider,
-    ) {
-        Ok(value) => Ok(decode_callable_carrier_function_result(
-            function_name,
-            value,
-            callable_registry,
-        )),
-        Err(_error)
-            if allow_host_query_worksheet_error_fallback(
-                function_name,
-                &call_args,
-                resolver,
-                context.host_info,
-            ) =>
-        {
-            Ok(EvalValue::Error(WorksheetErrorCode::Value))
-        }
-        Err(code) => Ok(EvalValue::Error(code)),
-    }
+    record_prepared_call_returned_value(trace, prepared_call_index, &returned_value);
+    Ok(returned_value)
 }
 
 fn allow_host_query_worksheet_error_fallback(
@@ -1151,7 +1170,7 @@ fn evaluate_reference_as_call_arg(
             )
         }
         ReferenceExpr::Atom(NormalizedReference::External(external)) => {
-            push_special_prepared_call(
+            let prepared_call_index = push_special_prepared_call(
                 trace,
                 "EXTERNAL_REFERENCE_DEFERRED",
                 SPECIAL_EXTERNAL_REFERENCE_DEFERRED_FUNCTION_ID,
@@ -1165,12 +1184,13 @@ fn evaluate_reference_as_call_arg(
                     caller_context_sensitive: false,
                     reference_target: Some(external.target_summary.clone()),
                     opaque_reason: Some("external_reference_deferred".to_string()),
+                    resolved_value: None,
                 }],
                 context,
             );
-            Ok(CallArgValue::Eval(EvalValue::Error(
-                WorksheetErrorCode::Ref,
-            )))
+            let returned = EvalValue::Error(WorksheetErrorCode::Ref);
+            record_prepared_call_returned_value(trace, prepared_call_index, &returned);
+            Ok(CallArgValue::Eval(returned))
         }
         ReferenceExpr::Atom(NormalizedReference::Error(error)) => Ok(CallArgValue::Eval(
             EvalValue::Error(error_code_for_error_ref(error)),
@@ -1251,7 +1271,7 @@ fn evaluate_reference_operator_call(
         args.push(arg);
     }
 
-    push_special_prepared_call(
+    let prepared_call_index = push_special_prepared_call(
         trace,
         function_name,
         function_id,
@@ -1280,6 +1300,7 @@ fn evaluate_reference_operator_call(
         Ok(value) => value,
         Err(code) => EvalValue::Error(code),
     };
+    record_prepared_call_returned_value(trace, prepared_call_index, &value);
     call_arg_from_reference_operator_value(value, preserve_reference, resolver)
 }
 
@@ -1462,7 +1483,7 @@ fn evaluate_binary_operator_call_evaluation(
         trace,
     )?;
 
-    push_special_prepared_call(
+    let prepared_call_index = push_special_prepared_call(
         trace,
         function_name,
         function_id,
@@ -1495,6 +1516,7 @@ fn evaluate_binary_operator_call_evaluation(
         Ok(value) => value,
         Err(code) => EvalValue::Error(code),
     };
+    record_prepared_call_returned_value(trace, prepared_call_index, &value);
     Ok(BinaryOperatorCallEvaluation { lhs, rhs, value })
 }
 
@@ -1519,7 +1541,7 @@ fn evaluate_unary_operator_call(
         trace,
     )?;
 
-    push_special_prepared_call(
+    let prepared_call_index = push_special_prepared_call(
         trace,
         function_name,
         function_id,
@@ -1544,10 +1566,12 @@ fn evaluate_unary_operator_call(
         context.rtd_provider,
         context.registered_external_provider,
     );
-    match result {
-        Ok(value) => Ok(value),
-        Err(code) => Ok(EvalValue::Error(code)),
-    }
+    let value = match result {
+        Ok(value) => value,
+        Err(code) => EvalValue::Error(code),
+    };
+    record_prepared_call_returned_value(trace, prepared_call_index, &value);
+    Ok(value)
 }
 
 fn binary_operator_identity(op: BinaryOp) -> (&'static str, &'static str) {
@@ -1702,6 +1726,7 @@ fn evaluate_let_call(
             caller_context_sensitive: false,
             reference_target: None,
             opaque_reason: None,
+            resolved_value: None,
         });
         if index + 1 >= args.len() {
             return Err(EvaluationError {
@@ -1749,7 +1774,7 @@ fn evaluate_let_call(
         &body_arg,
         false,
     ));
-    push_special_prepared_call(
+    let prepared_call_index = push_special_prepared_call(
         trace,
         "LET",
         SPECIAL_LET_FUNCTION_ID,
@@ -1758,7 +1783,9 @@ fn evaluate_let_call(
         context,
     );
 
-    materialize_call_arg(body_arg, resolver)
+    let value = materialize_call_arg(body_arg, resolver)?;
+    record_prepared_call_returned_value(trace, prepared_call_index, &value);
+    Ok(value)
 }
 
 fn coerce_excel_if_text_condition(
@@ -1844,7 +1871,7 @@ fn evaluate_if_call(
             CallArgValue::MissingArg
         };
 
-        push_special_prepared_call(
+        let prepared_call_index = push_special_prepared_call(
             trace,
             "IF",
             "FUNC.IF",
@@ -1852,11 +1879,13 @@ fn evaluate_if_call(
             prepared_arguments,
             context,
         );
-        return Ok(eval_if_surface(
+        let value = eval_if_surface(
             &[normalized_condition.clone(), true_arg, false_arg],
             resolver,
         )
-        .unwrap_or_else(|error| EvalValue::Error(map_if_error_to_ws(&error))));
+        .unwrap_or_else(|error| EvalValue::Error(map_if_error_to_ws(&error)));
+        record_prepared_call_returned_value(trace, prepared_call_index, &value);
+        return Ok(value);
     }
 
     let condition_is_true = match eval_if_surface(
@@ -1883,7 +1912,7 @@ fn evaluate_if_call(
                     "condition_invalid_lazy",
                 ));
             }
-            push_special_prepared_call(
+            let prepared_call_index = push_special_prepared_call(
                 trace,
                 "IF",
                 "FUNC.IF",
@@ -1891,7 +1920,9 @@ fn evaluate_if_call(
                 prepared_arguments,
                 context,
             );
-            return Ok(EvalValue::Error(map_if_error_to_ws(&error)));
+            let value = EvalValue::Error(map_if_error_to_ws(&error));
+            record_prepared_call_returned_value(trace, prepared_call_index, &value);
+            return Ok(value);
         }
     };
 
@@ -1942,7 +1973,7 @@ fn evaluate_if_call(
         }
     }
 
-    push_special_prepared_call(
+    let prepared_call_index = push_special_prepared_call(
         trace,
         "IF",
         "FUNC.IF",
@@ -1950,8 +1981,10 @@ fn evaluate_if_call(
         prepared_arguments,
         context,
     );
-    Ok(eval_if_surface(&call_args, resolver)
-        .unwrap_or_else(|error| EvalValue::Error(map_if_error_to_ws(&error))))
+    let value = eval_if_surface(&call_args, resolver)
+        .unwrap_or_else(|error| EvalValue::Error(map_if_error_to_ws(&error)));
+    record_prepared_call_returned_value(trace, prepared_call_index, &value);
+    Ok(value)
 }
 
 fn if_condition_resolves_to_array(
@@ -2016,7 +2049,7 @@ fn evaluate_iferror_call(
         call_args.push(CallArgValue::MissingArg);
     }
 
-    push_special_prepared_call(
+    let prepared_call_index = push_special_prepared_call(
         trace,
         "IFERROR",
         "FUNC.IFERROR",
@@ -2024,8 +2057,10 @@ fn evaluate_iferror_call(
         prepared_arguments,
         context,
     );
-    Ok(eval_iferror_surface(&call_args, resolver)
-        .unwrap_or_else(|error| EvalValue::Error(map_iferror_error_to_ws(&error))))
+    let value = eval_iferror_surface(&call_args, resolver)
+        .unwrap_or_else(|error| EvalValue::Error(map_iferror_error_to_ws(&error)));
+    record_prepared_call_returned_value(trace, prepared_call_index, &value);
+    Ok(value)
 }
 
 fn evaluate_lambda_call(
@@ -2057,6 +2092,7 @@ fn evaluate_lambda_call(
                     caller_context_sensitive: false,
                     reference_target: None,
                     opaque_reason: None,
+                    resolved_value: None,
                 });
                 Ok(LambdaParam {
                     name: name.clone(),
@@ -2073,6 +2109,7 @@ fn evaluate_lambda_call(
                     caller_context_sensitive: false,
                     reference_target: None,
                     opaque_reason: None,
+                    resolved_value: None,
                 });
                 Ok(LambdaParam {
                     name: name.clone(),
@@ -2093,8 +2130,9 @@ fn evaluate_lambda_call(
         caller_context_sensitive: false,
         reference_target: None,
         opaque_reason: None,
+        resolved_value: None,
     });
-    push_special_prepared_call(
+    let prepared_call_index = push_special_prepared_call(
         trace,
         "LAMBDA",
         SPECIAL_LAMBDA_FUNCTION_ID,
@@ -2105,14 +2143,14 @@ fn evaluate_lambda_call(
 
     let parameter_names = lambda_param_names(&params);
     let capture_names = helper_capture_names(&args[body_index], &parameter_names, helper_bindings);
-    Ok(EvalValue::Lambda(callable_registry.borrow_mut().register(
-        LambdaBinding {
-            origin_kind: CallableOriginKind::HelperLambda,
-            params,
-            body: args[body_index].clone(),
-            closure: helper_closure_from_names(helper_bindings, &capture_names),
-        },
-    )))
+    let value = EvalValue::Lambda(callable_registry.borrow_mut().register(LambdaBinding {
+        origin_kind: CallableOriginKind::HelperLambda,
+        params,
+        body: args[body_index].clone(),
+        closure: helper_closure_from_names(helper_bindings, &capture_names),
+    }));
+    record_prepared_call_returned_value(trace, prepared_call_index, &value);
+    Ok(value)
 }
 
 fn evaluate_legacy_single_call(
@@ -2139,7 +2177,7 @@ fn evaluate_legacy_single_call(
         false,
         trace,
     )?;
-    push_special_prepared_call(
+    let prepared_call_index = push_special_prepared_call(
         trace,
         "_XLFN.SINGLE",
         SPECIAL_LEGACY_SINGLE_FUNCTION_ID,
@@ -2147,8 +2185,10 @@ fn evaluate_legacy_single_call(
         vec![prepared_argument_for_call_arg(0, arg, &prepared, true)],
         context,
     );
-    Ok(eval_op_implicit_intersection_surface(&[prepared], resolver)
-        .unwrap_or_else(|error| EvalValue::Error(map_op_implicit_intersection_error_to_ws(&error))))
+    let value = eval_op_implicit_intersection_surface(&[prepared], resolver)
+        .unwrap_or_else(|error| EvalValue::Error(map_op_implicit_intersection_error_to_ws(&error)));
+    record_prepared_call_returned_value(trace, prepared_call_index, &value);
+    Ok(value)
 }
 
 fn evaluate_invocation(
@@ -2229,7 +2269,7 @@ fn evaluate_invocation(
     else {
         return Ok(EvalValue::Error(WorksheetErrorCode::Num));
     };
-    push_special_prepared_call(
+    let prepared_call_index = push_special_prepared_call(
         trace,
         "LAMBDA.INVOKE",
         "SPECIAL.LAMBDA_INVOKE",
@@ -2237,7 +2277,7 @@ fn evaluate_invocation(
         prepared_arguments,
         context,
     );
-    maybe_grow(
+    let value = maybe_grow(
         LOCAL_CALLABLE_STACK_RED_ZONE_BYTES,
         LOCAL_CALLABLE_STACK_GROW_BYTES,
         || {
@@ -2250,7 +2290,9 @@ fn evaluate_invocation(
                 trace,
             )
         },
-    )
+    )?;
+    record_prepared_call_returned_value(trace, prepared_call_index, &value);
+    Ok(value)
 }
 
 fn is_missing_helper_local_callee_name(
@@ -2849,6 +2891,7 @@ fn prepared_argument_for_call_arg(
             caller_context_sensitive: matches!(expr, BoundExpr::ImplicitIntersection(_)),
             reference_target: Some(reference.target.clone()),
             opaque_reason: prepared_argument_opaque_reason(expr),
+            resolved_value: None,
         },
         CallArgValue::MissingArg => PreparedArgument {
             ordinal,
@@ -2859,6 +2902,7 @@ fn prepared_argument_for_call_arg(
             caller_context_sensitive: false,
             reference_target: None,
             opaque_reason: prepared_argument_opaque_reason(expr),
+            resolved_value: None,
         },
         CallArgValue::EmptyCell => PreparedArgument {
             ordinal,
@@ -2869,6 +2913,7 @@ fn prepared_argument_for_call_arg(
             caller_context_sensitive: false,
             reference_target: None,
             opaque_reason: prepared_argument_opaque_reason(expr),
+            resolved_value: None,
         },
         CallArgValue::Eval(value) => PreparedArgument {
             ordinal,
@@ -2886,6 +2931,7 @@ fn prepared_argument_for_call_arg(
             caller_context_sensitive: matches!(expr, BoundExpr::ImplicitIntersection(_)),
             reference_target: None,
             opaque_reason: prepared_argument_opaque_reason(expr),
+            resolved_value: Some(value.clone()),
         },
     }
 }
@@ -2944,6 +2990,7 @@ fn lazy_skipped_prepared_argument(
         caller_context_sensitive: false,
         reference_target: None,
         opaque_reason: Some(reason.to_string()),
+        resolved_value: None,
     }
 }
 
@@ -2963,7 +3010,8 @@ fn push_special_prepared_call(
     arg_preparation_profile: ArgPreparationProfile,
     prepared_arguments: Vec<PreparedArgument>,
     context: &EvaluationContext<'_>,
-) {
+) -> usize {
+    let index = trace.prepared_calls.len();
     trace.prepared_calls.push(PreparedCall {
         function_name: function_name.to_string(),
         function_id,
@@ -2978,7 +3026,23 @@ fn push_special_prepared_call(
             .locale_ctx
             .map(|ctx| format!("{:?}", ctx.date_system)),
         host_query_enabled: context.host_info.is_some(),
+        returned_value: None,
     });
+    index
+}
+
+/// Stamp a value onto a `PreparedCall` previously pushed by
+/// `push_special_prepared_call` (or the main eval path). Designed for
+/// the trace.prepared_calls.push-then-call-then-record idiom: capture
+/// the index at push time, evaluate, then record the returned value.
+fn record_prepared_call_returned_value(
+    trace: &mut EvaluationTrace,
+    index: usize,
+    value: &EvalValue,
+) {
+    if let Some(call) = trace.prepared_calls.get_mut(index) {
+        call.returned_value = Some(value.clone());
+    }
 }
 
 fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> PreparedResult {
