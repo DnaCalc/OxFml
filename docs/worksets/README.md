@@ -148,7 +148,9 @@ Current baseline sequence after `W001`:
 61. `W063` callable capability review and Excel example matrix
 62. `W064` returned lambda invocation and lambda-valued binding follow-through
 63. `W065` recursive callable safety and workbook-visible behavior
-64. `W068` canonical function registry consumption cleanup
+64. `W066` consumer baseline stabilization for OxCalc W028
+65. `W067` diagnostic symbol spans and stage precision
+66. `W068` canonical function registry consumption cleanup
 
 This sequence is the current planning baseline.
 It may be refined, but new worksets should preserve dependency clarity rather than bypass it informally.

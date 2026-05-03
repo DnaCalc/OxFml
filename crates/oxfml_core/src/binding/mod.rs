@@ -30,6 +30,14 @@ pub struct BindDiagnostic {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FunctionCallSourceRecord {
+    pub function_name: String,
+    pub callee_span: TextSpan,
+    pub call_span: TextSpan,
+    pub arg_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BoundExpr {
     NumberLiteral(String),
     StringLiteral(String),
@@ -107,6 +115,7 @@ pub struct BoundFormula {
     pub unresolved_references: Vec<UnresolvedReferenceRecord>,
     pub capability_requirements: Vec<String>,
     pub diagnostics: Vec<BindDiagnostic>,
+    pub function_call_sources: Vec<FunctionCallSourceRecord>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -182,6 +191,7 @@ pub fn bind_formula(request: BindRequest) -> BindResult {
         unresolved_references: Vec::new(),
         capability_requirements: Vec::new(),
         helper_local_names: Vec::new(),
+        function_call_sources: Vec::new(),
     };
 
     let expr_node = request
@@ -213,6 +223,7 @@ pub fn bind_formula(request: BindRequest) -> BindResult {
             unresolved_references: binder.unresolved_references,
             capability_requirements: binder.capability_requirements,
             diagnostics: binder.diagnostics,
+            function_call_sources: binder.function_call_sources,
         },
     }
 }
@@ -262,6 +273,7 @@ struct Binder {
     unresolved_references: Vec<UnresolvedReferenceRecord>,
     capability_requirements: Vec<String>,
     helper_local_names: Vec<String>,
+    function_call_sources: Vec<FunctionCallSourceRecord>,
 }
 
 impl Binder {
@@ -768,14 +780,14 @@ impl Binder {
     }
 
     fn bind_call(&mut self, node: &GreenNode) -> BoundExpr {
-        let function_name = node
-            .children
-            .iter()
-            .find_map(|child| match child {
-                GreenChild::Token(token) => Some(token.text.clone()),
-                GreenChild::Node(_) => None,
-            })
+        let function_token = node.children.iter().find_map(|child| match child {
+            GreenChild::Token(token) => Some(token),
+            GreenChild::Node(_) => None,
+        });
+        let function_name = function_token
+            .map(|token| token.text.clone())
             .unwrap_or_default();
+        let callee_span = function_token.map(|token| token.span).unwrap_or(node.span);
         let uppercase_function_name = function_name.to_ascii_uppercase();
 
         let arg_nodes = node
@@ -809,11 +821,11 @@ impl Binder {
             .helper_local_names
             .iter()
             .any(|name| name.eq_ignore_ascii_case(&function_name));
-        let context_name_match = self
-            .context
-            .names
-            .keys()
-            .any(|name| name.eq_ignore_ascii_case(&function_name));
+        let context_name_kind = self.context.names.iter().find_map(|(name, kind)| {
+            name.eq_ignore_ascii_case(&function_name)
+                .then_some(kind.clone())
+        });
+        let context_name_match = context_name_kind.is_some();
         let builtin_function_meta = lookup_function_meta(&uppercase_function_name);
         let builtin_function_match = builtin_function_meta.is_some();
         let binds_as_invocation =
@@ -826,7 +838,14 @@ impl Binder {
         {
             self.diagnostics.push(BindDiagnostic {
                 message,
-                span: node.span,
+                span: callee_span,
+            });
+        }
+
+        if matches!(context_name_kind, Some(NameKind::ReferenceLike)) {
+            self.diagnostics.push(BindDiagnostic {
+                message: format!("known symbol '{function_name}' is not callable"),
+                span: callee_span,
             });
         }
 
@@ -837,6 +856,13 @@ impl Binder {
                 args,
             };
         }
+
+        self.function_call_sources.push(FunctionCallSourceRecord {
+            function_name: uppercase_function_name.clone(),
+            callee_span,
+            call_span: node.span,
+            arg_count: args.len(),
+        });
 
         BoundExpr::FunctionCall {
             function_name: uppercase_function_name,

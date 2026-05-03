@@ -64,6 +64,7 @@ pub struct LiveDiagnostic {
     pub primary_span: TextSpan,
     pub related_spans: Vec<TextSpan>,
     pub code: Option<String>,
+    pub worksheet_error_class: Option<String>,
     pub suggested_fix_kind: Option<String>,
 }
 

@@ -334,6 +334,42 @@ Current carrier-validation rule:
 5. canonical function-help result where available
 6. stable context needed to reissue the next editor interaction honestly
 
+### 7.4A Live Diagnostic Packet Precision
+Live diagnostics are the editor-facing projection of syntax, bind,
+semantic-plan, and later runtime facts. Each diagnostic packet should carry:
+1. a stable diagnostic identifier for this formula/version projection,
+2. severity,
+3. stage,
+4. human-readable message,
+5. stable diagnostic code,
+6. primary source span,
+7. optional related source spans,
+8. optional worksheet-visible error class when the formula-language consequence
+   is already known.
+
+Current stable code floor:
+1. `syntax` for generic parse diagnostics pending narrower parse taxonomy,
+2. `unknown_name` for unresolved bare identifiers/names,
+3. `unknown_function` for syntactically valid function-call surfaces without
+   registered metadata or admitted function identity,
+4. `known_symbol_not_callable` for a symbol that resolves but is not invocable
+   in the active binding context,
+5. `function_arity_mismatch` for catalog-known calls rejected by the authoring
+   arity boundary,
+6. `function_gated_or_unavailable` for catalog/context-known function surfaces
+   preserved as unavailable or gated rather than unknown,
+7. `structured_reference_unresolved` for table/structured-reference lookup
+   failures,
+8. `reference_invalid_or_deferred` for reference-validity cases where the host
+   or workbook profile must provide final truth.
+
+Unknown function calls are not parse failures. They preserve call shape, may
+still evaluate to worksheet `#NAME?`, and should point their primary span at the
+callee token rather than the whole formula. Unresolved bare identifiers remain
+bind-stage facts, but their diagnostic packet shape should align with unknown
+function diagnostics so editor hosts can render both without host-side symbol
+inference.
+
 Working rule:
 1. editor consumers should not need to stitch parse/bind/plan/completion/help
    calls together by hand,

@@ -1,7 +1,7 @@
 use oxfml_core::binding::{BindContext, BoundExpr, NameKind};
 use oxfml_core::consumer::editor::{
     CompletionProposalKind, EditorAnalysisStage, EditorEditService, EditorEnvironment,
-    EditorPlanOptions, EditorSyntaxSnapshot, FormulaTextChangeRange,
+    EditorPlanOptions, EditorSyntaxSnapshot, FormulaTextChangeRange, LiveDiagnosticStage,
 };
 use oxfml_core::interface::{
     InMemoryLibraryContextProvider, LibraryContextProvider, LibraryContextSnapshotRef,
@@ -383,10 +383,128 @@ fn apply_formula_edit_surfaces_bind_diagnostics_in_live_snapshot() {
             .live_diagnostics
             .diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.code.as_deref() == Some("bind")
+            .any(|diagnostic| diagnostic.code.as_deref()
+                == Some("structured_reference_unresolved")
                 && diagnostic.suggested_fix_kind.as_deref()
                     == Some("supply_enclosing_table_context"))
     );
+}
+
+#[test]
+fn live_diagnostics_use_exact_symbol_spans_for_unknown_function_and_name() {
+    let source = FormulaSourceRecord::new("editor-symbol-diag", 1, "=YYYY(1,2)+ABS(-12)+QQQQ");
+    let service =
+        EditorEditService::new(EditorEnvironment::new(editor_bind_context(source.clone())));
+
+    let result = service.apply_edit(source, None, EditorAnalysisStage::FullSemanticPlan, None);
+    let diagnostics = &result.document.live_diagnostics.diagnostics;
+
+    let unknown_function = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code.as_deref() == Some("unknown_function"))
+        .expect("unknown function diagnostic");
+    assert_eq!(unknown_function.stage, LiveDiagnosticStage::SemanticPlan);
+    assert_eq!(unknown_function.primary_span, TextSpan::new(1, 4));
+    assert_eq!(
+        unknown_function.worksheet_error_class.as_deref(),
+        Some("#NAME?")
+    );
+
+    let unknown_name = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code.as_deref() == Some("unknown_name"))
+        .expect("unknown name diagnostic");
+    assert_eq!(unknown_name.stage, LiveDiagnosticStage::Bind);
+    assert_eq!(unknown_name.primary_span, TextSpan::new(20, 4));
+    assert_eq!(
+        unknown_name.worksheet_error_class.as_deref(),
+        Some("#NAME?")
+    );
+
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| !diagnostic.message.contains("ABS")),
+        "ABS should not produce a diagnostic in the mixed formula: {diagnostics:?}"
+    );
+}
+
+#[test]
+fn live_diagnostics_classify_arity_and_noncallable_symbols() {
+    let source = FormulaSourceRecord::new("editor-arity-diag", 1, "=ABS(1,2)+RefName(1)");
+    let mut bind_context = editor_bind_context(source.clone());
+    bind_context
+        .names
+        .insert("RefName".to_string(), NameKind::ReferenceLike);
+    let service = EditorEditService::new(EditorEnvironment::new(bind_context));
+
+    let result = service.apply_edit(source, None, EditorAnalysisStage::FullSemanticPlan, None);
+    let diagnostics = &result.document.live_diagnostics.diagnostics;
+
+    let arity = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code.as_deref() == Some("function_arity_mismatch"))
+        .expect("arity diagnostic");
+    assert_eq!(arity.stage, LiveDiagnosticStage::Bind);
+    assert_eq!(arity.primary_span, TextSpan::new(1, 3));
+
+    let noncallable = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code.as_deref() == Some("known_symbol_not_callable"))
+        .expect("noncallable diagnostic");
+    assert_eq!(noncallable.stage, LiveDiagnosticStage::Bind);
+    assert_eq!(noncallable.primary_span, TextSpan::new(10, 7));
+    assert_eq!(noncallable.worksheet_error_class.as_deref(), Some("#NAME?"));
+}
+
+#[test]
+fn live_diagnostics_classify_gated_function_surfaces() {
+    let source = FormulaSourceRecord::new("editor-gated-diag", 1, "=YYYY(1)");
+    let mut snapshot = sample_library_context_snapshot();
+    snapshot.entries.push(LibraryContextSnapshotEntry {
+        surface_name: "YYYY".to_string(),
+        canonical_id: Some("FUNC.YYYY".to_string()),
+        surface_stable_id: Some("surface:yyyy".to_string()),
+        name_resolution_table_ref: None,
+        semantic_trait_profile_ref: None,
+        gating_profile_ref: Some("gate:fixture".to_string()),
+        metadata_status: Some("fixture-gated".to_string()),
+        special_interface_kind: None,
+        admission_interface_kind: None,
+        preparation_owner: None,
+        runtime_boundary_kind: None,
+        arity_shape_note: None,
+        interface_contract_ref: Some("contract:yyyy".to_string()),
+        registration_source_kind: RegistrationSourceKind::BuiltIn,
+        parse_bind_state: LibraryAvailabilityState::FeatureGated,
+        semantic_plan_state: LibraryAvailabilityState::FeatureGated,
+        runtime_capability_state: Some(LibraryAvailabilityState::FeatureGated),
+        post_dispatch_state: None,
+    });
+    let service =
+        EditorEditService::new(EditorEnvironment::new(editor_bind_context(source.clone())));
+
+    let result = service.apply_edit(
+        source,
+        None,
+        EditorAnalysisStage::FullSemanticPlan,
+        Some(EditorPlanOptions {
+            oxfunc_catalog_identity: "editor-catalog".to_string(),
+            locale_profile: None,
+            date_system: None,
+            format_profile: None,
+            library_context_snapshot: Some(snapshot),
+        }),
+    );
+
+    let gated = result
+        .document
+        .live_diagnostics
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code.as_deref() == Some("function_gated_or_unavailable"))
+        .expect("gated function diagnostic");
+    assert_eq!(gated.primary_span, TextSpan::new(1, 4));
 }
 
 #[test]
