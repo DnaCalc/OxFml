@@ -8,8 +8,11 @@ use oxfunc_core::function::{
 };
 use oxfunc_core::xll_export_specs::lookup_function_meta as lookup_oxfunc_function_meta;
 
-use crate::binding::{BoundExpr, BoundFormula, NormalizedReference, ReferenceExpr};
+use crate::binding::{
+    BoundExpr, BoundFormula, FunctionCallSourceRecord, NormalizedReference, ReferenceExpr,
+};
 use crate::interface::LibraryContextSnapshotRef;
+use crate::syntax::token::TextSpan;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompileSemanticPlanRequest {
@@ -237,6 +240,10 @@ pub struct HelperEnvironmentProfile {
 pub struct SemanticDiagnostic {
     pub message: String,
     pub function_name: Option<String>,
+    pub code: String,
+    pub primary_span: Option<TextSpan>,
+    pub related_spans: Vec<TextSpan>,
+    pub worksheet_error_class: Option<String>,
 }
 
 pub fn compile_semantic_plan(request: CompileSemanticPlanRequest) -> CompileSemanticPlanResult {
@@ -262,6 +269,8 @@ pub fn compile_semantic_plan(request: CompileSemanticPlanRequest) -> CompileSema
         capability_requirements: bound_formula.capability_requirements.clone(),
         diagnostics: Vec::new(),
         library_context_snapshot,
+        function_call_sources: bound_formula.function_call_sources.clone(),
+        function_call_source_cursor: 0,
     };
 
     compiler.visit_expr(&bound_formula.root);
@@ -315,6 +324,8 @@ struct SemanticCompiler {
     capability_requirements: Vec<String>,
     diagnostics: Vec<SemanticDiagnostic>,
     library_context_snapshot: Option<LibraryContextSnapshot>,
+    function_call_sources: Vec<FunctionCallSourceRecord>,
+    function_call_source_cursor: usize,
 }
 
 impl SemanticCompiler {
@@ -451,8 +462,25 @@ impl SemanticCompiler {
         }
     }
 
+    fn take_function_call_source(
+        &mut self,
+        function_name: &str,
+        arg_count: usize,
+    ) -> Option<FunctionCallSourceRecord> {
+        let record = self
+            .function_call_sources
+            .get(self.function_call_source_cursor)
+            .filter(|record| record.function_name == function_name && record.arg_count == arg_count)
+            .cloned();
+        if record.is_some() {
+            self.function_call_source_cursor += 1;
+        }
+        record
+    }
+
     fn record_function_call(&mut self, function_name: &str, arg_count: usize) {
-        self.record_special_function_lane(function_name);
+        let source_record = self.take_function_call_source(function_name, arg_count);
+        self.record_special_function_lane(function_name, source_record.as_ref());
         let meta = lookup_function_meta(function_name);
         let availability_summary = self.function_availability_summary(function_name, meta);
         self.availability_summaries
@@ -466,6 +494,13 @@ impl SemanticCompiler {
                         availability_summary.parse_bind_state
                     ),
                     function_name: Some(function_name.to_string()),
+                    code: "function_gated_or_unavailable".to_string(),
+                    primary_span: source_record.as_ref().map(|record| record.callee_span),
+                    related_spans: source_record
+                        .as_ref()
+                        .map(|record| vec![record.call_span])
+                        .unwrap_or_default(),
+                    worksheet_error_class: Some("#NAME?".to_string()),
                 });
                 return;
             }
@@ -477,6 +512,13 @@ impl SemanticCompiler {
             self.diagnostics.push(SemanticDiagnostic {
                 message: format!("no OxFunc metadata registered for function {function_name}"),
                 function_name: Some(function_name.to_string()),
+                code: "unknown_function".to_string(),
+                primary_span: source_record.as_ref().map(|record| record.callee_span),
+                related_spans: source_record
+                    .as_ref()
+                    .map(|record| vec![record.call_span])
+                    .unwrap_or_default(),
+                worksheet_error_class: Some("#NAME?".to_string()),
             });
             return;
         };
@@ -708,7 +750,11 @@ impl SemanticCompiler {
         }
     }
 
-    fn record_special_function_lane(&mut self, function_name: &str) {
+    fn record_special_function_lane(
+        &mut self,
+        function_name: &str,
+        source_record: Option<&FunctionCallSourceRecord>,
+    ) {
         match function_name {
             "_XLFN.SINGLE" | "SINGLE" => {
                 self.execution_profile.uses_implicit_intersection = true;
@@ -724,17 +770,24 @@ impl SemanticCompiler {
                         "legacy SINGLE compatibility lane preserved without OxFunc metadata for function {function_name}"
                     ),
                     function_name: Some(function_name.to_string()),
+                    code: "function_gated_or_unavailable".to_string(),
+                    primary_span: source_record.map(|record| record.callee_span),
+                    related_spans: source_record
+                        .map(|record| vec![record.call_span])
+                        .unwrap_or_default(),
+                    worksheet_error_class: None,
                 });
             }
             "LET" | "LAMBDA" => {
+                // LET / LAMBDA are fully supported in the engine. The
+                // requirement / capability pushes are internal book-
+                // keeping and stay; the previous per-call user-facing
+                // SemanticDiagnostic was engine-state-leak that
+                // surfaced as a squiggle on every valid LET / LAMBDA
+                // call site (e.g. =MAP(RANDARRAY(2,3),
+                // LAMBDA(x, x+100))) which is misleading.
                 self.push_evaluation_requirement(EvaluationRequirement::HelperEnvironment);
                 self.push_capability_requirement("helper_environment");
-                self.diagnostics.push(SemanticDiagnostic {
-                    message: format!(
-                        "helper-form environment preserved without OxFunc metadata for function {function_name}"
-                    ),
-                    function_name: Some(function_name.to_string()),
-                });
             }
             _ => {}
         }

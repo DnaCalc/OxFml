@@ -250,6 +250,7 @@ pub(crate) fn build_live_diagnostics(
             primary_span: diagnostic.span,
             related_spans: Vec::new(),
             code: Some("syntax".to_string()),
+            worksheet_error_class: None,
             suggested_fix_kind: None,
         });
     }
@@ -263,7 +264,8 @@ pub(crate) fn build_live_diagnostics(
                 message: diagnostic.message.clone(),
                 primary_span: diagnostic.span,
                 related_spans: Vec::new(),
-                code: Some("bind".to_string()),
+                code: Some(diagnostic_code_for_bind_message(&diagnostic.message).to_string()),
+                worksheet_error_class: worksheet_error_class_for_bind_message(&diagnostic.message),
                 suggested_fix_kind: suggested_fix_kind_for_bind_message(&diagnostic.message),
             });
         }
@@ -276,9 +278,12 @@ pub(crate) fn build_live_diagnostics(
                 severity: LiveDiagnosticSeverity::Warning,
                 stage: LiveDiagnosticStage::SemanticPlan,
                 message: diagnostic.message.clone(),
-                primary_span: TextSpan::new(0, source.entered_formula_text.chars().count()),
-                related_spans: Vec::new(),
-                code: diagnostic.function_name.clone(),
+                primary_span: diagnostic.primary_span.unwrap_or_else(|| {
+                    TextSpan::new(0, source.entered_formula_text.chars().count())
+                }),
+                related_spans: diagnostic.related_spans.clone(),
+                code: Some(diagnostic.code.clone()),
+                worksheet_error_class: diagnostic.worksheet_error_class.clone(),
                 suggested_fix_kind: None,
             });
         }
@@ -500,12 +505,36 @@ pub(crate) fn signature_help_context_at_cursor(
         GreenChild::Node(node) if node.kind == SyntaxKind::ArgumentList => Some(node.as_ref()),
         _ => None,
     })?;
+    // Suppress signature help once the caret has moved past the
+    // closing `)` of a closed call. `smallest_call_like_node` uses
+    // the inclusive `cursor_offset <= span.end()` rule because for
+    // an OPEN call the caret-at-end position is "still inside the
+    // call." For a CLOSED call, however, position == close-paren-
+    // end means the caret is one position past the `)` and we are
+    // no longer inside the call's arguments — the help line is
+    // misleading there.
+    if let Some(close_paren_end) = closed_call_close_paren_end(call_node) {
+        if cursor_offset >= close_paren_end {
+            return None;
+        }
+    }
 
     Some(SignatureHelpContext {
         callee_text: callee_text_for_call(source, call_node),
         call_span: call_node.span,
         active_argument_index: active_argument_index(arg_list, cursor_offset),
         invocation_kind: call_node.kind,
+    })
+}
+
+/// Return the byte offset just past a call's closing `)` token when
+/// the call has one, or `None` for unclosed calls. Used by
+/// signature_help to drop the help context once the caret is past
+/// the close paren.
+fn closed_call_close_paren_end(call_node: &GreenNode) -> Option<usize> {
+    call_node.children.iter().rev().find_map(|child| match child {
+        GreenChild::Token(token) if token.kind == TokenKind::RParen => Some(token.span.end()),
+        _ => None,
     })
 }
 
@@ -566,6 +595,33 @@ fn editor_trivia_from_token(token: &Token) -> EditorTrivia {
             _ => EditorTriviaKind::Unknown,
         },
         text: token.text.clone(),
+    }
+}
+
+fn diagnostic_code_for_bind_message(message: &str) -> &'static str {
+    if message.contains("unresolved identifier") {
+        "unknown_name"
+    } else if message.contains("rejects") && message.contains("arguments") {
+        "function_arity_mismatch"
+    } else if message.contains("is not callable") {
+        "known_symbol_not_callable"
+    } else if message.contains("structured reference")
+        || message.contains("table")
+        || message.contains("column")
+    {
+        "structured_reference_unresolved"
+    } else if message.contains("reference") {
+        "reference_invalid_or_deferred"
+    } else {
+        "bind"
+    }
+}
+
+fn worksheet_error_class_for_bind_message(message: &str) -> Option<String> {
+    if message.contains("unresolved identifier") || message.contains("is not callable") {
+        Some("#NAME?".to_string())
+    } else {
+        None
     }
 }
 
