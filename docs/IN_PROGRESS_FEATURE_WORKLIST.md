@@ -145,3 +145,11 @@ Last updated: 2026-04-16.
 - **Remaining gaps**: none within `W054` scope.
 - **Why still open**: not applicable. Any later replay breadth expansion, support-surface narrowing, or downstream uptake refinement is outside `W054` and requires a new bounded workset if taken up later.
 - **Canonical owner**: `W054` closure packet for `OxFml_V1`.
+
+### IP-17: Canonical Function Registry Consumption
+
+- **Status**: in-progress
+- **Current floor**: DNA OneCalc identified that OxFml editor function help still accepts host-filled free-text arity strings through `LibraryContextSnapshotEntry.arity_shape_note`, synthesizes fallback signatures such as `arg1` / `additional_args`, and therefore can present wrong signatures such as `NOW(*arg1, arg2, arg3, additional_args)`. OxFunc has now filed `HO-FN-011` and exposes the intended canonical runtime registry surface through `oxfunc_core::registry`.
+- **Remaining gaps**: OxFml still needs to wire editor/runtime function metadata consumption to OxFunc registry entries or registry-derived immutable views, remove `arity_shape_note`, delete the old string parsing and synthetic argument-help path, preserve snapshot data only as capability/admission/provenance overlay truth, add UDF registry mutation evidence, and update deterministic tests/spec text.
+- **Why still open**: `W068` has filed the local `HO-FN-011` acknowledgement and opened the execution bead tree, but implementation and evidence have not started.
+- **Canonical owner**: active owner `W068`.
