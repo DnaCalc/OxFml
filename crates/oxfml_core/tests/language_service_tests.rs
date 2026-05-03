@@ -15,6 +15,14 @@ use oxfml_core::source::{FormulaChannelKind, FormulaSourceRecord, StructureConte
 use oxfml_core::syntax::green::{GreenChild, GreenNode};
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
 use oxfml_core::syntax::token::{TextSpan, TokenKind};
+use oxfunc_core::function::{
+    ArgPreparationProfile, Arity, CoercionLiftProfile, DeterminismClass, FecDependencyProfile,
+    HostInteractionClass, KernelSignatureClass, ThreadSafetyClass, VolatilityClass,
+};
+use oxfunc_core::registry::{
+    CapabilityOverlay, FunctionEntry, FunctionRegistryMetadata, FunctionSource,
+    ParameterDescriptor, RegistryFunctionMeta, SignatureForm, builtin_registry,
+};
 
 #[test]
 fn editor_syntax_snapshot_tracks_leading_and_trailing_trivia() {
@@ -473,7 +481,6 @@ fn live_diagnostics_classify_gated_function_surfaces() {
         admission_interface_kind: None,
         preparation_owner: None,
         runtime_boundary_kind: None,
-        arity_shape_note: None,
         interface_contract_ref: Some("contract:yyyy".to_string()),
         registration_source_kind: RegistrationSourceKind::BuiltIn,
         parse_bind_state: LibraryAvailabilityState::FeatureGated,
@@ -672,6 +679,156 @@ fn function_help_packet_uses_provider_current_snapshot_when_unpinned() {
 }
 
 #[test]
+fn function_help_packet_uses_oxfunc_registry_signatures() {
+    let service = EditorEditService::new(EditorEnvironment::new(editor_bind_context(
+        FormulaSourceRecord::new("editor-registry-now", 1, "=NOW()"),
+    )));
+
+    let now_source = FormulaSourceRecord::new("editor-registry-now", 1, "=NOW()");
+    let now_packet = service
+        .open_and_interact(now_source, 5, None)
+        .function_help_packet
+        .expect("NOW should resolve through OxFunc registry");
+
+    assert_eq!(now_packet.display_name, "NOW");
+    assert_eq!(now_packet.signature_forms[0].display_signature, "NOW()");
+    assert_eq!(now_packet.signature_forms[0].min_arity, 0);
+    assert_eq!(now_packet.signature_forms[0].max_arity, Some(0));
+    assert!(now_packet.argument_help.is_empty());
+
+    let if_source = FormulaSourceRecord::new("editor-registry-if", 1, "=IF(TRUE,1,2)");
+    let if_packet = service
+        .open_and_interact(if_source, 10, None)
+        .function_help_packet
+        .expect("IF should resolve through OxFunc registry");
+
+    assert_eq!(
+        if_packet.signature_forms[0].display_signature,
+        "IF(logical_test, value_if_true, [value_if_false])"
+    );
+    assert_eq!(
+        if_packet.argument_help,
+        vec!["logical_test", "*value_if_true", "value_if_false"]
+    );
+
+    let sum_source = FormulaSourceRecord::new("editor-registry-sum", 1, "=SUM(1,2)");
+    let sum_packet = service
+        .open_and_interact(sum_source, 7, None)
+        .function_help_packet
+        .expect("SUM should resolve through OxFunc registry");
+
+    assert_eq!(
+        sum_packet.signature_forms[0].display_signature,
+        "SUM(number1, [number2], ...)"
+    );
+    assert_eq!(sum_packet.argument_help, vec!["number1", "*number2..."]);
+}
+
+#[test]
+fn function_help_packet_is_absent_for_unknown_callee() {
+    let source = FormulaSourceRecord::new("editor-help-unknown", 1, "=ZZZNOTAFUNCTION(");
+    let service =
+        EditorEditService::new(EditorEnvironment::new(editor_bind_context(source.clone())));
+
+    let interaction = service.open_and_interact(source, 16, None);
+
+    assert!(interaction.function_help_packet.is_none());
+}
+
+#[test]
+fn function_help_packet_preserves_registry_signature_under_capability_overlay() {
+    let source =
+        FormulaSourceRecord::new("editor-help-capability", 1, "=RTD(\"p\",\"s\",\"topic\")");
+    let mut overlay = CapabilityOverlay::new();
+    overlay.deny_function_id("FUNC.RTD", "provider unavailable");
+    let service = EditorEditService::new(
+        EditorEnvironment::new(editor_bind_context(source.clone()))
+            .with_capability_overlay(&overlay),
+    );
+
+    let packet = service
+        .open_and_interact(source, 6, None)
+        .function_help_packet
+        .expect("capability overlay must not remove registry signature metadata");
+
+    assert_eq!(
+        packet.signature_forms[0].display_signature,
+        "RTD(prog_id, server, topic1, [topic2], ...)"
+    );
+    assert!(packet.deferred_or_profile_limited);
+    assert_eq!(
+        packet.availability_summary.as_deref(),
+        Some("registry_capability=Unavailable(provider unavailable)")
+    );
+}
+
+#[test]
+fn function_help_packet_reflects_udf_registry_mutation() {
+    let source = FormulaSourceRecord::new("editor-help-udf", 1, "=MYFUNC(10,\"x\")");
+    let mut registry = builtin_registry().clone();
+    registry
+        .register_udf(test_udf_entry())
+        .expect("UDF registration should be accepted by OxFunc registry");
+
+    {
+        let service = EditorEditService::new(
+            EditorEnvironment::new(editor_bind_context(source.clone()))
+                .with_function_registry(&registry),
+        );
+        let packet = service
+            .open_and_interact(source.clone(), 11, None)
+            .function_help_packet
+            .expect("registered UDF should resolve through provided registry");
+
+        assert_eq!(packet.display_name, "MYFUNC");
+        assert_eq!(
+            packet.signature_forms[0].display_signature,
+            "MYFUNC(value, label)"
+        );
+        assert_eq!(packet.argument_help, vec!["value", "*label"]);
+    }
+
+    registry
+        .unregister_udf("FUNC.UDF.MYFUNC")
+        .expect("UDF unregister should be accepted by OxFunc registry");
+    let service = EditorEditService::new(
+        EditorEnvironment::new(editor_bind_context(source.clone()))
+            .with_function_registry(&registry),
+    );
+
+    assert!(
+        service
+            .open_and_interact(source, 11, None)
+            .function_help_packet
+            .is_none()
+    );
+}
+
+#[test]
+fn w068_editor_source_has_no_legacy_signature_synthesis() {
+    let editor_source = include_str!("../src/consumer/editor/mod.rs");
+    for needle in [
+        "parse_arity_shape_note",
+        "signature_suffix",
+        "build_argument_help",
+        "additional_args",
+        "arg1",
+        "arity_shape_note",
+    ] {
+        assert!(
+            !editor_source.contains(needle),
+            "editor function-help source must not contain legacy synthesis token {needle}"
+        );
+    }
+
+    let semantics_source = include_str!("../src/semantics/mod.rs");
+    assert!(
+        !semantics_source.contains("arity_shape_note"),
+        "snapshot/schema source must not retain arity_shape_note"
+    );
+}
+
+#[test]
 fn intelligent_completion_context_carries_scope_and_active_diagnostics() {
     let source = FormulaSourceRecord::new("editor-intel", 1, "=[@Amount]");
     let bind_context = editor_bind_context(source.clone());
@@ -862,7 +1019,6 @@ fn sample_library_context_snapshot() -> LibraryContextSnapshot {
                 admission_interface_kind: None,
                 preparation_owner: None,
                 runtime_boundary_kind: None,
-                arity_shape_note: None,
                 interface_contract_ref: Some("contract:sum".to_string()),
                 registration_source_kind: RegistrationSourceKind::BuiltIn,
                 parse_bind_state: LibraryAvailabilityState::CatalogKnown,
@@ -882,7 +1038,6 @@ fn sample_library_context_snapshot() -> LibraryContextSnapshot {
                 admission_interface_kind: None,
                 preparation_owner: None,
                 runtime_boundary_kind: None,
-                arity_shape_note: None,
                 interface_contract_ref: Some("contract:substitute".to_string()),
                 registration_source_kind: RegistrationSourceKind::BuiltIn,
                 parse_bind_state: LibraryAvailabilityState::CatalogKnown,
@@ -910,7 +1065,6 @@ fn sample_library_context_snapshot_v2() -> LibraryContextSnapshot {
         admission_interface_kind: None,
         preparation_owner: None,
         runtime_boundary_kind: None,
-        arity_shape_note: None,
         interface_contract_ref: Some("contract:take".to_string()),
         registration_source_kind: RegistrationSourceKind::BuiltIn,
         parse_bind_state: LibraryAvailabilityState::CatalogKnown,
@@ -936,5 +1090,49 @@ fn collect_green_tokens_recursive(
             GreenChild::Node(child_node) => collect_green_tokens_recursive(child_node, tokens),
             GreenChild::Token(token) => tokens.push(token.clone()),
         }
+    }
+}
+
+fn test_udf_entry() -> FunctionEntry {
+    FunctionEntry {
+        meta: RegistryFunctionMeta {
+            function_id: "FUNC.UDF.MYFUNC".to_string(),
+            arity: Arity::exact(2),
+            determinism: DeterminismClass::Deterministic,
+            volatility: VolatilityClass::NonVolatile,
+            host_interaction: HostInteractionClass::None,
+            thread_safety: ThreadSafetyClass::SafePure,
+            arg_preparation_profile: ArgPreparationProfile::ValuesOnlyPreAdapter,
+            coercion_lift_profile: CoercionLiftProfile::Custom,
+            kernel_signature_class: KernelSignatureClass::Custom,
+            fec_dependency_profile: FecDependencyProfile::None,
+            surface_fec_dependency_profile: FecDependencyProfile::None,
+        },
+        surface_name: "MYFUNC".to_string(),
+        display_signature: SignatureForm {
+            signature_display: "MYFUNC(value, label)".to_string(),
+            parameters: vec![
+                ParameterDescriptor {
+                    name: "value".to_string(),
+                    optional: false,
+                    repeats: false,
+                    short_description: None,
+                },
+                ParameterDescriptor {
+                    name: "label".to_string(),
+                    optional: false,
+                    repeats: false,
+                    short_description: None,
+                },
+            ],
+            trailing_repeats: false,
+        },
+        registry_metadata: FunctionRegistryMetadata::default(),
+        short_description: None,
+        long_description: None,
+        source: FunctionSource::Udf {
+            provenance: Some("language_service_tests".to_string()),
+            replaces_builtin: false,
+        },
     }
 }

@@ -140,27 +140,38 @@ Dependency shape:
 
 | # | Check | Yes/No |
 |---|-------|--------|
-| 1 | Spec text updated for all in-scope items? | |
-| 2 | Conformance matrix rows updated? | |
-| 3 | At least one deterministic replay artifact exists per in-scope behavior? | |
-| 4 | Cross-repo impact assessed and handoff filed if needed? | |
-| 5 | All required tests pass? | |
-| 6 | No known semantic gaps remain in declared scope? | |
-| 7 | Completion language audit passed (no premature completion wording per AGENTS.md Section 3)? | |
-| 8 | IN_PROGRESS_FEATURE_WORKLIST.md updated? | |
-| 9 | CURRENT_BLOCKERS.md updated (new/resolved)? | |
+| 1 | Spec text updated for all in-scope items? | Yes |
+| 2 | Conformance matrix rows updated? | Yes - W068 evidence rows are recorded in this workset and `docs/IN_PROGRESS_FEATURE_WORKLIST.md`; no separate conformance matrix file exists for this lane. |
+| 3 | At least one deterministic replay artifact exists per in-scope behavior? | Yes - deterministic editor/language-service, snapshot/interface, host/runtime, semantic-plan, and structural tests exercise the in-scope behavior. |
+| 4 | Cross-repo impact assessed and handoff filed if needed? | Yes - `HO-FN-011` acknowledgement is registered; DNA OneCalc-facing cleanup note is updated; no OxCalc coordinator-facing seam change was discovered. |
+| 5 | All required tests pass? | Yes |
+| 6 | No known semantic gaps remain in declared scope? | Yes |
+| 7 | Completion language audit passed (no premature completion wording per AGENTS.md Section 3)? | Yes |
+| 8 | IN_PROGRESS_FEATURE_WORKLIST.md updated? | Yes |
+| 9 | CURRENT_BLOCKERS.md updated (new/resolved)? | Yes - no new blocker entry required. |
 
 ## Completion Claim Self-Audit
-Not run yet. This workset is in progress and cannot advance to closure until implementation and evidence gates pass.
+Result: passed.
+
+1. Declared scope was direct post-migration cleanup for function-help metadata ownership, not DNA OneCalc host cleanup or broad UDF execution semantics.
+2. Implementation evidence is present for built-in registry help (`NOW`, `SUM`, `IF`), unknown-callee absence, capability overlay preservation, and UDF registry mutation display.
+3. Schema cleanup evidence is present through removal of `LibraryContextSnapshotEntry.arity_shape_note`, fixture/test field removal, export/import test updates, and source structural guard.
+4. Integration evidence is present through full `cargo test -p oxfml_core`.
+5. Cross-repo dependency state is explicit: OxFunc registry API is consumed; DNA OneCalc cleanup is unblocked but remains downstream-owned.
+6. No scaffolding-only or compile-only claims are used for declared W068 scope.
+7. No temporary compatibility shim for `arity_shape_note` was retained.
+
+Validation commands:
+1. `cargo fmt --all -- --check` - passed.
+2. `git diff --check` - passed with line-ending warnings only.
+3. `rg -n "arity_shape_note|parse_arity_shape_note|signature_suffix|build_argument_help|additional_args|arg1" crates\oxfml_core\src` - no matches.
+4. `cargo test -p oxfml_core --test language_service_tests` - passed, 28 tests.
+5. `cargo test -p oxfml_core` - passed.
 
 ## Status
-- execution_state: in_progress
-- scope_completeness: scope_partial
-- target_completeness: target_partial
-- integration_completeness: partial
-- open_lanes:
-  - handoff acknowledgement filed; implementation not started
-  - deterministic registry-backed editor evidence not yet produced
-  - `arity_shape_note` removal not yet executed
-  - downstream DNA OneCalc cleanup not yet unblocked by landed OxFml code
-- claim_confidence: draft
+- execution_state: validated
+- scope_completeness: scope_complete
+- target_completeness: target_complete
+- integration_completeness: integrated
+- open_lanes: []
+- claim_confidence: evidence-backed

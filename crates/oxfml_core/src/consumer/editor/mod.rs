@@ -9,6 +9,10 @@ use crate::language_service::{
 };
 use crate::semantics::LibraryContextSnapshot;
 use crate::source::FormulaSourceRecord;
+use oxfunc_core::registry::{
+    CapabilityOverlay, FunctionAvailability, FunctionEntry, FunctionRegistry, SignatureForm,
+    builtin_registry,
+};
 
 mod types;
 
@@ -24,6 +28,8 @@ pub use types::{
 pub struct EditorEnvironment<'a> {
     bind_context: BindContext,
     library_context: ConsumerLibraryContextState<'a>,
+    function_registry: &'a FunctionRegistry,
+    capability_overlay: Option<&'a CapabilityOverlay>,
 }
 
 impl EditorEnvironment<'_> {
@@ -31,6 +37,8 @@ impl EditorEnvironment<'_> {
         Self {
             bind_context,
             library_context: ConsumerLibraryContextState::new(),
+            function_registry: builtin_registry(),
+            capability_overlay: None,
         }
     }
 }
@@ -42,6 +50,16 @@ impl<'a> EditorEnvironment<'a> {
 
     pub fn with_bind_context(mut self, bind_context: BindContext) -> Self {
         self.bind_context = bind_context;
+        self
+    }
+
+    pub fn with_function_registry(mut self, function_registry: &'a FunctionRegistry) -> Self {
+        self.function_registry = function_registry;
+        self
+    }
+
+    pub fn with_capability_overlay(mut self, capability_overlay: &'a CapabilityOverlay) -> Self {
+        self.capability_overlay = Some(capability_overlay);
         self
     }
 
@@ -190,7 +208,7 @@ impl<'a> EditorEditService<'a> {
             self.environment.library_context.pinned_view(),
         )
         .as_ref()
-        .map(|request| {
+        .and_then(|request| {
             build_function_help_packet(request, &self.environment, signature_help_context.as_ref())
         });
         let intelligent_completion_context = Some(build_intelligent_completion_context(
@@ -303,17 +321,12 @@ fn build_function_help_packet(
     request: &crate::language_service::FunctionHelpLookupRequest,
     environment: &EditorEnvironment<'_>,
     signature_help_context: Option<&SignatureHelpContext>,
-) -> FunctionHelpPacket {
+) -> Option<FunctionHelpPacket> {
+    let registry_entry = lookup_registry_entry(environment, request)?;
     let snapshot_entry = lookup_snapshot_entry(environment, request);
-    let display_name = snapshot_entry
-        .as_ref()
-        .map(|entry| entry.surface_name.clone())
-        .unwrap_or_else(|| request.lookup_key.clone());
-    let (min_arity, max_arity, signature_suffix) = snapshot_entry
-        .as_ref()
-        .and_then(|entry| entry.arity_shape_note.as_deref())
-        .map(parse_arity_shape_note)
-        .unwrap_or((0, None, "...".to_string()));
+    let display_name = registry_entry.entry.surface_name.clone();
+    let min_arity = registry_entry.entry.meta.arity.min;
+    let max_arity = Some(registry_entry.entry.meta.arity.max);
 
     let availability_summary = snapshot_entry.as_ref().map(|entry| {
         let mut parts = vec![
@@ -328,30 +341,100 @@ fn build_function_help_packet(
         }
         parts.join("; ")
     });
-    let deferred_or_profile_limited = snapshot_entry.as_ref().is_some_and(|entry| {
+    let snapshot_limited = snapshot_entry.as_ref().is_some_and(|entry| {
         entry.parse_bind_state != crate::semantics::LibraryAvailabilityState::CatalogKnown
             || entry.semantic_plan_state != crate::semantics::LibraryAvailabilityState::CatalogKnown
             || entry.runtime_capability_state
                 != Some(crate::semantics::LibraryAvailabilityState::CatalogKnown)
             || entry.post_dispatch_state.is_some()
     });
+    let registry_limited = matches!(
+        registry_entry.availability,
+        FunctionAvailability::Unavailable { .. }
+    );
 
-    FunctionHelpPacket {
+    Some(FunctionHelpPacket {
         lookup_key: request.lookup_key.clone(),
         library_context_snapshot_ref: request.library_context_snapshot_ref.clone(),
         display_name: display_name.clone(),
         signature_forms: vec![FunctionHelpSignatureForm {
-            display_signature: format!("{display_name}({signature_suffix})"),
+            display_signature: registry_entry
+                .entry
+                .display_signature
+                .signature_display
+                .clone(),
             min_arity,
             max_arity,
         }],
-        argument_help: build_argument_help(min_arity, max_arity, signature_help_context),
-        short_description: snapshot_entry
-            .as_ref()
-            .and_then(|entry| entry.interface_contract_ref.clone()),
-        availability_summary,
-        deferred_or_profile_limited,
+        argument_help: argument_help_from_signature(
+            &registry_entry.entry.display_signature,
+            signature_help_context,
+        ),
+        short_description: registry_entry.entry.short_description.clone().or_else(|| {
+            snapshot_entry
+                .as_ref()
+                .and_then(|entry| entry.interface_contract_ref.clone())
+        }),
+        availability_summary: availability_summary.or_else(|| {
+            if let FunctionAvailability::Unavailable { reason } = registry_entry.availability {
+                Some(format!("registry_capability=Unavailable({reason})"))
+            } else {
+                None
+            }
+        }),
+        deferred_or_profile_limited: snapshot_limited || registry_limited,
+    })
+}
+
+struct RegistryHelpEntry<'a> {
+    entry: &'a FunctionEntry,
+    availability: FunctionAvailability,
+}
+
+fn lookup_registry_entry<'a>(
+    environment: &'a EditorEnvironment<'a>,
+    request: &crate::language_service::FunctionHelpLookupRequest,
+) -> Option<RegistryHelpEntry<'a>> {
+    if let Some(overlay) = environment.capability_overlay {
+        let scoped = environment
+            .function_registry
+            .with_capability_overlay(overlay)
+            .lookup_by_surface_name(&request.lookup_key)?;
+        return Some(RegistryHelpEntry {
+            entry: scoped.entry,
+            availability: scoped.availability,
+        });
     }
+
+    environment
+        .function_registry
+        .lookup_by_surface_name(&request.lookup_key)
+        .map(|entry| RegistryHelpEntry {
+            entry,
+            availability: FunctionAvailability::Available,
+        })
+}
+
+fn argument_help_from_signature(
+    signature: &SignatureForm,
+    signature_help_context: Option<&SignatureHelpContext>,
+) -> Vec<String> {
+    signature
+        .parameters
+        .iter()
+        .enumerate()
+        .map(|(index, parameter)| {
+            let mut label = parameter.name.clone();
+            if parameter.repeats {
+                label.push_str("...");
+            }
+            if signature_help_context.is_some_and(|context| context.active_argument_index == index)
+            {
+                label = format!("*{label}");
+            }
+            label
+        })
+        .collect()
 }
 
 fn lookup_snapshot_entry(
@@ -382,63 +465,6 @@ fn lookup_snapshot_entry(
                 .find(|entry| entry.surface_name.eq_ignore_ascii_case(&request.lookup_key))
                 .cloned()
         })
-}
-
-fn parse_arity_shape_note(note: &str) -> (usize, Option<usize>, String) {
-    if note.eq_ignore_ascii_case("variadic") {
-        return (1, None, "...".to_string());
-    }
-    if let Some(prefix) = note.strip_suffix('+') {
-        if let Ok(min_arity) = prefix.parse::<usize>() {
-            return (min_arity, None, signature_suffix(min_arity, None));
-        }
-    }
-    if let Some((start, end)) = note.split_once("..") {
-        if let Ok(min_arity) = start.parse::<usize>() {
-            let max_arity = if end == "*" {
-                None
-            } else {
-                end.parse::<usize>().ok()
-            };
-            return (min_arity, max_arity, signature_suffix(min_arity, max_arity));
-        }
-    }
-    if let Ok(arity) = note.parse::<usize>() {
-        return (arity, Some(arity), signature_suffix(arity, Some(arity)));
-    }
-    (0, None, note.to_string())
-}
-
-fn signature_suffix(min_arity: usize, max_arity: Option<usize>) -> String {
-    let max_display = max_arity.unwrap_or(min_arity.max(3));
-    let mut parts = Vec::new();
-    for index in 0..max_display {
-        parts.push(format!("arg{}", index + 1));
-    }
-    if max_arity.is_none() {
-        parts.push("...".to_string());
-    }
-    parts.join(", ")
-}
-
-fn build_argument_help(
-    min_arity: usize,
-    max_arity: Option<usize>,
-    signature_help_context: Option<&SignatureHelpContext>,
-) -> Vec<String> {
-    let max_display = max_arity.unwrap_or(min_arity.max(3));
-    let mut args = (0..max_display)
-        .map(|index| format!("arg{}", index + 1))
-        .collect::<Vec<_>>();
-    if max_arity.is_none() && min_arity > 0 {
-        args.push("additional_args".to_string());
-    }
-    if let Some(context) = signature_help_context {
-        if let Some(active) = args.get_mut(context.active_argument_index) {
-            *active = format!("*{active}");
-        }
-    }
-    args
 }
 
 fn document_from_edit_result(edit_result: FormulaEditResult) -> EditorDocument {

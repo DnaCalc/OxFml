@@ -430,7 +430,7 @@ pub fn classify_library_context_field(field_name: &str) -> Option<LibraryContext
         "xlcall_builtin_symbol" | "xlcall_builtin_code" | "xlfn_name" | "_xlfn_name" => {
             Some(LibraryContextFieldClass::CompatibilityMetadata)
         }
-        "arg_preparation_profile" | "arity_shape_note" | "explanatory_note" => {
+        "arg_preparation_profile" | "explanatory_note" => {
             Some(LibraryContextFieldClass::ExportDescription)
         }
         _ => None,

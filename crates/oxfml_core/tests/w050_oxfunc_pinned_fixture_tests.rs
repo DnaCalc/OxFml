@@ -390,7 +390,6 @@ fn test_snapshot(
             admission_interface_kind: Some("ordinary".to_string()),
             preparation_owner: Some("oxfunc".to_string()),
             runtime_boundary_kind: Some("ordinary_eval".to_string()),
-            arity_shape_note: None,
             interface_contract_ref: Some("iface:v1".to_string()),
             registration_source_kind: RegistrationSourceKind::BuiltIn,
             parse_bind_state: LibraryAvailabilityState::CatalogKnown,

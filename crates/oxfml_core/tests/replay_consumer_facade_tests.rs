@@ -1186,7 +1186,6 @@ fn editor_snapshot() -> LibraryContextSnapshot {
             admission_interface_kind: None,
             preparation_owner: None,
             runtime_boundary_kind: None,
-            arity_shape_note: None,
             interface_contract_ref: Some("contract:sum".to_string()),
             registration_source_kind: RegistrationSourceKind::BuiltIn,
             parse_bind_state: LibraryAvailabilityState::CatalogKnown,

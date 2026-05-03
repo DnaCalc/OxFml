@@ -148,8 +148,8 @@ Last updated: 2026-04-16.
 
 ### IP-17: Canonical Function Registry Consumption
 
-- **Status**: in-progress
-- **Current floor**: DNA OneCalc identified that OxFml editor function help still accepts host-filled free-text arity strings through `LibraryContextSnapshotEntry.arity_shape_note`, synthesizes fallback signatures such as `arg1` / `additional_args`, and therefore can present wrong signatures such as `NOW(*arg1, arg2, arg3, additional_args)`. OxFunc has now filed `HO-FN-011` and exposes the intended canonical runtime registry surface through `oxfunc_core::registry`.
-- **Remaining gaps**: OxFml still needs to wire editor/runtime function metadata consumption to OxFunc registry entries or registry-derived immutable views, remove `arity_shape_note`, delete the old string parsing and synthetic argument-help path, preserve snapshot data only as capability/admission/provenance overlay truth, add UDF registry mutation evidence, and update deterministic tests/spec text.
-- **Why still open**: `W068` has filed the local `HO-FN-011` acknowledgement and opened the execution bead tree, but implementation and evidence have not started.
-- **Canonical owner**: active owner `W068`.
+- **Status**: validated
+- **Current floor**: OxFml editor function help now consumes OxFunc registry truth through `oxfunc_core::registry`: built-in help uses `builtin_registry()`, `EditorEnvironment` can receive a host/UDF-mutated `FunctionRegistry`, capability tweaks can be represented through `CapabilityOverlay`, unknown registry entries return no `FunctionHelpPacket`, and `LibraryContextSnapshot` is preserved as availability/admission/provenance overlay data rather than a comprehensive function list. `LibraryContextSnapshotEntry.arity_shape_note` and the old string-arity parser/synthetic `argN` help path have been removed from ordinary source and fixtures.
+- **Remaining gaps**: DNA OneCalc still owns downstream removal of its host-owned comprehensive function-list wiring after consuming this OxFml revision. Broad UDF execution semantics remain outside `W068`.
+- **Why still open**: not applicable for the W068 OxFml-local scope; downstream cleanup and future runtime registry-view expansion require separate owner lanes if taken up later.
+- **Canonical owner**: `W068` closure packet.

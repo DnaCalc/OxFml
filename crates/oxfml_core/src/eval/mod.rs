@@ -929,11 +929,9 @@ fn evaluate_function_call(
             context.rtd_provider,
             context.registered_external_provider,
         ) {
-            Ok(value) => decode_callable_carrier_function_result(
-                function_name,
-                value,
-                callable_registry,
-            ),
+            Ok(value) => {
+                decode_callable_carrier_function_result(function_name, value, callable_registry)
+            }
             Err(_error)
                 if allow_host_query_worksheet_error_fallback(
                     function_name,

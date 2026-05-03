@@ -31,7 +31,6 @@ struct OxfuncExportRow {
     admission_interface_kind: String,
     preparation_owner: String,
     runtime_boundary_kind: String,
-    arity_shape_note: String,
     interface_contract_ref: String,
 }
 
@@ -136,10 +135,6 @@ fn w044_export_seam_heavy_rows_round_trip_into_semantic_plan() {
         Some("callable_helper_runtime_after_formation")
     );
     assert_eq!(
-        let_summary.arity_shape_note.as_deref(),
-        Some("odd-style helper shape: final arg is body; preceding args form name/value pairs")
-    );
-    assert_eq!(
         let_summary.interface_contract_ref.as_deref(),
         Some("docs/worksets/W038_FUNCTIONAL_LAMBDA_AND_HELPER_FAMILY.md")
     );
@@ -180,10 +175,6 @@ fn w044_export_seam_heavy_rows_round_trip_into_semantic_plan() {
         Some("host_provider_projection")
     );
     assert_eq!(
-        rtd_summary.arity_shape_note.as_deref(),
-        Some("prog_id, server_name, then ordered topic strings")
-    );
-    assert_eq!(
         rtd_summary.interface_contract_ref.as_deref(),
         Some("docs/function-lane/FUNCTION_SLICE_RTD_CONTRACT_PRELIM.md")
     );
@@ -218,32 +209,26 @@ fn w044_export_higher_order_rows_round_trip_into_semantic_plan() {
     assert_higher_order_row(
         find_summary(&plan.availability_summaries, "MAP"),
         "FUNC.MAP",
-        "trailing arg callable; preceding args are mapped arrays",
     );
     assert_higher_order_row(
         find_summary(&plan.availability_summaries, "REDUCE"),
         "FUNC.REDUCE",
-        "initial accumulator, array, callable",
     );
     assert_higher_order_row(
         find_summary(&plan.availability_summaries, "SCAN"),
         "FUNC.SCAN",
-        "initial accumulator, array, callable",
     );
     assert_higher_order_row(
         find_summary(&plan.availability_summaries, "BYROW"),
         "FUNC.BYROW",
-        "array plus callable applied per row",
     );
     assert_higher_order_row(
         find_summary(&plan.availability_summaries, "BYCOL"),
         "FUNC.BYCOL",
-        "array plus callable applied per column",
     );
     assert_higher_order_row(
         find_summary(&plan.availability_summaries, "MAKEARRAY"),
         "FUNC.MAKEARRAY",
-        "rows, cols, callable producing each coordinate cell",
     );
 }
 
@@ -316,7 +301,6 @@ fn assert_ordinary_row(
 fn assert_higher_order_row(
     summary: &FunctionAvailabilitySummary,
     expected_surface_stable_id: &str,
-    expected_arity_shape_note: &str,
 ) {
     assert_eq!(
         summary.surface_stable_id.as_deref(),
@@ -365,10 +349,6 @@ fn assert_higher_order_row(
     assert_eq!(
         summary.runtime_boundary_kind.as_deref(),
         Some("callable_helper_runtime")
-    );
-    assert_eq!(
-        summary.arity_shape_note.as_deref(),
-        Some(expected_arity_shape_note)
     );
     assert_eq!(
         summary.interface_contract_ref.as_deref(),
@@ -452,7 +432,6 @@ fn snapshot_entry_from_export_row(row: &OxfuncExportRow) -> LibraryContextSnapsh
         admission_interface_kind: some_if_non_empty(&row.admission_interface_kind),
         preparation_owner: some_if_non_empty(&row.preparation_owner),
         runtime_boundary_kind: some_if_non_empty(&row.runtime_boundary_kind),
-        arity_shape_note: some_if_non_empty(&row.arity_shape_note),
         interface_contract_ref: some_if_non_empty(&row.interface_contract_ref),
         registration_source_kind: parse_registration_source_kind(&row.registration_source_kind),
         parse_bind_state: LibraryAvailabilityState::CatalogKnown,

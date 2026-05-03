@@ -634,7 +634,6 @@ fn test_snapshot() -> LibraryContextSnapshot {
             admission_interface_kind: Some("ordinary".to_string()),
             preparation_owner: Some("OxFunc".to_string()),
             runtime_boundary_kind: Some("ordinary".to_string()),
-            arity_shape_note: Some("variadic".to_string()),
             interface_contract_ref: Some("contract:sum".to_string()),
             registration_source_kind: RegistrationSourceKind::BuiltIn,
             parse_bind_state: LibraryAvailabilityState::CatalogKnown,

@@ -565,7 +565,10 @@ fn single_formula_host_uses_pinned_snapshot_ref_over_provider_current_snapshot()
         .iter()
         .find(|summary| summary.surface_name == "TAKE")
         .expect("TAKE availability summary");
-    assert_eq!(take_first.metadata_status, None);
+    assert_eq!(
+        take_first.metadata_status.as_deref(),
+        Some("function_meta_extracted")
+    );
     assert_eq!(take_first.surface_stable_id.as_deref(), Some("FUNC.TAKE"));
 
     let current_snapshot_ref = LibraryContextSnapshotRef::new("host-runtime", "v2");
@@ -695,7 +698,6 @@ fn host_library_context_snapshot_v1() -> LibraryContextSnapshot {
             admission_interface_kind: None,
             preparation_owner: None,
             runtime_boundary_kind: None,
-            arity_shape_note: None,
             interface_contract_ref: Some("contract:sum".to_string()),
             registration_source_kind: RegistrationSourceKind::BuiltIn,
             parse_bind_state: LibraryAvailabilityState::CatalogKnown,
@@ -721,7 +723,6 @@ fn host_library_context_snapshot_v2() -> LibraryContextSnapshot {
         admission_interface_kind: None,
         preparation_owner: None,
         runtime_boundary_kind: None,
-        arity_shape_note: None,
         interface_contract_ref: Some("contract:take".to_string()),
         registration_source_kind: RegistrationSourceKind::BuiltIn,
         parse_bind_state: LibraryAvailabilityState::CatalogKnown,

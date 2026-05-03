@@ -6,6 +6,7 @@ use oxfunc_core::function::{
     ArgPreparationProfile, DeterminismClass, FecDependencyProfile, FunctionMeta,
     HostInteractionClass, ThreadSafetyClass, VolatilityClass,
 };
+use oxfunc_core::registry::{FunctionRegistryMetadata, FunctionSource, builtin_registry};
 use oxfunc_core::xll_export_specs::lookup_function_meta as lookup_oxfunc_function_meta;
 
 use crate::binding::{
@@ -82,7 +83,6 @@ pub struct LibraryContextSnapshotEntry {
     pub admission_interface_kind: Option<String>,
     pub preparation_owner: Option<String>,
     pub runtime_boundary_kind: Option<String>,
-    pub arity_shape_note: Option<String>,
     pub interface_contract_ref: Option<String>,
     pub registration_source_kind: RegistrationSourceKind,
     pub parse_bind_state: LibraryAvailabilityState,
@@ -111,7 +111,6 @@ pub struct FunctionAvailabilitySummary {
     pub admission_interface_kind: Option<String>,
     pub preparation_owner: Option<String>,
     pub runtime_boundary_kind: Option<String>,
-    pub arity_shape_note: Option<String>,
     pub interface_contract_ref: Option<String>,
     pub registration_source_kind: Option<RegistrationSourceKind>,
     pub parse_bind_state: LibraryAvailabilityState,
@@ -694,7 +693,6 @@ impl SemanticCompiler {
                     admission_interface_kind: entry.admission_interface_kind.clone(),
                     preparation_owner: entry.preparation_owner.clone(),
                     runtime_boundary_kind: entry.runtime_boundary_kind.clone(),
-                    arity_shape_note: entry.arity_shape_note.clone(),
                     interface_contract_ref: entry.interface_contract_ref.clone(),
                     registration_source_kind: Some(entry.registration_source_kind),
                     parse_bind_state: entry.parse_bind_state,
@@ -706,21 +704,47 @@ impl SemanticCompiler {
         }
 
         if let Some(meta) = meta {
+            let registry_entry = builtin_registry().lookup_by_surface_name(function_name);
+            let registry_metadata = registry_entry.map(|entry| &entry.registry_metadata);
             return FunctionAvailabilitySummary {
                 surface_name: function_name.to_string(),
-                canonical_id: Some(meta.function_id.to_string()),
-                surface_stable_id: Some(meta.function_id.to_string()),
-                name_resolution_table_ref: None,
-                semantic_trait_profile_ref: Some(meta.function_id.to_string()),
-                gating_profile_ref: None,
-                metadata_status: None,
-                special_interface_kind: None,
-                admission_interface_kind: None,
-                preparation_owner: None,
-                runtime_boundary_kind: None,
-                arity_shape_note: None,
-                interface_contract_ref: None,
-                registration_source_kind: Some(RegistrationSourceKind::BuiltIn),
+                canonical_id: Some(
+                    registry_entry
+                        .map(|entry| entry.meta.function_id.as_str())
+                        .unwrap_or(meta.function_id)
+                        .to_string(),
+                ),
+                surface_stable_id: registry_field_or_function_id(
+                    registry_metadata,
+                    |metadata| metadata.surface_stable_id.as_ref(),
+                    meta.function_id,
+                ),
+                name_resolution_table_ref: registry_metadata
+                    .and_then(|metadata| metadata.name_resolution_table_ref.clone()),
+                semantic_trait_profile_ref: registry_field_or_function_id(
+                    registry_metadata,
+                    |metadata| metadata.semantic_trait_profile_ref.as_ref(),
+                    meta.function_id,
+                ),
+                gating_profile_ref: registry_metadata
+                    .and_then(|metadata| metadata.gating_profile_ref.clone()),
+                metadata_status: registry_metadata
+                    .and_then(|metadata| metadata.metadata_status.clone()),
+                special_interface_kind: registry_metadata
+                    .and_then(|metadata| metadata.special_interface_kind.clone()),
+                admission_interface_kind: registry_metadata
+                    .and_then(|metadata| metadata.admission_interface_kind.clone()),
+                preparation_owner: registry_metadata
+                    .and_then(|metadata| metadata.preparation_owner.clone()),
+                runtime_boundary_kind: registry_metadata
+                    .and_then(|metadata| metadata.runtime_boundary_kind.clone()),
+                interface_contract_ref: registry_metadata
+                    .and_then(|metadata| metadata.interface_contract_ref.clone()),
+                registration_source_kind: Some(
+                    registry_entry
+                        .map(|entry| registration_source_kind_from_function_source(&entry.source))
+                        .unwrap_or(RegistrationSourceKind::BuiltIn),
+                ),
                 parse_bind_state: LibraryAvailabilityState::CatalogKnown,
                 semantic_plan_state: LibraryAvailabilityState::CatalogKnown,
                 runtime_capability_state: None,
@@ -740,7 +764,6 @@ impl SemanticCompiler {
             admission_interface_kind: None,
             preparation_owner: None,
             runtime_boundary_kind: None,
-            arity_shape_note: None,
             interface_contract_ref: None,
             registration_source_kind: None,
             parse_bind_state: LibraryAvailabilityState::UnknownSurface,
@@ -858,6 +881,26 @@ impl SemanticCompiler {
         {
             self.capability_requirements.push(requirement.to_string());
         }
+    }
+}
+
+fn registry_field_or_function_id(
+    registry_metadata: Option<&FunctionRegistryMetadata>,
+    field: impl Fn(&FunctionRegistryMetadata) -> Option<&String>,
+    function_id: &str,
+) -> Option<String> {
+    registry_metadata
+        .and_then(field)
+        .cloned()
+        .or_else(|| Some(function_id.to_string()))
+}
+
+fn registration_source_kind_from_function_source(
+    source: &FunctionSource,
+) -> RegistrationSourceKind {
+    match source {
+        FunctionSource::BuiltIn => RegistrationSourceKind::BuiltIn,
+        FunctionSource::Udf { .. } => RegistrationSourceKind::UserDefined,
     }
 }
 

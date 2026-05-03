@@ -39,15 +39,17 @@ The current boundary is primarily shaped by these function families:
 These are not random examples. They are the current proof points for whether OxFml is preserving enough structure.
 
 ## 3A. Library Context And Catalog Snapshot Boundary
-OxFunc should own the canonical function/operator catalog semantics.
-OxFml should consume that world through an externally supplied library-context snapshot rather than through hidden global registry state.
+OxFunc owns the canonical function/operator catalog semantics and the canonical runtime function registry.
+OxFml consumes function identity, arity, display signatures, parameter descriptors, source classification, and help metadata from `oxfunc_core::registry` entries or immutable registry-derived views. OxFml must not maintain a second comprehensive function list and must not accept host-filled free-text arity as signature truth.
+
+`LibraryContextSnapshot` remains an admission, capability, provenance, and replay overlay. It may preserve stage-aware availability or profile facts for a surface, but it is not a replacement function catalog and must not override registry-owned signature or parameter metadata.
 
 The current intended split is:
-1. OxFunc owns canonical function and operator ids, aliases, localized names, semantic traits, function profiles, and capability declarations,
-2. OxFml owns parse, bind, semantic-plan, and evaluation behavior that consumes a versioned library-context snapshot,
-3. the library-context snapshot should remain externally allocated and versioned rather than globally owned by OxFunc.
-4. dynamic registrations from add-in, VBA, user-defined, or later provider-backed sources should be representable as snapshot truth without requiring OxFunc-owned hidden global state.
-5. the preferred normative interface is a runtime-ingested snapshot/provider interface rather than build-time catalog-file ingestion.
+1. OxFunc owns canonical function and operator ids, aliases, localized names, semantic traits, function profiles, capability declarations, display signatures, ordered parameter descriptors, and UDF-capable registry mutation,
+2. OxFml owns parse, bind, semantic-plan, and evaluation behavior that consumes registry truth plus a versioned overlay snapshot where profile or capability state matters,
+3. the library-context snapshot should remain externally allocated and versioned as overlay truth rather than as a comprehensive OxFml-owned function list,
+4. dynamic registrations from add-in, VBA, user-defined, or later provider-backed sources should be represented in the OxFunc registry or a registry-derived immutable view, with snapshot overlays carrying admission/provenance/capability facts,
+5. the preferred normative interface is a runtime registry plus snapshot/provider interface rather than build-time catalog-file ingestion.
 
 Minimum library-context concerns that must remain representable are:
 1. canonical function/operator identity,
@@ -61,12 +63,13 @@ Minimum library-context concerns that must remain representable are:
 Current local floor:
 1. OxFml now preserves `library_context_snapshot_ref` on the semantic plan when an external snapshot is supplied,
 2. availability summaries are stage-aware across parse/bind, semantic-plan, runtime-capability, and post-dispatch/provider lanes,
-3. per-surface availability summaries now preserve a smaller concrete field floor for:
+3. per-surface availability summaries preserve overlay/profile fields while registry-derived fallback summaries source equivalent identity and interface-classification facts from `FunctionEntry.registry_metadata`,
+4. per-surface availability summaries now preserve a smaller concrete field floor for:
    - `surface_stable_id`
    - `name_resolution_table_ref`
    - `semantic_trait_profile_ref`
    - `gating_profile_ref`
-4. transport remains intentionally open beyond those preserved semantic distinctions.
+5. transport remains intentionally open beyond those preserved semantic distinctions.
 
 Current integration preference:
 1. OxFunc has now exposed a first-pass pinned machine-readable catalog snapshot export and reading guide,
@@ -90,17 +93,17 @@ Current first-pass downstream artifact:
 
 Current OxFml reading of that artifact:
 1. the export is useful now for initial consumption and mismatch discovery,
-2. `snapshot_id`, `snapshot_generation`, `source_commit_short`, `source_commit_full`, `source_tree_state`, `surface_stable_id`, `entry_kind`, `registration_source_kind`, `canonical_surface_name`, `arg_preparation_profile` when populated, `metadata_status`, `special_interface_kind`, `admission_interface_kind`, `preparation_owner`, `runtime_boundary_kind`, `arity_shape_note`, and `interface_contract_ref` are already useful first-pass fields,
+2. `snapshot_id`, `snapshot_generation`, `source_commit_short`, `source_commit_full`, `source_tree_state`, `surface_stable_id`, `entry_kind`, `registration_source_kind`, `canonical_surface_name`, `arg_preparation_profile` when populated, `metadata_status`, `special_interface_kind`, `admission_interface_kind`, `preparation_owner`, `runtime_boundary_kind`, and `interface_contract_ref` are already useful first-pass overlay/profile fields,
 3. refreshed ordinary extracted rows such as `FUNC.CHOOSECOLS`, `FUNC.FILTER`, `FUNC.UNIQUE`, and `FUNC.VSTACK` are now useful first-pass planning and test-synthesis inputs rather than mere catalog placeholders,
 4. OxFml now consumes selected seam-heavy and ordinary rows from this export directly in local semantic-plan tests,
 5. exact shared field names and fuller dereferenceable profile bundles remain open,
-6. current OxFunc guidance is that the callable-minimum semantic facts may remain in contract docs for one more round rather than requiring immediate direct snapshot columns.
+6. function-help signatures and parameter labels are no longer read from this export; they are read from the OxFunc runtime registry.
 
 Working rule:
 1. preserve the semantic distinction first,
 2. keep the exact transport or runtime ownership shape open until later narrowing,
-3. do not require OxFunc to own hidden mutable registry state just to express catalog truth,
-4. prefer an immutable `LibraryContextSnapshot` acquired through a formal runtime provider surface over build-time file ingestion as the normative implementation path.
+3. do not create or retain an OxFml-local comprehensive function list to express catalog truth,
+4. prefer an OxFunc registry or registry-derived immutable view plus a formal runtime provider/snapshot overlay over build-time file ingestion as the normative implementation path.
 
 Current preferred runtime interface direction is specified in:
 1. `OXFML_OXFUNC_LIBRARY_CONTEXT_RUNTIME_INTERFACE.md`

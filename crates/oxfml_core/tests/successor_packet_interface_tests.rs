@@ -180,7 +180,6 @@ fn pinned_library_context_view_prefers_pinned_snapshot_ref_over_provider_current
         admission_interface_kind: None,
         preparation_owner: None,
         runtime_boundary_kind: None,
-        arity_shape_note: None,
         interface_contract_ref: Some("contract:take".to_string()),
         registration_source_kind: RegistrationSourceKind::BuiltIn,
         parse_bind_state: LibraryAvailabilityState::CatalogKnown,
@@ -240,10 +239,7 @@ fn library_context_field_classification_preserves_runtime_vs_export_split() {
         classify_library_context_field("xlcall_builtin_symbol"),
         Some(oxfml_core::LibraryContextFieldClass::CompatibilityMetadata)
     );
-    assert_eq!(
-        classify_library_context_field("arity_shape_note"),
-        Some(oxfml_core::LibraryContextFieldClass::ExportDescription)
-    );
+    assert_eq!(classify_library_context_field("arity_shape_note"), None);
 }
 
 #[test]
@@ -466,7 +462,6 @@ fn test_snapshot() -> LibraryContextSnapshot {
             admission_interface_kind: Some("value_call".to_string()),
             preparation_owner: Some("oxfunc".to_string()),
             runtime_boundary_kind: Some("surface_dispatch".to_string()),
-            arity_shape_note: Some("1+".to_string()),
             interface_contract_ref: Some("oxfunc.surface.sum.v1".to_string()),
             registration_source_kind: RegistrationSourceKind::BuiltIn,
             parse_bind_state: LibraryAvailabilityState::CatalogKnown,

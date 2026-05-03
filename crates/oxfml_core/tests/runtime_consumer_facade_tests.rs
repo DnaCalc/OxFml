@@ -130,7 +130,10 @@ fn runtime_environment_executes_against_pinned_snapshot_ref() {
         .iter()
         .find(|summary| summary.surface_name == "TAKE")
         .expect("TAKE availability summary");
-    assert_eq!(take_summary.metadata_status, None);
+    assert_eq!(
+        take_summary.metadata_status.as_deref(),
+        Some("function_meta_extracted")
+    );
     assert_eq!(take_summary.surface_stable_id.as_deref(), Some("FUNC.TAKE"));
 }
 
@@ -1589,7 +1592,6 @@ fn runtime_snapshot_v1() -> LibraryContextSnapshot {
             admission_interface_kind: None,
             preparation_owner: None,
             runtime_boundary_kind: None,
-            arity_shape_note: None,
             interface_contract_ref: Some("contract:sum".to_string()),
             registration_source_kind: RegistrationSourceKind::BuiltIn,
             parse_bind_state: LibraryAvailabilityState::CatalogKnown,
@@ -1847,7 +1849,6 @@ fn runtime_snapshot_v2() -> LibraryContextSnapshot {
         admission_interface_kind: None,
         preparation_owner: None,
         runtime_boundary_kind: None,
-        arity_shape_note: None,
         interface_contract_ref: Some("contract:take".to_string()),
         registration_source_kind: RegistrationSourceKind::BuiltIn,
         parse_bind_state: LibraryAvailabilityState::CatalogKnown,

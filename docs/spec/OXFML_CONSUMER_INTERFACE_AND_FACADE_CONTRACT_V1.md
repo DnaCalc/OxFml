@@ -278,14 +278,20 @@ It should own:
 2. structure-context identity
 3. `LibraryContextProvider`
 4. pinned `LibraryContextSnapshotRef`
-5. visible-name and table-context inputs where needed
-6. any carrier-restriction mode that affects formula-language legality
+5. OxFunc `FunctionRegistry` or an immutable registry-derived view
+6. capability overlay inputs where function admission differs from registry membership
+7. visible-name and table-context inputs where needed
+8. any carrier-restriction mode that affects formula-language legality
 
 Current implementation note:
 1. the first landed editor slice now uses the same facade-native
    provider-plus-pin environment model as runtime
 2. completion/help request construction derives a `PinnedLibraryContextView`
    from that environment rather than rebuilding pinning inputs at each callsite
+3. function-help packet construction reads display signatures, arity, and ordered
+   parameter labels from `oxfunc_core::registry`, while
+   `LibraryContextSnapshot` contributes only availability, admission,
+   provenance, and replay overlay data
 
 ### 7.2 EditorDocument
 `EditorDocument` is the immutable or snapshot-oriented editing object.
@@ -310,6 +316,9 @@ It should carry:
    - active argument index
    - validity and availability classification
    - provisionality where relevant
+   Function signature and parameter truth must come from OxFunc registry
+   entries. Unknown registry lookup returns no `FunctionHelpPacket`; OxFml
+   must not synthesize fallback parameter names or parse host-filled arity text.
 6. derive carrier-specific validation where OxFml intends those validations to
    be part of the consumer-facing editor surface
 

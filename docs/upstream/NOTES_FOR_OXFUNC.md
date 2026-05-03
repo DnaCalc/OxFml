@@ -27,6 +27,7 @@ The main current points for OxFunc are:
    - operators, criteria/database selection, and `SWITCH` use the tolerant lane,
    - `MATCH`, `XMATCH`, and `DELTA` remain exact.
 9. OxFml acknowledges `HO-FN-009` / OxFunc `W082`: OxFunc owns locale-sensitive function semantics and the typed locale/format seam, while OxFml/FEC owns the concrete parser/formatter capability bundle supplied through `LocaleFormatContext`.
+10. OxFml acknowledges `HO-FN-011` / OxFunc `W091`: OxFunc owns the canonical runtime function registry. OxFml consumes `FunctionEntry.display_signature`, ordered `ParameterDescriptor` rows, `FunctionMeta.arity`, registry metadata, UDF registration/unregistration, and capability overlays from `oxfunc_core::registry`; OxFml no longer treats `LibraryContextSnapshot` as a comprehensive function catalog or function-help signature source.
 
 Current acknowledged follow-on packet:
 1. `docs/handoffs/HANDOFF-OXFUNC-003_CORPUS_IF_EMPTY_TEXT_AND_FLOAT_COMPARE.md`

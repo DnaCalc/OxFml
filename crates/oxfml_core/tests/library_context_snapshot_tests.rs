@@ -39,7 +39,6 @@ struct LibraryContextSnapshotEntryWire {
     admission_interface_kind: Option<String>,
     preparation_owner: Option<String>,
     runtime_boundary_kind: Option<String>,
-    arity_shape_note: Option<String>,
     interface_contract_ref: Option<String>,
     registration_source_kind: String,
     parse_bind_state: String,
@@ -67,7 +66,6 @@ struct AvailabilitySummaryExpected {
     admission_interface_kind: Option<String>,
     preparation_owner: Option<String>,
     runtime_boundary_kind: Option<String>,
-    arity_shape_note: Option<String>,
     interface_contract_ref: Option<String>,
     registration_source_kind: Option<String>,
     parse_bind_state: String,
@@ -172,11 +170,6 @@ fn semantic_plan_library_context_snapshot_fixtures_round_trip() {
                 fixture.case_id
             );
             assert_eq!(
-                actual.arity_shape_note, expected.arity_shape_note,
-                "arity shape note mismatch for {}",
-                fixture.case_id
-            );
-            assert_eq!(
                 actual.interface_contract_ref, expected.interface_contract_ref,
                 "interface contract ref mismatch for {}",
                 fixture.case_id
@@ -251,7 +244,6 @@ fn into_snapshot_entry(wire: &LibraryContextSnapshotEntryWire) -> LibraryContext
         admission_interface_kind: wire.admission_interface_kind.clone(),
         preparation_owner: wire.preparation_owner.clone(),
         runtime_boundary_kind: wire.runtime_boundary_kind.clone(),
-        arity_shape_note: wire.arity_shape_note.clone(),
         interface_contract_ref: wire.interface_contract_ref.clone(),
         registration_source_kind: parse_registration_source_kind(&wire.registration_source_kind),
         parse_bind_state: parse_availability_state(&wire.parse_bind_state),

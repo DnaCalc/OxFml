@@ -349,7 +349,6 @@ fn semantic_plan_uses_snapshot_minimum_fields_and_builtin_fallback_refs() {
                 admission_interface_kind: None,
                 preparation_owner: None,
                 runtime_boundary_kind: None,
-                arity_shape_note: None,
                 interface_contract_ref: None,
                 registration_source_kind: RegistrationSourceKind::ProviderBacked,
                 parse_bind_state: LibraryAvailabilityState::CatalogKnown,
@@ -372,8 +371,14 @@ fn semantic_plan_uses_snapshot_minimum_fields_and_builtin_fallback_refs() {
         .find(|summary| summary.surface_name == "SUM")
         .expect("SUM summary should exist");
     assert_eq!(sum.surface_stable_id.as_deref(), Some("FUNC.SUM"));
-    assert_eq!(sum.semantic_trait_profile_ref.as_deref(), Some("FUNC.SUM"));
-    assert_eq!(sum.name_resolution_table_ref, None);
+    assert_eq!(
+        sum.semantic_trait_profile_ref.as_deref(),
+        Some("oxfunc.local.profile.function_surface.current_baseline.v1")
+    );
+    assert_eq!(
+        sum.name_resolution_table_ref.as_deref(),
+        Some("docs/function-lane/W28_FUNCTION_NAME_LOCALIZATION_LIBRARY_SEED.csv")
+    );
 
     let translate = plan
         .availability_summaries

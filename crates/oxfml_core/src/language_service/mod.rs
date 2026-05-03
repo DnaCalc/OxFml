@@ -532,10 +532,14 @@ pub(crate) fn signature_help_context_at_cursor(
 /// signature_help to drop the help context once the caret is past
 /// the close paren.
 fn closed_call_close_paren_end(call_node: &GreenNode) -> Option<usize> {
-    call_node.children.iter().rev().find_map(|child| match child {
-        GreenChild::Token(token) if token.kind == TokenKind::RParen => Some(token.span.end()),
-        _ => None,
-    })
+    call_node
+        .children
+        .iter()
+        .rev()
+        .find_map(|child| match child {
+            GreenChild::Token(token) if token.kind == TokenKind::RParen => Some(token.span.end()),
+            _ => None,
+        })
 }
 
 fn collect_editor_tokens_from_full_fidelity(
