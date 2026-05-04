@@ -32,7 +32,7 @@ fn editor_edit_service_applies_edit_and_returns_document() {
 }
 
 #[test]
-fn editor_edit_service_interaction_uses_pinned_snapshot_for_help_and_completion() {
+fn editor_edit_service_interaction_uses_registry_for_completion_and_snapshot_for_help() {
     let pinned_snapshot = editor_snapshot_v1();
     let pinned_snapshot_ref = LibraryContextSnapshotRef::from(&pinned_snapshot);
     let current_snapshot = editor_snapshot_v2();
@@ -65,10 +65,11 @@ fn editor_edit_service_interaction_uses_pinned_snapshot_for_help_and_completion(
             .any(|proposal| proposal.display_text.eq_ignore_ascii_case("SUM"))
     );
     assert!(
-        !completion
+        completion
             .proposals
             .iter()
-            .any(|proposal| proposal.display_text.eq_ignore_ascii_case("TAKE"))
+            .any(|proposal| proposal.display_text.eq_ignore_ascii_case("TAKE")),
+        "completion proposals come from the OxFunc registry, not the pinned snapshot"
     );
 
     let help_interaction = service.open_and_interact(

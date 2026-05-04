@@ -14,3 +14,4 @@ HO-FN-009,inbound,Locale/format Seam Ownership Realignment,acknowledged,OxFunc/W
 HO-FN-011,inbound,Canonical Function Registry Consumption,acknowledged,OxFunc/W091,W068,2026-05-03,2026-05-03
 HANDOFF-OXFUNC-005,outbound,W068 Canonical Registry Consumption Landing,filed,W068,OxFunc-TBD,2026-05-04,
 HANDOFF-DNAONECALC-003,outbound,W068 Registry-Backed Function Help,filed,W068,DnaOneCalc-TBD,2026-05-04,
+HANDOFF-DNAONECALC-004,outbound,W068 Registry-Backed Completion Proposals,filed,W068 follow-up,DnaOneCalc-TBD,2026-05-04,

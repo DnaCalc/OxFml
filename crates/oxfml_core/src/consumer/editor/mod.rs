@@ -197,6 +197,8 @@ impl<'a> EditorEditService<'a> {
             red_projection: &document.red_projection,
             bind_context: self.environment.bind_context(),
             library_context: self.environment.library_context.pinned_view(),
+            function_registry: self.environment.function_registry,
+            capability_overlay: self.environment.capability_overlay,
             cursor_offset,
         });
         let signature_help_context =
@@ -218,6 +220,8 @@ impl<'a> EditorEditService<'a> {
                 red_projection: &document.red_projection,
                 bind_context: self.environment.bind_context(),
                 library_context: self.environment.library_context.pinned_view(),
+                function_registry: self.environment.function_registry,
+                capability_overlay: self.environment.capability_overlay,
                 cursor_offset,
             },
             &document.live_diagnostics,

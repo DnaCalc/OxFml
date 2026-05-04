@@ -9,13 +9,14 @@ use crate::consumer::editor::{
 };
 use crate::interface::{LibraryContextSnapshotRef, PinnedLibraryContextView};
 use crate::red::{RedProjection, project_red_view_incremental};
-use crate::semantics::{
-    CompileSemanticPlanRequest, LibraryContextSnapshot, SemanticPlan, compile_semantic_plan,
-};
+use crate::semantics::{CompileSemanticPlanRequest, SemanticPlan, compile_semantic_plan};
 use crate::source::{FormulaChannelKind, FormulaSourceRecord, FormulaTextVersion};
 use crate::syntax::green::{GreenChild, GreenNode, GreenTreeRoot, SyntaxKind};
 use crate::syntax::parser::{ParseRequest, parse_formula_incremental};
 use crate::syntax::token::{TextSpan, Token, TokenKind};
+use oxfunc_core::registry::{
+    CapabilityOverlay, FunctionAvailability, FunctionEntry, FunctionRegistry,
+};
 
 #[derive(Debug, Clone)]
 pub struct FormulaEditRequest<'a> {
@@ -69,6 +70,8 @@ pub struct CompletionRequest<'a> {
     pub red_projection: &'a RedProjection,
     pub bind_context: &'a BindContext,
     pub library_context: PinnedLibraryContextView<'a>,
+    pub function_registry: &'a FunctionRegistry,
+    pub capability_overlay: Option<&'a CapabilityOverlay>,
     pub cursor_offset: usize,
 }
 
@@ -424,33 +427,13 @@ pub(crate) fn collect_completion_proposals(request: CompletionRequest<'_>) -> Co
         }
     }
 
-    let library_context_snapshot = resolve_library_context_snapshot(&request);
-    if let Some(snapshot) = library_context_snapshot.as_ref() {
-        let mut seen_functions = BTreeSet::new();
-        for entry in &snapshot.entries {
-            if seen_functions.insert(entry.surface_name.to_ascii_lowercase())
-                && (normalized_prefix.is_empty()
-                    || entry
-                        .surface_name
-                        .to_ascii_lowercase()
-                        .starts_with(&normalized_prefix))
-            {
-                insert_proposal(
-                    &mut proposals,
-                    4,
-                    CompletionProposal {
-                        proposal_id: format!("function:{}", entry.surface_name),
-                        proposal_kind: CompletionProposalKind::Function,
-                        display_text: entry.surface_name.clone(),
-                        insert_text: entry.surface_name.clone(),
-                        replacement_span: Some(replacement_span),
-                        documentation_ref: entry.interface_contract_ref.clone(),
-                        requires_revalidation: true,
-                    },
-                );
-            }
-        }
-    }
+    collect_function_completion_proposals(
+        &mut proposals,
+        request.function_registry,
+        request.capability_overlay,
+        &normalized_prefix,
+        replacement_span,
+    );
 
     CompletionResult {
         replacement_span: Some(replacement_span),
@@ -489,12 +472,6 @@ pub(crate) fn build_intelligent_completion_context(
     }
 }
 
-fn resolve_library_context_snapshot(
-    request: &CompletionRequest<'_>,
-) -> Option<LibraryContextSnapshot> {
-    request.library_context.resolve_snapshot()
-}
-
 pub(crate) fn signature_help_context_at_cursor(
     source: &FormulaSourceRecord,
     green_tree: &GreenTreeRoot,
@@ -525,6 +502,80 @@ pub(crate) fn signature_help_context_at_cursor(
         active_argument_index: active_argument_index(arg_list, cursor_offset),
         invocation_kind: call_node.kind,
     })
+}
+
+fn collect_function_completion_proposals(
+    proposals: &mut BTreeMap<(u8, String), CompletionProposal>,
+    function_registry: &FunctionRegistry,
+    capability_overlay: Option<&CapabilityOverlay>,
+    normalized_prefix: &str,
+    replacement_span: TextSpan,
+) {
+    let mut seen_functions = BTreeSet::new();
+
+    if let Some(overlay) = capability_overlay {
+        let scoped_registry = function_registry.with_capability_overlay(overlay);
+        let mut entries = scoped_registry.iter().collect::<Vec<_>>();
+        entries.reverse();
+        for scoped_entry in entries {
+            if matches!(
+                scoped_entry.availability,
+                FunctionAvailability::Unavailable { .. }
+            ) {
+                continue;
+            }
+            insert_function_completion_proposal(
+                proposals,
+                &mut seen_functions,
+                scoped_entry.entry,
+                normalized_prefix,
+                replacement_span,
+            );
+        }
+        return;
+    }
+
+    let mut entries = function_registry.iter().collect::<Vec<_>>();
+    entries.reverse();
+    for entry in entries {
+        insert_function_completion_proposal(
+            proposals,
+            &mut seen_functions,
+            entry,
+            normalized_prefix,
+            replacement_span,
+        );
+    }
+}
+
+fn insert_function_completion_proposal(
+    proposals: &mut BTreeMap<(u8, String), CompletionProposal>,
+    seen_functions: &mut BTreeSet<String>,
+    entry: &FunctionEntry,
+    normalized_prefix: &str,
+    replacement_span: TextSpan,
+) {
+    let normalized_surface = entry.surface_name.to_ascii_lowercase();
+    if !seen_functions.insert(normalized_surface.clone()) {
+        return;
+    }
+    if !normalized_prefix.is_empty() && !normalized_surface.starts_with(normalized_prefix) {
+        return;
+    }
+
+    insert_proposal(
+        proposals,
+        4,
+        CompletionProposal {
+            proposal_id: format!("function:{}", entry.surface_name),
+            proposal_kind: CompletionProposalKind::Function,
+            display_text: entry.surface_name.clone(),
+            insert_text: entry.surface_name.clone(),
+            replacement_span: Some(replacement_span),
+            documentation_ref: entry.registry_metadata.interface_contract_ref.clone(),
+            requires_revalidation: true,
+        },
+    );
 }
 
 /// Return the byte offset just past a call's closing `)` token when

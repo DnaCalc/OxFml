@@ -521,20 +521,21 @@ fn completion_proposals_include_functions_defined_names_and_table_names() {
     bind_context
         .names
         .insert("SummaryName".to_string(), NameKind::ValueLike);
-    let snapshot = sample_library_context_snapshot();
-    let snapshot_ref = LibraryContextSnapshotRef::from(&snapshot);
-    let provider = InMemoryLibraryContextProvider::new(snapshot);
-    let service = EditorEditService::new(
-        EditorEnvironment::new(bind_context).with_pinned_library_context(&provider, snapshot_ref),
-    );
+    let service = EditorEditService::new(EditorEnvironment::new(bind_context));
 
     let document = service.open_document(source.clone(), None);
     let result =
         service.completion_at_cursor(&document, source.entered_formula_text.chars().count());
 
-    assert!(result.proposals.iter().any(|proposal| {
-        proposal.proposal_kind == CompletionProposalKind::Function && proposal.display_text == "SUM"
-    }));
+    for expected_function in ["SUM", "SUMIF", "SUMIFS", "SUMPRODUCT", "SUBSTITUTE"] {
+        assert!(
+            result.proposals.iter().any(|proposal| {
+                proposal.proposal_kind == CompletionProposalKind::Function
+                    && proposal.display_text == expected_function
+            }),
+            "default registry completion proposals should include {expected_function}"
+        );
+    }
     assert!(result.proposals.iter().any(|proposal| {
         proposal.proposal_kind == CompletionProposalKind::DefinedName
             && proposal.display_text == "SummaryName"
@@ -542,17 +543,12 @@ fn completion_proposals_include_functions_defined_names_and_table_names() {
 }
 
 #[test]
-fn completion_proposals_use_pinned_snapshot_ref_over_provider_current_snapshot() {
-    let source = FormulaSourceRecord::new("editor-pinned-snapshot", 1, "=TA");
+fn completion_proposals_use_registry_not_library_context_snapshot() {
+    let source = FormulaSourceRecord::new("editor-registry-complete", 1, "=SUMI");
     let bind_context = editor_bind_context(source.clone());
     let pinned_snapshot = sample_library_context_snapshot();
-    let current_snapshot = sample_library_context_snapshot_v2();
     let pinned_snapshot_ref = LibraryContextSnapshotRef::from(&pinned_snapshot);
-    let current_snapshot_ref = LibraryContextSnapshotRef::from(&current_snapshot);
-    let provider = InMemoryLibraryContextProvider::with_snapshots(
-        current_snapshot_ref,
-        vec![pinned_snapshot, current_snapshot],
-    );
+    let provider = InMemoryLibraryContextProvider::new(pinned_snapshot);
     let service = EditorEditService::new(
         EditorEnvironment::new(bind_context)
             .with_pinned_library_context(&provider, pinned_snapshot_ref),
@@ -563,11 +559,53 @@ fn completion_proposals_use_pinned_snapshot_ref_over_provider_current_snapshot()
         service.completion_at_cursor(&document, source.entered_formula_text.chars().count());
 
     assert!(
-        !result
-            .proposals
-            .iter()
-            .any(|proposal| proposal.display_text == "TAKE")
+        result.proposals.iter().any(|proposal| {
+            proposal.proposal_kind == CompletionProposalKind::Function
+                && proposal.display_text == "SUMIF"
+        }),
+        "function proposals must come from the OxFunc registry even when the pinned snapshot omits the function"
     );
+}
+
+#[test]
+fn completion_proposals_reflect_udf_registry_mutation() {
+    let source = FormulaSourceRecord::new("editor-complete-udf", 1, "=MY");
+    let mut registry = builtin_registry().clone();
+    registry
+        .register_udf(test_udf_entry())
+        .expect("UDF registration should be accepted by OxFunc registry");
+    let service = EditorEditService::new(
+        EditorEnvironment::new(editor_bind_context(source.clone()))
+            .with_function_registry(&registry),
+    );
+
+    let document = service.open_document(source.clone(), None);
+    let result =
+        service.completion_at_cursor(&document, source.entered_formula_text.chars().count());
+
+    assert!(result.proposals.iter().any(|proposal| {
+        proposal.proposal_kind == CompletionProposalKind::Function
+            && proposal.display_text == "MYFUNC"
+    }));
+}
+
+#[test]
+fn completion_proposals_filter_capability_denied_registry_entries() {
+    let source = FormulaSourceRecord::new("editor-complete-capability", 1, "=R");
+    let mut overlay = CapabilityOverlay::new();
+    overlay.deny_function_id("FUNC.RTD", "provider unavailable");
+    let service = EditorEditService::new(
+        EditorEnvironment::new(editor_bind_context(source.clone()))
+            .with_capability_overlay(&overlay),
+    );
+
+    let document = service.open_document(source.clone(), None);
+    let result =
+        service.completion_at_cursor(&document, source.entered_formula_text.chars().count());
+
+    assert!(!result.proposals.iter().any(|proposal| {
+        proposal.proposal_kind == CompletionProposalKind::Function && proposal.display_text == "RTD"
+    }));
 }
 
 #[test]

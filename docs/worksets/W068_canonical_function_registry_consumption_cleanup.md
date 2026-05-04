@@ -168,6 +168,30 @@ Validation commands:
 4. `cargo test -p oxfml_core --test language_service_tests` - passed, 28 tests.
 5. `cargo test -p oxfml_core` - passed.
 
+## Post-Migration Follow-Up: Registry-Backed Completion Proposals
+
+DNA OneCalc later filed `../DnaOneCalc/docs/HANDOFF_OXFML_COMPLETION_PROPOSALS_FROM_REGISTRY.md`, identifying that function help had moved to the OxFunc registry while deterministic function-completion proposals still discovered function names from `LibraryContextSnapshot.entries`.
+
+OxFml accepted the observation as useful and corrected the remaining editor lane:
+
+1. `CompletionRequest` now carries `FunctionRegistry` and optional `CapabilityOverlay`.
+2. `EditorEnvironment` passes its registry and capability overlay into completion collection.
+3. `collect_completion_proposals(...)` now builds function proposals from registry entries.
+4. Registry UDF mutations surface in proposals.
+5. Capability-denied registry entries are filtered from proposals.
+6. `LibraryContextSnapshot` no longer carries function names for proposal purposes.
+
+Additional deterministic evidence was added for:
+
+1. default built-in registry proposals without a library snapshot,
+2. registry proposals even when a pinned snapshot omits the function,
+3. UDF registry mutation proposals,
+4. capability-denied function filtering,
+5. editor facade separation between registry-backed completion and pinned-snapshot help overlay behavior.
+
+Additional downstream handoff:
+1. `docs/handoffs/HANDOFF-DNAONECALC-004_W068_REGISTRY_BACKED_COMPLETION_PROPOSALS.md`
+
 ## Status
 - execution_state: validated
 - scope_completeness: scope_complete
