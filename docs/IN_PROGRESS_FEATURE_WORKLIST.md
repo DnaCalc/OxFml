@@ -3,7 +3,7 @@
 Canonical repo-level register of feature areas that are in-progress under workset completion doctrine.
 
 Status: active.
-Last updated: 2026-04-16.
+Last updated: 2026-05-04.
 
 ## Status Vocabulary
 
@@ -153,3 +153,11 @@ Last updated: 2026-04-16.
 - **Remaining gaps**: DNA OneCalc still owns downstream removal of its host-owned comprehensive function-list and temporary snapshot-bridge wiring after consuming this OxFml revision. Broad UDF execution semantics remain outside `W068`.
 - **Why still open**: not applicable for the W068 OxFml-local scope; downstream cleanup and future runtime registry-view expansion require separate owner lanes if taken up later.
 - **Canonical owner**: `W068` closure packet.
+
+### IP-18: Format Engine Time, Fraction, And Accounting Coverage
+
+- **Status**: validated
+- **Current floor**: OxFml has accepted the DNA OneCalc `HH:mm:ss` / `NOW()` formatting handoff as an OxFml-owned format-engine gap. A bounded `W069` implementation now renders common time tokens, AM/PM transitions, datetime composites, elapsed-time tokens, simple fraction patterns, and common accounting parentheses patterns through `render_with_code(...)`; publication evidence now shows a user-supplied `HH:mm:ss` code is honored before `DateLike` fallback.
+- **Remaining gaps**: full Excel custom-format grammar parity, text sections, and exact UI accounting alignment remain outside `W069`.
+- **Why still open**: not applicable for the bounded `W069` OxFml-local scope; broader custom-format grammar parity requires a separate owner lane if taken up later.
+- **Canonical owner**: `W069` closure packet.

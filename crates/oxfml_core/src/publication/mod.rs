@@ -603,14 +603,14 @@ mod tests {
             render_with_code(&locale.profile, locale.date_system, 45293.0, "m/d/yyyy"),
             Ok("1/2/2024".to_string())
         );
-        assert!(
+        assert_eq!(
             render_with_code(
                 &locale.profile,
                 locale.date_system,
                 45293.5,
                 "m/d/yyyy h:mm"
-            )
-            .is_err()
+            ),
+            Ok("1/2/2024 12:00".to_string())
         );
     }
 

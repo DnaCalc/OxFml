@@ -72,8 +72,8 @@ pub fn render_with_number_format_code(
     }
     let trimmed = stripped.trim();
 
-    if datetime::looks_like_date_format(trimmed) {
-        return datetime::render_with_date_tokens(profile, date_system, value, trimmed)
+    if datetime::looks_like_datetime_format(trimmed) {
+        return datetime::render_with_datetime_tokens(profile, date_system, value, trimmed)
             .ok_or(FormatFailure::InvalidDateSerial);
     }
 
@@ -82,9 +82,8 @@ pub fn render_with_number_format_code(
     }
 
     if contains_fraction_placeholder_pattern(trimmed) {
-        return Err(FormatFailure::UnsupportedCode(
-            number_format_code.to_string(),
-        ));
+        return render_fraction_format(value, trimmed)
+            .ok_or_else(|| FormatFailure::UnsupportedCode(number_format_code.to_string()));
     }
 
     let numeric = parse_numeric_section(trimmed, profile)
@@ -515,7 +514,8 @@ pub(crate) fn strip_condition_and_color_tokens(section: &str) -> String {
             if token.starts_with('>')
                 || token.starts_with('<')
                 || token.starts_with('=')
-                || token.chars().all(|c| c.is_ascii_alphabetic())
+                || (token.chars().all(|c| c.is_ascii_alphabetic())
+                    && !is_elapsed_time_token(&token))
             {
                 continue;
             }
@@ -614,8 +614,180 @@ fn contains_fraction_placeholder_pattern(section: &str) -> bool {
         })
 }
 
+fn is_elapsed_time_token(token: &str) -> bool {
+    let lower = token.to_ascii_lowercase();
+    !lower.is_empty()
+        && lower
+            .chars()
+            .all(|ch| matches!(ch, 'h' | 'm' | 's') && ch == lower.chars().next().unwrap())
+}
+
 fn is_fraction_placeholder(ch: char) -> bool {
     matches!(ch, '#' | '0' | '?')
+}
+
+fn render_fraction_format(value: f64, section: &str) -> Option<String> {
+    if !value.is_finite() {
+        return None;
+    }
+
+    let expanded = expand_literal_tokens(section);
+    let slash = expanded.find('/')?;
+    let left = &expanded[..slash];
+    let right = &expanded[slash + 1..];
+    let denominator_pattern: String = right
+        .chars()
+        .take_while(|ch| is_fraction_placeholder(*ch))
+        .collect();
+    if denominator_pattern.is_empty() {
+        return None;
+    }
+    let denominator_width = denominator_pattern.chars().count();
+    let denominator_max = 10_i64.pow(denominator_width as u32) - 1;
+    if denominator_max <= 0 {
+        return None;
+    }
+
+    let numerator_pattern: String = left
+        .chars()
+        .rev()
+        .take_while(|ch| is_fraction_placeholder(*ch))
+        .collect::<String>()
+        .chars()
+        .rev()
+        .collect();
+    if numerator_pattern.is_empty() {
+        return None;
+    }
+
+    let integer_pattern = left.strip_suffix(&numerator_pattern).unwrap_or(left);
+    let has_integer_part = integer_pattern
+        .chars()
+        .any(|ch| is_fraction_placeholder(ch));
+    let negative = value.is_sign_negative() && value != 0.0;
+    let abs_value = value.abs();
+    let whole = if has_integer_part {
+        abs_value.floor() as i64
+    } else {
+        0
+    };
+    let fraction_value = if has_integer_part {
+        abs_value - whole as f64
+    } else {
+        abs_value
+    };
+    let (mut numerator, mut denominator) = approximate_fraction(fraction_value, denominator_max)?;
+
+    let mut whole = whole;
+    if has_integer_part && numerator == denominator {
+        whole += 1;
+        numerator = 0;
+        denominator = 1;
+    }
+
+    let mut rendered = String::new();
+    if negative {
+        rendered.push('-');
+    }
+
+    if has_integer_part {
+        let integer_rendered = render_fraction_integer_part(integer_pattern, whole);
+        rendered.push_str(&integer_rendered);
+    }
+
+    if numerator != 0 || !has_integer_part {
+        rendered.push_str(&render_placeholder_number(
+            numerator,
+            &numerator_pattern,
+            numerator_pattern.contains('0'),
+        ));
+        rendered.push('/');
+        rendered.push_str(&render_placeholder_number(
+            denominator,
+            &denominator_pattern,
+            denominator_pattern.contains('0'),
+        ));
+        rendered.push_str(&right[denominator_pattern.len()..]);
+    } else {
+        rendered.push_str(&blank_fraction_tail(
+            &numerator_pattern,
+            &denominator_pattern,
+            &right[denominator_pattern.len()..],
+        ));
+    }
+
+    Some(rendered)
+}
+
+fn approximate_fraction(value: f64, denominator_max: i64) -> Option<(i64, i64)> {
+    if value == 0.0 {
+        return Some((0, 1));
+    }
+
+    let mut best_numerator = 0;
+    let mut best_denominator = 1;
+    let mut best_error = f64::INFINITY;
+    for denominator in 1..=denominator_max {
+        let numerator = (value * denominator as f64).round() as i64;
+        let error = (value - numerator as f64 / denominator as f64).abs();
+        if error < best_error {
+            best_error = error;
+            best_numerator = numerator;
+            best_denominator = denominator;
+        }
+        if error < f64::EPSILON {
+            break;
+        }
+    }
+    Some((best_numerator, best_denominator))
+}
+
+fn render_fraction_integer_part(pattern: &str, whole: i64) -> String {
+    let mut rendered = String::new();
+    let mut digits = whole.to_string();
+    let placeholder_count = pattern
+        .chars()
+        .filter(|ch| is_fraction_placeholder(*ch))
+        .count();
+    if digits == "0" && !pattern.contains('0') {
+        digits.clear();
+    }
+    if pattern.contains('0') && digits.len() < placeholder_count {
+        digits = format!("{digits:0>placeholder_count$}");
+    }
+    let overflow_digits = digits.len().saturating_sub(placeholder_count);
+    rendered.push_str(&digits.chars().take(overflow_digits).collect::<String>());
+    let mut digit_chars = digits.chars().skip(overflow_digits);
+    for ch in pattern.chars() {
+        if is_fraction_placeholder(ch) {
+            if let Some(digit) = digit_chars.next() {
+                rendered.push(digit);
+            } else if ch == '0' {
+                rendered.push('0');
+            }
+        } else {
+            rendered.push(ch);
+        }
+    }
+    rendered
+}
+
+fn render_placeholder_number(value: i64, pattern: &str, zero_pad: bool) -> String {
+    let width = pattern.chars().count();
+    if zero_pad {
+        format!("{value:0width$}")
+    } else {
+        format!("{value:>width$}")
+    }
+}
+
+fn blank_fraction_tail(numerator_pattern: &str, denominator_pattern: &str, suffix: &str) -> String {
+    format!(
+        "{}/{}{}",
+        " ".repeat(numerator_pattern.chars().count()),
+        " ".repeat(denominator_pattern.chars().count()),
+        suffix
+    )
 }
 
 fn is_two_digit_integer_code(section: &str) -> bool {

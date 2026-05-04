@@ -15,3 +15,4 @@ HO-FN-011,inbound,Canonical Function Registry Consumption,acknowledged,OxFunc/W0
 HANDOFF-OXFUNC-005,outbound,W068 Canonical Registry Consumption Landing,filed,W068,OxFunc-TBD,2026-05-04,
 HANDOFF-DNAONECALC-003,outbound,W068 Registry-Backed Function Help,filed,W068,DnaOneCalc-TBD,2026-05-04,
 HANDOFF-DNAONECALC-004,outbound,W068 Registry-Backed Completion Proposals,filed,W068 follow-up,DnaOneCalc-TBD,2026-05-04,
+HANDOFF-DNAONECALC-005,outbound,W069 Format Engine Time Fraction Accounting,filed,W069,DnaOneCalc-TBD,2026-05-04,

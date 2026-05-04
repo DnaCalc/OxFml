@@ -9,11 +9,13 @@ use oxfml_core::test_support::oxfunc_adapter::{
     OxFuncAdapterRequest, run_oxfunc_preparation_adapter,
 };
 use oxfml_core::{FormulaSourceRecord, TypedContextQueryBundle};
-use oxfunc_core::locale_format::FormatFailure;
-use oxfunc_core::value::WorksheetErrorCode;
 use oxfunc_core::value::{EvalValue, ExcelText};
 
-fn evaluate_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::EvaluationOutput {
+fn evaluate_formula_text_with_locale(
+    formula_stable_id: &str,
+    formula: &str,
+) -> oxfml_core::EvaluationOutput {
+    let locale = oxfml_en_us_locale_context();
     let compiled = common::compile_formula(
         formula_stable_id,
         formula,
@@ -21,31 +23,35 @@ fn evaluate_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::
         "eval-struct-v1",
         "oxfunc:test",
     );
-    let context = EvaluationContext::new(&compiled.bound_formula, &compiled.semantic_plan);
+    let mut context = EvaluationContext::new(&compiled.bound_formula, &compiled.semantic_plan);
+    context.apply_typed_context_query_bundle(TypedContextQueryBundle::new(
+        None,
+        None,
+        Some(&locale),
+        None,
+        None,
+    ));
     evaluate_formula(context).expect("evaluation should succeed")
 }
 
 #[test]
-fn format_engine_rejects_unsupported_fraction_placeholder_text_code_ftc_0654() {
+fn format_engine_renders_fraction_placeholder_text_code_ftc_0654() {
     let locale = oxfml_en_us_locale_context();
     let rendered = render_with_code(&locale.profile, locale.date_system, 0.25, "# ?/?");
-    assert_eq!(
-        rendered,
-        Err(FormatFailure::UnsupportedCode("# ?/?".to_string()))
-    );
+    assert_eq!(rendered, Ok(" 1/4".to_string()));
 }
 
 #[test]
-fn evaluator_rejects_unsupported_fraction_placeholder_text_code_ftc_0654() {
-    let output = evaluate_formula_text("ftc-0654:evaluator", "=TEXT(0.25,\"# ?/?\")");
+fn evaluator_renders_fraction_placeholder_text_code_ftc_0654() {
+    let output = evaluate_formula_text_with_locale("ftc-0654:evaluator", "=TEXT(0.25,\"# ?/?\")");
     assert_eq!(
         output.oxfunc_value,
-        EvalValue::Error(WorksheetErrorCode::Value)
+        EvalValue::Text(ExcelText::from_interop_assignment(" 1/4"))
     );
 }
 
 #[test]
-fn runtime_rejects_unsupported_fraction_placeholder_text_code_ftc_0654() {
+fn runtime_renders_fraction_placeholder_text_code_ftc_0654() {
     let locale = oxfml_en_us_locale_context();
     let result = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
@@ -56,16 +62,12 @@ fn runtime_rejects_unsupported_fraction_placeholder_text_code_ftc_0654() {
 
     assert_eq!(
         result.published_worksheet_value,
-        EvalValue::Error(WorksheetErrorCode::Value)
-    );
-    assert_eq!(
-        result.verification_publication_surface.visible_value_text,
-        "#VALUE!"
+        EvalValue::Text(ExcelText::from_interop_assignment(" 1/4"))
     );
 }
 
 #[test]
-fn adapter_rejects_unsupported_fraction_placeholder_text_code_ftc_0654() {
+fn adapter_renders_fraction_placeholder_text_code_ftc_0654() {
     let locale = oxfml_en_us_locale_context();
     let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
         "ftc-0654-fraction-text",
@@ -82,11 +84,11 @@ fn adapter_rejects_unsupported_fraction_placeholder_text_code_ftc_0654() {
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Error(WorksheetErrorCode::Value)
+        EvalValue::Text(ExcelText::from_interop_assignment(" 1/4"))
     );
     assert_eq!(
         run.evaluation_artifact.evaluation_result.payload_summary,
-        "Error(Value)"
+        "Text( 1/4)"
     );
 }
 

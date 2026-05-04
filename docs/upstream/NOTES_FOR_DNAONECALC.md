@@ -28,3 +28,22 @@ Related handoffs:
 2. `docs/handoffs/HANDOFF-DNAONECALC-004_W068_REGISTRY_BACKED_COMPLETION_PROPOSALS.md`
 
 Non-claim: this note does not claim DNA OneCalc has removed its local cleanup yet.
+
+## W069 Format Engine Time, Fraction, And Accounting
+
+OxFml has accepted `../DnaOneCalc/docs/HANDOFF_OXFML_FORMAT_ENGINE_TIME_FRACTION_ACCOUNTING.md` as a real OxFml-owned formatter gap.
+
+Bounded OxFml support now covers:
+1. time tokens such as `HH:mm:ss`,
+2. AM/PM time rendering,
+3. datetime composites such as `yyyy-mm-dd hh:mm:ss`,
+4. elapsed-time tokens `[h]`, `[m]`, and `[s]`,
+5. simple fraction codes such as `# ?/?`,
+6. common accounting parentheses patterns.
+
+Downstream cleanup now unblocked after consuming this OxFml revision:
+1. remove `<NOT IMPLEMENTED>` markers for the bounded live time/datetime/fraction/accounting preset families,
+2. keep markers for full custom-format grammar, text sections, and UI-specific accounting alignment until separate evidence lands.
+
+Related handoff:
+1. `docs/handoffs/HANDOFF-DNAONECALC-005_W069_FORMAT_ENGINE_TIME_FRACTION_ACCOUNTING.md`
