@@ -1,8 +1,8 @@
 # CURRENT_BLOCKERS.md — OxFml
 
-Status: 1 active blocker.
+Status: 2 active blockers.
 
-Last reviewed: 2026-04-19 after `FTC-0902` callable-boundary decomposition review.
+Last reviewed: 2026-05-04 after DNA OneCalc locale and custom-format grammar handoff intake.
 
 ---
 
@@ -15,6 +15,17 @@ Last reviewed: 2026-04-19 after `FTC-0902` callable-boundary decomposition revie
 - **Current state**: repo-local probes show the retained blocked witnesses use LET binder name `row`, which collides with built-in `ROW`; the exact blocked forms fail locally, but the same self-application / returned-lambda forms succeed immediately when renamed to a non-colliding helper such as `grow`, so the current evidence does not support a new generic higher-order callable patch
 - **Exact unblock steps**: obtain one of: (a) a non-built-in exact witness that still fails, or (b) authoritative host evidence that built-in-colliding `row` should shadow `ROW` in this callable self-application lane despite the existing `FTC-0443/0444` collision frontier
 - **Recommendation**: wait
+
+---
+
+### BLK-FML-005: Locale expansion requires OxFunc locale-profile API breadth
+
+- **Status**: active
+- **Impact**: blocks the locale-specific portions of DNA OneCalc `HANDOFF_OXFML_LOCALE_EXPANSION.md` and the locale-prefix portion of `HANDOFF_OXFML_CUSTOM_FORMAT_GRAMMAR.md`
+- **Current state**: OxFml can currently construct only `LocaleProfileId::EnUs` and `LocaleProfileId::CurrentExcelHost` profiles through the OxFunc locale-format seam. The requested locale-keyed month/weekday names, separators, currency symbols, parser branches, General rendering, and optional locale-prefix parsing need canonical OxFunc `LocaleProfileId` variants and profile constants before OxFml can avoid inventing a second locale registry.
+- **Exact unblock steps**: OxFunc exposes canonical locale profile identities and format-profile constants for the requested locale set, including decimal/thousands/list separators, currency symbol, date separator, time separator, and date-system compatibility expectations. After that lands, OxFml can add locale-keyed parser/formatter tables and locale-prefix custom-format grammar coverage without violating ownership.
+- **Recommendation**: escalate
+- **Opened**: 2026-05-04
 
 ---
 

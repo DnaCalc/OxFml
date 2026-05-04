@@ -151,6 +151,10 @@ Current baseline sequence after `W001`:
 64. `W066` consumer baseline stabilization for OxCalc W028
 65. `W067` diagnostic symbol spans and stage precision
 66. `W068` canonical function registry consumption cleanup
+67. `W069` format engine time, fraction, and accounting expansion
+68. `W070` DNA OneCalc formatting handoff processing
+69. `W071` conditional formatting array per-cell publication
+70. `W072` conditional formatting aggregate visualization rules
 
 This sequence is the current planning baseline.
 It may be refined, but new worksets should preserve dependency clarity rather than bypass it informally.

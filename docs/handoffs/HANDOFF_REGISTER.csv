@@ -16,3 +16,15 @@ HANDOFF-OXFUNC-005,outbound,W068 Canonical Registry Consumption Landing,filed,W0
 HANDOFF-DNAONECALC-003,outbound,W068 Registry-Backed Function Help,filed,W068,DnaOneCalc-TBD,2026-05-04,
 HANDOFF-DNAONECALC-004,outbound,W068 Registry-Backed Completion Proposals,filed,W068 follow-up,DnaOneCalc-TBD,2026-05-04,
 HANDOFF-DNAONECALC-005,outbound,W069 Format Engine Time Fraction Accounting,filed,W069,DnaOneCalc-TBD,2026-05-04,
+HANDOFF-DNAONECALC-IN-006,inbound,Locale Expansion,acknowledged,DnaOneCalc-TBD,W070,2026-05-04,2026-05-04
+HANDOFF-DNAONECALC-IN-007,inbound,Conditional Formatting Predicate And Relative Date Rules,acknowledged,DnaOneCalc-TBD,W070,2026-05-04,2026-05-04
+HANDOFF-DNAONECALC-IN-008,inbound,Custom Format Grammar,acknowledged,DnaOneCalc-TBD,W070,2026-05-04,2026-05-04
+HANDOFF-DNAONECALC-006,outbound,W070 Conditional Formatting Predicate Rules Landing,filed,W070,DnaOneCalc-TBD,2026-05-04,
+HANDOFF-OXFUNC-006,outbound,W070 Locale Profile Expansion Request,filed,W070,OxFunc-TBD,2026-05-04,
+HANDOFF-DNAONECALC-007,outbound,W070 Locale And Custom Format Triage,filed,W070,DnaOneCalc-TBD,2026-05-04,
+HANDOFF-DNAONECALC-IN-009,inbound,CF Array Per Cell,acknowledged,DnaOneCalc-TBD,W071,2026-05-04,2026-05-04
+HANDOFF-DNAONECALC-IN-010,inbound,CF Aggregate Visualization Rules,acknowledged,DnaOneCalc-TBD,W072,2026-05-04,2026-05-04
+HANDOFF-DNAONECALC-008,outbound,W071 CF Array Per Cell Landing,filed,W071,DnaOneCalc-TBD,2026-05-04,
+HANDOFF-DNAONECALC-009,outbound,W072 CF Aggregate Visualization Intake,filed,W072,DnaOneCalc-TBD,2026-05-04,
+HANDOFF-DNAONECALC-010,outbound,W072 Aggregate Predicate Slice,filed,W072,DnaOneCalc-TBD,2026-05-04,
+HANDOFF-DNAONECALC-011,outbound,W072 Visualization Rule Slice,filed,W072,DnaOneCalc-TBD,2026-05-04,

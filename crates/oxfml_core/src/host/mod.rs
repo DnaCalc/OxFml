@@ -173,6 +173,7 @@ impl HostRecalcOutput {
                 self.candidate_result.format_delta.as_ref(),
                 self.candidate_result.display_delta.as_ref(),
                 locale_ctx,
+                None,
                 verification_publication_context,
             ),
             execution_outcome_surface: self.execution_outcome_surface.clone(),
@@ -586,6 +587,7 @@ impl SingleFormulaHost {
             candidate_result.format_delta.as_ref(),
             candidate_result.display_delta.as_ref(),
             effective_query_bundle.locale_ctx,
+            effective_query_bundle.now_serial,
             verification_publication_context,
         );
         let execution_outcome_surface = execution_outcome_surface(&commit_decision);

@@ -161,3 +161,19 @@ Last updated: 2026-05-04.
 - **Remaining gaps**: full Excel custom-format grammar parity, text sections, and exact UI accounting alignment remain outside `W069`.
 - **Why still open**: not applicable for the bounded `W069` OxFml-local scope; broader custom-format grammar parity requires a separate owner lane if taken up later.
 - **Canonical owner**: `W069` closure packet.
+
+### IP-19: DNA OneCalc Formatting Handoff Processing
+
+- **Status**: in_progress
+- **Current floor**: OxFml has processed the DNA OneCalc conditional-formatting predicate handoff in `W070`: publication now evaluates `blanks`, `noBlanks`, `errors`, `noErrors`, and relative `dates` predicates, and `SingleFormulaHost` passes `TypedContextQueryBundle.now_serial` into publication so date predicates use the runtime clock seed.
+- **Remaining gaps**: locale expansion is blocked on OxFunc locale-profile API breadth (`BLK-FML-005`); custom-format grammar follow-up remains for text fourth-section behavior, selected format-section color publication, and locale-prefix parsing after OxFunc locale profiles expand.
+- **Why still open**: the W070 handoff bundle intentionally separates the landed conditional-formatting predicate slice from locale/custom-format lanes that remain blocked or planned.
+- **Canonical owner**: `W070` tracking packet.
+
+### IP-20: Conditional Formatting Array And Aggregate Publication
+
+- **Status**: validated
+- **Current floor**: `W071` adds `VerificationPublicationSurface.array_cell_format` and evaluates existing scalar/operator/predicate CF rules per array cell, including `cell_value` operators, W070 predicates, relative dates with `now_serial`, blank empty array cells, and 1x1-array agreement with whole-cell CF fields. `W072` now evaluates aggregate predicate rules `aboveAverage`, `belowAverage`, `top`, `bottom`, `uniqueValues`, and `duplicateValues` over the array as aggregate context, publishes bounded `colorScale`, `dataBar`, and `iconSet` visualization output, supports scalar visualization through a 1x1 carrier, and consumes the documented existing-rule payload convention for stops, bars, icons, rank, and average flags.
+- **Remaining gaps**: downstream DNA OneCalc bridge/UI consumption.
+- **Why still open**: not applicable for the OxFml-local W071/W072 scope; downstream rendering remains a DNA OneCalc lane.
+- **Canonical owner**: `W071` and `W072` tracking packets.
