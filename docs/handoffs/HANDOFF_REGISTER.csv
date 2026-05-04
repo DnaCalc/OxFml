@@ -12,3 +12,5 @@ HO-FN-008,inbound,Corpus IF Correction And Numeric Comparison Tolerance,acknowle
 HANDOFF-OXFUNC-004,outbound,TAKE Omitted Row Count In Complex Helper Lambda,filed,local-direct-investigation,OxFunc-TBD,2026-04-10,
 HO-FN-009,inbound,Locale/format Seam Ownership Realignment,acknowledged,OxFunc/W082,IP-05,2026-04-10,2026-04-29
 HO-FN-011,inbound,Canonical Function Registry Consumption,acknowledged,OxFunc/W091,W068,2026-05-03,2026-05-03
+HANDOFF-OXFUNC-005,outbound,W068 Canonical Registry Consumption Landing,filed,W068,OxFunc-TBD,2026-05-04,
+HANDOFF-DNAONECALC-003,outbound,W068 Registry-Backed Function Help,filed,W068,DnaOneCalc-TBD,2026-05-04,
