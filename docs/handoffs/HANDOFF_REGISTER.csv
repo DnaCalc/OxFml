@@ -24,7 +24,8 @@ HANDOFF-OXFUNC-006,outbound,W070 Locale Profile Expansion Request,filed,W070,OxF
 HANDOFF-DNAONECALC-007,outbound,W070 Locale And Custom Format Triage,filed,W070,DnaOneCalc-TBD,2026-05-04,
 HANDOFF-DNAONECALC-IN-009,inbound,CF Array Per Cell,acknowledged,DnaOneCalc-TBD,W071,2026-05-04,2026-05-04
 HANDOFF-DNAONECALC-IN-010,inbound,CF Aggregate Visualization Rules,acknowledged,DnaOneCalc-TBD,W072,2026-05-04,2026-05-04
-HANDOFF-DNAONECALC-008,outbound,W071 CF Array Per Cell Landing,filed,W071,DnaOneCalc-TBD,2026-05-04,
-HANDOFF-DNAONECALC-009,outbound,W072 CF Aggregate Visualization Intake,filed,W072,DnaOneCalc-TBD,2026-05-04,
-HANDOFF-DNAONECALC-010,outbound,W072 Aggregate Predicate Slice,filed,W072,DnaOneCalc-TBD,2026-05-04,
-HANDOFF-DNAONECALC-011,outbound,W072 Visualization Rule Slice,filed,W072,DnaOneCalc-TBD,2026-05-04,
+HANDOFF-DNAONECALC-008,outbound,W071 CF Array Per Cell Landing,acknowledged,W071,DnaOneCalc-TBD,2026-05-04,2026-05-04
+HANDOFF-DNAONECALC-009,outbound,W072 CF Aggregate Visualization Intake,acknowledged,W072,DnaOneCalc-TBD,2026-05-04,2026-05-04
+HANDOFF-DNAONECALC-010,outbound,W072 Aggregate Predicate Slice,acknowledged,W072,DnaOneCalc-TBD,2026-05-04,2026-05-04
+HANDOFF-DNAONECALC-011,outbound,W072 Visualization Rule Slice,acknowledged,W072,DnaOneCalc-TBD,2026-05-04,2026-05-04
+HANDOFF-DNAONECALC-012,outbound,W073 Typed CF Payload First Slice,filed,W073,DnaOneCalc-TBD,2026-05-04,

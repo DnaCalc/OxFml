@@ -174,6 +174,14 @@ Last updated: 2026-05-04.
 
 - **Status**: validated
 - **Current floor**: `W071` adds `VerificationPublicationSurface.array_cell_format` and evaluates existing scalar/operator/predicate CF rules per array cell, including `cell_value` operators, W070 predicates, relative dates with `now_serial`, blank empty array cells, and 1x1-array agreement with whole-cell CF fields. `W072` now evaluates aggregate predicate rules `aboveAverage`, `belowAverage`, `top`, `bottom`, `uniqueValues`, and `duplicateValues` over the array as aggregate context, publishes bounded `colorScale`, `dataBar`, and `iconSet` visualization output, supports scalar visualization through a 1x1 carrier, and consumes the documented existing-rule payload convention for stops, bars, icons, rank, and average flags.
-- **Remaining gaps**: downstream DNA OneCalc bridge/UI consumption.
-- **Why still open**: not applicable for the OxFml-local W071/W072 scope; downstream rendering remains a DNA OneCalc lane.
-- **Canonical owner**: `W071` and `W072` tracking packets.
+- **Remaining gaps**: richer typed visualization payload replacing the W072 bounded string convention.
+- **Why still open**: DNA OneCalc has acknowledged and absorbed the W071/W072 bridge/UI consumption lane; the remaining follow-up is contract cleanup and richer typed authoring metadata, not missing W072 behavior.
+- **Canonical owner**: `W071` and `W072` tracking packets; planned follow-on owner `W073`.
+
+### IP-21: Conditional Formatting Typed Visualization Payload
+
+- **Status**: in_progress
+- **Current floor**: W073 first slice adds additive `VerificationConditionalFormattingRule.typed_rule` metadata for color-scale stops, data-bar options, icon-set thresholds, rank options, and average-rule flags. The evaluator prefers typed metadata when present and keeps the W072 bounded `thresholds` convention as compatibility fallback.
+- **Remaining gaps**: DNA OneCalc acknowledgement and optional typed request-construction uptake; later decision on whether or when to retire W072 bounded string fallback.
+- **Why still open**: OxFml has local typed-payload evidence, but downstream typed request adoption remains an integration lane rather than an OxFml-only closure.
+- **Canonical owner**: `W073` tracking packet.

@@ -66,10 +66,12 @@ pub use interface::{
     classify_library_context_field,
 };
 pub use publication::{
-    ArrayCellFormat, ArrayCellFormatGrid, CfIcon, DataBarDirection, DataBarFill,
-    LocaleFormatContextSurface, VerificationConditionalFormattingRule,
-    VerificationPublicationContext, VerificationPublicationSurface,
-    build_verification_publication_surface,
+    ArrayCellFormat, ArrayCellFormatGrid, AverageRuleOptions, CfIcon, ColorScaleRuleOptions,
+    ColorScaleRuleStop, ConditionalFormattingRank, ConditionalFormattingThreshold,
+    ConditionalFormattingTypedRule, DataBarDirection, DataBarFill, DataBarRuleOptions,
+    IconSetRuleOptions, LocaleFormatContextSurface, RankRuleOptions,
+    VerificationConditionalFormattingRule, VerificationPublicationContext,
+    VerificationPublicationSurface, build_verification_publication_surface,
 };
 pub use red::{
     IncrementalRedProjectionResult, RedNode, RedProjection, project_red_view,

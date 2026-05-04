@@ -121,7 +121,7 @@ Validation commands:
 - execution_state: validated
 - scope_completeness: scope_complete
 - target_completeness: target_complete
-- integration_completeness: partial
+- integration_completeness: integrated
 - open_lanes:
-  - downstream DNA OneCalc bridge/UI consumption
+  - typed visualization payload follow-up opened as W073
 - claim_confidence: validated

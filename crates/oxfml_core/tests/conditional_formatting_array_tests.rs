@@ -1,8 +1,11 @@
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::{
-    FormulaSourceRecord, ReturnedValueSurface, TopologyDelta,
-    VerificationConditionalFormattingRule, VerificationPublicationContext,
-    VerificationPublicationSurface, build_verification_publication_surface,
+    AverageRuleOptions, ColorScaleRuleOptions, ColorScaleRuleStop, ConditionalFormattingRank,
+    ConditionalFormattingThreshold, ConditionalFormattingTypedRule, DataBarDirection,
+    DataBarRuleOptions, FormulaSourceRecord, IconSetRuleOptions, RankRuleOptions,
+    ReturnedValueSurface, TopologyDelta, VerificationConditionalFormattingRule,
+    VerificationPublicationContext, VerificationPublicationSurface,
+    build_verification_publication_surface,
 };
 use oxfunc_core::value::{
     ArrayCellValue, EvalArray, EvalValue, ExcelText, ExtendedValue, WorksheetErrorCode,
@@ -75,6 +78,7 @@ fn rule(
             .into_iter()
             .map(std::string::ToString::to_string)
             .collect(),
+        typed_rule: None,
         font_color: None,
         fill_color: Some(fill_color.to_string()),
         effective_display_text: None,
@@ -98,6 +102,7 @@ fn font_rule(
             .into_iter()
             .map(std::string::ToString::to_string)
             .collect(),
+        typed_rule: None,
         font_color: Some(font_color.to_string()),
         fill_color: None,
         effective_display_text: None,
@@ -105,6 +110,16 @@ fn font_rule(
         effective_font_color: None,
         effective_fill_color: None,
     }
+}
+
+fn typed_rule(
+    kind: &str,
+    typed_rule: ConditionalFormattingTypedRule,
+    fill_color: &str,
+) -> VerificationConditionalFormattingRule {
+    let mut rule = rule(kind, None, Vec::new(), fill_color);
+    rule.typed_rule = Some(typed_rule);
+    rule
 }
 
 #[test]
@@ -629,5 +644,214 @@ fn array_average_rules_respect_equal_and_stddev_thresholds() {
             .map(|cell| cell.effective_fill_color.as_deref())
             .collect::<Vec<_>>(),
         vec![None, None, None, None, Some("#D9EAD3")]
+    );
+}
+
+#[test]
+fn typed_color_scale_payload_matches_bounded_threshold_convention() {
+    let values = (1..=5)
+        .map(|number| ArrayCellValue::Number(number as f64))
+        .collect::<Vec<_>>();
+    let surface = surface_for_array(
+        vec![values],
+        vec![typed_rule(
+            "colorScale",
+            ConditionalFormattingTypedRule {
+                color_scale: Some(ColorScaleRuleOptions {
+                    stops: vec![
+                        ColorScaleRuleStop {
+                            position: ConditionalFormattingThreshold::Min,
+                            color: "#F8696B".to_string(),
+                        },
+                        ColorScaleRuleStop {
+                            position: ConditionalFormattingThreshold::Mid,
+                            color: "#FFEB84".to_string(),
+                        },
+                        ColorScaleRuleStop {
+                            position: ConditionalFormattingThreshold::Max,
+                            color: "#63BE7B".to_string(),
+                        },
+                    ],
+                }),
+                ..Default::default()
+            },
+            "#000000",
+        )],
+        None,
+    );
+
+    let grid = surface.array_cell_format.expect("array cell format");
+    assert_eq!(
+        grid.rows[0]
+            .iter()
+            .map(|cell| cell.effective_fill_color.as_deref())
+            .collect::<Vec<_>>(),
+        vec![
+            Some("#F8696B"),
+            Some("#FCAA78"),
+            Some("#FFEB84"),
+            Some("#B1D580"),
+            Some("#63BE7B")
+        ]
+    );
+}
+
+#[test]
+fn typed_data_bar_payload_controls_bounds_direction_and_bar_only() {
+    let surface = surface_for_array(
+        vec![vec![
+            ArrayCellValue::Number(10.0),
+            ArrayCellValue::Number(20.0),
+            ArrayCellValue::Number(30.0),
+        ]],
+        vec![typed_rule(
+            "dataBar",
+            ConditionalFormattingTypedRule {
+                data_bar: Some(DataBarRuleOptions {
+                    minimum: Some(ConditionalFormattingThreshold::Number(0.0)),
+                    maximum: Some(ConditionalFormattingThreshold::Number(40.0)),
+                    bar_color: Some("#638EC6".to_string()),
+                    direction: Some(DataBarDirection::Right),
+                    show_bar_only: true,
+                }),
+                ..Default::default()
+            },
+            "#000000",
+        )],
+        None,
+    );
+
+    let grid = surface.array_cell_format.expect("array cell format");
+    let data_bars = grid.rows[0]
+        .iter()
+        .map(|cell| cell.data_bar.as_ref().expect("data bar"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        data_bars
+            .iter()
+            .map(|bar| bar.fill_ratio)
+            .collect::<Vec<_>>(),
+        vec![0.25, 0.5, 0.75]
+    );
+    assert!(
+        data_bars
+            .iter()
+            .all(|bar| bar.direction == DataBarDirection::Right)
+    );
+    assert!(data_bars.iter().all(|bar| bar.show_bar_only));
+    assert!(data_bars.iter().all(|bar| bar.bar_color == "#638EC6"));
+}
+
+#[test]
+fn typed_icon_set_payload_uses_explicit_thresholds() {
+    let surface = surface_for_array(
+        vec![vec![
+            ArrayCellValue::Number(10.0),
+            ArrayCellValue::Number(20.0),
+            ArrayCellValue::Number(30.0),
+            ArrayCellValue::Number(40.0),
+        ]],
+        vec![typed_rule(
+            "iconSet",
+            ConditionalFormattingTypedRule {
+                icon_set: Some(IconSetRuleOptions {
+                    set_kind: "3Arrows".to_string(),
+                    thresholds: vec![
+                        ConditionalFormattingThreshold::Number(20.0),
+                        ConditionalFormattingThreshold::Number(30.0),
+                    ],
+                }),
+                ..Default::default()
+            },
+            "#000000",
+        )],
+        None,
+    );
+
+    let grid = surface.array_cell_format.expect("array cell format");
+    assert_eq!(
+        grid.rows[0]
+            .iter()
+            .map(|cell| cell.icon.as_ref().map(|icon| icon.icon_index))
+            .collect::<Vec<_>>(),
+        vec![Some(0), Some(1), Some(2), Some(2)]
+    );
+}
+
+#[test]
+fn typed_rank_and_average_payloads_replace_threshold_parsing() {
+    let top_values = (1..=10)
+        .map(|number| ArrayCellValue::Number(number as f64))
+        .collect::<Vec<_>>();
+    let top_surface = surface_for_array(
+        vec![top_values],
+        vec![typed_rule(
+            "top",
+            ConditionalFormattingTypedRule {
+                rank: Some(RankRuleOptions {
+                    rank: ConditionalFormattingRank::Count(5),
+                }),
+                ..Default::default()
+            },
+            "#D9EAD3",
+        )],
+        None,
+    );
+    let top_grid = top_surface.array_cell_format.expect("array cell format");
+    assert_eq!(
+        top_grid.rows[0]
+            .iter()
+            .map(|cell| cell.effective_fill_color.as_deref())
+            .collect::<Vec<_>>(),
+        vec![
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some("#D9EAD3"),
+            Some("#D9EAD3"),
+            Some("#D9EAD3"),
+            Some("#D9EAD3"),
+            Some("#D9EAD3")
+        ]
+    );
+
+    let average_surface = surface_for_array(
+        vec![vec![
+            ArrayCellValue::Number(1.0),
+            ArrayCellValue::Number(2.0),
+            ArrayCellValue::Number(3.0),
+            ArrayCellValue::Number(4.0),
+            ArrayCellValue::Number(5.0),
+        ]],
+        vec![typed_rule(
+            "aboveAverage",
+            ConditionalFormattingTypedRule {
+                average: Some(AverageRuleOptions {
+                    include_equal: true,
+                    stddev_multiplier: None,
+                }),
+                ..Default::default()
+            },
+            "#D9EAD3",
+        )],
+        None,
+    );
+    let average_grid = average_surface
+        .array_cell_format
+        .expect("array cell format");
+    assert_eq!(
+        average_grid.rows[0]
+            .iter()
+            .map(|cell| cell.effective_fill_color.as_deref())
+            .collect::<Vec<_>>(),
+        vec![
+            None,
+            None,
+            Some("#D9EAD3"),
+            Some("#D9EAD3"),
+            Some("#D9EAD3")
+        ]
     );
 }

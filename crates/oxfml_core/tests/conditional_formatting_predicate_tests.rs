@@ -59,6 +59,7 @@ fn predicate_rule(kind: &str, thresholds: Vec<&str>) -> VerificationConditionalF
             .into_iter()
             .map(std::string::ToString::to_string)
             .collect(),
+        typed_rule: None,
         font_color: Some("#FF0000".to_string()),
         fill_color: None,
         effective_display_text: None,

@@ -14,12 +14,13 @@ use crate::seam::{
 };
 use crate::source::FormulaSourceRecord;
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct VerificationConditionalFormattingRule {
     pub target_ranges: Vec<String>,
     pub rule_kind: String,
     pub operator: Option<String>,
     pub thresholds: Vec<String>,
+    pub typed_rule: Option<ConditionalFormattingTypedRule>,
     pub font_color: Option<String>,
     pub fill_color: Option<String>,
     pub effective_display_text: Option<String>,
@@ -28,7 +29,79 @@ pub struct VerificationConditionalFormattingRule {
     pub effective_fill_color: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ConditionalFormattingTypedRule {
+    pub color_scale: Option<ColorScaleRuleOptions>,
+    pub data_bar: Option<DataBarRuleOptions>,
+    pub icon_set: Option<IconSetRuleOptions>,
+    pub rank: Option<RankRuleOptions>,
+    pub average: Option<AverageRuleOptions>,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ColorScaleRuleOptions {
+    pub stops: Vec<ColorScaleRuleStop>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ColorScaleRuleStop {
+    pub position: ConditionalFormattingThreshold,
+    pub color: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DataBarRuleOptions {
+    pub minimum: Option<ConditionalFormattingThreshold>,
+    pub maximum: Option<ConditionalFormattingThreshold>,
+    pub bar_color: Option<String>,
+    pub direction: Option<DataBarDirection>,
+    pub show_bar_only: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct IconSetRuleOptions {
+    pub set_kind: String,
+    pub thresholds: Vec<ConditionalFormattingThreshold>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RankRuleOptions {
+    pub rank: ConditionalFormattingRank,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConditionalFormattingRank {
+    Count(usize),
+    Percent(f64),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AverageRuleOptions {
+    pub include_equal: bool,
+    pub stddev_multiplier: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConditionalFormattingThreshold {
+    Min,
+    Mid,
+    Max,
+    Percent(f64),
+    Percentile(f64),
+    Number(f64),
+}
+
+impl Eq for ConditionalFormattingTypedRule {}
+impl Eq for ColorScaleRuleOptions {}
+impl Eq for ColorScaleRuleStop {}
+impl Eq for DataBarRuleOptions {}
+impl Eq for IconSetRuleOptions {}
+impl Eq for RankRuleOptions {}
+impl Eq for ConditionalFormattingRank {}
+impl Eq for AverageRuleOptions {}
+impl Eq for ConditionalFormattingThreshold {}
+
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct VerificationPublicationContext {
     pub format_profile: Option<String>,
     pub number_format_code: Option<String>,
@@ -840,6 +913,7 @@ fn conditional_formatting_rule_json(rule: &VerificationConditionalFormattingRule
         "rule_kind": rule.rule_kind,
         "operator": rule.operator,
         "thresholds": rule.thresholds,
+        "typed_rule": rule.typed_rule.as_ref().map(typed_conditional_formatting_rule_json),
         "font_color": rule.font_color,
         "fill_color": rule.fill_color,
         "effective_display_text": rule.effective_display_text,
@@ -847,6 +921,77 @@ fn conditional_formatting_rule_json(rule: &VerificationConditionalFormattingRule
         "effective_font_color": rule.effective_font_color,
         "effective_fill_color": rule.effective_fill_color
     })
+}
+
+fn typed_conditional_formatting_rule_json(rule: &ConditionalFormattingTypedRule) -> Value {
+    json!({
+        "color_scale": rule.color_scale.as_ref().map(color_scale_rule_options_json),
+        "data_bar": rule.data_bar.as_ref().map(data_bar_rule_options_json),
+        "icon_set": rule.icon_set.as_ref().map(icon_set_rule_options_json),
+        "rank": rule.rank.as_ref().map(rank_rule_options_json),
+        "average": rule.average.as_ref().map(average_rule_options_json)
+    })
+}
+
+fn color_scale_rule_options_json(options: &ColorScaleRuleOptions) -> Value {
+    json!({
+        "stops": options.stops.iter().map(color_scale_rule_stop_json).collect::<Vec<_>>()
+    })
+}
+
+fn color_scale_rule_stop_json(stop: &ColorScaleRuleStop) -> Value {
+    json!({
+        "position": conditional_formatting_threshold_json(&stop.position),
+        "color": stop.color
+    })
+}
+
+fn data_bar_rule_options_json(options: &DataBarRuleOptions) -> Value {
+    json!({
+        "minimum": options.minimum.as_ref().map(conditional_formatting_threshold_json),
+        "maximum": options.maximum.as_ref().map(conditional_formatting_threshold_json),
+        "bar_color": options.bar_color,
+        "direction": options.direction.map(|value| format!("{value:?}")),
+        "show_bar_only": options.show_bar_only
+    })
+}
+
+fn icon_set_rule_options_json(options: &IconSetRuleOptions) -> Value {
+    json!({
+        "set_kind": options.set_kind,
+        "thresholds": options.thresholds.iter().map(conditional_formatting_threshold_json).collect::<Vec<_>>()
+    })
+}
+
+fn rank_rule_options_json(options: &RankRuleOptions) -> Value {
+    match options.rank {
+        ConditionalFormattingRank::Count(count) => json!({"kind": "count", "value": count}),
+        ConditionalFormattingRank::Percent(percent) => {
+            json!({"kind": "percent", "value": percent})
+        }
+    }
+}
+
+fn average_rule_options_json(options: &AverageRuleOptions) -> Value {
+    json!({
+        "include_equal": options.include_equal,
+        "stddev_multiplier": options.stddev_multiplier
+    })
+}
+
+fn conditional_formatting_threshold_json(threshold: &ConditionalFormattingThreshold) -> Value {
+    match threshold {
+        ConditionalFormattingThreshold::Min => json!({"kind": "min"}),
+        ConditionalFormattingThreshold::Mid => json!({"kind": "mid"}),
+        ConditionalFormattingThreshold::Max => json!({"kind": "max"}),
+        ConditionalFormattingThreshold::Percent(value) => {
+            json!({"kind": "percent", "value": value})
+        }
+        ConditionalFormattingThreshold::Percentile(value) => {
+            json!({"kind": "percentile", "value": value})
+        }
+        ConditionalFormattingThreshold::Number(value) => json!({"kind": "number", "value": value}),
+    }
 }
 
 fn spreadsheetml_conditional_formatting_rule_json(
@@ -986,6 +1131,7 @@ mod tests {
                     rule_kind: "Expression".to_string(),
                     operator: None,
                     thresholds: vec!["=A1>0".to_string()],
+                    typed_rule: None,
                     font_color: Some("#FF0000".to_string()),
                     fill_color: Some("#00FF00".to_string()),
                     effective_display_text: Some("[POS] $6.00".to_string()),
@@ -998,6 +1144,7 @@ mod tests {
                     rule_kind: "CellIs".to_string(),
                     operator: Some("LessThan".to_string()),
                     thresholds: vec!["0".to_string()],
+                    typed_rule: None,
                     font_color: Some("#999999".to_string()),
                     fill_color: Some("#EEEEEE".to_string()),
                     effective_display_text: Some("[NEG] $6.00".to_string()),
@@ -1158,25 +1305,38 @@ fn evaluate_data_bar_rule(
     if !number.is_finite() {
         return None;
     }
-    let fill_ratio = data_bar_ratio(rule, *number, aggregate_context)?;
-    let bar_color = rule
-        .fill_color
-        .as_deref()
+    let typed_options = rule
+        .typed_rule
+        .as_ref()
+        .and_then(|typed| typed.data_bar.as_ref());
+    let fill_ratio = data_bar_ratio(rule, typed_options, *number, aggregate_context)?;
+    let bar_color = typed_options
+        .and_then(|options| options.bar_color.as_deref())
+        .or(rule.fill_color.as_deref())
         .and_then(normalize_hex_color)
         .unwrap_or_else(|| "#638EC6".to_string());
-    let direction = if rule
-        .thresholds
-        .iter()
-        .any(|threshold| normalized_token(threshold).contains("directionright"))
-    {
-        DataBarDirection::Right
-    } else {
-        DataBarDirection::Left
-    };
-    let show_bar_only = rule.thresholds.iter().any(|threshold| {
-        let normalized = normalized_token(threshold);
-        normalized == "showbaronly" || normalized == "baronly"
-    });
+    let direction = typed_options
+        .and_then(|options| options.direction)
+        .unwrap_or_else(|| {
+            if rule
+                .thresholds
+                .iter()
+                .any(|threshold| normalized_token(threshold).contains("directionright"))
+            {
+                DataBarDirection::Right
+            } else {
+                DataBarDirection::Left
+            }
+        });
+    let show_bar_only = typed_options.map_or_else(
+        || {
+            rule.thresholds.iter().any(|threshold| {
+                let normalized = normalized_token(threshold);
+                normalized == "showbaronly" || normalized == "baronly"
+            })
+        },
+        |options| options.show_bar_only,
+    );
 
     Some(ArrayVisualizationOutcome {
         effective_fill_color: None,
@@ -1192,11 +1352,18 @@ fn evaluate_data_bar_rule(
 
 fn data_bar_ratio(
     rule: &VerificationConditionalFormattingRule,
+    typed_options: Option<&DataBarRuleOptions>,
     value: f64,
     aggregate_context: &AggregateConditionalFormattingContext,
 ) -> Option<f64> {
-    let explicit_min = data_bar_bound(rule, "min");
-    let explicit_max = data_bar_bound(rule, "max");
+    let explicit_min = typed_options
+        .and_then(|options| options.minimum.as_ref())
+        .and_then(|threshold| typed_threshold_value(threshold, aggregate_context))
+        .or_else(|| data_bar_bound(rule, "min"));
+    let explicit_max = typed_options
+        .and_then(|options| options.maximum.as_ref())
+        .and_then(|threshold| typed_threshold_value(threshold, aggregate_context))
+        .or_else(|| data_bar_bound(rule, "max"));
     if explicit_min.is_none() && explicit_max.is_none() {
         return aggregate_context.ratio_for_value(value, 1.0);
     }
@@ -1233,16 +1400,31 @@ fn evaluate_icon_set_rule(
     if !number.is_finite() {
         return None;
     }
-    let set_kind = rule
-        .thresholds
-        .first()
-        .map(|value| value.trim())
+    let typed_options = rule
+        .typed_rule
+        .as_ref()
+        .and_then(|typed| typed.icon_set.as_ref());
+    let set_kind = typed_options
+        .map(|options| options.set_kind.trim())
         .filter(|value| !value.is_empty())
+        .or_else(|| {
+            rule.thresholds
+                .first()
+                .map(|value| value.trim())
+                .filter(|value| !value.is_empty())
+        })
         .unwrap_or("3Arrows")
         .to_string();
     let icon_count = icon_set_size(&set_kind);
     let ratio = aggregate_context.ratio_for_value(*number, 0.5)?;
-    let icon_index = icon_index_for_value(rule, icon_count, ratio, aggregate_context, *number)?;
+    let icon_index = icon_index_for_value(
+        rule,
+        typed_options,
+        icon_count,
+        ratio,
+        aggregate_context,
+        *number,
+    )?;
 
     Some(ArrayVisualizationOutcome {
         effective_fill_color: None,
@@ -1256,17 +1438,25 @@ fn evaluate_icon_set_rule(
 
 fn icon_index_for_value(
     rule: &VerificationConditionalFormattingRule,
+    typed_options: Option<&IconSetRuleOptions>,
     icon_count: usize,
     ratio: f64,
     aggregate_context: &AggregateConditionalFormattingContext,
     value: f64,
 ) -> Option<usize> {
-    let thresholds = rule
-        .thresholds
-        .iter()
-        .skip(1)
-        .filter_map(|threshold| icon_threshold_value(threshold, aggregate_context))
-        .collect::<Vec<_>>();
+    let thresholds = if let Some(options) = typed_options {
+        options
+            .thresholds
+            .iter()
+            .filter_map(|threshold| typed_threshold_value(threshold, aggregate_context))
+            .collect::<Vec<_>>()
+    } else {
+        rule.thresholds
+            .iter()
+            .skip(1)
+            .filter_map(|threshold| icon_threshold_value(threshold, aggregate_context))
+            .collect::<Vec<_>>()
+    };
     if thresholds.is_empty() {
         let icon_index = (ratio * icon_count as f64).floor() as usize;
         return Some(icon_index.min(icon_count.saturating_sub(1)));
@@ -1323,6 +1513,14 @@ fn color_scale_stops(
     rule: &VerificationConditionalFormattingRule,
     aggregate_context: &AggregateConditionalFormattingContext,
 ) -> Option<Vec<ColorScaleStop>> {
+    if let Some(options) = rule
+        .typed_rule
+        .as_ref()
+        .and_then(|typed| typed.color_scale.as_ref())
+    {
+        return typed_color_scale_stops(options, aggregate_context);
+    }
+
     let mut stops = rule
         .thresholds
         .iter()
@@ -1343,6 +1541,27 @@ fn color_scale_stops(
             color: high,
         });
     }
+    if stops.len() < 2 {
+        return None;
+    }
+    stops.sort_by(|left, right| left.position.total_cmp(&right.position));
+    Some(stops)
+}
+
+fn typed_color_scale_stops(
+    options: &ColorScaleRuleOptions,
+    aggregate_context: &AggregateConditionalFormattingContext,
+) -> Option<Vec<ColorScaleStop>> {
+    let mut stops = options
+        .stops
+        .iter()
+        .filter_map(|stop| {
+            Some(ColorScaleStop {
+                position: color_scale_position_from_typed(&stop.position, aggregate_context)?,
+                color: RgbColor::parse(&stop.color)?,
+            })
+        })
+        .collect::<Vec<_>>();
     if stops.len() < 2 {
         return None;
     }
@@ -1372,6 +1591,47 @@ fn parse_color_scale_stop(
     };
 
     Some(ColorScaleStop { position, color })
+}
+
+fn color_scale_position_from_typed(
+    threshold: &ConditionalFormattingThreshold,
+    aggregate_context: &AggregateConditionalFormattingContext,
+) -> Option<f64> {
+    match threshold {
+        ConditionalFormattingThreshold::Min => Some(0.0),
+        ConditionalFormattingThreshold::Mid => Some(0.5),
+        ConditionalFormattingThreshold::Max => Some(1.0),
+        ConditionalFormattingThreshold::Percent(value)
+        | ConditionalFormattingThreshold::Percentile(value) => {
+            Some((value / 100.0).clamp(0.0, 1.0))
+        }
+        ConditionalFormattingThreshold::Number(value) => {
+            aggregate_context.ratio_for_value(*value, 0.5)
+        }
+    }
+}
+
+fn typed_threshold_value(
+    threshold: &ConditionalFormattingThreshold,
+    aggregate_context: &AggregateConditionalFormattingContext,
+) -> Option<f64> {
+    match threshold {
+        ConditionalFormattingThreshold::Min => aggregate_context.min,
+        ConditionalFormattingThreshold::Mid => {
+            let min = aggregate_context.min?;
+            let max = aggregate_context.max?;
+            Some(min + 0.5 * (max - min))
+        }
+        ConditionalFormattingThreshold::Max => aggregate_context.max,
+        ConditionalFormattingThreshold::Percent(value)
+        | ConditionalFormattingThreshold::Percentile(value) => {
+            let min = aggregate_context.min?;
+            let max = aggregate_context.max?;
+            let ratio = (value / 100.0).clamp(0.0, 1.0);
+            Some(min + ratio * (max - min))
+        }
+        ConditionalFormattingThreshold::Number(value) => Some(*value),
+    }
 }
 
 fn color_scale_position(
@@ -1493,6 +1753,7 @@ fn evaluated_conditional_formatting_rule(
         rule_kind: rule.rule_kind.clone(),
         operator: rule.operator.clone(),
         thresholds: rule.thresholds.clone(),
+        typed_rule: rule.typed_rule.clone(),
         font_color: rule.font_color.clone(),
         fill_color: rule.fill_color.clone(),
         effective_display_text,
@@ -1540,7 +1801,15 @@ fn evaluate_average_rule(
     above: bool,
 ) -> Option<bool> {
     let mean = aggregate_context.mean?;
-    let stddev_multiplier = average_stddev_multiplier(rule)?;
+    let typed_options = rule
+        .typed_rule
+        .as_ref()
+        .and_then(|typed| typed.average.as_ref());
+    let stddev_multiplier = if let Some(options) = typed_options {
+        options.stddev_multiplier.unwrap_or(0.0)
+    } else {
+        average_stddev_multiplier(rule)?
+    };
     let threshold = if stddev_multiplier == 0.0 {
         mean
     } else {
@@ -1551,7 +1820,10 @@ fn evaluate_average_rule(
             mean - stddev_multiplier * stddev
         }
     };
-    let equal = average_includes_equal(rule);
+    let equal = typed_options.map_or_else(
+        || average_includes_equal(rule),
+        |options| options.include_equal,
+    );
     Some(if above {
         number > threshold || (equal && number == threshold)
     } else {
@@ -1619,6 +1891,22 @@ fn aggregate_rank_count(
 ) -> Option<usize> {
     if value_count == 0 {
         return Some(0);
+    }
+    if let Some(options) = rule
+        .typed_rule
+        .as_ref()
+        .and_then(|typed| typed.rank.as_ref())
+    {
+        return match options.rank {
+            ConditionalFormattingRank::Count(count) => Some(count.min(value_count)),
+            ConditionalFormattingRank::Percent(percent) => {
+                if !percent.is_finite() || percent <= 0.0 {
+                    Some(0)
+                } else {
+                    Some(((value_count as f64) * percent / 100.0).ceil() as usize)
+                }
+            }
+        };
     }
     let threshold = rule
         .thresholds

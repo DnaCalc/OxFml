@@ -150,6 +150,7 @@ fn replay_projection_service_projects_runtime_and_host_outputs() {
             rule_kind: "Expression".to_string(),
             operator: None,
             thresholds: vec!["=A1>0".to_string()],
+            typed_rule: None,
             font_color: Some("#FF0000".to_string()),
             fill_color: Some("#00FF00".to_string()),
             effective_display_text: None,
