@@ -7,7 +7,7 @@ use oxfml_core::eval::{EvaluationContext, evaluate_formula};
 use oxfml_core::format::{oxfml_en_us_format_profile, oxfml_en_us_locale_context};
 use oxfml_core::publication::VerificationPublicationContext;
 use oxfml_core::{FormulaChannelKind, FormulaSourceRecord, TypedContextQueryBundle};
-use oxfunc_core::locale_format::{FormatProfile, LocaleFormatContext};
+use oxfunc_core::locale_format::{FormatCodeTokenPolicy, FormatProfile, LocaleFormatContext};
 use oxfunc_core::value::{EvalValue, ExcelText};
 
 fn en_us_profile_with_separators(
@@ -17,6 +17,13 @@ fn en_us_profile_with_separators(
     FormatProfile {
         decimal_separator,
         thousands_separator,
+        format_code_decimal_token: ".",
+        format_code_group_token: if thousands_separator == "," {
+            ","
+        } else {
+            "\u{00A0}"
+        },
+        format_code_token_policy: FormatCodeTokenPolicy::LocalizedExcel,
         ..oxfml_en_us_format_profile()
     }
 }

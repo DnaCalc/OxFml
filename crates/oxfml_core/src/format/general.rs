@@ -1,3 +1,4 @@
+use oxfunc_core::locale_format::FormatProfile;
 use oxfunc_core::value::{ArrayCellValue, EvalValue, WorksheetErrorCode};
 
 pub fn render_visible_value_text(value: &EvalValue) -> String {
@@ -26,6 +27,15 @@ pub fn render_visible_number(number: f64) -> String {
         format!("{number:.0}")
     } else {
         number.to_string()
+    }
+}
+
+pub fn render_visible_number_with_profile(profile: &FormatProfile, number: f64) -> String {
+    let rendered = render_visible_number(number);
+    if profile.decimal_separator == "." {
+        rendered
+    } else {
+        rendered.replace('.', profile.decimal_separator)
     }
 }
 

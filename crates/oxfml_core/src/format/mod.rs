@@ -10,4 +10,7 @@ pub use engine::{
     oxfml_en_us_format_profile, oxfml_en_us_locale_context, oxfml_locale_context, parse_value_text,
     render_currency, render_fixed, render_with_code,
 };
-pub use general::{render_visible_number, render_visible_value_text, worksheet_error_text};
+pub use general::{
+    render_visible_number, render_visible_number_with_profile, render_visible_value_text,
+    worksheet_error_text,
+};

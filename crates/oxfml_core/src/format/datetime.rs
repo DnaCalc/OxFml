@@ -100,8 +100,8 @@ pub fn render_with_datetime_tokens(
                         match width {
                             1 => month.to_string(),
                             2 => format!("{month:02}"),
-                            3 => month_name(month, true).to_string(),
-                            _ => month_name(month, false).to_string(),
+                            3 => month_name(profile, month, true).to_string(),
+                            _ => month_name(profile, month, false).to_string(),
                         }
                     }
                     DateTimeTokenKind::Minute => {
@@ -116,8 +116,8 @@ pub fn render_with_datetime_tokens(
                         match width {
                             1 => day.to_string(),
                             2 => format!("{day:02}"),
-                            3 => weekday_name(weekday_index?, true).to_string(),
-                            _ => weekday_name(weekday_index?, false).to_string(),
+                            3 => weekday_name(profile, weekday_index?, true).to_string(),
+                            _ => weekday_name(profile, weekday_index?, false).to_string(),
                         }
                     }
                     DateTimeTokenKind::Hour => {

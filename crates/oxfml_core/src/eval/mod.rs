@@ -7,7 +7,9 @@ use oxfunc_core::functions::call_register_id_family::{
     RegisterIdRequest, RegisteredExternalCallRequest, RegisteredExternalProvider,
     parse_call_request, parse_register_id_request,
 };
-use oxfunc_core::functions::callable_helpers::{CallableInvocationError, CallableInvoker};
+use oxfunc_core::functions::callable_helpers::{
+    CallableInvocationBatch, CallableInvocationError, CallableInvoker,
+};
 use oxfunc_core::functions::cell::{CellEvalError, eval_cell_surface};
 use oxfunc_core::functions::if_fn::{eval_if_surface, map_if_error_to_ws};
 use oxfunc_core::functions::iferror::{eval_iferror_surface, map_iferror_error_to_ws};
@@ -208,8 +210,8 @@ const BUILTIN_CALLABLE_INVOCATION_CONTRACT_REF: &str = "oxfml.builtin_callable.i
 const LOCAL_CALLABLE_RECURSION_BUDGET_UNITS: usize = 16_383;
 const LOCAL_CALLABLE_RECURSION_BASE_COST_UNITS: usize = 3;
 const LOCAL_CALLABLE_RECURSION_LAMBDA_ARG_COST_UNITS: usize = 1;
-const LOCAL_CALLABLE_STACK_RED_ZONE_BYTES: usize = 128 * 1024;
-const LOCAL_CALLABLE_STACK_GROW_BYTES: usize = 32 * 1024 * 1024;
+const LOCAL_CALLABLE_STACK_RED_ZONE_BYTES: usize = 2 * 1024 * 1024;
+const LOCAL_CALLABLE_STACK_GROW_BYTES: usize = 128 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EvaluationBackend {
@@ -3567,6 +3569,162 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
         )
         .map_err(|_| CallableInvocationError::Worksheet(WorksheetErrorCode::Value))?;
         Ok(prepared_arg_from_eval_value(value))
+    }
+
+    fn invoke_many(
+        &self,
+        callable: &OxLambdaValue,
+        batch: &mut dyn CallableInvocationBatch,
+    ) -> Result<(), CallableInvocationError> {
+        let _mode = batch.mode();
+        if callable.origin_kind == OxCallableOriginKind::BuiltInCallable {
+            return invoke_many_fallback(self, callable, batch);
+        }
+
+        let binding = self
+            .callable_registry
+            .borrow()
+            .get(&callable.callable_token)
+            .cloned()
+            .ok_or_else(|| {
+                CallableInvocationError::UnsupportedCallableToken(callable.callable_token.clone())
+            })?;
+        let param_names = binding
+            .lambda
+            .params
+            .iter()
+            .map(|param| param.name.clone())
+            .collect::<Vec<_>>();
+        let mut local_bindings = binding.lambda.closure;
+        prime_local_callable_param_slots(&mut local_bindings, &param_names);
+        let mut trace = EvaluationTrace {
+            prepared_calls: Vec::new(),
+        };
+        let mut resolver = LocalReferenceResolver {
+            cell_values: &self.context.cell_values,
+            defined_names: &self.context.defined_names,
+            caller_row: self.context.caller_row,
+            caller_col: self.context.caller_col,
+            callable_registry: self.callable_registry,
+        };
+        let mut args = Vec::new();
+
+        while {
+            args.clear();
+            batch.prepare_next_args(&mut args)
+        } {
+            let argc = args.len();
+            if !callable.arity_shape.accepts(argc) {
+                return Err(CallableInvocationError::ArityMismatch {
+                    expected_min: callable.arity_shape.min,
+                    expected_max: callable.arity_shape.max,
+                    actual: argc,
+                });
+            }
+            set_local_callable_arg_slots(
+                &mut local_bindings,
+                &param_names,
+                &args,
+                self.callable_registry,
+            );
+            let recursion_cost_units = LOCAL_CALLABLE_RECURSION_BASE_COST_UNITS
+                + args
+                    .iter()
+                    .filter(|arg| prepared_arg_contains_lambda(arg, self.callable_registry))
+                    .count()
+                    * LOCAL_CALLABLE_RECURSION_LAMBDA_ARG_COST_UNITS;
+            let Some(_recursion_guard) = try_enter_callable_recursion(
+                &self.context.callable_recursion_state,
+                recursion_cost_units,
+            ) else {
+                batch.accept_result(prepared_arg_from_eval_value(EvalValue::Error(
+                    WorksheetErrorCode::Num,
+                )))?;
+                continue;
+            };
+
+            trace.prepared_calls.clear();
+            let value = maybe_grow(
+                LOCAL_CALLABLE_STACK_RED_ZONE_BYTES,
+                LOCAL_CALLABLE_STACK_GROW_BYTES,
+                || {
+                    evaluate_expr_value(
+                        &binding.lambda.body,
+                        self.context,
+                        &mut resolver,
+                        &local_bindings,
+                        self.callable_registry,
+                        &mut trace,
+                    )
+                },
+            )
+            .map_err(|_| CallableInvocationError::Worksheet(WorksheetErrorCode::Value))?;
+            batch.accept_result(prepared_arg_from_eval_value(value))?;
+        }
+        Ok(())
+    }
+}
+
+fn invoke_many_fallback(
+    invoker: &(impl CallableInvoker + ?Sized),
+    callable: &OxLambdaValue,
+    batch: &mut dyn CallableInvocationBatch,
+) -> Result<(), CallableInvocationError> {
+    let mut args = Vec::new();
+    while {
+        args.clear();
+        batch.prepare_next_args(&mut args)
+    } {
+        let argc = args.len();
+        if !callable.arity_shape.accepts(argc) {
+            return Err(CallableInvocationError::ArityMismatch {
+                expected_min: callable.arity_shape.min,
+                expected_max: callable.arity_shape.max,
+                actual: argc,
+            });
+        }
+        let result = invoker.invoke(callable, &args)?;
+        batch.accept_result(result)?;
+    }
+    Ok(())
+}
+
+fn prime_local_callable_param_slots(
+    local_bindings: &mut BTreeMap<String, HelperBinding>,
+    param_names: &[String],
+) {
+    for param_name in param_names {
+        if let Some(existing_name) = local_bindings
+            .keys()
+            .find(|binding_name| binding_name.eq_ignore_ascii_case(param_name))
+            .cloned()
+        {
+            local_bindings.remove(&existing_name);
+        }
+    }
+    for param_name in param_names {
+        local_bindings.insert(
+            param_name.clone(),
+            HelperBinding::Arg(CallArgValue::MissingArg),
+        );
+    }
+}
+
+fn set_local_callable_arg_slots(
+    local_bindings: &mut BTreeMap<String, HelperBinding>,
+    param_names: &[String],
+    args: &[PreparedArgValue],
+    callable_registry: &RefCell<CallableRegistry>,
+) {
+    for (param_name, arg) in param_names.iter().zip(args.iter()) {
+        if let Some(slot) = local_bindings.get_mut(param_name.as_str()) {
+            *slot = HelperBinding::Arg(call_arg_from_prepared(arg, callable_registry));
+        }
+    }
+    for param_name in param_names.iter().skip(args.len()) {
+        if let Some(slot) = local_bindings.get_mut(param_name.as_str()) {
+            *slot = HelperBinding::Arg(CallArgValue::MissingArg);
+        }
     }
 }
 

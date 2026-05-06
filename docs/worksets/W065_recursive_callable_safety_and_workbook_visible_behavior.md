@@ -108,6 +108,7 @@ Current OxFml comparison:
 2. OxFml now uses:
    - explicit stack growth in local callable execution,
    - an empirical recursion-budget model tuned to the currently exercised Excel lanes,
+   - a red-zone reserve sized for the current OxFunc value representation so deep recursion reaches the guard instead of the process stack,
 3. direct helper-local self-recursion now surfaces worksheet-visible `#NAME?` locally instead of a fatal execution failure,
 4. the exercised named-recursion and `LET` self-application rows above now match the explicit Excel probes.
 

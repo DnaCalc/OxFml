@@ -4,9 +4,13 @@ use oxfunc_core::locale_format::{LocaleFormatContext, WorkbookDateSystem, ymd_fr
 use oxfunc_core::value::{ArrayCellValue, EvalValue, ExcelText, PresentationHint};
 use serde_json::{Value, json};
 
+use crate::format::number::{
+    render_text_with_number_format_code, selected_number_format_section_color,
+    selected_text_format_section_color,
+};
 use crate::format::{
-    parse_value_text, render_currency, render_visible_number, render_visible_value_text,
-    render_with_code, worksheet_error_text,
+    parse_value_text, render_currency, render_visible_number_with_profile,
+    render_visible_value_text, render_with_code, worksheet_error_text,
 };
 use crate::interface::ReturnedValueSurface;
 use crate::seam::{
@@ -264,6 +268,9 @@ pub fn build_verification_publication_surface(
     .unwrap_or_else(|| visible_value_text.clone());
     let base_font_color = context.and_then(|value| value.font_color.clone());
     let base_fill_color = context.and_then(|value| value.fill_color.clone());
+    let format_section_font_color = context
+        .and_then(|value| value.number_format_code.as_deref())
+        .and_then(|code| selected_format_section_font_color(published_worksheet_value, code));
     let conditional_evaluation_value = conditional_evaluation_value(published_worksheet_value);
     let conditional_formatting_rules = context
         .map(|value| {
@@ -303,6 +310,7 @@ pub fn build_verification_publication_surface(
         .rev()
         .find(|rule| rule.applies == Some(true))
         .and_then(|rule| rule.effective_font_color.clone())
+        .or_else(|| format_section_font_color.clone())
         .or_else(|| base_font_color.clone());
     let effective_fill_color = conditional_formatting_rules
         .iter()
@@ -1027,6 +1035,13 @@ fn render_effective_display_text(
     locale_ctx: Option<&LocaleFormatContext<'_>>,
     number_format_code: Option<&str>,
 ) -> Option<String> {
+    if let EvalValue::Text(text) = value
+        && let Some(code) = number_format_code
+        && let Some(rendered) = render_text_with_number_format_code(&text.to_string_lossy(), code)
+    {
+        return Some(rendered);
+    }
+
     let EvalValue::Number(number) = value else {
         return Some(render_visible_value_text(value));
     };
@@ -1061,13 +1076,29 @@ fn render_effective_display_text(
         oxfunc_core::value::NumberFormatHint::General
         | oxfunc_core::value::NumberFormatHint::Scientific
         | oxfunc_core::value::NumberFormatHint::Fraction
-        | oxfunc_core::value::NumberFormatHint::Custom => Some(render_visible_number(*number)),
+        | oxfunc_core::value::NumberFormatHint::Custom => Some(render_visible_number_with_profile(
+            &locale_ctx.profile,
+            *number,
+        )),
+    }
+}
+
+fn selected_format_section_font_color(
+    value: &EvalValue,
+    number_format_code: &str,
+) -> Option<String> {
+    match value {
+        EvalValue::Number(number) => {
+            selected_number_format_section_color(number_format_code, *number)
+        }
+        EvalValue::Text(_) => selected_text_format_section_color(number_format_code),
+        _ => None,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use oxfunc_core::value::{EvalValue, ExtendedValue};
+    use oxfunc_core::value::{EvalValue, ExcelText, ExtendedValue};
 
     use super::{
         VerificationConditionalFormattingRule, VerificationPublicationContext,
@@ -1077,6 +1108,25 @@ mod tests {
     use crate::interface::ReturnedValueSurface;
     use crate::seam::TopologyDelta;
     use crate::source::FormulaSourceRecord;
+
+    fn empty_topology_delta(formula_stable_id: &str) -> TopologyDelta {
+        TopologyDelta {
+            formula_stable_id: formula_stable_id.to_string(),
+            dependency_additions: Vec::new(),
+            dependency_removals: Vec::new(),
+            dependency_reclassifications: Vec::new(),
+            dependency_consequence_facts: Vec::new(),
+            dynamic_reference_facts: Vec::new(),
+            spill_facts: Vec::new(),
+            format_dependency_facts: Vec::new(),
+            capability_effect_facts: Vec::new(),
+            candidate_result_id: None,
+        }
+    }
+
+    fn excel_text(text: &str) -> ExcelText {
+        ExcelText::from_utf16_code_units(text.encode_utf16().collect())
+    }
 
     #[test]
     fn number_format_code_heuristics_cover_grouping_percent_date_and_negative_sections() {
@@ -1198,6 +1248,153 @@ mod tests {
             vec![Some("#00FF00".to_string()), None]
         );
     }
+
+    #[test]
+    fn custom_format_colour_token_flows_to_publication_font_color() {
+        let locale = oxfml_en_us_locale_context();
+        let source = FormulaSourceRecord::new("publication:format-color", 1, "=42");
+        let returned_value_surface = ReturnedValueSurface::from_extended_value(
+            &ExtendedValue::Core(EvalValue::Number(42.0)),
+        );
+        let context = VerificationPublicationContext {
+            number_format_code: Some("[Red]#,##0;[Blue]#,##0".to_string()),
+            ..Default::default()
+        };
+
+        let surface = build_verification_publication_surface(
+            &source,
+            &EvalValue::Number(42.0),
+            &returned_value_surface,
+            &empty_topology_delta("publication:format-color"),
+            None,
+            None,
+            Some(&locale),
+            None,
+            Some(&context),
+        );
+
+        assert_eq!(surface.effective_display_text, "42");
+        assert_eq!(surface.effective_font_color.as_deref(), Some("#FF0000"));
+    }
+
+    #[test]
+    fn custom_format_colour_token_uses_selected_section_and_indexed_palette() {
+        let locale = oxfml_en_us_locale_context();
+        let source = FormulaSourceRecord::new("publication:format-color-index", 1, "=-42");
+        let returned_value_surface = ReturnedValueSurface::from_extended_value(
+            &ExtendedValue::Core(EvalValue::Number(-42.0)),
+        );
+        let context = VerificationPublicationContext {
+            number_format_code: Some("[Red]#,##0;[Color3]#,##0;0".to_string()),
+            ..Default::default()
+        };
+
+        let surface = build_verification_publication_surface(
+            &source,
+            &EvalValue::Number(-42.0),
+            &returned_value_surface,
+            &empty_topology_delta("publication:format-color-index"),
+            None,
+            None,
+            Some(&locale),
+            None,
+            Some(&context),
+        );
+
+        assert_eq!(surface.effective_display_text, "-42");
+        assert_eq!(surface.effective_font_color.as_deref(), Some("#FF0000"));
+    }
+
+    #[test]
+    fn custom_format_colour_token_respects_condition_order_and_cf_precedence() {
+        let locale = oxfml_en_us_locale_context();
+        let source = FormulaSourceRecord::new("publication:format-color-cf", 1, "=5000");
+        let returned_value_surface = ReturnedValueSurface::from_extended_value(
+            &ExtendedValue::Core(EvalValue::Number(5000.0)),
+        );
+        let context = VerificationPublicationContext {
+            number_format_code: Some("[Green][>=1000]#,##0;[Red][<0](#,##0);0".to_string()),
+            conditional_formatting_rules: vec![VerificationConditionalFormattingRule {
+                target_ranges: vec!["A1".to_string()],
+                rule_kind: "CellIs".to_string(),
+                operator: Some("GreaterThan".to_string()),
+                thresholds: vec!["0".to_string()],
+                font_color: Some("#000000".to_string()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let surface = build_verification_publication_surface(
+            &source,
+            &EvalValue::Number(5000.0),
+            &returned_value_surface,
+            &empty_topology_delta("publication:format-color-cf"),
+            None,
+            None,
+            Some(&locale),
+            None,
+            Some(&context),
+        );
+
+        assert_eq!(surface.effective_display_text, "5,000");
+        assert_eq!(surface.effective_font_color.as_deref(), Some("#000000"));
+        assert_eq!(surface.conditional_formatting_applies, vec![Some(true)]);
+    }
+
+    #[test]
+    fn custom_format_text_fourth_section_renders_at_placeholder() {
+        let locale = oxfml_en_us_locale_context();
+        let source = FormulaSourceRecord::new("publication:text-section", 1, "=\"x\"");
+        let value = EvalValue::Text(excel_text("x"));
+        let returned_value_surface =
+            ReturnedValueSurface::from_extended_value(&ExtendedValue::Core(value.clone()));
+        let context = VerificationPublicationContext {
+            number_format_code: Some("0.00;-0.00;\"-\";\"prefix-\"@\"-suffix\"".to_string()),
+            ..Default::default()
+        };
+
+        let surface = build_verification_publication_surface(
+            &source,
+            &value,
+            &returned_value_surface,
+            &empty_topology_delta("publication:text-section"),
+            None,
+            None,
+            Some(&locale),
+            None,
+            Some(&context),
+        );
+
+        assert_eq!(surface.effective_display_text, "prefix-x-suffix");
+    }
+
+    #[test]
+    fn custom_format_text_without_fourth_section_falls_back_to_verbatim_text() {
+        let locale = oxfml_en_us_locale_context();
+        let source = FormulaSourceRecord::new("publication:text-section-fallback", 1, "=\"hello\"");
+        let value = EvalValue::Text(excel_text("hello"));
+        let returned_value_surface =
+            ReturnedValueSurface::from_extended_value(&ExtendedValue::Core(value.clone()));
+        let context = VerificationPublicationContext {
+            number_format_code: Some("0.00;-0.00;\"-\"".to_string()),
+            ..Default::default()
+        };
+
+        let surface = build_verification_publication_surface(
+            &source,
+            &value,
+            &returned_value_surface,
+            &empty_topology_delta("publication:text-section-fallback"),
+            None,
+            None,
+            Some(&locale),
+            None,
+            Some(&context),
+        );
+
+        assert_eq!(surface.effective_display_text, "hello");
+    }
 }
 
 fn evaluate_conditional_formatting_rule(
@@ -1305,38 +1502,21 @@ fn evaluate_data_bar_rule(
     if !number.is_finite() {
         return None;
     }
-    let typed_options = rule
+    let Some(typed_options) = rule
         .typed_rule
         .as_ref()
-        .and_then(|typed| typed.data_bar.as_ref());
-    let fill_ratio = data_bar_ratio(rule, typed_options, *number, aggregate_context)?;
+        .and_then(|typed| typed.data_bar.as_ref())
+    else {
+        return None;
+    };
+    let fill_ratio = data_bar_ratio(typed_options, *number, aggregate_context)?;
     let bar_color = typed_options
-        .and_then(|options| options.bar_color.as_deref())
-        .or(rule.fill_color.as_deref())
+        .bar_color
+        .as_deref()
         .and_then(normalize_hex_color)
         .unwrap_or_else(|| "#638EC6".to_string());
-    let direction = typed_options
-        .and_then(|options| options.direction)
-        .unwrap_or_else(|| {
-            if rule
-                .thresholds
-                .iter()
-                .any(|threshold| normalized_token(threshold).contains("directionright"))
-            {
-                DataBarDirection::Right
-            } else {
-                DataBarDirection::Left
-            }
-        });
-    let show_bar_only = typed_options.map_or_else(
-        || {
-            rule.thresholds.iter().any(|threshold| {
-                let normalized = normalized_token(threshold);
-                normalized == "showbaronly" || normalized == "baronly"
-            })
-        },
-        |options| options.show_bar_only,
-    );
+    let direction = typed_options.direction.unwrap_or(DataBarDirection::Left);
+    let show_bar_only = typed_options.show_bar_only;
 
     Some(ArrayVisualizationOutcome {
         effective_fill_color: None,
@@ -1351,19 +1531,18 @@ fn evaluate_data_bar_rule(
 }
 
 fn data_bar_ratio(
-    rule: &VerificationConditionalFormattingRule,
-    typed_options: Option<&DataBarRuleOptions>,
+    typed_options: &DataBarRuleOptions,
     value: f64,
     aggregate_context: &AggregateConditionalFormattingContext,
 ) -> Option<f64> {
     let explicit_min = typed_options
-        .and_then(|options| options.minimum.as_ref())
-        .and_then(|threshold| typed_threshold_value(threshold, aggregate_context))
-        .or_else(|| data_bar_bound(rule, "min"));
+        .minimum
+        .as_ref()
+        .and_then(|threshold| typed_threshold_value(threshold, aggregate_context));
     let explicit_max = typed_options
-        .and_then(|options| options.maximum.as_ref())
-        .and_then(|threshold| typed_threshold_value(threshold, aggregate_context))
-        .or_else(|| data_bar_bound(rule, "max"));
+        .maximum
+        .as_ref()
+        .and_then(|threshold| typed_threshold_value(threshold, aggregate_context));
     if explicit_min.is_none() && explicit_max.is_none() {
         return aggregate_context.ratio_for_value(value, 1.0);
     }
@@ -1374,19 +1553,6 @@ fn data_bar_ratio(
         return Some(1.0);
     }
     Some(((value - min) / (max - min)).clamp(0.0, 1.0))
-}
-
-fn data_bar_bound(rule: &VerificationConditionalFormattingRule, bound_name: &str) -> Option<f64> {
-    for threshold in &rule.thresholds {
-        let Some((kind, value)) = threshold.split_once(':') else {
-            continue;
-        };
-        if normalized_token(kind) == bound_name {
-            let parsed = value.trim().parse::<f64>().ok()?;
-            return parsed.is_finite().then_some(parsed);
-        }
-    }
-    None
 }
 
 fn evaluate_icon_set_rule(
@@ -1400,31 +1566,21 @@ fn evaluate_icon_set_rule(
     if !number.is_finite() {
         return None;
     }
-    let typed_options = rule
+    let Some(typed_options) = rule
         .typed_rule
         .as_ref()
-        .and_then(|typed| typed.icon_set.as_ref());
-    let set_kind = typed_options
-        .map(|options| options.set_kind.trim())
-        .filter(|value| !value.is_empty())
-        .or_else(|| {
-            rule.thresholds
-                .first()
-                .map(|value| value.trim())
-                .filter(|value| !value.is_empty())
-        })
-        .unwrap_or("3Arrows")
-        .to_string();
+        .and_then(|typed| typed.icon_set.as_ref())
+    else {
+        return None;
+    };
+    let set_kind = typed_options.set_kind.trim().to_string();
+    let set_kind = (!set_kind.is_empty())
+        .then_some(set_kind)
+        .unwrap_or_else(|| "3Arrows".to_string());
     let icon_count = icon_set_size(&set_kind);
     let ratio = aggregate_context.ratio_for_value(*number, 0.5)?;
-    let icon_index = icon_index_for_value(
-        rule,
-        typed_options,
-        icon_count,
-        ratio,
-        aggregate_context,
-        *number,
-    )?;
+    let icon_index =
+        icon_index_for_value(typed_options, icon_count, ratio, aggregate_context, *number)?;
 
     Some(ArrayVisualizationOutcome {
         effective_fill_color: None,
@@ -1437,26 +1593,17 @@ fn evaluate_icon_set_rule(
 }
 
 fn icon_index_for_value(
-    rule: &VerificationConditionalFormattingRule,
-    typed_options: Option<&IconSetRuleOptions>,
+    typed_options: &IconSetRuleOptions,
     icon_count: usize,
     ratio: f64,
     aggregate_context: &AggregateConditionalFormattingContext,
     value: f64,
 ) -> Option<usize> {
-    let thresholds = if let Some(options) = typed_options {
-        options
-            .thresholds
-            .iter()
-            .filter_map(|threshold| typed_threshold_value(threshold, aggregate_context))
-            .collect::<Vec<_>>()
-    } else {
-        rule.thresholds
-            .iter()
-            .skip(1)
-            .filter_map(|threshold| icon_threshold_value(threshold, aggregate_context))
-            .collect::<Vec<_>>()
-    };
+    let thresholds = typed_options
+        .thresholds
+        .iter()
+        .filter_map(|threshold| typed_threshold_value(threshold, aggregate_context))
+        .collect::<Vec<_>>();
     if thresholds.is_empty() {
         let icon_index = (ratio * icon_count as f64).floor() as usize;
         return Some(icon_index.min(icon_count.saturating_sub(1)));
@@ -1469,35 +1616,6 @@ fn icon_index_for_value(
         }
     }
     Some(icon_index.min(icon_count.saturating_sub(1)))
-}
-
-fn icon_threshold_value(
-    threshold: &str,
-    aggregate_context: &AggregateConditionalFormattingContext,
-) -> Option<f64> {
-    let trimmed = threshold.trim();
-    if let Some((kind, value)) = trimmed.split_once(':') {
-        let parsed = value.trim().trim_end_matches('%').parse::<f64>().ok()?;
-        return match normalized_token(kind).as_str() {
-            "percent" | "percentile" => {
-                let min = aggregate_context.min?;
-                let max = aggregate_context.max?;
-                let ratio = (parsed / 100.0).clamp(0.0, 1.0);
-                Some(min + ratio * (max - min))
-            }
-            "num" | "number" | "value" => Some(parsed),
-            _ => None,
-        };
-    }
-
-    let parsed = trimmed.trim_end_matches('%').parse::<f64>().ok()?;
-    if trimmed.ends_with('%') {
-        let min = aggregate_context.min?;
-        let max = aggregate_context.max?;
-        let ratio = (parsed / 100.0).clamp(0.0, 1.0);
-        return Some(min + ratio * (max - min));
-    }
-    Some(parsed)
 }
 
 fn icon_set_size(set_kind: &str) -> usize {
@@ -1513,39 +1631,10 @@ fn color_scale_stops(
     rule: &VerificationConditionalFormattingRule,
     aggregate_context: &AggregateConditionalFormattingContext,
 ) -> Option<Vec<ColorScaleStop>> {
-    if let Some(options) = rule
-        .typed_rule
+    rule.typed_rule
         .as_ref()
         .and_then(|typed| typed.color_scale.as_ref())
-    {
-        return typed_color_scale_stops(options, aggregate_context);
-    }
-
-    let mut stops = rule
-        .thresholds
-        .iter()
-        .filter_map(|threshold| parse_color_scale_stop(threshold, aggregate_context))
-        .collect::<Vec<_>>();
-    if stops.is_empty()
-        && let (Some(low), Some(high)) = (
-            rule.font_color.as_deref().and_then(RgbColor::parse),
-            rule.fill_color.as_deref().and_then(RgbColor::parse),
-        )
-    {
-        stops.push(ColorScaleStop {
-            position: 0.0,
-            color: low,
-        });
-        stops.push(ColorScaleStop {
-            position: 1.0,
-            color: high,
-        });
-    }
-    if stops.len() < 2 {
-        return None;
-    }
-    stops.sort_by(|left, right| left.position.total_cmp(&right.position));
-    Some(stops)
+        .and_then(|options| typed_color_scale_stops(options, aggregate_context))
 }
 
 fn typed_color_scale_stops(
@@ -1567,30 +1656,6 @@ fn typed_color_scale_stops(
     }
     stops.sort_by(|left, right| left.position.total_cmp(&right.position));
     Some(stops)
-}
-
-fn parse_color_scale_stop(
-    threshold: &str,
-    aggregate_context: &AggregateConditionalFormattingContext,
-) -> Option<ColorScaleStop> {
-    let parts = threshold
-        .split(':')
-        .map(str::trim)
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>();
-    let color_text = parts
-        .iter()
-        .rev()
-        .find_map(|part| normalize_hex_color(part))?;
-    let color = RgbColor::parse(&color_text)?;
-    let position = match parts.as_slice() {
-        [color_only] if normalize_hex_color(color_only).is_some() => 0.0,
-        [position, _] => color_scale_position(position, aggregate_context)?,
-        [kind, value, _] => color_scale_position(&format!("{kind}:{value}"), aggregate_context)?,
-        _ => return None,
-    };
-
-    Some(ColorScaleStop { position, color })
 }
 
 fn color_scale_position_from_typed(
@@ -1631,35 +1696,6 @@ fn typed_threshold_value(
             Some(min + ratio * (max - min))
         }
         ConditionalFormattingThreshold::Number(value) => Some(*value),
-    }
-}
-
-fn color_scale_position(
-    token: &str,
-    aggregate_context: &AggregateConditionalFormattingContext,
-) -> Option<f64> {
-    let trimmed = token.trim();
-    let normalized = normalized_token(trimmed);
-    match normalized.as_str() {
-        "min" => Some(0.0),
-        "mid" | "middle" => Some(0.5),
-        "max" => Some(1.0),
-        _ => {
-            if let Some((kind, value)) = trimmed.split_once(':') {
-                let parsed = value.trim().trim_end_matches('%').parse::<f64>().ok()?;
-                return match normalized_token(kind).as_str() {
-                    "percent" | "percentile" => Some((parsed / 100.0).clamp(0.0, 1.0)),
-                    "num" | "number" | "value" => aggregate_context.ratio_for_value(parsed, 0.5),
-                    _ => None,
-                };
-            }
-            let parsed = trimmed.trim_end_matches('%').parse::<f64>().ok()?;
-            if trimmed.ends_with('%') {
-                Some((parsed / 100.0).clamp(0.0, 1.0))
-            } else {
-                Some(parsed.clamp(0.0, 1.0))
-            }
-        }
     }
 }
 
@@ -1801,15 +1837,14 @@ fn evaluate_average_rule(
     above: bool,
 ) -> Option<bool> {
     let mean = aggregate_context.mean?;
-    let typed_options = rule
+    let Some(typed_options) = rule
         .typed_rule
         .as_ref()
-        .and_then(|typed| typed.average.as_ref());
-    let stddev_multiplier = if let Some(options) = typed_options {
-        options.stddev_multiplier.unwrap_or(0.0)
-    } else {
-        average_stddev_multiplier(rule)?
+        .and_then(|typed| typed.average.as_ref())
+    else {
+        return None;
     };
+    let stddev_multiplier = typed_options.stddev_multiplier.unwrap_or(0.0);
     let threshold = if stddev_multiplier == 0.0 {
         mean
     } else {
@@ -1820,40 +1855,11 @@ fn evaluate_average_rule(
             mean - stddev_multiplier * stddev
         }
     };
-    let equal = typed_options.map_or_else(
-        || average_includes_equal(rule),
-        |options| options.include_equal,
-    );
+    let equal = typed_options.include_equal;
     Some(if above {
         number > threshold || (equal && number == threshold)
     } else {
         number < threshold || (equal && number == threshold)
-    })
-}
-
-fn average_stddev_multiplier(rule: &VerificationConditionalFormattingRule) -> Option<f64> {
-    for threshold in &rule.thresholds {
-        let trimmed = threshold.trim();
-        if let Some((kind, value)) = trimmed.split_once(':')
-            && normalized_token(kind) == "stddev"
-        {
-            let parsed = value.trim().parse::<f64>().ok()?;
-            return parsed.is_finite().then_some(parsed.max(0.0));
-        }
-
-        let normalized = normalized_token(trimmed);
-        if let Some(prefix) = normalized.strip_suffix("stddev") {
-            let parsed = prefix.parse::<f64>().ok()?;
-            return parsed.is_finite().then_some(parsed.max(0.0));
-        }
-    }
-    Some(0.0)
-}
-
-fn average_includes_equal(rule: &VerificationConditionalFormattingRule) -> bool {
-    rule.thresholds.iter().any(|threshold| {
-        let normalized = normalized_token(threshold);
-        normalized == "equal" || normalized == "equalaverage" || normalized == "includeequal"
     })
 }
 
@@ -1892,38 +1898,24 @@ fn aggregate_rank_count(
     if value_count == 0 {
         return Some(0);
     }
-    if let Some(options) = rule
+    let Some(options) = rule
         .typed_rule
         .as_ref()
         .and_then(|typed| typed.rank.as_ref())
-    {
-        return match options.rank {
-            ConditionalFormattingRank::Count(count) => Some(count.min(value_count)),
-            ConditionalFormattingRank::Percent(percent) => {
-                if !percent.is_finite() || percent <= 0.0 {
-                    Some(0)
-                } else {
-                    Some(((value_count as f64) * percent / 100.0).ceil() as usize)
-                }
-            }
-        };
-    }
-    let threshold = rule
-        .thresholds
-        .first()
-        .map(String::as_str)
-        .unwrap_or("10")
-        .trim();
-    if let Some(percent) = threshold.strip_suffix('%') {
-        let percent = percent.trim().parse::<f64>().ok()?;
-        if !percent.is_finite() || percent <= 0.0 {
-            return Some(0);
-        }
-        return Some(((value_count as f64) * percent / 100.0).ceil() as usize);
-    }
+    else {
+        return None;
+    };
 
-    let count = threshold.parse::<usize>().ok()?;
-    Some(count.min(value_count))
+    match options.rank {
+        ConditionalFormattingRank::Count(count) => Some(count.min(value_count)),
+        ConditionalFormattingRank::Percent(percent) => {
+            if !percent.is_finite() || percent <= 0.0 {
+                Some(0)
+            } else {
+                Some(((value_count as f64) * percent / 100.0).ceil() as usize)
+            }
+        }
+    }
 }
 
 fn evaluate_predicate_rule(

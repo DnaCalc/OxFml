@@ -1,4 +1,7 @@
-use oxfunc_core::locale_format::{FormatFailure, FormatProfile, WorkbookDateSystem};
+use oxfunc_core::locale_format::{
+    CurrencyNegativePattern, CurrencyPlacement, CurrencySpacing, FormatFailure, FormatProfile,
+    LocaleProfileId, WorkbookDateSystem, format_profile,
+};
 
 use crate::format::datetime;
 
@@ -66,15 +69,22 @@ pub fn render_with_number_format_code(
 ) -> Result<String, FormatFailure> {
     let section = select_number_format_section(number_format_code, value)
         .ok_or_else(|| FormatFailure::UnsupportedCode(number_format_code.to_string()))?;
-    let stripped = strip_condition_and_color_tokens(&section);
+    let (stripped, locale_profile_id) = strip_section_tokens(&section);
+    let locale_profile = locale_profile_id.map(format_profile);
+    let effective_profile = locale_profile.as_ref().unwrap_or(profile);
     if stripped.chars().all(char::is_whitespace) {
         return Ok(stripped);
     }
     let trimmed = stripped.trim();
 
     if datetime::looks_like_datetime_format(trimmed) {
-        return datetime::render_with_datetime_tokens(profile, date_system, value, trimmed)
-            .ok_or(FormatFailure::InvalidDateSerial);
+        return datetime::render_with_datetime_tokens(
+            effective_profile,
+            date_system,
+            value,
+            trimmed,
+        )
+        .ok_or(FormatFailure::InvalidDateSerial);
     }
 
     if is_two_digit_integer_code(trimmed) {
@@ -86,7 +96,7 @@ pub fn render_with_number_format_code(
             .ok_or_else(|| FormatFailure::UnsupportedCode(number_format_code.to_string()));
     }
 
-    let numeric = parse_numeric_section(trimmed, profile)
+    let numeric = parse_numeric_section(trimmed, effective_profile)
         .ok_or_else(|| FormatFailure::UnsupportedCode(number_format_code.to_string()))?;
     let scaled_value = apply_scaling(value, &numeric);
 
@@ -99,7 +109,7 @@ pub fn render_with_number_format_code(
         return Ok(apply_numeric_affixes(rendered, &numeric));
     }
 
-    let base = render_fixed_with_numeric_section(profile, scaled_value.abs(), &numeric);
+    let base = render_fixed_with_numeric_section(effective_profile, scaled_value.abs(), &numeric);
 
     let body = if scaled_value.is_sign_negative() && !base.starts_with('-') {
         format!("-{base}")
@@ -109,14 +119,54 @@ pub fn render_with_number_format_code(
     Ok(apply_numeric_affixes(body, &numeric))
 }
 
+pub(crate) fn render_text_with_number_format_code(
+    text: &str,
+    number_format_code: &str,
+) -> Option<String> {
+    let sections = split_format_sections(number_format_code);
+    if sections.is_empty() {
+        return None;
+    }
+    let Some(section) = sections.get(3) else {
+        return Some(text.to_string());
+    };
+    let stripped = strip_condition_and_color_tokens(section);
+    Some(render_text_format_section(text, &stripped))
+}
+
+pub(crate) fn selected_number_format_section_color(
+    number_format_code: &str,
+    value: f64,
+) -> Option<String> {
+    let section = select_number_format_section(number_format_code, value)?;
+    leading_format_section_color(&section)
+}
+
+pub(crate) fn selected_text_format_section_color(number_format_code: &str) -> Option<String> {
+    let sections = split_format_sections(number_format_code);
+    let section = sections.get(3)?;
+    leading_format_section_color(section)
+}
+
 pub fn render_currency(profile: &FormatProfile, value: f64, decimals: i32) -> String {
-    render_fixed_common(
+    let magnitude = render_fixed_common(
         profile,
-        value,
+        value.abs(),
         decimals,
         IntegerRenderStyle::RecursiveGrouping,
-        profile.currency_symbol,
-    )
+        "",
+    );
+    let spacing = currency_spacing_text(profile.currency_spacing);
+    let body = match profile.currency_placement {
+        CurrencyPlacement::Before => format!("{}{}{}", profile.currency_symbol, spacing, magnitude),
+        CurrencyPlacement::After => format!("{}{}{}", magnitude, spacing, profile.currency_symbol),
+    };
+
+    if value.is_sign_negative() && value != 0.0 {
+        apply_currency_negative_pattern(profile, body, magnitude, spacing)
+    } else {
+        body
+    }
 }
 
 pub fn render_fixed(profile: &FormatProfile, value: f64, decimals: i32, no_commas: bool) -> String {
@@ -142,12 +192,14 @@ pub(crate) fn parse_numeric_section(
     let prefix = cleaned[..first_placeholder].replace('*', "");
     let suffix = cleaned[numeric_region_end..].replace('*', "");
     let numeric_region = &cleaned[first_placeholder..numeric_region_end];
+    let decimal_token = format_code_decimal_token(profile);
+    let group_token = format_code_group_token(profile);
     let mantissa_region = numeric_region
         .split_once(['E', 'e'])
         .map(|(mantissa, _)| mantissa)
         .unwrap_or(numeric_region);
     let decimals = mantissa_region
-        .split_once('.')
+        .split_once(decimal_token)
         .map(|(_, fractional)| {
             fractional
                 .chars()
@@ -156,30 +208,21 @@ pub(crate) fn parse_numeric_section(
         })
         .unwrap_or(0);
     let integer_region = mantissa_region
-        .split_once('.')
+        .split_once(decimal_token)
         .map(|(integer, _)| integer)
         .unwrap_or(mantissa_region);
-    let comma_is_semantic_separator = profile.thousands_separator == ",";
-    let scale_commas = if comma_is_semantic_separator {
-        integer_region
-            .chars()
-            .rev()
-            .take_while(|ch| *ch == ',')
-            .count() as i32
-    } else {
-        0
-    };
-    let integer_pattern = if comma_is_semantic_separator {
-        integer_region.trim_end_matches(',').to_string()
-    } else {
-        integer_region.to_string()
-    };
-    let integer_separator_semantics = if !integer_pattern.contains(',') {
-        IntegerSeparatorSemantics::None
-    } else if comma_is_semantic_separator {
+    let scale_commas = integer_region
+        .chars()
+        .rev()
+        .take_while(|ch| *ch == group_token)
+        .count() as i32;
+    let integer_pattern = integer_region.trim_end_matches(group_token).to_string();
+    let integer_separator_semantics = if integer_pattern.contains(group_token) {
         IntegerSeparatorSemantics::RecursiveGrouping
-    } else {
+    } else if group_token != ',' && integer_pattern.contains(',') {
         IntegerSeparatorSemantics::LiteralPattern
+    } else {
+        IntegerSeparatorSemantics::None
     };
     let scientific_exponent_digits = numeric_region
         .to_ascii_uppercase()
@@ -188,8 +231,10 @@ pub(crate) fn parse_numeric_section(
         .filter(|digits| *digits > 0);
     let percent_count = prefix.matches('%').count() as i32 + suffix.matches('%').count() as i32;
     let negative_parentheses = prefix.contains('(') && suffix.contains(')');
-    let is_currency =
-        prefix.contains(profile_currency_tokens()) || suffix.contains(profile_currency_tokens());
+    let is_currency = prefix.contains(profile_currency_tokens())
+        || suffix.contains(profile_currency_tokens())
+        || prefix.contains(profile.currency_symbol)
+        || suffix.contains(profile.currency_symbol);
 
     Some(ParsedNumericSection {
         prefix,
@@ -500,8 +545,13 @@ fn split_format_sections(code: &str) -> Vec<String> {
 }
 
 pub(crate) fn strip_condition_and_color_tokens(section: &str) -> String {
+    strip_section_tokens(section).0
+}
+
+fn strip_section_tokens(section: &str) -> (String, Option<LocaleProfileId>) {
     let mut stripped = String::new();
     let mut chars = section.chars().peekable();
+    let mut locale_profile_id = None;
     while let Some(ch) = chars.next() {
         if ch == '[' {
             let mut token = String::new();
@@ -511,12 +561,14 @@ pub(crate) fn strip_condition_and_color_tokens(section: &str) -> String {
                 }
                 token.push(next);
             }
-            if token.starts_with('>')
-                || token.starts_with('<')
-                || token.starts_with('=')
+            if is_condition_token(&token)
+                || is_format_color_token(&token)
+                || is_locale_prefix_token(&token)
                 || (token.chars().all(|c| c.is_ascii_alphabetic())
                     && !is_elapsed_time_token(&token))
             {
+                locale_profile_id =
+                    locale_profile_id.or_else(|| locale_profile_id_from_token(&token));
                 continue;
             }
             stripped.push('[');
@@ -526,7 +578,7 @@ pub(crate) fn strip_condition_and_color_tokens(section: &str) -> String {
             stripped.push(ch);
         }
     }
-    stripped
+    (stripped, locale_profile_id)
 }
 
 pub(crate) fn expand_literal_tokens(section: &str) -> String {
@@ -555,19 +607,35 @@ pub(crate) fn expand_literal_tokens(section: &str) -> String {
     result
 }
 
+fn render_text_format_section(text: &str, section: &str) -> String {
+    let expanded = expand_literal_tokens(section);
+    if expanded.contains('@') {
+        expanded.replace('@', text)
+    } else {
+        expanded
+    }
+}
+
 fn is_numeric_format_token(ch: char) -> bool {
     matches!(ch, '#' | '0' | '?' | ',' | '.' | 'E' | 'e' | '+' | '-')
 }
 
 fn extract_condition(section: &str) -> Option<String> {
-    let trimmed = section.trim_start();
-    let remaining = trimmed.strip_prefix('[')?;
-    let token = remaining.split(']').next()?;
-    if token.starts_with('>') || token.starts_with('<') || token.starts_with('=') {
-        Some(token.to_string())
-    } else {
-        None
+    let mut remaining = section.trim_start();
+    while let Some((token, rest)) = take_leading_bracket_token(remaining) {
+        if is_condition_token(token) {
+            return Some(token.to_string());
+        }
+        if is_format_color_token(token)
+            || is_locale_prefix_token(token)
+            || (token.chars().all(|c| c.is_ascii_alphabetic()) && !is_elapsed_time_token(token))
+        {
+            remaining = rest.trim_start();
+            continue;
+        }
+        break;
     }
+    None
 }
 
 fn condition_matches(condition: &str, value: f64) -> bool {
@@ -599,6 +667,124 @@ fn condition_matches(condition: &str, value: f64) -> bool {
         _ => false,
     }
 }
+
+fn leading_format_section_color(section: &str) -> Option<String> {
+    let mut remaining = section.trim_start();
+    while let Some((token, rest)) = take_leading_bracket_token(remaining) {
+        if let Some(color) = format_color_token_hex(token) {
+            return Some(color.to_string());
+        }
+        if is_condition_token(token) || is_locale_prefix_token(token) {
+            remaining = rest.trim_start();
+            continue;
+        }
+        break;
+    }
+    None
+}
+
+fn take_leading_bracket_token(input: &str) -> Option<(&str, &str)> {
+    let remaining = input.strip_prefix('[')?;
+    let close = remaining.find(']')?;
+    let token = &remaining[..close];
+    let rest = &remaining[close + 1..];
+    Some((token, rest))
+}
+
+fn is_condition_token(token: &str) -> bool {
+    token.starts_with('>') || token.starts_with('<') || token.starts_with('=')
+}
+
+fn is_format_color_token(token: &str) -> bool {
+    format_color_token_hex(token).is_some()
+}
+
+fn is_locale_prefix_token(token: &str) -> bool {
+    locale_profile_id_from_token(token).is_some()
+}
+
+fn locale_profile_id_from_token(token: &str) -> Option<LocaleProfileId> {
+    let token = token.trim();
+    let body = token.strip_prefix("$-")?;
+    let lcid_text = body
+        .split_once('-')
+        .map(|(lcid, _)| lcid)
+        .unwrap_or(body)
+        .trim();
+    let lcid = u16::from_str_radix(lcid_text, 16).ok()?;
+    LocaleProfileId::from_excel_lcid(lcid)
+}
+
+fn format_code_decimal_token(profile: &FormatProfile) -> char {
+    single_char_token(profile.format_code_decimal_token).unwrap_or('.')
+}
+
+fn format_code_group_token(profile: &FormatProfile) -> char {
+    single_char_token(profile.format_code_group_token).unwrap_or(',')
+}
+
+fn single_char_token(token: &str) -> Option<char> {
+    let mut chars = token.chars();
+    let first = chars.next()?;
+    chars.next().is_none().then_some(first)
+}
+
+fn currency_spacing_text(spacing: CurrencySpacing) -> &'static str {
+    match spacing {
+        CurrencySpacing::None => "",
+        CurrencySpacing::Space => " ",
+        CurrencySpacing::NarrowNoBreakSpace => "\u{202F}",
+    }
+}
+
+fn apply_currency_negative_pattern(
+    profile: &FormatProfile,
+    body: String,
+    magnitude: String,
+    spacing: &str,
+) -> String {
+    match profile.currency_negative_pattern {
+        CurrencyNegativePattern::LeadingMinus => format!("-{body}"),
+        CurrencyNegativePattern::TrailingMinus => format!("{body}-"),
+        CurrencyNegativePattern::Parentheses => format!("({body})"),
+        CurrencyNegativePattern::MinusBeforeSymbol => match profile.currency_placement {
+            CurrencyPlacement::Before => {
+                format!("-{}{}{}", profile.currency_symbol, spacing, magnitude)
+            }
+            CurrencyPlacement::After => format!("-{body}"),
+        },
+    }
+}
+
+fn format_color_token_hex(token: &str) -> Option<&'static str> {
+    let normalized = token.trim().to_ascii_lowercase();
+    match normalized.as_str() {
+        "black" => Some("#000000"),
+        "blue" => Some("#0000FF"),
+        "cyan" => Some("#00FFFF"),
+        "green" => Some("#00FF00"),
+        "magenta" => Some("#FF00FF"),
+        "red" => Some("#FF0000"),
+        "white" => Some("#FFFFFF"),
+        "yellow" => Some("#FFFF00"),
+        _ => {
+            let index = normalized.strip_prefix("color")?.parse::<usize>().ok()?;
+            EXCEL_DEFAULT_COLOR_INDEX
+                .get(index.checked_sub(1)?)
+                .copied()
+        }
+    }
+}
+
+const EXCEL_DEFAULT_COLOR_INDEX: [&str; 56] = [
+    "#000000", "#FFFFFF", "#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF",
+    "#800000", "#008000", "#000080", "#808000", "#800080", "#008080", "#C0C0C0", "#808080",
+    "#9999FF", "#993366", "#FFFFCC", "#CCFFFF", "#660066", "#FF8080", "#0066CC", "#CCCCFF",
+    "#000080", "#FF00FF", "#FFFF00", "#00FFFF", "#800080", "#800000", "#008080", "#0000FF",
+    "#00CCFF", "#CCFFFF", "#CCFFCC", "#FFFF99", "#99CCFF", "#FF99CC", "#CC99FF", "#FFCC99",
+    "#3366FF", "#33CCCC", "#99CC00", "#FFCC00", "#FF9900", "#FF6600", "#666699", "#969696",
+    "#003366", "#339966", "#003300", "#333300", "#993300", "#993366", "#333399", "#333333",
+];
 
 fn contains_fraction_placeholder_pattern(section: &str) -> bool {
     let expanded = expand_literal_tokens(section);

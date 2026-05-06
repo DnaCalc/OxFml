@@ -673,6 +673,48 @@ fn signature_help_context_tracks_active_argument_index() {
 }
 
 #[test]
+fn signature_help_context_is_absent_after_closed_call_close_paren() {
+    let source = FormulaSourceRecord::new("editor-signature-closed-end", 1, "=SUM(1,2,3)");
+    let service =
+        EditorEditService::new(EditorEnvironment::new(editor_bind_context(source.clone())));
+
+    let document = service.open_document(source, None);
+
+    assert!(service.signature_help_at_cursor(&document, 11).is_none());
+    assert!(service.signature_help_at_cursor(&document, 12).is_none());
+}
+
+#[test]
+fn signature_help_context_still_shows_before_closed_call_close_paren() {
+    let source = FormulaSourceRecord::new("editor-signature-before-close", 1, "=SUM(1,2,3)");
+    let service =
+        EditorEditService::new(EditorEnvironment::new(editor_bind_context(source.clone())));
+
+    let document = service.open_document(source, None);
+    let signature = service
+        .signature_help_at_cursor(&document, 10)
+        .expect("cursor immediately before close paren should still be inside the call");
+
+    assert_eq!(signature.callee_text, "SUM");
+    assert_eq!(signature.active_argument_index, 2);
+}
+
+#[test]
+fn signature_help_context_still_shows_for_unclosed_call() {
+    let source = FormulaSourceRecord::new("editor-signature-unclosed", 1, "=SUM(1,2,3");
+    let service =
+        EditorEditService::new(EditorEnvironment::new(editor_bind_context(source.clone())));
+
+    let document = service.open_document(source, None);
+    let signature = service
+        .signature_help_at_cursor(&document, 10)
+        .expect("unclosed calls should keep signature help active at the caret");
+
+    assert_eq!(signature.callee_text, "SUM");
+    assert_eq!(signature.active_argument_index, 2);
+}
+
+#[test]
 fn function_help_packet_tracks_active_callee_and_snapshot() {
     let source = FormulaSourceRecord::new("editor-help", 1, "=SUM(1,2,3)");
     let snapshot = sample_library_context_snapshot();

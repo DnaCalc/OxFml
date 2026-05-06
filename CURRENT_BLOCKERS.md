@@ -1,8 +1,8 @@
 # CURRENT_BLOCKERS.md — OxFml
 
-Status: 2 active blockers.
+Status: 1 active blocker.
 
-Last reviewed: 2026-05-04 after DNA OneCalc locale and custom-format grammar handoff intake.
+Last reviewed: 2026-05-06 after consuming the OxFunc final `FormatProfile` semantics and rerunning focused locale/custom-format evidence.
 
 ---
 
@@ -18,20 +18,31 @@ Last reviewed: 2026-05-04 after DNA OneCalc locale and custom-format grammar han
 
 ---
 
-### BLK-FML-005: Locale expansion requires OxFunc locale-profile API breadth
-
-- **Status**: active
-- **Impact**: blocks the locale-specific portions of DNA OneCalc `HANDOFF_OXFML_LOCALE_EXPANSION.md` and the locale-prefix portion of `HANDOFF_OXFML_CUSTOM_FORMAT_GRAMMAR.md`
-- **Current state**: OxFml can currently construct only `LocaleProfileId::EnUs` and `LocaleProfileId::CurrentExcelHost` profiles through the OxFunc locale-format seam. The requested locale-keyed month/weekday names, separators, currency symbols, parser branches, General rendering, and optional locale-prefix parsing need canonical OxFunc `LocaleProfileId` variants and profile constants before OxFml can avoid inventing a second locale registry.
-- **Exact unblock steps**: OxFunc exposes canonical locale profile identities and format-profile constants for the requested locale set, including decimal/thousands/list separators, currency symbol, date separator, time separator, and date-system compatibility expectations. After that lands, OxFml can add locale-keyed parser/formatter tables and locale-prefix custom-format grammar coverage without violating ownership.
-- **Recommendation**: escalate
-- **Opened**: 2026-05-04
-
----
-
----
-
 ## Resolved Blockers
+
+### BLK-FML-005: Locale expansion requires final OxFunc FormatProfile semantics
+
+- **Status**: resolved
+- **Impact**: previously blocked the date-parser, currency-placement, format-code-token-policy, and locale-prefix portions of DNA OneCalc `HANDOFF_OXFML_LOCALE_EXPANSION.md` and `HANDOFF_OXFML_CUSTOM_FORMAT_GRAMMAR.md`
+- **Current state**: OxFunc W094 exposes the needed profile semantics: short-date order/pattern, currency placement/spacing/negative pattern, invariant format-code token fields, and `LocaleProfileId::from_excel_lcid(lcid)`. OxFml consumes those fields for locale-keyed date names, profile-driven short-date parsing, currency parsing/rendering, invariant custom-format numeric tokens, and `[$-LCID]` locale-prefix custom-format rendering. Existing localized `TEXT(...)` separator-context fixtures now express their token policy explicitly through the profile fields rather than relying on separator inference.
+- **Exact unblock steps**: resolved; consumed the OxFunc final `FormatProfile` surface and reran focused OxFml locale/custom-format evidence.
+- **Recommendation**: resolved
+- **Opened**: 2026-05-04
+- **Resolved**: 2026-05-06
+
+---
+
+### BLK-FML-006: Lambda `invoke_many` batching requires OxFunc callable-helper trait and loop coordination
+
+- **Status**: resolved
+- **Impact**: previously blocked OxFml bead `fml-0wg.6` / DnaOneCalc `HANDOFF_OXFML_LAMBDA_INVOCATION_PERF.md`
+- **Current state**: OxFunc W095 added the owned `CallableInvoker::invoke_many(...)` seam plus `CallableInvocationBatch` / `CallableBatchMode` and wired `MAP`, `REDUCE`, `SCAN`, `BYROW`, `BYCOL`, and `MAKEARRAY` through it. OxFml now specializes `OxFmlCallableInvoker::invoke_many(...)` for local callables, hoisting registry lookup, binding clone, resolver setup, trace buffer reuse, and local helper-binding slot setup out of the per-iteration path while preserving per-invocation arity and recursion checks.
+- **Exact unblock steps**: completed; consumed the OxFunc W095 seam and reran focused higher-order callable evidence plus full `oxfml_core` validation.
+- **Recommendation**: resolved
+- **Opened**: 2026-05-06
+- **Resolved**: 2026-05-06
+
+---
 
 ### BLK-FML-002: OxFunc `call_register_id_family` derive regression blocked 2026-03-22 validation
 

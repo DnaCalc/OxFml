@@ -583,12 +583,25 @@ fn insert_function_completion_proposal(
 /// signature_help to drop the help context once the caret is past
 /// the close paren.
 fn closed_call_close_paren_end(call_node: &GreenNode) -> Option<usize> {
+    fn rparen_end_in_node(node: &GreenNode) -> Option<usize> {
+        node.children.iter().rev().find_map(|child| match child {
+            GreenChild::Token(token) if token.kind == TokenKind::RParen && token.text == ")" => {
+                Some(token.span.end())
+            }
+            _ => None,
+        })
+    }
+
+    if let Some(end) = rparen_end_in_node(call_node) {
+        return Some(end);
+    }
+
     call_node
         .children
         .iter()
         .rev()
         .find_map(|child| match child {
-            GreenChild::Token(token) if token.kind == TokenKind::RParen => Some(token.span.end()),
+            GreenChild::Node(node) => rparen_end_in_node(node),
             _ => None,
         })
 }
@@ -753,12 +766,19 @@ fn insert_proposal(
 }
 
 fn smallest_call_like_node<'a>(node: &'a GreenNode, cursor_offset: usize) -> Option<&'a GreenNode> {
-    if !span_contains(node.span, cursor_offset) {
+    let contains_cursor = span_contains(node.span, cursor_offset);
+    let one_past_node = cursor_offset == node.span.end().saturating_add(1);
+    if !contains_cursor && !one_past_node {
         return None;
     }
 
-    let mut best =
-        matches!(node.kind, SyntaxKind::CallExpr | SyntaxKind::InvokeExpr).then_some(node);
+    let mut best = if matches!(node.kind, SyntaxKind::CallExpr | SyntaxKind::InvokeExpr)
+        && (contains_cursor || closed_call_close_paren_end(node).is_none())
+    {
+        Some(node)
+    } else {
+        None
+    };
 
     for child in &node.children {
         if let GreenChild::Node(child_node) = child {
