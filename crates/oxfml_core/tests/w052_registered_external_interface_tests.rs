@@ -6,6 +6,7 @@ use oxfunc_core::functions::call_register_id_family::{
 use oxfunc_core::value::{CallArgValue, EvalValue, ExcelText, ReferenceKind, ReferenceLike};
 use std::cell::RefCell;
 
+use oxfml_core::EvaluationTraceMode;
 use oxfml_core::TypedContextQueryBundleSpec;
 use oxfml_core::interface::{
     RegisteredExternalCatalogController, RegisteredExternalCatalogMutationRequest,
@@ -33,6 +34,7 @@ fn host_executes_register_id_and_call_through_registered_external_provider() {
         "formula:register-id",
         "=REGISTER.ID(\"Kernel32\",\"GetTickCount\",\"J!\")",
     );
+    register_host.set_trace_mode(EvaluationTraceMode::PreparedCalls);
 
     let register_output = register_host
         .recalc_with_registered_external_provider(None, Some(&provider), None, None)
@@ -78,6 +80,7 @@ fn host_executes_register_id_and_call_through_registered_external_provider() {
         "formula:call-direct",
         "=CALL(\"Kernel32\",\"MulDiv\",\"JJJJ\",6,7,3)",
     );
+    call_host.set_trace_mode(EvaluationTraceMode::PreparedCalls);
     let call_output = call_host
         .recalc_with_registered_external_provider(None, Some(&provider), None, None)
         .expect("call host recalc");
@@ -135,6 +138,7 @@ fn host_executes_register_id_and_call_through_registered_external_provider() {
 fn host_executes_call_by_register_id_through_lookup_lane() {
     let provider = RecordingRegisteredExternalProvider::default();
     let mut host = SingleFormulaHost::new("formula:call-register-id", "=CALL(4242,6,7,3)");
+    host.set_trace_mode(EvaluationTraceMode::PreparedCalls);
 
     let output = host
         .recalc_with_registered_external_provider(None, Some(&provider), None, None)

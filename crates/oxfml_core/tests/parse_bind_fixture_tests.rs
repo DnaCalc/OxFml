@@ -373,6 +373,7 @@ fn bind_prefers_builtin_function_over_colliding_helper_local_in_call_position() 
     let BoundExpr::FunctionCall {
         function_name,
         args,
+        ..
     } = &bind.bound_formula.root
     else {
         panic!("expected LET call root, got {:?}", bind.bound_formula.root);
@@ -382,6 +383,7 @@ fn bind_prefers_builtin_function_over_colliding_helper_local_in_call_position() 
     let BoundExpr::FunctionCall {
         function_name,
         args: invocation_args,
+        ..
     } = &args[2]
     else {
         panic!("expected builtin function call body, got {:?}", args[2]);
@@ -429,6 +431,7 @@ fn bind_surfaces_t_builtin_arity_authoring_reject_for_ftc_0444() {
     let BoundExpr::FunctionCall {
         function_name,
         args,
+        ..
     } = &bind.bound_formula.root
     else {
         panic!("expected LET call root, got {:?}", bind.bound_formula.root);
@@ -438,6 +441,7 @@ fn bind_surfaces_t_builtin_arity_authoring_reject_for_ftc_0444() {
     let BoundExpr::FunctionCall {
         function_name,
         args: invocation_args,
+        ..
     } = &args[4]
     else {
         panic!("expected builtin function call body, got {:?}", args[4]);
@@ -472,6 +476,7 @@ fn bind_surfaces_generic_builtin_arity_authoring_reject_for_plain_gcd_zero_arity
     let BoundExpr::FunctionCall {
         function_name,
         args,
+        ..
     } = &bind.bound_formula.root
     else {
         panic!("expected GCD call root, got {:?}", bind.bound_formula.root);
@@ -508,6 +513,7 @@ fn bind_accepts_error_literal_inside_array_call_for_ftc_0837() {
     let BoundExpr::FunctionCall {
         function_name,
         args,
+        ..
     } = &bind.bound_formula.root
     else {
         panic!("expected SUM call root, got {:?}", bind.bound_formula.root);
@@ -517,6 +523,7 @@ fn bind_accepts_error_literal_inside_array_call_for_ftc_0837() {
     let BoundExpr::FunctionCall {
         function_name,
         args: tocol_args,
+        ..
     } = &args[0]
     else {
         panic!("expected TOCOL inner call, got {:?}", args[0]);
@@ -562,6 +569,7 @@ fn bind_accepts_filterxml_embedded_quoted_xml_string_for_ftc_1041() {
     let BoundExpr::FunctionCall {
         function_name,
         args,
+        ..
     } = &bind.bound_formula.root
     else {
         panic!(
@@ -643,6 +651,7 @@ fn bind_prefers_helper_local_name_over_cell_like_reference_text() {
     let BoundExpr::FunctionCall {
         function_name,
         args,
+        ..
     } = &bind.bound_formula.root
     else {
         panic!("expected LET call root, got {:?}", bind.bound_formula.root);

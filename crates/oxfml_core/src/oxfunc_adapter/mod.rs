@@ -3,7 +3,9 @@ use std::collections::BTreeMap;
 use oxfunc_core::value::EvalValue;
 
 use crate::binding::BindDiagnostic;
-use crate::eval::{DefinedNameBinding, EvaluationBackend, PreparedCall, PreparedResult};
+use crate::eval::{
+    DefinedNameBinding, EvaluationBackend, EvaluationTraceMode, PreparedCall, PreparedResult,
+};
 use crate::host::{HostRecalcOutput, SingleFormulaHost};
 use crate::interface::{
     LibraryContextProvider, LibraryContextSnapshotRef, ReturnedValueSurface, TableCallerRegion,
@@ -179,6 +181,7 @@ pub fn run_oxfunc_preparation_adapter(
     host.caller_row = caller_anchor.row;
     host.caller_col = caller_anchor.col;
     host.primary_locus = caller_anchor.clone();
+    host.set_trace_mode(EvaluationTraceMode::PreparedCalls);
     host.set_table_catalog(table_catalog);
     host.set_enclosing_table_ref(enclosing_table_ref);
     host.set_caller_table_region(caller_table_region);

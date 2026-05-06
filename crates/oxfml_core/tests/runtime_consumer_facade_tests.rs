@@ -15,11 +15,12 @@ use oxfml_core::semantics::{
     RegistrationSourceKind,
 };
 use oxfml_core::{
-    AcceptDecision, ExecutionOutcomeKind, ExecutionOutcomeStage, FormulaChannelKind,
-    FormulaSourceRecord, InMemoryLibraryContextProvider, LibraryContextSnapshotRef,
-    RegisteredExternalCatalogController, RegisteredExternalCatalogMutationRequest,
-    RegisteredExternalCatalogMutationResult, RegisteredExternalHostRegistrationRequest,
-    RegisteredExternalRegistrationChannel, TypedContextQueryBundle, TypedContextQueryFamily,
+    AcceptDecision, EvaluationTraceMode, ExecutionOutcomeKind, ExecutionOutcomeStage,
+    FormulaChannelKind, FormulaSourceRecord, InMemoryLibraryContextProvider,
+    LibraryContextSnapshotRef, RegisteredExternalCatalogController,
+    RegisteredExternalCatalogMutationRequest, RegisteredExternalCatalogMutationResult,
+    RegisteredExternalHostRegistrationRequest, RegisteredExternalRegistrationChannel,
+    TypedContextQueryBundle, TypedContextQueryFamily,
 };
 use oxfunc_core::functions::call_register_id_family::{
     RegisterIdRequest, RegisteredExternalDescriptor, RegisteredExternalOriginKind,
@@ -547,7 +548,8 @@ fn runtime_environment_executes_registered_external_formula_through_typed_query_
     let request = RuntimeFormulaRequest::new(
         FormulaSourceRecord::new("runtime:call-register", 1, "=CALL(4242,6,7,3)"),
         TypedContextQueryBundle::default().with_registered_external_provider(Some(&provider)),
-    );
+    )
+    .with_trace_mode(EvaluationTraceMode::PreparedCalls);
 
     let result = RuntimeEnvironment::new()
         .execute(request)
@@ -736,10 +738,17 @@ fn runtime_environment_preserves_randarray_width_for_columns_ftc_0505_without_ex
  {
     let locale = oxfml_en_us_locale_context();
     let result = RuntimeEnvironment::new()
-        .execute(RuntimeFormulaRequest::new(
-            FormulaSourceRecord::new("runtime:foundation:FTC-0505", 1, "=COLUMNS(RANDARRAY(5,3))"),
-            TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
-        ))
+        .execute(
+            RuntimeFormulaRequest::new(
+                FormulaSourceRecord::new(
+                    "runtime:foundation:FTC-0505",
+                    1,
+                    "=COLUMNS(RANDARRAY(5,3))",
+                ),
+                TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
+            )
+            .with_trace_mode(EvaluationTraceMode::PreparedCalls),
+        )
         .expect("FTC-0505 runtime execution should succeed");
 
     assert_eq!(result.published_worksheet_value, EvalValue::Number(3.0));

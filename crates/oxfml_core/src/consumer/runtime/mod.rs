@@ -4,7 +4,7 @@ use oxfunc_core::value::EvalValue;
 
 use crate::binding::{BindContext, BindDiagnostic, NameKind, bind_formula};
 use crate::consumer::ConsumerLibraryContextState;
-use crate::eval::{DefinedNameBinding, EvaluationBackend, EvaluationOutput};
+use crate::eval::{DefinedNameBinding, EvaluationBackend, EvaluationOutput, EvaluationTraceMode};
 use crate::host::{
     ArtifactReuseReport, FirstHostReplayCapturePacket, HostRecalcOutput, SingleFormulaHost,
 };
@@ -199,6 +199,7 @@ impl<'a> RuntimeEnvironment<'a> {
             );
         }
         self.apply_to_host(host, request.source());
+        host.set_trace_mode(request.trace_mode());
         let output = host.recalc_with_library_context_view(
             request.backend(),
             request.typed_query_bundle,
@@ -243,6 +244,7 @@ pub struct RuntimeFormulaRequest<'a> {
     backend: EvaluationBackend,
     typed_query_bundle: TypedContextQueryBundle<'a>,
     verification_publication_context: Option<VerificationPublicationContext>,
+    trace_mode: EvaluationTraceMode,
 }
 
 impl<'a> RuntimeFormulaRequest<'a> {
@@ -255,6 +257,7 @@ impl<'a> RuntimeFormulaRequest<'a> {
             backend: EvaluationBackend::OxFuncBacked,
             typed_query_bundle,
             verification_publication_context: None,
+            trace_mode: EvaluationTraceMode::default(),
         }
     }
 
@@ -268,6 +271,11 @@ impl<'a> RuntimeFormulaRequest<'a> {
         verification_publication_context: VerificationPublicationContext,
     ) -> Self {
         self.verification_publication_context = Some(verification_publication_context);
+        self
+    }
+
+    pub fn with_trace_mode(mut self, trace_mode: EvaluationTraceMode) -> Self {
+        self.trace_mode = trace_mode;
         self
     }
 
@@ -285,6 +293,10 @@ impl<'a> RuntimeFormulaRequest<'a> {
 
     pub fn verification_publication_context(&self) -> Option<&VerificationPublicationContext> {
         self.verification_publication_context.as_ref()
+    }
+
+    pub fn trace_mode(&self) -> EvaluationTraceMode {
+        self.trace_mode
     }
 }
 

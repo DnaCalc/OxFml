@@ -56,6 +56,7 @@ fn bind_surfaces_caller_context_locator_authoring_frontier_for_colliding_row_cal
     let BoundExpr::FunctionCall {
         function_name,
         args,
+        ..
     } = &bind.bound_formula.root
     else {
         panic!("expected LET root, got {:?}", bind.bound_formula.root);
@@ -68,6 +69,7 @@ fn bind_surfaces_caller_context_locator_authoring_frontier_for_colliding_row_cal
     let BoundExpr::FunctionCall {
         function_name,
         args: row_args,
+        ..
     } = callee.as_ref()
     else {
         panic!(

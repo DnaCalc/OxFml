@@ -3,7 +3,7 @@
 Canonical repo-level register of feature areas that are in-progress under workset completion doctrine.
 
 Status: active.
-Last updated: 2026-05-06.
+Last updated: 2026-05-07.
 
 ## Status Vocabulary
 
@@ -161,6 +161,14 @@ Last updated: 2026-05-06.
 - **Remaining gaps**: registry snapshot identity in bind/editor cache keys, formula-call binding against registry views for UDF-aware contexts, `#NAME?` recovery after late UDF registration, unregister/capability-denial invalidation, UDF-vs-defined-name precedence documentation, and registered-external reconciliation.
 - **Why still open**: this is HO-FN-014 follow-up design and implementation work, not a defect in the W068 editor metadata landing.
 - **Canonical owner**: planned `W074` tracking packet.
+
+### IP-23: Compiled Formula Plan And Hot-Loop Optimization
+
+- **Status**: in-progress
+- **Current floor**: OxFunc `HO-FN-016` / `W096` has been reviewed as the target surface-call shape. OxFml now carries resolved `SurfaceCallSite` handles in compiled formula evaluation paths, keeps trace mode explicitly context-owned and default-off, and uses reusable `SurfaceCallScratch` storage for built-in callable `invoke_many` batching.
+- **Remaining gaps**: lexical slot-frame execution for lambda bodies and ordinary formulas, reusable trace skeletons for value-only hot paths, metadata-driven invariant subexpression handling, deterministic perf fixtures, and broader full-formula planning beyond the first resolved-call-site floor.
+- **Why still open**: the current OxFml slice consumes the OxFunc call-site/scratch seam and removes avoidable name dispatch from key paths, but the longer optimizer program still needs dedicated plan lowering, evidence, and perf gates.
+- **Canonical owner**: active owner `W075`.
 
 ### IP-18: Format Engine Time, Fraction, And Accounting Coverage
 

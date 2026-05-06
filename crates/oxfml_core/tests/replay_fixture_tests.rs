@@ -7,7 +7,9 @@ use oxfunc_core::value::{EvalValue, ExcelText, ReferenceLike};
 use serde::Deserialize;
 
 use oxfml_core::binding::{BindContext, BindRequest, bind_formula};
-use oxfml_core::eval::{DefinedNameBinding, EvaluationContext, evaluate_formula};
+use oxfml_core::eval::{
+    DefinedNameBinding, EvaluationContext, EvaluationTraceMode, evaluate_formula,
+};
 use oxfml_core::interface::TypedContextQueryBundle;
 use oxfml_core::red::project_red_view;
 use oxfml_core::scheduler::{ExecutionRestriction, build_execution_contract};
@@ -690,6 +692,7 @@ fn single_formula_host_replay_fixtures_match_expected_snapshots() {
     for fixture in fixtures {
         let mut host =
             SingleFormulaHost::new(format!("host:{}", fixture.case_id), &fixture.formula);
+        host.set_trace_mode(EvaluationTraceMode::PreparedCalls);
         for (name, value) in &fixture.defined_names {
             apply_defined_name_summary(&mut host, name, value);
         }
@@ -1148,6 +1151,7 @@ fn evaluate_fixture_formula(
         Some(46000.0),
         Some(0.25),
     ));
+    context.set_trace_mode(EvaluationTraceMode::PreparedCalls);
 
     evaluate_formula(context).expect("fixture evaluation should succeed")
 }

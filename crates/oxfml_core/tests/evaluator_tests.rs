@@ -22,9 +22,26 @@ use oxfml_core::binding::{
 };
 use oxfml_core::eval::{
     CallableDefinedNameBinding, CallableValueCarrier, CallableValueProfile, DefinedNameBinding,
-    EvaluationContext, evaluate_formula,
+    EvaluationContext, EvaluationTraceMode, evaluate_formula,
 };
 use oxfml_core::interface::TypedContextQueryBundle;
+
+#[test]
+fn evaluation_context_defaults_to_value_only_trace_mode() {
+    let compiled = common::compile_formula(
+        "eval-fixture",
+        "=SUM(1,2)",
+        BTreeMap::new(),
+        "eval-struct-v1",
+        "oxfunc:test",
+    );
+
+    let context = EvaluationContext::new(&compiled.bound_formula, &compiled.semantic_plan);
+    let output = evaluate_formula(context).expect("evaluation should succeed");
+
+    assert_eq!(output.oxfunc_value, EvalValue::Number(3.0));
+    assert!(output.trace.prepared_calls.is_empty());
+}
 
 #[test]
 fn evaluator_runs_text_with_locale_format_context() {
@@ -2311,6 +2328,7 @@ fn evaluate_with_cells_result(
         Some(46000.0),
         Some(0.25),
     ));
+    context.set_trace_mode(EvaluationTraceMode::PreparedCalls);
 
     evaluate_formula(context)
 }
@@ -2362,6 +2380,7 @@ fn evaluate_with_rtd_provider(
         Some(46000.0),
         Some(0.25),
     ));
+    context.set_trace_mode(EvaluationTraceMode::PreparedCalls);
 
     evaluate_formula(context)
 }

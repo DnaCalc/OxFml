@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use oxfml_core::binding::{BindContext, BindRequest, BoundExpr, NameKind, bind_formula};
 use oxfml_core::eval::{
     CallableDefinedNameBinding, CallableValueCarrier, CallableValueProfile, DefinedNameBinding,
-    EvaluationBackend,
+    EvaluationBackend, EvaluationTraceMode,
 };
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::red::project_red_view;
@@ -64,6 +64,7 @@ fn callable_transport_fixtures_match_expected_snapshots() {
             fixture.callable_name.clone(),
             into_callable_binding(&fixture),
         );
+        host.set_trace_mode(EvaluationTraceMode::PreparedCalls);
 
         let output = host
             .recalc_with_backend(

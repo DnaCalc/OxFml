@@ -13,7 +13,7 @@ use crate::binding::{
 };
 use crate::eval::{
     CallableDefinedNameBinding, DefinedNameBinding, EvaluationBackend, EvaluationContext,
-    EvaluationOutput, evaluate_formula,
+    EvaluationOutput, EvaluationTraceMode, evaluate_formula,
 };
 use crate::format::canonicalize_locale_context;
 use crate::interface::{
@@ -82,6 +82,7 @@ pub struct SingleFormulaHost {
     pub caller_table_region: Option<TableCallerRegion>,
     pub now_serial: Option<f64>,
     pub random_value: Option<f64>,
+    pub trace_mode: EvaluationTraceMode,
     next_session_id: u64,
     next_commit_attempt_id: u64,
     cached_artifacts: Option<CachedHostArtifacts>,
@@ -228,10 +229,15 @@ impl SingleFormulaHost {
             caller_table_region: None,
             now_serial: Some(46000.0),
             random_value: Some(0.25),
+            trace_mode: EvaluationTraceMode::default(),
             next_session_id: 1,
             next_commit_attempt_id: 1,
             cached_artifacts: None,
         }
+    }
+
+    pub fn set_trace_mode(&mut self, trace_mode: EvaluationTraceMode) {
+        self.trace_mode = trace_mode;
     }
 
     pub fn set_formula_text(&mut self, formula_text: impl Into<String>) {
@@ -543,6 +549,7 @@ impl SingleFormulaHost {
         evaluation_context.cell_values = self.cell_values.clone();
         evaluation_context.defined_names = self.defined_names.clone();
         evaluation_context.apply_typed_context_query_bundle(effective_query_bundle);
+        evaluation_context.set_trace_mode(self.trace_mode);
 
         let bind_mismatch_detail = bind_mismatch_detail(&bind.bound_formula.diagnostics);
         let evaluation = if let Some(detail) = bind_mismatch_detail.as_deref() {

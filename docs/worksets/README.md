@@ -157,6 +157,7 @@ Current baseline sequence after `W001`:
 70. `W072` conditional formatting aggregate visualization rules
 71. `W073` conditional formatting typed visualization payload
 72. `W074` registry mutation and name-resolution invalidation
+73. `W075` compiled formula plan and hot-loop optimization
 
 This sequence is the current planning baseline.
 It may be refined, but new worksets should preserve dependency clarity rather than bypass it informally.
