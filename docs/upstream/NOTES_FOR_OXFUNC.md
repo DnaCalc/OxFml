@@ -27,12 +27,16 @@ The main current points for OxFunc are:
    - operators, criteria/database selection, and `SWITCH` use the tolerant lane,
    - `MATCH`, `XMATCH`, and `DELTA` remain exact.
 9. OxFml acknowledges `HO-FN-009` / OxFunc `W082`: OxFunc owns locale-sensitive function semantics and the typed locale/format seam, while OxFml/FEC owns the concrete parser/formatter capability bundle supplied through `LocaleFormatContext`.
-10. OxFml acknowledges `HO-FN-011` / OxFunc `W091`: OxFunc owns the canonical runtime function registry. OxFml consumes `FunctionEntry.display_signature`, ordered `ParameterDescriptor` rows, `FunctionMeta.arity`, registry metadata, UDF registration/unregistration, and capability overlays from `oxfunc_core::registry`; OxFml no longer treats `LibraryContextSnapshot` as a comprehensive function catalog or function-help signature source.
+10. OxFml acknowledges `HO-FN-011` / OxFunc `W091`: OxFunc owns the canonical runtime function registry. OxFml consumes `FunctionEntry.display_signature`, ordered `ParameterDescriptor` rows, `FunctionEntry.meta.arity`, registry metadata, UDF registration/unregistration, and capability overlays from `oxfunc_core::registry`; OxFml no longer treats `LibraryContextSnapshot` as a comprehensive function catalog or function-help signature source.
+11. OxFml acknowledges `HO-FN-013`: current OxFunc registry entries expose owned runtime metadata through `RegistryFunctionMeta` on `FunctionEntry.meta`; OxFml must not type-assume static built-in `FunctionMeta` for registry consumers.
+12. OxFml acknowledges `HO-FN-014` as an open design lane for registry snapshot identity, name-resolution invalidation, UDF-vs-defined-name precedence, and migration of formula-call binding from static built-in lookup to registry-backed lookup.
 
 Current acknowledged follow-on packet:
 1. `docs/handoffs/HANDOFF-OXFUNC-003_CORPUS_IF_EMPTY_TEXT_AND_FLOAT_COMPARE.md`
 2. `../OxFunc/docs/handoffs/HO-FN-008_corpus_if_correction_and_numeric_comparison_tolerance.md`
 3. `../OxFunc/docs/handoffs/HO-FN-009_locale_format_seam_ownership_realignment.md`
+4. `../OxFunc/docs/handoffs/HO-FN-013_registry_function_meta_owned_runtime_shape.md`
+5. `../OxFunc/docs/handoffs/HO-FN-014_udf_registry_mutation_and_name_resolution_invalidation.md`
 
 ## 3. Current Evidence In OxFml
 

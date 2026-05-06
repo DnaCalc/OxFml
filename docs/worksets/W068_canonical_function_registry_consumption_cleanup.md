@@ -31,9 +31,10 @@ This workset is a direct move to the desired end state. No compatibility depreca
 4. OxFunc handoff `../OxFunc/docs/handoffs/HO-FN-011_canonical_function_registry_consumption.md` was reviewed.
 
 Relevant unresolved observations:
-1. OxFunc requires `display_signature`, `ParameterDescriptor`, and `FunctionMeta.arity` to be the future-facing signature source.
+1. OxFunc requires `display_signature`, ordered `ParameterDescriptor` rows, and `FunctionEntry.meta.arity` to be the future-facing signature source.
 2. DNA OneCalc must not compensate for OxFml by sending a comprehensive function-list snapshot.
 3. Capability and provider availability must remain a registry-view or snapshot-overlay concern rather than deleting entries or inventing host-local list truth.
+4. `HO-FN-013` hardens the current registry shape: `FunctionEntry.meta` is `RegistryFunctionMeta` with owned runtime `function_id: String`, not static built-in-only `FunctionMeta`.
 
 ## Scope
 ### In scope

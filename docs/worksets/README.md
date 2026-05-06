@@ -156,6 +156,7 @@ Current baseline sequence after `W001`:
 69. `W071` conditional formatting array per-cell publication
 70. `W072` conditional formatting aggregate visualization rules
 71. `W073` conditional formatting typed visualization payload
+72. `W074` registry mutation and name-resolution invalidation
 
 This sequence is the current planning baseline.
 It may be refined, but new worksets should preserve dependency clarity rather than bypass it informally.

@@ -10,7 +10,7 @@ W072 remains the validated common-case floor. W073 is the follow-up that turns t
 
 - **Depends on**: `W071`, `W072`
 - **Unblocks**: richer DNA OneCalc conditional-formatting rule configuration without encoding rule metadata as threshold strings.
-- **Cross-repo**: DNA OneCalc has acknowledged W072 and can already render the bounded carrier. W073 needs DNA OneCalc alignment before any bridge-breaking payload shape is promoted.
+- **Cross-repo**: DNA OneCalc has acknowledged W072 and can already render the W071/W072 output carrier. W073 changes the input rule metadata contract for aggregate and visualization families.
 
 ## Source Context
 
@@ -27,9 +27,9 @@ W072 remains the validated common-case floor. W073 is the follow-up that turns t
 ### In Scope
 
 1. Define a typed conditional-formatting rule metadata model for the W072 aggregate and visualization families.
-2. Preserve W072 evaluator behavior while moving rule metadata reads from string parsing to structured fields.
+2. Preserve W072 output carrier behavior while moving rule metadata reads from string parsing to structured fields.
 3. Keep JSON/publication output for `ArrayCellFormat.data_bar` and `ArrayCellFormat.icon` stable unless a separate consumer-facing change is explicitly agreed.
-4. Add deterministic tests proving typed payloads produce the same outcomes as the W072 bounded convention.
+4. Add deterministic tests proving typed payloads produce the intended aggregate and visualization outcomes.
 5. File downstream-facing notes if the bridge shape changes.
 
 ### Out of Scope
@@ -41,9 +41,9 @@ W072 remains the validated common-case floor. W073 is the follow-up that turns t
 
 ## Compatibility Decision
 
-W073 first slice lands as an additive typed payload. `VerificationConditionalFormattingRule.typed_rule` is preferred by the evaluator when present; existing W072 bounded string conventions in `thresholds` remain supported as compatibility fallback.
+W073 is a direct move to the future typed input contract. `VerificationConditionalFormattingRule.typed_rule` is the only accepted metadata source for `colorScale`, `dataBar`, `iconSet`, `top`, `bottom`, `aboveAverage`, and `belowAverage` options.
 
-No existing DNA OneCalc W072 bridge/UI consumer is required to change to preserve current behavior. DNA OneCalc can opt into typed request construction when ready.
+The W072 bounded string conventions in `thresholds` are intentionally ignored for these families. `thresholds` remains available for existing scalar/operator/expression rule families that still use threshold text as their real rule input.
 
 ## Bead Set
 
@@ -52,7 +52,7 @@ No existing DNA OneCalc W072 bridge/UI consumer is required to change to preserv
 - **Status**: validated
 - **Owner**: OxFml with DNA OneCalc consultation
 - **Effect**: inventory all current W072 bounded string conventions and classify each as retained, replaced by typed field, or deferred.
-- **Gate**: additive typed fields with W072 compatibility fallback.
+- **Gate**: direct typed-only metadata for aggregate and visualization families.
 - **Evidence**: compatibility decision recorded above; downstream note `HANDOFF-DNAONECALC-012` filed.
 
 ### B073-02: Typed Rule Metadata Shape
@@ -71,15 +71,15 @@ No existing DNA OneCalc W072 bridge/UI consumer is required to change to preserv
 
 - **Status**: validated
 - **Owner**: OxFml
-- **Effect**: route aggregate and visualization evaluation through typed metadata first, with W072 bounded string parsing retained only if the compatibility gate chooses an additive path.
-- **Evidence**: old W072 tests remain green; new typed-payload tests cover each rule family.
+- **Effect**: route aggregate and visualization evaluation through typed metadata only for W073 families.
+- **Evidence**: typed-payload tests cover each rule family; legacy bounded-string tests now prove old strings are ignored.
 
 ### B073-04: Typed Color-Scale Stop Semantics
 
 - **Status**: validated
 - **Owner**: OxFml
 - **Effect**: replace color-stop string parsing with typed stop interpretation for two-stop and three-stop gradients, percent/percentile stops, and absolute numeric stops.
-- **Evidence**: `typed_color_scale_payload_matches_bounded_threshold_convention`.
+- **Evidence**: `typed_color_scale_payload_drives_interpolation` and `bounded_visualization_threshold_strings_are_not_interpreted`.
 
 ### B073-05: Typed Data-Bar and Icon-Set Semantics
 
@@ -93,20 +93,20 @@ No existing DNA OneCalc W072 bridge/UI consumer is required to change to preserv
 - **Status**: validated
 - **Owner**: OxFml
 - **Effect**: replace rank and average option parsing with typed `RankRuleOptions` and `AverageRuleOptions`.
-- **Evidence**: `typed_rank_and_average_payloads_replace_threshold_parsing`.
+- **Evidence**: `typed_rank_and_average_payloads_drive_aggregate_predicates` and `bounded_aggregate_option_strings_are_not_interpreted`.
 
 ### B073-07: Surface and Handoff Update
 
 - **Status**: filed
 - **Owner**: OxFml
 - **Effect**: update publication/spec docs, worklist rows, and handoff register entries for any bridge-visible field changes.
-- **Evidence**: `HANDOFF-DNAONECALC-012` records the additive typed input shape and no forced W072 bridge change.
+- **Evidence**: `HANDOFF-DNAONECALC-012` records the typed-only input shape and required DNA OneCalc request-construction update.
 
 ### B073-08: Regression and Compatibility Evidence
 
 - **Status**: validated
 - **Owner**: OxFml
-- **Effect**: preserve W072 behavior and prove typed payload parity.
+- **Effect**: preserve W071/W072 output carrier behavior, prove typed payload behavior, and prove old bounded strings are no longer interpreted.
 - **Evidence**:
   1. focused conditional-formatting tests,
   2. `cargo test -p oxfml_core`,
@@ -116,7 +116,7 @@ No existing DNA OneCalc W072 bridge/UI consumer is required to change to preserv
 Validation commands:
 
 1. `cargo fmt --all -- --check` - passed.
-2. `cargo test -p oxfml_core --test conditional_formatting_array_tests` - passed, 19 tests.
+2. `cargo test -p oxfml_core --test conditional_formatting_array_tests` - passed, 21 tests.
 3. `cargo test -p oxfml_core` - passed.
 4. `git diff --check` - passed with CRLF normalization warnings only.
 
@@ -127,5 +127,4 @@ Validation commands:
 - target_completeness: target_partial
 - integration_completeness: partial
 - open_lanes:
-  - DNA OneCalc acknowledgement and optional typed request-construction uptake
-  - future decision on whether or when to retire W072 bounded string fallback
+  - DNA OneCalc acknowledgement and required typed request-construction uptake
