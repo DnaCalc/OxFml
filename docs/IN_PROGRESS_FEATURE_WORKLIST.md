@@ -165,9 +165,9 @@ Last updated: 2026-05-07.
 ### IP-23: Compiled Formula Plan And Hot-Loop Optimization
 
 - **Status**: in-progress
-- **Current floor**: OxFunc `HO-FN-016` / `W096` has been reviewed as the target surface-call shape. OxFml now carries resolved `SurfaceCallSite` handles in compiled formula evaluation paths, keeps trace mode explicitly context-owned and default-off, and uses reusable `SurfaceCallScratch` storage for built-in callable `invoke_many` batching.
-- **Remaining gaps**: lexical slot-frame execution for lambda bodies and ordinary formulas, reusable trace skeletons for value-only hot paths, metadata-driven invariant subexpression handling, deterministic perf fixtures, and broader full-formula planning beyond the first resolved-call-site floor.
-- **Why still open**: the current OxFml slice consumes the OxFunc call-site/scratch seam and removes avoidable name dispatch from key paths, but the longer optimizer program still needs dedicated plan lowering, evidence, and perf gates.
+- **Current floor**: OxFunc `HO-FN-016` / `W096` has been reviewed as the target surface-call shape. OxFml now carries resolved `SurfaceCallSite` handles in compiled formula evaluation paths, keeps trace mode explicitly context-owned and default-off, uses reusable `SurfaceCallScratch` storage for built-in callable `invoke_many` batching, and has identified callable stack-guard coalescing as the first execution-frame optimization lane.
+- **Remaining gaps**: persisted deterministic perf fixtures, `EvaluationFrame` substrate, lexical slot-frame execution for lambda bodies and ordinary formulas, compiled OxFml-owned language nodes, reusable argument/scratch buffers, reusable trace templates for value-only hot paths, metadata-driven invariant subexpression handling, and broader full-formula planning beyond the first resolved-call-site floor.
+- **Why still open**: the current OxFml slice consumes the OxFunc call-site/scratch seam and removes avoidable name dispatch from key paths, but the longer optimizer program still needs a unified execution frame, dedicated plan lowering, evidence, and perf gates.
 - **Canonical owner**: active owner `W075`.
 
 ### IP-18: Format Engine Time, Fraction, And Accounting Coverage

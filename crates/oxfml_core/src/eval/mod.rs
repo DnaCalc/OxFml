@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
 
 use oxfunc_core::function::ArgPreparationProfile;
@@ -218,6 +218,7 @@ const LOCAL_CALLABLE_RECURSION_BASE_COST_UNITS: usize = 3;
 const LOCAL_CALLABLE_RECURSION_LAMBDA_ARG_COST_UNITS: usize = 1;
 const LOCAL_CALLABLE_STACK_RED_ZONE_BYTES: usize = 2 * 1024 * 1024;
 const LOCAL_CALLABLE_STACK_GROW_BYTES: usize = 128 * 1024 * 1024;
+const LOCAL_CALLABLE_STACK_REPROBE_INTERVAL: usize = 32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EvaluationBackend {
@@ -475,6 +476,16 @@ impl Drop for CallableRecursionGuard<'_> {
     }
 }
 
+struct CallableStackGuard<'a> {
+    depth: &'a Cell<usize>,
+}
+
+impl Drop for CallableStackGuard<'_> {
+    fn drop(&mut self) {
+        self.depth.set(self.depth.get().saturating_sub(1));
+    }
+}
+
 #[derive(Debug, Default)]
 struct CallableRegistry {
     next_id: usize,
@@ -676,6 +687,7 @@ pub struct EvaluationContext<'a> {
     pub random_value: Option<f64>,
     pub trace_mode: EvaluationTraceMode,
     callable_recursion_state: RefCell<CallableRecursionState>,
+    callable_stack_guard_depth: Cell<usize>,
 }
 
 impl<'a> EvaluationContext<'a> {
@@ -700,6 +712,7 @@ impl<'a> EvaluationContext<'a> {
                 current_cost_units: 0,
                 max_cost_units: LOCAL_CALLABLE_RECURSION_BUDGET_UNITS,
             }),
+            callable_stack_guard_depth: Cell::new(0),
         }
     }
 
@@ -735,6 +748,33 @@ impl<'a> EvaluationContext<'a> {
     fn records_prepared_calls(&self) -> bool {
         matches!(self.trace_mode, EvaluationTraceMode::PreparedCalls)
     }
+
+    fn enter_callable_stack_guard(&self) -> CallableStackGuard<'_> {
+        self.callable_stack_guard_depth
+            .set(self.callable_stack_guard_depth.get() + 1);
+        CallableStackGuard {
+            depth: &self.callable_stack_guard_depth,
+        }
+    }
+}
+
+fn with_callable_stack_guard<T>(context: &EvaluationContext<'_>, f: impl FnOnce() -> T) -> T {
+    let depth = context.callable_stack_guard_depth.get();
+    // Avoid stacker probes on every helper-loop iteration, but keep periodic
+    // checks for genuinely deep recursive lambda chains.
+    if depth > 0 && depth % LOCAL_CALLABLE_STACK_REPROBE_INTERVAL != 0 {
+        let _guard = context.enter_callable_stack_guard();
+        return f();
+    }
+
+    maybe_grow(
+        LOCAL_CALLABLE_STACK_RED_ZONE_BYTES,
+        LOCAL_CALLABLE_STACK_GROW_BYTES,
+        || {
+            let _guard = context.enter_callable_stack_guard();
+            f()
+        },
+    )
 }
 
 pub fn evaluate_formula(
@@ -2712,20 +2752,16 @@ fn evaluate_invocation(
         prepared_arguments,
         context,
     );
-    let value = maybe_grow(
-        LOCAL_CALLABLE_STACK_RED_ZONE_BYTES,
-        LOCAL_CALLABLE_STACK_GROW_BYTES,
-        || {
-            evaluate_expr_value(
-                &lambda.body,
-                context,
-                resolver,
-                &local_bindings,
-                callable_registry,
-                trace,
-            )
-        },
-    )?;
+    let value = with_callable_stack_guard(context, || {
+        evaluate_expr_value(
+            &lambda.body,
+            context,
+            resolver,
+            &local_bindings,
+            callable_registry,
+            trace,
+        )
+    })?;
     record_prepared_call_returned_value(trace, prepared_call_index, &value);
     Ok(value)
 }
@@ -4029,20 +4065,16 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
             caller_col: self.context.caller_col,
             callable_registry: self.callable_registry,
         };
-        let value = maybe_grow(
-            LOCAL_CALLABLE_STACK_RED_ZONE_BYTES,
-            LOCAL_CALLABLE_STACK_GROW_BYTES,
-            || {
-                evaluate_expr_value(
-                    &binding.lambda.body,
-                    self.context,
-                    &mut resolver,
-                    &local_bindings,
-                    self.callable_registry,
-                    &mut trace,
-                )
-            },
-        )
+        let value = with_callable_stack_guard(self.context, || {
+            evaluate_expr_value(
+                &binding.lambda.body,
+                self.context,
+                &mut resolver,
+                &local_bindings,
+                self.callable_registry,
+                &mut trace,
+            )
+        })
         .map_err(|_| CallableInvocationError::Worksheet(WorksheetErrorCode::Value))?;
         Ok(prepared_arg_from_eval_value(value))
     }
@@ -4085,59 +4117,55 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
         };
         let mut args = Vec::new();
 
-        while {
-            args.clear();
-            batch.prepare_next_args(&mut args)
-        } {
-            let argc = args.len();
-            if !callable.arity_shape.accepts(argc) {
-                return Err(CallableInvocationError::ArityMismatch {
-                    expected_min: callable.arity_shape.min,
-                    expected_max: callable.arity_shape.max,
-                    actual: argc,
-                });
-            }
-            set_local_callable_arg_slots(
-                &mut local_bindings,
-                &param_names,
-                &args,
-                self.callable_registry,
-            );
-            let recursion_cost_units = LOCAL_CALLABLE_RECURSION_BASE_COST_UNITS
-                + args
-                    .iter()
-                    .filter(|arg| prepared_arg_contains_lambda(arg, self.callable_registry))
-                    .count()
-                    * LOCAL_CALLABLE_RECURSION_LAMBDA_ARG_COST_UNITS;
-            let Some(_recursion_guard) = try_enter_callable_recursion(
-                &self.context.callable_recursion_state,
-                recursion_cost_units,
-            ) else {
-                batch.accept_result(prepared_arg_from_eval_value(EvalValue::Error(
-                    WorksheetErrorCode::Num,
-                )))?;
-                continue;
-            };
+        with_callable_stack_guard(self.context, || {
+            while {
+                args.clear();
+                batch.prepare_next_args(&mut args)
+            } {
+                let argc = args.len();
+                if !callable.arity_shape.accepts(argc) {
+                    return Err(CallableInvocationError::ArityMismatch {
+                        expected_min: callable.arity_shape.min,
+                        expected_max: callable.arity_shape.max,
+                        actual: argc,
+                    });
+                }
+                set_local_callable_arg_slots(
+                    &mut local_bindings,
+                    &param_names,
+                    &args,
+                    self.callable_registry,
+                );
+                let recursion_cost_units = LOCAL_CALLABLE_RECURSION_BASE_COST_UNITS
+                    + args
+                        .iter()
+                        .filter(|arg| prepared_arg_contains_lambda(arg, self.callable_registry))
+                        .count()
+                        * LOCAL_CALLABLE_RECURSION_LAMBDA_ARG_COST_UNITS;
+                let Some(_recursion_guard) = try_enter_callable_recursion(
+                    &self.context.callable_recursion_state,
+                    recursion_cost_units,
+                ) else {
+                    batch.accept_result(prepared_arg_from_eval_value(EvalValue::Error(
+                        WorksheetErrorCode::Num,
+                    )))?;
+                    continue;
+                };
 
-            trace.prepared_calls.clear();
-            let value = maybe_grow(
-                LOCAL_CALLABLE_STACK_RED_ZONE_BYTES,
-                LOCAL_CALLABLE_STACK_GROW_BYTES,
-                || {
-                    evaluate_expr_value(
-                        &binding.lambda.body,
-                        self.context,
-                        &mut resolver,
-                        &local_bindings,
-                        self.callable_registry,
-                        &mut trace,
-                    )
-                },
-            )
-            .map_err(|_| CallableInvocationError::Worksheet(WorksheetErrorCode::Value))?;
-            batch.accept_result(prepared_arg_from_eval_value(value))?;
-        }
-        Ok(())
+                trace.prepared_calls.clear();
+                let value = evaluate_expr_value(
+                    &binding.lambda.body,
+                    self.context,
+                    &mut resolver,
+                    &local_bindings,
+                    self.callable_registry,
+                    &mut trace,
+                )
+                .map_err(|_| CallableInvocationError::Worksheet(WorksheetErrorCode::Value))?;
+                batch.accept_result(prepared_arg_from_eval_value(value))?;
+            }
+            Ok(())
+        })
     }
 }
 
