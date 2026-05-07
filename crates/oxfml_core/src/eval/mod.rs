@@ -1,5 +1,7 @@
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
+use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
 
 use oxfunc_core::function::ArgPreparationProfile;
 use oxfunc_core::functions::adapters::{PreparedArgValue, prepare_arg_values_only};
@@ -229,17 +231,31 @@ pub enum EvaluationBackend {
 #[derive(Debug, Clone, PartialEq)]
 struct CompiledFormulaPlan {
     root: CompiledExpr,
+    helper_slot_count: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 enum CompiledExpr {
-    NumberLiteral(String),
-    StringLiteral(String),
+    NumberLiteral {
+        source: String,
+        value: Option<f64>,
+    },
+    StringLiteral(ExcelText),
     LogicalLiteral(bool),
+    PrecomputedValue {
+        value: EvalValue,
+        source: Box<CompiledExpr>,
+    },
     ArrayLiteral(Vec<Vec<CompiledExpr>>),
     OmittedArgument,
-    HelperParameterName(String),
-    HelperOptionalParameterName(String),
+    HelperParameterName {
+        name: String,
+        slot: Option<usize>,
+    },
+    HelperOptionalParameterName {
+        name: String,
+        slot: Option<usize>,
+    },
     Binary {
         op: BinaryOp,
         call_site: SurfaceCallSite,
@@ -254,6 +270,24 @@ enum CompiledExpr {
     FunctionCall {
         function_name: String,
         call_site: CompiledFunctionCallSite,
+        args: Vec<CompiledExpr>,
+    },
+    SurfaceCall {
+        function_name: String,
+        call_site: CompiledFunctionCallSite,
+        args: Vec<CompiledExpr>,
+    },
+    Let {
+        args: Vec<CompiledExpr>,
+        slot_only: bool,
+    },
+    LambdaLiteral {
+        args: Vec<CompiledExpr>,
+    },
+    If {
+        args: Vec<CompiledExpr>,
+    },
+    IfError {
         args: Vec<CompiledExpr>,
     },
     BuiltinCallable(CompiledBuiltinCallable),
@@ -271,6 +305,10 @@ enum CompiledExpr {
 #[derive(Debug, Clone, PartialEq)]
 enum CompiledReferenceExpr {
     Atom(NormalizedReference),
+    HelperLocalSlot {
+        name: NameRef,
+        slot: usize,
+    },
     Spill {
         call_site: SurfaceCallSite,
         anchor: Box<CompiledReferenceExpr>,
@@ -297,20 +335,27 @@ struct CompiledFunctionCallSite {
     special_form: CompiledFunctionSpecialForm,
     surface_call_site: Option<SurfaceCallSite>,
     special_operator_call_site: Option<SurfaceCallSite>,
+    callable_argument_ordinals: Vec<usize>,
 }
 
 impl CompiledFunctionCallSite {
-    fn from_surface_name(surface_name: &str) -> Self {
+    fn from_surface_name(surface_name: &str, argc: usize) -> Self {
         let special_form = CompiledFunctionSpecialForm::from_surface_name(surface_name);
+        let surface_call_site = SurfaceCallSite::from_surface_name(surface_name).ok();
+        let callable_argument_ordinals = surface_call_site
+            .as_ref()
+            .map(|call_site| call_site.callable_argument_ordinals_for_arity(argc))
+            .unwrap_or_default();
         Self {
             special_form,
-            surface_call_site: SurfaceCallSite::from_surface_name(surface_name).ok(),
+            surface_call_site,
             special_operator_call_site: match special_form {
                 CompiledFunctionSpecialForm::LegacySingle => Some(
                     surface_call_site_from_function_id(FUNC_ID_OP_IMPLICIT_INTERSECTION),
                 ),
                 _ => None,
             },
+            callable_argument_ordinals,
         }
     }
 
@@ -318,13 +363,6 @@ impl CompiledFunctionCallSite {
         self.surface_call_site
             .as_ref()
             .map(SurfaceCallSite::function_id)
-    }
-
-    fn callable_argument_ordinals_for_arity(&self, argc: usize) -> Vec<usize> {
-        self.surface_call_site
-            .as_ref()
-            .map(|call_site| call_site.callable_argument_ordinals_for_arity(argc))
-            .unwrap_or_default()
     }
 
     fn has_special_form(&self, special_form: CompiledFunctionSpecialForm) -> bool {
@@ -398,9 +436,9 @@ enum HelperBinding {
     Arg(CallArgValue),
     EmptyHstackCarrier(CallArgValue),
     Lambda {
-        params: Vec<LambdaParam>,
-        body: CompiledExpr,
-        closure: BTreeMap<String, HelperBinding>,
+        params: Rc<[LambdaParam]>,
+        body: Rc<CompiledExpr>,
+        closure: HelperBindingFrame,
     },
 }
 
@@ -408,48 +446,230 @@ fn helper_name_key(name: &str) -> String {
     name.to_ascii_uppercase()
 }
 
-fn helper_binding_contains(helper_bindings: &BTreeMap<String, HelperBinding>, name: &str) -> bool {
-    helper_bindings
-        .keys()
-        .any(|binding_name| binding_name.eq_ignore_ascii_case(name))
+#[derive(Debug, Default, PartialEq)]
+struct HelperBindingFrame {
+    layers: Vec<Rc<BTreeMap<String, HelperBindingEntry>>>,
+    slots: Rc<Vec<RefCell<Option<HelperBinding>>>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct HelperBindingEntry {
+    display_name: String,
+    slot: Option<usize>,
+    binding: HelperBinding,
+}
+
+impl HelperBindingFrame {
+    fn child(&self) -> Self {
+        let mut layers = self.layers.clone();
+        layers.push(Rc::new(BTreeMap::new()));
+        Self {
+            layers,
+            slots: self.slots.clone(),
+        }
+    }
+
+    fn with_slot_count(slot_count: usize) -> Self {
+        Self {
+            layers: Vec::new(),
+            slots: empty_slot_cells(slot_count),
+        }
+    }
+
+    fn contains(&self, name: &str) -> bool {
+        let key = helper_name_key(name);
+        self.layers
+            .iter()
+            .rev()
+            .any(|layer| layer.contains_key(&key))
+    }
+
+    fn get(&self, name: &str) -> Option<&HelperBinding> {
+        let key = helper_name_key(name);
+        self.layers
+            .iter()
+            .rev()
+            .find_map(|layer| layer.get(&key).map(|entry| &entry.binding))
+    }
+
+    fn get_slot_clone(&self, slot: usize) -> Option<HelperBinding> {
+        self.slots.get(slot).and_then(|cell| cell.borrow().clone())
+    }
+
+    fn get_mut_key(&mut self, key: &str) -> Option<&mut HelperBinding> {
+        let layer_index = self
+            .layers
+            .iter()
+            .enumerate()
+            .rev()
+            .find_map(|(index, layer)| layer.contains_key(key).then_some(index))?;
+        Rc::make_mut(&mut self.layers[layer_index])
+            .get_mut(key)
+            .map(|entry| &mut entry.binding)
+    }
+
+    fn insert(&mut self, name: String, binding: HelperBinding) {
+        self.insert_key(helper_name_key(&name), name, None, binding);
+    }
+
+    fn insert_key(
+        &mut self,
+        key: String,
+        display_name: String,
+        slot: Option<usize>,
+        binding: HelperBinding,
+    ) {
+        if self.layers.is_empty() {
+            self.layers.push(Rc::new(BTreeMap::new()));
+        }
+        if let Some(slot) = slot {
+            self.set_slot(slot, binding.clone());
+        }
+        Rc::make_mut(
+            self.layers
+                .last_mut()
+                .expect("helper frame has a top layer"),
+        )
+        .insert(
+            key,
+            HelperBindingEntry {
+                display_name,
+                slot,
+                binding,
+            },
+        );
+    }
+
+    fn set_key_binding(&mut self, key: &str, slot: Option<usize>, binding: HelperBinding) {
+        if let Some(slot) = slot {
+            self.set_slot(slot, binding.clone());
+        }
+        if let Some(existing) = self.get_mut_key(key) {
+            *existing = binding;
+        } else {
+            debug_assert!(
+                false,
+                "attempted to update helper binding key {key} before priming it"
+            );
+        }
+    }
+
+    fn set_slot(&self, slot: usize, binding: HelperBinding) {
+        if let Some(cell) = self.slots.get(slot) {
+            *cell.borrow_mut() = Some(binding);
+        } else {
+            debug_assert!(
+                false,
+                "attempted to update helper slot {slot} outside the compiled slot frame"
+            );
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.layers.iter().all(|layer| layer.is_empty())
+    }
+
+    fn keys(&self) -> impl Iterator<Item = &String> {
+        self.layers
+            .iter()
+            .flat_map(|layer| layer.values().map(|entry| &entry.display_name))
+    }
+
+    fn entries(&self) -> impl Iterator<Item = &HelperBindingEntry> {
+        self.layers.iter().flat_map(|layer| layer.values())
+    }
+}
+
+impl Clone for HelperBindingFrame {
+    fn clone(&self) -> Self {
+        Self {
+            layers: self.layers.clone(),
+            slots: clone_slot_cells(&self.slots),
+        }
+    }
+}
+
+fn empty_slot_cells(slot_count: usize) -> Rc<Vec<RefCell<Option<HelperBinding>>>> {
+    Rc::new((0..slot_count).map(|_| RefCell::new(None)).collect())
+}
+
+fn clone_slot_cells(
+    slots: &Rc<Vec<RefCell<Option<HelperBinding>>>>,
+) -> Rc<Vec<RefCell<Option<HelperBinding>>>> {
+    Rc::new(
+        slots
+            .iter()
+            .map(|cell| RefCell::new(cell.borrow().clone()))
+            .collect(),
+    )
+}
+
+impl FromIterator<(String, HelperBinding)> for HelperBindingFrame {
+    fn from_iter<T: IntoIterator<Item = (String, HelperBinding)>>(iter: T) -> Self {
+        let mut frame = Self::default();
+        for (name, binding) in iter {
+            frame.insert(name, binding);
+        }
+        frame
+    }
+}
+
+fn helper_binding_contains(helper_bindings: &HelperBindingFrame, name: &str) -> bool {
+    helper_bindings.contains(name)
 }
 
 fn helper_binding_get<'a>(
-    helper_bindings: &'a BTreeMap<String, HelperBinding>,
+    helper_bindings: &'a HelperBindingFrame,
     name: &str,
 ) -> Option<&'a HelperBinding> {
-    helper_bindings.iter().find_map(|(binding_name, binding)| {
-        binding_name.eq_ignore_ascii_case(name).then_some(binding)
-    })
+    helper_bindings.get(name)
 }
 
-fn insert_helper_binding(
-    helper_bindings: &mut BTreeMap<String, HelperBinding>,
+fn insert_helper_slot_binding(
+    helper_bindings: &mut HelperBindingFrame,
     name: String,
+    slot: Option<usize>,
     binding: HelperBinding,
 ) {
-    if let Some(existing_name) = helper_bindings
-        .keys()
-        .find(|binding_name| binding_name.eq_ignore_ascii_case(&name))
-        .cloned()
-    {
-        helper_bindings.remove(&existing_name);
-    }
-    helper_bindings.insert(name, binding);
+    helper_bindings.insert_key(helper_name_key(&name), name, slot, binding);
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct LambdaParam {
     name: String,
     optional: bool,
+    slot: Option<usize>,
+}
+
+fn lambda_param_from_expr(expr: &CompiledExpr) -> Option<LambdaParam> {
+    match expr {
+        CompiledExpr::HelperParameterName { name, slot } => Some(LambdaParam {
+            name: name.clone(),
+            optional: false,
+            slot: *slot,
+        }),
+        CompiledExpr::HelperOptionalParameterName { name, slot } => Some(LambdaParam {
+            name: name.clone(),
+            optional: true,
+            slot: *slot,
+        }),
+        _ => None,
+    }
+}
+
+fn lambda_params_from_exprs(args: &[CompiledExpr]) -> Option<Rc<[LambdaParam]>> {
+    args.iter()
+        .map(lambda_param_from_expr)
+        .collect::<Option<Vec<_>>>()
+        .map(|params| Rc::from(params.into_boxed_slice()))
 }
 
 #[derive(Debug, Clone, PartialEq)]
 struct LambdaBinding {
     origin_kind: CallableOriginKind,
-    params: Vec<LambdaParam>,
-    body: CompiledExpr,
-    closure: BTreeMap<String, HelperBinding>,
+    params: Rc<[LambdaParam]>,
+    body: Rc<CompiledExpr>,
+    closure: HelperBindingFrame,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -483,6 +703,77 @@ struct CallableStackGuard<'a> {
 impl Drop for CallableStackGuard<'_> {
     fn drop(&mut self) {
         self.depth.set(self.depth.get().saturating_sub(1));
+    }
+}
+
+#[derive(Debug)]
+struct EvaluationFrameState {
+    surface_call_scratch: RefCell<Vec<SurfaceCallScratch>>,
+    callable_recursion_state: RefCell<CallableRecursionState>,
+    callable_stack_guard_depth: Cell<usize>,
+}
+
+impl Default for EvaluationFrameState {
+    fn default() -> Self {
+        Self {
+            surface_call_scratch: RefCell::new(Vec::new()),
+            callable_recursion_state: RefCell::new(CallableRecursionState {
+                current_cost_units: 0,
+                max_cost_units: LOCAL_CALLABLE_RECURSION_BUDGET_UNITS,
+            }),
+            callable_stack_guard_depth: Cell::new(0),
+        }
+    }
+}
+
+struct EvaluationFrame {
+    trace: EvaluationTrace,
+    callable_registry: RefCell<CallableRegistry>,
+    root_helper_bindings: HelperBindingFrame,
+    state: Rc<EvaluationFrameState>,
+}
+
+impl EvaluationFrame {
+    fn new(_plan: &CompiledFormulaPlan) -> Self {
+        Self {
+            trace: EvaluationTrace {
+                prepared_calls: Vec::new(),
+            },
+            callable_registry: RefCell::new(CallableRegistry::default()),
+            root_helper_bindings: HelperBindingFrame::with_slot_count(_plan.helper_slot_count),
+            state: Rc::new(EvaluationFrameState::default()),
+        }
+    }
+
+    fn into_trace(self) -> EvaluationTrace {
+        self.trace
+    }
+}
+
+struct PooledSurfaceCallScratch<'a> {
+    pool: &'a RefCell<Vec<SurfaceCallScratch>>,
+    scratch: SurfaceCallScratch,
+}
+
+impl Deref for PooledSurfaceCallScratch<'_> {
+    type Target = SurfaceCallScratch;
+
+    fn deref(&self) -> &Self::Target {
+        &self.scratch
+    }
+}
+
+impl DerefMut for PooledSurfaceCallScratch<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.scratch
+    }
+}
+
+impl Drop for PooledSurfaceCallScratch<'_> {
+    fn drop(&mut self) {
+        let mut reusable = std::mem::take(&mut self.scratch);
+        reusable.clear();
+        self.pool.borrow_mut().push(reusable);
     }
 }
 
@@ -549,33 +840,73 @@ impl CallableRegistry {
 }
 
 fn compile_formula_for_evaluation(bound_formula: &BoundFormula) -> CompiledFormulaPlan {
+    let mut scope = CompileHelperScope::default();
+    let root =
+        precompute_context_free_expr(compile_expr_for_evaluation(&bound_formula.root, &mut scope));
     CompiledFormulaPlan {
-        root: compile_expr_for_evaluation(&bound_formula.root),
+        root,
+        helper_slot_count: scope.next_slot,
     }
 }
 
-fn compile_expr_for_evaluation(expr: &BoundExpr) -> CompiledExpr {
+#[derive(Debug, Clone, Default)]
+struct CompileHelperScope {
+    helper_slots: BTreeMap<String, usize>,
+    next_slot: usize,
+}
+
+impl CompileHelperScope {
+    fn child(&self) -> Self {
+        self.clone()
+    }
+
+    fn define_helper(&mut self, name: &str) -> usize {
+        let slot = self.next_slot;
+        self.next_slot += 1;
+        self.helper_slots.insert(helper_name_key(name), slot);
+        slot
+    }
+
+    fn helper_slot(&self, name: &str) -> Option<usize> {
+        self.helper_slots.get(&helper_name_key(name)).copied()
+    }
+}
+
+fn compile_expr_for_evaluation(expr: &BoundExpr, scope: &mut CompileHelperScope) -> CompiledExpr {
     match expr {
-        BoundExpr::NumberLiteral(text) => CompiledExpr::NumberLiteral(text.clone()),
-        BoundExpr::StringLiteral(text) => CompiledExpr::StringLiteral(text.clone()),
+        BoundExpr::NumberLiteral(text) => CompiledExpr::NumberLiteral {
+            source: text.clone(),
+            value: parse_excel_numeric_literal(text).ok(),
+        },
+        BoundExpr::StringLiteral(text) => CompiledExpr::StringLiteral(
+            ExcelText::from_utf16_code_units(decode_string_literal(text).encode_utf16().collect()),
+        ),
         BoundExpr::LogicalLiteral(value) => CompiledExpr::LogicalLiteral(*value),
         BoundExpr::ArrayLiteral(rows) => CompiledExpr::ArrayLiteral(
             rows.iter()
-                .map(|row| row.iter().map(compile_expr_for_evaluation).collect())
+                .map(|row| {
+                    row.iter()
+                        .map(|expr| compile_expr_for_evaluation(expr, scope))
+                        .collect()
+                })
                 .collect(),
         ),
         BoundExpr::OmittedArgument => CompiledExpr::OmittedArgument,
-        BoundExpr::HelperParameterName(name) => CompiledExpr::HelperParameterName(name.clone()),
-        BoundExpr::HelperOptionalParameterName(name) => {
-            CompiledExpr::HelperOptionalParameterName(name.clone())
-        }
+        BoundExpr::HelperParameterName(name) => CompiledExpr::HelperParameterName {
+            name: name.clone(),
+            slot: scope.helper_slot(name),
+        },
+        BoundExpr::HelperOptionalParameterName(name) => CompiledExpr::HelperOptionalParameterName {
+            name: name.clone(),
+            slot: scope.helper_slot(name),
+        },
         BoundExpr::Binary { op, left, right } => {
             let (_, function_id) = binary_operator_identity(*op);
             CompiledExpr::Binary {
                 op: *op,
                 call_site: surface_call_site_from_function_id(function_id),
-                left: Box::new(compile_expr_for_evaluation(left)),
-                right: Box::new(compile_expr_for_evaluation(right)),
+                left: Box::new(compile_expr_for_evaluation(left, scope)),
+                right: Box::new(compile_expr_for_evaluation(right, scope)),
             }
         }
         BoundExpr::Unary { op, expr } => {
@@ -583,27 +914,56 @@ fn compile_expr_for_evaluation(expr: &BoundExpr) -> CompiledExpr {
             CompiledExpr::Unary {
                 op: *op,
                 call_site: surface_call_site_from_function_id(function_id),
-                expr: Box::new(compile_expr_for_evaluation(expr)),
+                expr: Box::new(compile_expr_for_evaluation(expr, scope)),
             }
         }
         BoundExpr::FunctionCall {
             function_name,
             args,
         } => {
-            let call_site = CompiledFunctionCallSite::from_surface_name(function_name);
-            let callable_argument_ordinals =
-                call_site.callable_argument_ordinals_for_arity(args.len());
+            let call_site = CompiledFunctionCallSite::from_surface_name(function_name, args.len());
+            if call_site.has_special_form(CompiledFunctionSpecialForm::Let) {
+                return compile_let_call_for_evaluation(args, scope);
+            }
+            if call_site.has_special_form(CompiledFunctionSpecialForm::Lambda) {
+                return compile_lambda_call_for_evaluation(args, scope);
+            }
+            if call_site.has_special_form(CompiledFunctionSpecialForm::If) {
+                return CompiledExpr::If {
+                    args: args
+                        .iter()
+                        .map(|arg| compile_expr_for_evaluation(arg, scope))
+                        .collect(),
+                };
+            }
+            if call_site.has_special_form(CompiledFunctionSpecialForm::IfError) {
+                return CompiledExpr::IfError {
+                    args: args
+                        .iter()
+                        .map(|arg| compile_expr_for_evaluation(arg, scope))
+                        .collect(),
+                };
+            }
             let args = args
                 .iter()
                 .enumerate()
                 .map(|(ordinal, arg)| {
-                    if callable_argument_ordinals.contains(&ordinal) {
-                        compile_callable_slot_expr_for_evaluation(arg)
+                    if call_site.callable_argument_ordinals.contains(&ordinal) {
+                        compile_callable_slot_expr_for_evaluation(arg, scope)
                     } else {
-                        compile_expr_for_evaluation(arg)
+                        compile_expr_for_evaluation(arg, scope)
                     }
                 })
                 .collect();
+            if call_site.has_special_form(CompiledFunctionSpecialForm::None)
+                && call_site.surface_call_site.is_some()
+            {
+                return CompiledExpr::SurfaceCall {
+                    function_name: function_name.clone(),
+                    call_site,
+                    args,
+                };
+            }
             CompiledExpr::FunctionCall {
                 function_name: function_name.clone(),
                 call_site,
@@ -611,50 +971,404 @@ fn compile_expr_for_evaluation(expr: &BoundExpr) -> CompiledExpr {
             }
         }
         BoundExpr::Invocation { callee, args } => CompiledExpr::Invocation {
-            callee: Box::new(compile_expr_for_evaluation(callee)),
-            args: args.iter().map(compile_expr_for_evaluation).collect(),
+            callee: Box::new(compile_expr_for_evaluation(callee, scope)),
+            args: args
+                .iter()
+                .map(|arg| compile_expr_for_evaluation(arg, scope))
+                .collect(),
         },
         BoundExpr::Reference(reference) => {
-            CompiledExpr::Reference(compile_reference_for_evaluation(reference))
+            CompiledExpr::Reference(compile_reference_for_evaluation(reference, scope))
         }
         BoundExpr::ImplicitIntersection(inner) => CompiledExpr::ImplicitIntersection {
             call_site: surface_call_site_from_function_id(FUNC_ID_OP_IMPLICIT_INTERSECTION),
-            expr: Box::new(compile_expr_for_evaluation(inner)),
+            expr: Box::new(compile_expr_for_evaluation(inner, scope)),
         },
     }
 }
 
-fn compile_reference_for_evaluation(reference: &ReferenceExpr) -> CompiledReferenceExpr {
+fn compile_let_call_for_evaluation(
+    args: &[BoundExpr],
+    scope: &mut CompileHelperScope,
+) -> CompiledExpr {
+    let mut let_scope = scope.child();
+    let last_index = args.len().saturating_sub(1);
+    let mut compiled_args = Vec::with_capacity(args.len());
+    let mut index = 0usize;
+    while index < last_index {
+        let value_expr = compile_expr_for_evaluation(&args[index + 1], &mut let_scope);
+        let binding_expr = match &args[index] {
+            BoundExpr::HelperParameterName(name) => {
+                let slot = let_scope.define_helper(name);
+                CompiledExpr::HelperParameterName {
+                    name: name.clone(),
+                    slot: Some(slot),
+                }
+            }
+            arg => compile_expr_for_evaluation(arg, &mut let_scope),
+        };
+        compiled_args.push(binding_expr);
+        compiled_args.push(value_expr);
+        index += 2;
+    }
+    if last_index < args.len() {
+        compiled_args.push(compile_expr_for_evaluation(
+            &args[last_index],
+            &mut let_scope,
+        ));
+    }
+    scope.next_slot = scope.next_slot.max(let_scope.next_slot);
+    let slot_only = compiled_let_args_are_slot_only(&compiled_args);
+    CompiledExpr::Let {
+        args: compiled_args,
+        slot_only,
+    }
+}
+
+fn compiled_let_args_are_slot_only(args: &[CompiledExpr]) -> bool {
+    if args.len() < 3 {
+        return false;
+    }
+    let last_index = args.len() - 1;
+    let mut index = 0usize;
+    while index < last_index {
+        if !matches!(
+            args.get(index),
+            Some(CompiledExpr::HelperParameterName { slot: Some(_), .. })
+        ) {
+            return false;
+        }
+        index += 2;
+    }
+    !args.iter().any(compiled_expr_contains_lambda_literal)
+}
+
+fn compiled_expr_contains_lambda_literal(expr: &CompiledExpr) -> bool {
+    match expr {
+        CompiledExpr::LambdaLiteral { .. } => true,
+        CompiledExpr::PrecomputedValue { source, .. } => {
+            compiled_expr_contains_lambda_literal(source)
+        }
+        CompiledExpr::ArrayLiteral(rows) => rows
+            .iter()
+            .flatten()
+            .any(compiled_expr_contains_lambda_literal),
+        CompiledExpr::Binary { left, right, .. } => {
+            compiled_expr_contains_lambda_literal(left)
+                || compiled_expr_contains_lambda_literal(right)
+        }
+        CompiledExpr::Unary { expr, .. } | CompiledExpr::ImplicitIntersection { expr, .. } => {
+            compiled_expr_contains_lambda_literal(expr)
+        }
+        CompiledExpr::FunctionCall { args, .. }
+        | CompiledExpr::SurfaceCall { args, .. }
+        | CompiledExpr::Let { args, .. }
+        | CompiledExpr::If { args }
+        | CompiledExpr::IfError { args } => args.iter().any(compiled_expr_contains_lambda_literal),
+        CompiledExpr::Invocation { callee, args } => {
+            compiled_expr_contains_lambda_literal(callee)
+                || args.iter().any(compiled_expr_contains_lambda_literal)
+        }
+        _ => false,
+    }
+}
+
+fn compile_lambda_call_for_evaluation(
+    args: &[BoundExpr],
+    scope: &mut CompileHelperScope,
+) -> CompiledExpr {
+    let body_index = args.len().saturating_sub(1);
+    let mut lambda_scope = scope.child();
+    let mut compiled_args = Vec::with_capacity(args.len());
+    for arg in &args[..body_index] {
+        match arg {
+            BoundExpr::HelperParameterName(name) => {
+                let slot = lambda_scope.define_helper(name);
+                compiled_args.push(CompiledExpr::HelperParameterName {
+                    name: name.clone(),
+                    slot: Some(slot),
+                });
+            }
+            BoundExpr::HelperOptionalParameterName(name) => {
+                let slot = lambda_scope.define_helper(name);
+                compiled_args.push(CompiledExpr::HelperOptionalParameterName {
+                    name: name.clone(),
+                    slot: Some(slot),
+                });
+            }
+            _ => compiled_args.push(compile_expr_for_evaluation(arg, &mut lambda_scope)),
+        }
+    }
+    if body_index < args.len() {
+        compiled_args.push(compile_expr_for_evaluation(
+            &args[body_index],
+            &mut lambda_scope,
+        ));
+    }
+    scope.next_slot = scope.next_slot.max(lambda_scope.next_slot);
+    CompiledExpr::LambdaLiteral {
+        args: compiled_args,
+    }
+}
+
+fn compile_reference_for_evaluation(
+    reference: &ReferenceExpr,
+    scope: &mut CompileHelperScope,
+) -> CompiledReferenceExpr {
     match reference {
+        ReferenceExpr::Atom(NormalizedReference::Name(name))
+            if matches!(name.kind, NameKind::HelperLocal) =>
+        {
+            if let Some(slot) = scope.helper_slot(&name.name) {
+                CompiledReferenceExpr::HelperLocalSlot {
+                    name: name.clone(),
+                    slot,
+                }
+            } else {
+                CompiledReferenceExpr::Atom(NormalizedReference::Name(name.clone()))
+            }
+        }
         ReferenceExpr::Atom(atom) => CompiledReferenceExpr::Atom(atom.clone()),
         ReferenceExpr::Spill { anchor } => CompiledReferenceExpr::Spill {
             call_site: surface_call_site_from_function_id(FUNC_ID_OP_SPILL_REF),
-            anchor: Box::new(compile_reference_for_evaluation(anchor)),
+            anchor: Box::new(compile_reference_for_evaluation(anchor, scope)),
         },
         ReferenceExpr::Range { start, end } => CompiledReferenceExpr::Range {
             call_site: surface_call_site_from_function_id(FUNC_ID_OP_RANGE_REF),
-            start: Box::new(compile_reference_for_evaluation(start)),
-            end: Box::new(compile_reference_for_evaluation(end)),
+            start: Box::new(compile_reference_for_evaluation(start, scope)),
+            end: Box::new(compile_reference_for_evaluation(end, scope)),
         },
         ReferenceExpr::Union { left, right } => CompiledReferenceExpr::Union {
             call_site: surface_call_site_from_function_id(FUNC_ID_OP_UNION_REF),
-            left: Box::new(compile_reference_for_evaluation(left)),
-            right: Box::new(compile_reference_for_evaluation(right)),
+            left: Box::new(compile_reference_for_evaluation(left, scope)),
+            right: Box::new(compile_reference_for_evaluation(right, scope)),
         },
         ReferenceExpr::Intersection { left, right } => CompiledReferenceExpr::Intersection {
             call_site: surface_call_site_from_function_id(FUNC_ID_OP_INTERSECTION_REF),
-            left: Box::new(compile_reference_for_evaluation(left)),
-            right: Box::new(compile_reference_for_evaluation(right)),
+            left: Box::new(compile_reference_for_evaluation(left, scope)),
+            right: Box::new(compile_reference_for_evaluation(right, scope)),
         },
     }
 }
 
-fn compile_callable_slot_expr_for_evaluation(expr: &BoundExpr) -> CompiledExpr {
+fn precompute_context_free_expr(expr: CompiledExpr) -> CompiledExpr {
+    let expr = match expr {
+        CompiledExpr::ArrayLiteral(rows) => CompiledExpr::ArrayLiteral(
+            rows.into_iter()
+                .map(|row| row.into_iter().map(precompute_context_free_expr).collect())
+                .collect(),
+        ),
+        CompiledExpr::Binary {
+            op,
+            call_site,
+            left,
+            right,
+        } => CompiledExpr::Binary {
+            op,
+            call_site,
+            left: Box::new(precompute_context_free_expr(*left)),
+            right: Box::new(precompute_context_free_expr(*right)),
+        },
+        CompiledExpr::Unary {
+            op,
+            call_site,
+            expr,
+        } => CompiledExpr::Unary {
+            op,
+            call_site,
+            expr: Box::new(precompute_context_free_expr(*expr)),
+        },
+        CompiledExpr::FunctionCall {
+            function_name,
+            call_site,
+            args,
+        } => CompiledExpr::FunctionCall {
+            function_name,
+            call_site,
+            args: args.into_iter().map(precompute_context_free_expr).collect(),
+        },
+        CompiledExpr::SurfaceCall {
+            function_name,
+            call_site,
+            args,
+        } => CompiledExpr::SurfaceCall {
+            function_name,
+            call_site,
+            args: args.into_iter().map(precompute_context_free_expr).collect(),
+        },
+        CompiledExpr::Let { args, slot_only } => CompiledExpr::Let {
+            args: args.into_iter().map(precompute_context_free_expr).collect(),
+            slot_only,
+        },
+        CompiledExpr::If { args } => CompiledExpr::If {
+            args: args.into_iter().map(precompute_context_free_expr).collect(),
+        },
+        CompiledExpr::IfError { args } => CompiledExpr::IfError {
+            args: args.into_iter().map(precompute_context_free_expr).collect(),
+        },
+        CompiledExpr::Invocation { callee, args } => CompiledExpr::Invocation {
+            callee: Box::new(precompute_context_free_expr(*callee)),
+            args: args.into_iter().map(precompute_context_free_expr).collect(),
+        },
+        CompiledExpr::ImplicitIntersection { call_site, expr } => {
+            CompiledExpr::ImplicitIntersection {
+                call_site,
+                expr: Box::new(precompute_context_free_expr(*expr)),
+            }
+        }
+        CompiledExpr::LambdaLiteral { args } => CompiledExpr::LambdaLiteral {
+            args: args.into_iter().map(precompute_context_free_expr).collect(),
+        },
+        other => other,
+    };
+
+    if expr_can_be_precomputed(&expr) {
+        if let Some(value) = context_free_eval_value_for_expr(&expr) {
+            return CompiledExpr::PrecomputedValue {
+                value,
+                source: Box::new(expr),
+            };
+        }
+    }
+    expr
+}
+
+fn expr_can_be_precomputed(expr: &CompiledExpr) -> bool {
+    match expr {
+        CompiledExpr::Binary {
+            call_site,
+            left,
+            right,
+            ..
+        } => {
+            call_site.is_context_free_pure()
+                && expr_is_context_free_value(left)
+                && expr_is_context_free_value(right)
+        }
+        CompiledExpr::Unary {
+            call_site, expr, ..
+        } => call_site.is_context_free_pure() && expr_is_context_free_value(expr),
+        CompiledExpr::SurfaceCall {
+            call_site, args, ..
+        } => {
+            call_site
+                .surface_call_site
+                .as_ref()
+                .is_some_and(SurfaceCallSite::is_context_free_pure)
+                && args.iter().all(expr_is_context_free_value)
+        }
+        _ => false,
+    }
+}
+
+fn expr_is_context_free_value(expr: &CompiledExpr) -> bool {
+    match expr {
+        CompiledExpr::NumberLiteral { value, .. } => value.is_some(),
+        CompiledExpr::StringLiteral(_) | CompiledExpr::LogicalLiteral(_) => true,
+        CompiledExpr::PrecomputedValue { .. } => true,
+        _ => expr_can_be_precomputed(expr),
+    }
+}
+
+fn context_free_eval_value_for_expr(expr: &CompiledExpr) -> Option<EvalValue> {
+    match expr {
+        CompiledExpr::NumberLiteral { value, .. } => value.map(EvalValue::Number),
+        CompiledExpr::StringLiteral(text) => Some(EvalValue::Text(text.clone())),
+        CompiledExpr::LogicalLiteral(value) => Some(EvalValue::Logical(*value)),
+        CompiledExpr::PrecomputedValue { value, .. } => Some(value.clone()),
+        CompiledExpr::Binary {
+            call_site,
+            left,
+            right,
+            ..
+        } if call_site.is_context_free_pure() => {
+            let args = [
+                context_free_call_arg_for_expr(left)?,
+                context_free_call_arg_for_expr(right)?,
+            ];
+            Some(invoke_context_free_surface_call(call_site, &args))
+        }
+        CompiledExpr::Unary {
+            call_site, expr, ..
+        } if call_site.is_context_free_pure() => {
+            let args = [context_free_call_arg_for_expr(expr)?];
+            Some(invoke_context_free_surface_call(call_site, &args))
+        }
+        CompiledExpr::SurfaceCall {
+            call_site, args, ..
+        } => {
+            let surface_call_site = call_site.surface_call_site.as_ref()?;
+            if !surface_call_site.is_context_free_pure() {
+                return None;
+            }
+            let mut call_args = args
+                .iter()
+                .map(context_free_call_arg_for_expr)
+                .collect::<Option<Vec<_>>>()?;
+            let trailing_omitted_count = args
+                .iter()
+                .rev()
+                .take_while(|arg| matches!(arg, CompiledExpr::OmittedArgument))
+                .count();
+            for _ in 0..trailing_omitted_count {
+                if !matches!(call_args.last(), Some(CallArgValue::MissingArg)) {
+                    break;
+                }
+                call_args.pop();
+            }
+            if surface_call_site.function_meta().function_id == FUNC_ID_HSTACK
+                && args.iter().zip(call_args.iter()).any(|(arg, call_arg)| {
+                    hstack_arg_should_collapse(arg, call_arg, &HelperBindingFrame::default())
+                })
+            {
+                return Some(EvalValue::Error(WorksheetErrorCode::Calc));
+            }
+            Some(invoke_context_free_surface_call(
+                surface_call_site,
+                &call_args,
+            ))
+        }
+        _ => None,
+    }
+}
+
+fn context_free_call_arg_for_expr(expr: &CompiledExpr) -> Option<CallArgValue> {
+    match expr {
+        CompiledExpr::OmittedArgument => Some(CallArgValue::MissingArg),
+        _ => context_free_eval_value_for_expr(expr).map(CallArgValue::Eval),
+    }
+}
+
+fn invoke_context_free_surface_call(
+    call_site: &SurfaceCallSite,
+    args: &[CallArgValue],
+) -> EvalValue {
+    let cell_values = BTreeMap::new();
+    let defined_names = BTreeMap::new();
+    let callable_registry = RefCell::new(CallableRegistry::default());
+    let resolver = LocalReferenceResolver {
+        cell_values: &cell_values,
+        defined_names: &defined_names,
+        caller_row: 1,
+        caller_col: 1,
+        callable_registry: &callable_registry,
+    };
+    let mut runtime = SurfaceCallRuntime::new(&resolver);
+    match call_site.invoke(args, &mut runtime) {
+        Ok(value) => value,
+        Err(code) => EvalValue::Error(code),
+    }
+}
+
+fn compile_callable_slot_expr_for_evaluation(
+    expr: &BoundExpr,
+    scope: &mut CompileHelperScope,
+) -> CompiledExpr {
     if let Some(callable) = compile_builtin_callable_for_slot(expr) {
         return CompiledExpr::BuiltinCallable(callable);
     }
 
-    compile_expr_for_evaluation(expr)
+    compile_expr_for_evaluation(expr, scope)
 }
 
 fn compile_builtin_callable_for_slot(expr: &BoundExpr) -> Option<CompiledBuiltinCallable> {
@@ -686,8 +1400,7 @@ pub struct EvaluationContext<'a> {
     pub now_serial: Option<f64>,
     pub random_value: Option<f64>,
     pub trace_mode: EvaluationTraceMode,
-    callable_recursion_state: RefCell<CallableRecursionState>,
-    callable_stack_guard_depth: Cell<usize>,
+    frame_state: Rc<EvaluationFrameState>,
 }
 
 impl<'a> EvaluationContext<'a> {
@@ -708,11 +1421,7 @@ impl<'a> EvaluationContext<'a> {
             now_serial: None,
             random_value: None,
             trace_mode: EvaluationTraceMode::default(),
-            callable_recursion_state: RefCell::new(CallableRecursionState {
-                current_cost_units: 0,
-                max_cost_units: LOCAL_CALLABLE_RECURSION_BUDGET_UNITS,
-            }),
-            callable_stack_guard_depth: Cell::new(0),
+            frame_state: Rc::new(EvaluationFrameState::default()),
         }
     }
 
@@ -745,21 +1454,47 @@ impl<'a> EvaluationContext<'a> {
         self.trace_mode = trace_mode;
     }
 
+    fn with_frame_state(mut self, frame_state: Rc<EvaluationFrameState>) -> Self {
+        self.frame_state = frame_state;
+        self
+    }
+
     fn records_prepared_calls(&self) -> bool {
         matches!(self.trace_mode, EvaluationTraceMode::PreparedCalls)
     }
 
     fn enter_callable_stack_guard(&self) -> CallableStackGuard<'_> {
-        self.callable_stack_guard_depth
-            .set(self.callable_stack_guard_depth.get() + 1);
+        self.frame_state
+            .callable_stack_guard_depth
+            .set(self.frame_state.callable_stack_guard_depth.get() + 1);
         CallableStackGuard {
-            depth: &self.callable_stack_guard_depth,
+            depth: &self.frame_state.callable_stack_guard_depth,
+        }
+    }
+
+    fn take_surface_call_scratch(&self, capacity: usize) -> PooledSurfaceCallScratch<'_> {
+        let mut scratch = self
+            .frame_state
+            .surface_call_scratch
+            .borrow_mut()
+            .pop()
+            .unwrap_or_else(|| SurfaceCallScratch::with_capacity(capacity));
+        scratch.clear();
+        let current_capacity = scratch.capacity();
+        if current_capacity < capacity {
+            scratch
+                .call_args_mut()
+                .reserve(capacity.saturating_sub(current_capacity));
+        }
+        PooledSurfaceCallScratch {
+            pool: &self.frame_state.surface_call_scratch,
+            scratch,
         }
     }
 }
 
 fn with_callable_stack_guard<T>(context: &EvaluationContext<'_>, f: impl FnOnce() -> T) -> T {
-    let depth = context.callable_stack_guard_depth.get();
+    let depth = context.frame_state.callable_stack_guard_depth.get();
     // Avoid stacker probes on every helper-loop iteration, but keep periodic
     // checks for genuinely deep recursive lambda chains.
     if depth > 0 && depth % LOCAL_CALLABLE_STACK_REPROBE_INTERVAL != 0 {
@@ -780,28 +1515,25 @@ fn with_callable_stack_guard<T>(context: &EvaluationContext<'_>, f: impl FnOnce(
 pub fn evaluate_formula(
     context: EvaluationContext<'_>,
 ) -> Result<EvaluationOutput, EvaluationError> {
-    let mut trace = EvaluationTrace {
-        prepared_calls: Vec::new(),
-    };
-    let callable_registry = RefCell::new(CallableRegistry::default());
+    let mut frame = EvaluationFrame::new(&context.compiled_plan);
+    let context = context.with_frame_state(frame.state.clone());
     let mut resolver = LocalReferenceResolver {
         cell_values: &context.cell_values,
         defined_names: &context.defined_names,
         caller_row: context.caller_row,
         caller_col: context.caller_col,
-        callable_registry: &callable_registry,
+        callable_registry: &frame.callable_registry,
     };
-    let helper_bindings = BTreeMap::new();
 
     let value = evaluate_root_expr_value(
         &context.compiled_plan.root,
         &context,
         &mut resolver,
-        &helper_bindings,
-        &callable_registry,
-        &mut trace,
+        &frame.root_helper_bindings,
+        &frame.callable_registry,
+        &mut frame.trace,
     )?;
-    let output_value = sanitize_final_output_value(value, &callable_registry);
+    let output_value = sanitize_final_output_value(value, &frame.callable_registry);
 
     Ok(EvaluationOutput {
         result: prepared_result_from_eval_value(&output_value, context.plan),
@@ -811,7 +1543,7 @@ pub fn evaluate_formula(
             &context,
         ),
         oxfunc_value: output_value,
-        trace,
+        trace: frame.into_trace(),
     })
 }
 
@@ -838,6 +1570,9 @@ fn typed_surface_for_top_level_host_or_provider_call(
     match root {
         CompiledExpr::FunctionCall {
             call_site, args, ..
+        }
+        | CompiledExpr::SurfaceCall {
+            call_site, args, ..
         } if call_site.function_id() == Some(FUNC_ID_RTD) && context.rtd_provider.is_some() => {
             let call_args = build_top_level_call_args(args, context, true).ok()?;
             let callable_registry = RefCell::new(CallableRegistry::default());
@@ -859,6 +1594,9 @@ fn typed_surface_for_top_level_host_or_provider_call(
         }
         CompiledExpr::FunctionCall {
             call_site, args, ..
+        }
+        | CompiledExpr::SurfaceCall {
+            call_site, args, ..
         } if call_site.function_id() == Some(FUNC_ID_INFO) && context.host_info.is_some() => {
             let call_args = build_top_level_call_args(args, context, true).ok()?;
             let callable_registry = RefCell::new(CallableRegistry::default());
@@ -877,6 +1615,9 @@ fn typed_surface_for_top_level_host_or_provider_call(
             }
         }
         CompiledExpr::FunctionCall {
+            call_site, args, ..
+        }
+        | CompiledExpr::SurfaceCall {
             call_site, args, ..
         } if call_site.function_id() == Some(FUNC_ID_CELL) && context.host_info.is_some() => {
             let call_args = build_top_level_call_args(args, context, true).ok()?;
@@ -905,6 +1646,9 @@ fn extended_surface_for_top_level_function_call(
 ) -> Option<ReturnedValueSurface> {
     match root {
         CompiledExpr::FunctionCall {
+            call_site, args, ..
+        }
+        | CompiledExpr::SurfaceCall {
             call_site, args, ..
         } => {
             let function_id = call_site.function_id()?;
@@ -946,7 +1690,7 @@ fn build_top_level_call_args(
         caller_col: context.caller_col,
         callable_registry: &callable_registry,
     };
-    let helper_bindings = BTreeMap::new();
+    let helper_bindings = HelperBindingFrame::default();
     let mut trace = EvaluationTrace {
         prepared_calls: Vec::new(),
     };
@@ -971,7 +1715,7 @@ fn evaluate_root_expr_value(
     expr: &CompiledExpr,
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
@@ -1019,20 +1763,32 @@ fn evaluate_expr_value(
     expr: &CompiledExpr,
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
     match expr {
-        CompiledExpr::NumberLiteral(text) => parse_excel_numeric_literal(text)
-            .map(EvalValue::Number)
-            .map_err(|_| EvaluationError {
-                message: format!("failed to parse numeric literal {text}"),
-            }),
+        CompiledExpr::NumberLiteral { source, value } => {
+            value.map(EvalValue::Number).ok_or_else(|| EvaluationError {
+                message: format!("failed to parse numeric literal {source}"),
+            })
+        }
         CompiledExpr::LogicalLiteral(value) => Ok(EvalValue::Logical(*value)),
-        CompiledExpr::StringLiteral(text) => Ok(EvalValue::Text(ExcelText::from_utf16_code_units(
-            decode_string_literal(text).encode_utf16().collect(),
-        ))),
+        CompiledExpr::StringLiteral(text) => Ok(EvalValue::Text(text.clone())),
+        CompiledExpr::PrecomputedValue { value, source } => {
+            if context.records_prepared_calls() {
+                evaluate_expr_value(
+                    source,
+                    context,
+                    resolver,
+                    helper_bindings,
+                    callable_registry,
+                    trace,
+                )
+            } else {
+                Ok(value.clone())
+            }
+        }
         CompiledExpr::ArrayLiteral(rows) => evaluate_array_literal(
             rows,
             context,
@@ -1042,8 +1798,8 @@ fn evaluate_expr_value(
             trace,
         ),
         CompiledExpr::OmittedArgument => Ok(EvalValue::Error(WorksheetErrorCode::Value)),
-        CompiledExpr::HelperParameterName(name)
-        | CompiledExpr::HelperOptionalParameterName(name) => Err(EvaluationError {
+        CompiledExpr::HelperParameterName { name, .. }
+        | CompiledExpr::HelperOptionalParameterName { name, .. } => Err(EvaluationError {
             message: format!(
                 "helper parameter {name} cannot be evaluated without helper-form environment support"
             ),
@@ -1085,6 +1841,48 @@ fn evaluate_expr_value(
         } => evaluate_function_call(
             function_name,
             call_site,
+            args,
+            context,
+            resolver,
+            helper_bindings,
+            callable_registry,
+            trace,
+        ),
+        CompiledExpr::SurfaceCall {
+            function_name,
+            call_site,
+            args,
+        } => evaluate_ordinary_surface_call(
+            function_name,
+            call_site,
+            args,
+            context,
+            resolver,
+            helper_bindings,
+            callable_registry,
+            trace,
+        ),
+        CompiledExpr::Let { args, slot_only } => evaluate_let_call(
+            args,
+            *slot_only,
+            context,
+            resolver,
+            helper_bindings,
+            callable_registry,
+            trace,
+        ),
+        CompiledExpr::LambdaLiteral { args } => {
+            evaluate_lambda_call(args, helper_bindings, callable_registry, context, trace)
+        }
+        CompiledExpr::If { args } => evaluate_if_call(
+            args,
+            context,
+            resolver,
+            helper_bindings,
+            callable_registry,
+            trace,
+        ),
+        CompiledExpr::IfError { args } => evaluate_iferror_call(
             args,
             context,
             resolver,
@@ -1146,7 +1944,7 @@ fn evaluate_function_call(
     args: &[CompiledExpr],
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
@@ -1154,6 +1952,7 @@ fn evaluate_function_call(
         CompiledFunctionSpecialForm::Let => {
             return evaluate_let_call(
                 args,
+                false,
                 context,
                 resolver,
                 helper_bindings,
@@ -1202,6 +2001,28 @@ fn evaluate_function_call(
         CompiledFunctionSpecialForm::None => {}
     }
 
+    evaluate_ordinary_surface_call(
+        function_name,
+        call_site,
+        args,
+        context,
+        resolver,
+        helper_bindings,
+        callable_registry,
+        trace,
+    )
+}
+
+fn evaluate_ordinary_surface_call(
+    function_name: &str,
+    call_site: &CompiledFunctionCallSite,
+    args: &[CompiledExpr],
+    context: &EvaluationContext<'_>,
+    resolver: &mut LocalReferenceResolver<'_>,
+    helper_bindings: &HelperBindingFrame,
+    callable_registry: &RefCell<CallableRegistry>,
+    trace: &mut EvaluationTrace,
+) -> Result<EvalValue, EvaluationError> {
     let Some(surface_call_site) = call_site.surface_call_site.as_ref() else {
         return Ok(EvalValue::Error(WorksheetErrorCode::Name));
     };
@@ -1221,12 +2042,11 @@ fn evaluate_function_call(
     } else {
         Vec::new()
     };
-    let mut call_args = Vec::with_capacity(args.len());
-    let callable_argument_ordinals = call_site.callable_argument_ordinals_for_arity(args.len());
+    let mut scratch = context.take_surface_call_scratch(args.len());
     for (ordinal, arg) in args.iter().enumerate() {
         let preserve_reference =
             meta.arg_preparation_profile == ArgPreparationProfile::RefsVisibleInAdapter;
-        let callable_slot = callable_argument_ordinals.contains(&ordinal);
+        let callable_slot = call_site.callable_argument_ordinals.contains(&ordinal);
         let call_arg = evaluate_expr_as_call_arg(
             arg,
             context,
@@ -1245,13 +2065,13 @@ fn evaluate_function_call(
                 preserve_reference,
             ));
         }
-        call_args.push(call_arg);
+        scratch.push_arg(call_arg);
     }
 
     let collapse_hstack_empty_carrier = meta.function_id == FUNC_ID_HSTACK
         && args
             .iter()
-            .zip(call_args.iter())
+            .zip(scratch.call_args().iter())
             .any(|(arg, call_arg)| hstack_arg_should_collapse(arg, call_arg, helper_bindings));
 
     // Excel trailing omitted arguments behave like absent optional arguments at the
@@ -1262,55 +2082,59 @@ fn evaluate_function_call(
         .rev()
         .take_while(|arg| matches!(arg, CompiledExpr::OmittedArgument))
         .count();
-    for _ in 0..trailing_omitted_count {
-        if !matches!(call_args.last(), Some(CallArgValue::MissingArg)) {
-            break;
+    {
+        let call_args = scratch.call_args_mut();
+        for _ in 0..trailing_omitted_count {
+            if !matches!(call_args.last(), Some(CallArgValue::MissingArg)) {
+                break;
+            }
+            if records_prepared_calls {
+                prepared_arguments.pop();
+            }
+            call_args.pop();
         }
-        if records_prepared_calls {
-            prepared_arguments.pop();
-        }
-        call_args.pop();
     }
 
-    let register_id_request = if records_prepared_calls && meta.function_id == FUNC_ID_REGISTER_ID {
-        parse_register_id_request(&call_args, resolver).ok()
-    } else {
-        None
-    };
-    let registered_external_call_request =
-        if records_prepared_calls && meta.function_id == FUNC_ID_CALL {
-            parse_call_request(&call_args, resolver).ok()
+    let prepared_call_index = if records_prepared_calls {
+        let register_id_request = if meta.function_id == FUNC_ID_REGISTER_ID {
+            parse_register_id_request(scratch.call_args(), resolver).ok()
         } else {
             None
         };
-
-    let prepared_call_index = push_prepared_call(
-        trace,
-        context,
-        PreparedCall {
-            function_name: function_name.to_string(),
-            function_id: meta.function_id,
-            arg_preparation_profile: meta.arg_preparation_profile,
-            prepared_arguments,
-            register_id_request,
-            registered_external_call_request,
-            locale_profile_id: context
-                .locale_ctx
-                .map(|ctx| format!("{:?}", ctx.profile.id)),
-            date_system: context
-                .locale_ctx
-                .map(|ctx| format!("{:?}", ctx.date_system)),
-            host_query_enabled: context.host_info.is_some(),
-            returned_value: None,
-        },
-    );
+        let registered_external_call_request = if meta.function_id == FUNC_ID_CALL {
+            parse_call_request(scratch.call_args(), resolver).ok()
+        } else {
+            None
+        };
+        push_prepared_call_unchecked(
+            trace,
+            PreparedCall {
+                function_name: function_name.to_string(),
+                function_id: meta.function_id,
+                arg_preparation_profile: meta.arg_preparation_profile,
+                prepared_arguments,
+                register_id_request,
+                registered_external_call_request,
+                locale_profile_id: context
+                    .locale_ctx
+                    .map(|ctx| format!("{:?}", ctx.profile.id)),
+                date_system: context
+                    .locale_ctx
+                    .map(|ctx| format!("{:?}", ctx.date_system)),
+                host_query_enabled: context.host_info.is_some(),
+                returned_value: None,
+            },
+        )
+    } else {
+        None
+    };
 
     let returned_value = if collapse_hstack_empty_carrier {
         EvalValue::Error(WorksheetErrorCode::Calc)
     } else {
-        match evaluate_surface_call_site(
+        match evaluate_surface_call_site_scratch(
             surface_call_site,
-            &call_args,
+            &scratch,
             context,
             resolver,
             callable_registry,
@@ -1321,7 +2145,7 @@ fn evaluate_function_call(
             Err(_error)
                 if allow_host_query_worksheet_error_fallback(
                     meta.function_id,
-                    &call_args,
+                    scratch.call_args(),
                     resolver,
                     context.host_info,
                 ) =>
@@ -1375,6 +2199,28 @@ fn evaluate_surface_call_site(
     runtime.rtd_provider = context.rtd_provider;
     runtime.registered_external_provider = context.registered_external_provider;
     call_site.invoke(args, &mut runtime)
+}
+
+fn evaluate_surface_call_site_scratch(
+    call_site: &SurfaceCallSite,
+    scratch: &SurfaceCallScratch,
+    context: &EvaluationContext<'_>,
+    resolver: &LocalReferenceResolver<'_>,
+    callable_registry: &RefCell<CallableRegistry>,
+) -> Result<EvalValue, WorksheetErrorCode> {
+    let callable_invoker = OxFmlCallableInvoker {
+        context,
+        callable_registry,
+    };
+    let mut runtime = SurfaceCallRuntime::new(resolver);
+    runtime.now_serial = context.now_serial;
+    runtime.random_value = context.random_value;
+    runtime.locale_ctx = context.locale_ctx;
+    runtime.host_info = context.host_info;
+    runtime.callable_invoker = Some(&callable_invoker);
+    runtime.rtd_provider = context.rtd_provider;
+    runtime.registered_external_provider = context.registered_external_provider;
+    call_site.invoke_scratch(scratch, &mut runtime)
 }
 
 fn evaluate_surface_call_site_value(
@@ -1464,7 +2310,7 @@ fn evaluate_expr_as_call_arg(
     expr: &CompiledExpr,
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     preserve_reference: bool,
     callable_slot: bool,
@@ -1532,6 +2378,9 @@ fn built_in_callable_arg_for_expr(
         }
         CompiledExpr::FunctionCall {
             call_site, args, ..
+        }
+        | CompiledExpr::SurfaceCall {
+            call_site, args, ..
         } if args.is_empty() => call_site
             .surface_call_site
             .as_ref()
@@ -1545,7 +2394,7 @@ fn evaluate_reference_as_call_arg(
     reference: &CompiledReferenceExpr,
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     preserve_reference: bool,
     callable_slot: bool,
@@ -1587,6 +2436,27 @@ fn evaluate_reference_as_call_arg(
             helper_bindings,
             callable_registry,
         ),
+        CompiledReferenceExpr::HelperLocalSlot { name, slot } => {
+            if let Some(call_arg) = call_arg_for_helper_slot(
+                helper_bindings,
+                *slot,
+                preserve_reference,
+                resolver,
+                callable_registry,
+            ) {
+                call_arg
+            } else {
+                call_arg_for_name(
+                    name,
+                    preserve_reference,
+                    callable_slot,
+                    context,
+                    resolver,
+                    helper_bindings,
+                    callable_registry,
+                )
+            }
+        }
         CompiledReferenceExpr::Atom(NormalizedReference::Structured(structured)) => {
             call_arg_for_reference_like(
                 reference_like_for_structured(structured),
@@ -1689,7 +2559,7 @@ fn evaluate_reference_operator_call(
     operands: Vec<&CompiledReferenceExpr>,
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     preserve_reference: bool,
     trace: &mut EvaluationTrace,
@@ -1772,7 +2642,7 @@ fn evaluate_array_literal(
     rows: &[Vec<CompiledExpr>],
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
@@ -1811,7 +2681,7 @@ fn evaluate_binary_operator_call(
     right: &CompiledExpr,
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
@@ -1894,7 +2764,7 @@ fn evaluate_binary_operator_call_evaluation(
     right: &CompiledExpr,
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
 ) -> Result<BinaryOperatorCallEvaluation, EvaluationError> {
@@ -1952,7 +2822,7 @@ fn evaluate_unary_operator_call(
     expr: &CompiledExpr,
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
@@ -2022,38 +2892,16 @@ fn call_arg_for_name(
     callable_slot: bool,
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> Result<CallArgValue, EvaluationError> {
     if let Some(binding) = helper_binding_get(helper_bindings, &name.name) {
-        return match binding {
-            HelperBinding::Arg(CallArgValue::Reference(reference))
-            | HelperBinding::EmptyHstackCarrier(CallArgValue::Reference(reference)) => {
-                if preserve_reference {
-                    Ok(CallArgValue::Reference(reference.clone()))
-                } else {
-                    resolver
-                        .resolve_reference(reference)
-                        .map(call_arg_from_resolved_reference_value)
-                        .map_err(map_resolution_error)
-                }
-            }
-            HelperBinding::Arg(other) | HelperBinding::EmptyHstackCarrier(other) => {
-                Ok(other.clone())
-            }
-            HelperBinding::Lambda {
-                params,
-                body,
-                closure,
-            } => Ok(CallArgValue::Eval(EvalValue::Lambda(
-                callable_registry.borrow_mut().register(LambdaBinding {
-                    origin_kind: CallableOriginKind::HelperLambda,
-                    params: params.clone(),
-                    body: body.clone(),
-                    closure: closure.clone(),
-                }),
-            ))),
-        };
+        return call_arg_for_helper_binding(
+            binding,
+            preserve_reference,
+            resolver,
+            callable_registry,
+        );
     }
 
     let Some(binding) = context.defined_names.get(&name.name) else {
@@ -2087,6 +2935,58 @@ fn call_arg_for_name(
     }
 }
 
+fn call_arg_for_helper_slot(
+    helper_bindings: &HelperBindingFrame,
+    slot: usize,
+    preserve_reference: bool,
+    resolver: &mut LocalReferenceResolver<'_>,
+    callable_registry: &RefCell<CallableRegistry>,
+) -> Option<Result<CallArgValue, EvaluationError>> {
+    let slot_cell = helper_bindings.slots.get(slot)?;
+    let slot_ref = slot_cell.borrow();
+    let binding = slot_ref.as_ref()?;
+    Some(call_arg_for_helper_binding(
+        binding,
+        preserve_reference,
+        resolver,
+        callable_registry,
+    ))
+}
+
+fn call_arg_for_helper_binding(
+    binding: &HelperBinding,
+    preserve_reference: bool,
+    resolver: &mut LocalReferenceResolver<'_>,
+    callable_registry: &RefCell<CallableRegistry>,
+) -> Result<CallArgValue, EvaluationError> {
+    match binding {
+        HelperBinding::Arg(CallArgValue::Reference(reference))
+        | HelperBinding::EmptyHstackCarrier(CallArgValue::Reference(reference)) => {
+            if preserve_reference {
+                Ok(CallArgValue::Reference(reference.clone()))
+            } else {
+                resolver
+                    .resolve_reference(reference)
+                    .map(call_arg_from_resolved_reference_value)
+                    .map_err(map_resolution_error)
+            }
+        }
+        HelperBinding::Arg(other) | HelperBinding::EmptyHstackCarrier(other) => Ok(other.clone()),
+        HelperBinding::Lambda {
+            params,
+            body,
+            closure,
+        } => Ok(CallArgValue::Eval(EvalValue::Lambda(
+            callable_registry.borrow_mut().register(LambdaBinding {
+                origin_kind: CallableOriginKind::HelperLambda,
+                params: params.clone(),
+                body: body.clone(),
+                closure: closure.clone(),
+            }),
+        ))),
+    }
+}
+
 fn built_in_callable_arg_for_call_site(
     call_site: &SurfaceCallSite,
     callable_registry: &RefCell<CallableRegistry>,
@@ -2107,9 +3007,10 @@ fn built_in_callable_lambda_from_call_site(
 
 fn evaluate_let_call(
     args: &[CompiledExpr],
+    slot_only: bool,
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
@@ -2119,7 +3020,18 @@ fn evaluate_let_call(
         });
     }
 
-    let mut local_bindings = helper_bindings.clone();
+    if slot_only {
+        return evaluate_slot_only_let_call(
+            args,
+            context,
+            resolver,
+            helper_bindings,
+            callable_registry,
+            trace,
+        );
+    }
+
+    let mut local_bindings = helper_bindings.child();
     let records_prepared_calls = context.records_prepared_calls();
     let mut prepared_arguments = if records_prepared_calls {
         Vec::with_capacity(args.len())
@@ -2129,7 +3041,7 @@ fn evaluate_let_call(
     let last_index = args.len() - 1;
     let mut index = 0usize;
     while index < last_index {
-        let CompiledExpr::HelperParameterName(name) = &args[index] else {
+        let CompiledExpr::HelperParameterName { name, slot } = &args[index] else {
             return Err(EvaluationError {
                 message: "LET binding position did not contain a helper parameter".to_string(),
             });
@@ -2176,7 +3088,7 @@ fn evaluate_let_call(
             &local_bindings,
             callable_registry,
         );
-        insert_helper_binding(&mut local_bindings, name.clone(), helper_binding);
+        insert_helper_slot_binding(&mut local_bindings, name.clone(), *slot, helper_binding);
         index += 2;
     }
     let body_arg = evaluate_expr_as_call_arg(
@@ -2184,6 +3096,110 @@ fn evaluate_let_call(
         context,
         resolver,
         &local_bindings,
+        callable_registry,
+        false,
+        false,
+        trace,
+    )?;
+    if records_prepared_calls {
+        prepared_arguments.push(prepared_argument_for_call_arg(
+            last_index,
+            &args[last_index],
+            &body_arg,
+            false,
+        ));
+    }
+    let prepared_call_index = push_special_prepared_call(
+        trace,
+        "LET",
+        SPECIAL_LET_FUNCTION_ID,
+        ArgPreparationProfile::ValuesOnlyPreAdapter,
+        prepared_arguments,
+        context,
+    );
+
+    let value = materialize_call_arg(body_arg, resolver)?;
+    record_prepared_call_returned_value(trace, prepared_call_index, &value);
+    Ok(value)
+}
+
+fn evaluate_slot_only_let_call(
+    args: &[CompiledExpr],
+    context: &EvaluationContext<'_>,
+    resolver: &mut LocalReferenceResolver<'_>,
+    helper_bindings: &HelperBindingFrame,
+    callable_registry: &RefCell<CallableRegistry>,
+    trace: &mut EvaluationTrace,
+) -> Result<EvalValue, EvaluationError> {
+    let records_prepared_calls = context.records_prepared_calls();
+    let mut prepared_arguments = if records_prepared_calls {
+        Vec::with_capacity(args.len())
+    } else {
+        Vec::new()
+    };
+    let last_index = args.len() - 1;
+    let mut index = 0usize;
+    while index < last_index {
+        let CompiledExpr::HelperParameterName {
+            name,
+            slot: Some(slot),
+        } = &args[index]
+        else {
+            return Err(EvaluationError {
+                message: "LET binding position did not contain a slotted helper parameter"
+                    .to_string(),
+            });
+        };
+        if records_prepared_calls {
+            prepared_arguments.push(PreparedArgument {
+                ordinal: index,
+                structure_class: PreparedStructureClass::DirectScalar,
+                source_class: PreparedSourceClass::HelperParameter,
+                evaluation_mode: PreparedEvaluationMode::EagerValue,
+                blankness_class: PreparedBlanknessClass::NonBlank,
+                caller_context_sensitive: false,
+                reference_target: None,
+                opaque_reason: None,
+                resolved_value: None,
+            });
+        }
+        if index + 1 >= args.len() {
+            return Err(EvaluationError {
+                message: format!("LET binding {name} is missing a value expression"),
+            });
+        }
+        let binding_arg = evaluate_expr_as_call_arg(
+            &args[index + 1],
+            context,
+            resolver,
+            helper_bindings,
+            callable_registry,
+            true,
+            false,
+            trace,
+        )?;
+        if records_prepared_calls {
+            prepared_arguments.push(prepared_argument_for_call_arg(
+                index + 1,
+                &args[index + 1],
+                &binding_arg,
+                true,
+            ));
+        }
+        let helper_binding = helper_binding_from_expr(
+            &args[index + 1],
+            binding_arg,
+            helper_bindings,
+            callable_registry,
+        );
+        helper_bindings.set_slot(*slot, helper_binding);
+        index += 2;
+    }
+    let body_arg = evaluate_expr_as_call_arg(
+        &args[last_index],
+        context,
+        resolver,
+        helper_bindings,
         callable_registry,
         false,
         false,
@@ -2235,7 +3251,7 @@ fn evaluate_if_call(
     args: &[CompiledExpr],
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
@@ -2443,7 +3459,7 @@ fn evaluate_iferror_call(
     args: &[CompiledExpr],
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
@@ -2516,7 +3532,7 @@ fn evaluate_iferror_call(
 
 fn evaluate_lambda_call(
     args: &[CompiledExpr],
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     context: &EvaluationContext<'_>,
     trace: &mut EvaluationTrace,
@@ -2537,48 +3553,24 @@ fn evaluate_lambda_call(
     let params = args[..body_index]
         .iter()
         .enumerate()
-        .map(|(ordinal, arg)| match arg {
-            CompiledExpr::HelperParameterName(name) => {
-                if records_prepared_calls {
-                    prepared_arguments.push(PreparedArgument {
-                        ordinal,
-                        structure_class: PreparedStructureClass::DirectScalar,
-                        source_class: PreparedSourceClass::HelperParameter,
-                        evaluation_mode: PreparedEvaluationMode::EagerValue,
-                        blankness_class: PreparedBlanknessClass::NonBlank,
-                        caller_context_sensitive: false,
-                        reference_target: None,
-                        opaque_reason: None,
-                        resolved_value: None,
-                    });
-                }
-                Ok(LambdaParam {
-                    name: name.clone(),
-                    optional: false,
-                })
-            }
-            CompiledExpr::HelperOptionalParameterName(name) => {
-                if records_prepared_calls {
-                    prepared_arguments.push(PreparedArgument {
-                        ordinal,
-                        structure_class: PreparedStructureClass::DirectScalar,
-                        source_class: PreparedSourceClass::HelperParameter,
-                        evaluation_mode: PreparedEvaluationMode::EagerValue,
-                        blankness_class: PreparedBlanknessClass::NonBlank,
-                        caller_context_sensitive: false,
-                        reference_target: None,
-                        opaque_reason: None,
-                        resolved_value: None,
-                    });
-                }
-                Ok(LambdaParam {
-                    name: name.clone(),
-                    optional: true,
-                })
-            }
-            _ => Err(EvaluationError {
+        .map(|(ordinal, arg)| {
+            let param = lambda_param_from_expr(arg).ok_or_else(|| EvaluationError {
                 message: "LAMBDA parameter did not bind as helper parameter".to_string(),
-            }),
+            })?;
+            if records_prepared_calls {
+                prepared_arguments.push(PreparedArgument {
+                    ordinal,
+                    structure_class: PreparedStructureClass::DirectScalar,
+                    source_class: PreparedSourceClass::HelperParameter,
+                    evaluation_mode: PreparedEvaluationMode::EagerValue,
+                    blankness_class: PreparedBlanknessClass::NonBlank,
+                    caller_context_sensitive: false,
+                    reference_target: None,
+                    opaque_reason: None,
+                    resolved_value: None,
+                });
+            }
+            Ok(param)
         })
         .collect::<Result<Vec<_>, _>>()?;
     if records_prepared_calls {
@@ -2607,8 +3599,8 @@ fn evaluate_lambda_call(
     let capture_names = helper_capture_names(&args[body_index], &parameter_names, helper_bindings);
     let value = EvalValue::Lambda(callable_registry.borrow_mut().register(LambdaBinding {
         origin_kind: CallableOriginKind::HelperLambda,
-        params,
-        body: args[body_index].clone(),
+        params: Rc::from(params.into_boxed_slice()),
+        body: Rc::new(args[body_index].clone()),
         closure: helper_closure_from_names(helper_bindings, &capture_names),
     }));
     record_prepared_call_returned_value(trace, prepared_call_index, &value);
@@ -2620,7 +3612,7 @@ fn evaluate_legacy_single_call(
     args: &[CompiledExpr],
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
@@ -2664,7 +3656,7 @@ fn evaluate_invocation(
     args: &[CompiledExpr],
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
@@ -2726,22 +3718,25 @@ fn evaluate_invocation(
                 ordinal, arg, &prepared, true,
             ));
         }
-        insert_helper_binding(
+        insert_helper_slot_binding(
             &mut local_bindings,
             param.name.clone(),
+            param.slot,
             HelperBinding::Arg(prepared),
         );
     }
     for param in lambda.params.iter().skip(args.len()) {
-        insert_helper_binding(
+        insert_helper_slot_binding(
             &mut local_bindings,
             param.name.clone(),
+            param.slot,
             HelperBinding::Arg(CallArgValue::MissingArg),
         );
     }
-    let Some(_recursion_guard) =
-        try_enter_callable_recursion(&context.callable_recursion_state, recursion_cost_units)
-    else {
+    let Some(_recursion_guard) = try_enter_callable_recursion(
+        &context.frame_state.callable_recursion_state,
+        recursion_cost_units,
+    ) else {
         return Ok(EvalValue::Error(WorksheetErrorCode::Num));
     };
     let prepared_call_index = push_special_prepared_call(
@@ -2768,7 +3763,7 @@ fn evaluate_invocation(
 
 fn is_missing_helper_local_callee_name(
     callee: &CompiledExpr,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
     defined_names: &BTreeMap<String, DefinedNameBinding>,
 ) -> bool {
     match callee {
@@ -2786,7 +3781,7 @@ fn lambda_binding_for_evaluated_callee(
     callee: &CompiledExpr,
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
 ) -> Result<LambdaBinding, EvaluationError> {
@@ -2846,30 +3841,14 @@ fn try_enter_callable_recursion(
 fn helper_binding_from_expr(
     expr: &CompiledExpr,
     fallback: CallArgValue,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> HelperBinding {
     match expr {
-        CompiledExpr::FunctionCall {
-            call_site, args, ..
-        } if call_site.has_special_form(CompiledFunctionSpecialForm::Lambda)
-            && !args.is_empty() =>
-        {
+        CompiledExpr::LambdaLiteral { args } if !args.is_empty() => {
             let body_index = args.len() - 1;
-            let params = args[..body_index]
-                .iter()
-                .filter_map(|arg| match arg {
-                    CompiledExpr::HelperParameterName(name) => Some(LambdaParam {
-                        name: name.clone(),
-                        optional: false,
-                    }),
-                    CompiledExpr::HelperOptionalParameterName(name) => Some(LambdaParam {
-                        name: name.clone(),
-                        optional: true,
-                    }),
-                    _ => None,
-                })
-                .collect::<Vec<_>>();
+            let params = lambda_params_from_exprs(&args[..body_index])
+                .expect("evaluated LAMBDA literal parameters were validated earlier");
             let capture_names = helper_capture_names(
                 &args[body_index],
                 &lambda_param_names(&params),
@@ -2877,7 +3856,7 @@ fn helper_binding_from_expr(
             );
             HelperBinding::Lambda {
                 params,
-                body: args[body_index].clone(),
+                body: Rc::new(args[body_index].clone()),
                 closure: helper_closure_from_names(helper_bindings, &capture_names),
             }
         }
@@ -2903,12 +3882,12 @@ fn helper_binding_from_expr(
     }
 }
 
-fn expr_is_hstack_empty_carrier(
-    expr: &CompiledExpr,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
-) -> bool {
+fn expr_is_hstack_empty_carrier(expr: &CompiledExpr, helper_bindings: &HelperBindingFrame) -> bool {
     match expr {
         CompiledExpr::FunctionCall {
+            call_site, args, ..
+        }
+        | CompiledExpr::SurfaceCall {
             call_site, args, ..
         } if call_site.function_id() == Some(FUNC_ID_TAKE) => {
             take_call_has_zero_column_extent(args)
@@ -2916,6 +3895,10 @@ fn expr_is_hstack_empty_carrier(
         CompiledExpr::FunctionCall {
             call_site, args, ..
         } if call_site.has_special_form(CompiledFunctionSpecialForm::If) => args
+            .iter()
+            .skip(1)
+            .any(|arg| expr_is_hstack_empty_carrier(arg, helper_bindings)),
+        CompiledExpr::If { args } => args
             .iter()
             .skip(1)
             .any(|arg| expr_is_hstack_empty_carrier(arg, helper_bindings)),
@@ -2927,8 +3910,17 @@ fn expr_is_hstack_empty_carrier(
                 Some(HelperBinding::EmptyHstackCarrier(_))
             )
         }
+        CompiledExpr::Reference(CompiledReferenceExpr::HelperLocalSlot { slot, .. }) => {
+            matches!(
+                helper_bindings.get_slot_clone(*slot),
+                Some(HelperBinding::EmptyHstackCarrier(_))
+            )
+        }
         CompiledExpr::ImplicitIntersection { expr, .. } => {
             expr_is_hstack_empty_carrier(expr, helper_bindings)
+        }
+        CompiledExpr::PrecomputedValue { source, .. } => {
+            expr_is_hstack_empty_carrier(source, helper_bindings)
         }
         _ => false,
     }
@@ -2940,7 +3932,7 @@ fn take_call_has_zero_column_extent(args: &[CompiledExpr]) -> bool {
 
 fn expr_is_numeric_zero(expr: &CompiledExpr) -> bool {
     match expr {
-        CompiledExpr::NumberLiteral(text) => text.trim() == "0",
+        CompiledExpr::NumberLiteral { value, .. } => *value == Some(0.0),
         CompiledExpr::Unary {
             op: crate::binding::UnaryOp::Plus,
             expr,
@@ -2951,6 +3943,10 @@ fn expr_is_numeric_zero(expr: &CompiledExpr) -> bool {
             expr,
             ..
         } => expr_is_numeric_zero(expr),
+        CompiledExpr::PrecomputedValue { value, source } => {
+            matches!(value, EvalValue::Number(number) if *number == 0.0)
+                || expr_is_numeric_zero(source)
+        }
         _ => false,
     }
 }
@@ -2958,7 +3954,7 @@ fn expr_is_numeric_zero(expr: &CompiledExpr) -> bool {
 fn hstack_arg_should_collapse(
     expr: &CompiledExpr,
     call_arg: &CallArgValue,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
 ) -> bool {
     matches!(
         call_arg,
@@ -2968,30 +3964,13 @@ fn hstack_arg_should_collapse(
 
 fn lambda_binding_for_callee(
     callee: &CompiledExpr,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> Option<LambdaBinding> {
     match callee {
-        CompiledExpr::FunctionCall {
-            call_site, args, ..
-        } if call_site.has_special_form(CompiledFunctionSpecialForm::Lambda)
-            && !args.is_empty() =>
-        {
+        CompiledExpr::LambdaLiteral { args } if !args.is_empty() => {
             let body_index = args.len() - 1;
-            let params = args[..body_index]
-                .iter()
-                .map(|arg| match arg {
-                    CompiledExpr::HelperParameterName(name) => Some(LambdaParam {
-                        name: name.clone(),
-                        optional: false,
-                    }),
-                    CompiledExpr::HelperOptionalParameterName(name) => Some(LambdaParam {
-                        name: name.clone(),
-                        optional: true,
-                    }),
-                    _ => None,
-                })
-                .collect::<Option<Vec<_>>>()?;
+            let params = lambda_params_from_exprs(&args[..body_index])?;
             let capture_names = helper_capture_names(
                 &args[body_index],
                 &lambda_param_names(&params),
@@ -3000,7 +3979,7 @@ fn lambda_binding_for_callee(
             Some(LambdaBinding {
                 origin_kind: CallableOriginKind::HelperLambda,
                 params,
-                body: args[body_index].clone(),
+                body: Rc::new(args[body_index].clone()),
                 closure: helper_closure_from_names(helper_bindings, &capture_names),
             })
         }
@@ -3017,6 +3996,27 @@ fn lambda_binding_for_callee(
                     params: params.clone(),
                     body: body.clone(),
                     closure: closure.clone(),
+                }),
+                Some(HelperBinding::Arg(CallArgValue::Eval(EvalValue::Lambda(lambda)))) => {
+                    callable_registry
+                        .borrow()
+                        .get(&lambda.callable_token)
+                        .map(|binding| binding.lambda.clone())
+                }
+                _ => None,
+            }
+        }
+        CompiledExpr::Reference(CompiledReferenceExpr::HelperLocalSlot { slot, .. }) => {
+            match helper_bindings.get_slot_clone(*slot) {
+                Some(HelperBinding::Lambda {
+                    params,
+                    body,
+                    closure,
+                }) => Some(LambdaBinding {
+                    origin_kind: CallableOriginKind::HelperLambda,
+                    params,
+                    body,
+                    closure,
                 }),
                 Some(HelperBinding::Arg(CallArgValue::Eval(EvalValue::Lambda(lambda)))) => {
                     callable_registry
@@ -3051,15 +4051,22 @@ fn lambda_binding_for_defined_name_callee(
 fn lambda_binding_from_defined_name_binding(binding: &CallableDefinedNameBinding) -> LambdaBinding {
     LambdaBinding {
         origin_kind: CallableOriginKind::DefinedNameCallable,
-        params: binding
-            .params
-            .iter()
-            .map(|name| LambdaParam {
-                name: name.clone(),
-                optional: binding.optional_parameter_names.contains(name),
-            })
-            .collect(),
-        body: compile_expr_for_evaluation(&binding.body),
+        params: Rc::from(
+            binding
+                .params
+                .iter()
+                .map(|name| LambdaParam {
+                    name: name.clone(),
+                    optional: binding.optional_parameter_names.contains(name),
+                    slot: None,
+                })
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+        ),
+        body: Rc::new({
+            let mut scope = CompileHelperScope::default();
+            compile_expr_for_evaluation(&binding.body, &mut scope)
+        }),
         closure: binding
             .closure
             .iter()
@@ -3121,17 +4128,22 @@ fn lambda_value_summary_from_captures(
 
 fn lambda_body_kind(body: &CompiledExpr) -> &'static str {
     match body {
-        CompiledExpr::NumberLiteral(_) => "NumberLiteral",
+        CompiledExpr::NumberLiteral { .. } => "NumberLiteral",
         CompiledExpr::StringLiteral(_) => "StringLiteral",
         CompiledExpr::LogicalLiteral(_) => "LogicalLiteral",
+        CompiledExpr::PrecomputedValue { source, .. } => lambda_body_kind(source),
         CompiledExpr::ArrayLiteral(_) => "ArrayLiteral",
         CompiledExpr::OmittedArgument => "OmittedArgument",
-        CompiledExpr::HelperParameterName(_) | CompiledExpr::HelperOptionalParameterName(_) => {
-            "HelperParameter"
-        }
+        CompiledExpr::HelperParameterName { .. }
+        | CompiledExpr::HelperOptionalParameterName { .. } => "HelperParameter",
         CompiledExpr::Binary { .. } => "Binary",
         CompiledExpr::Unary { .. } => "Unary",
         CompiledExpr::FunctionCall { .. } => "FunctionCall",
+        CompiledExpr::SurfaceCall { .. } => "SurfaceCall",
+        CompiledExpr::Let { .. } => "Let",
+        CompiledExpr::LambdaLiteral { .. } => "LambdaLiteral",
+        CompiledExpr::If { .. } => "If",
+        CompiledExpr::IfError { .. } => "IfError",
         CompiledExpr::BuiltinCallable(_) => "BuiltinCallable",
         CompiledExpr::Invocation { .. } => "Invocation",
         CompiledExpr::Reference(_) => "Reference",
@@ -3142,7 +4154,7 @@ fn lambda_body_kind(body: &CompiledExpr) -> &'static str {
 fn helper_capture_names(
     body: &CompiledExpr,
     parameter_names: &[String],
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
 ) -> BTreeSet<String> {
     let mut bound_names = parameter_names
         .iter()
@@ -3161,8 +4173,8 @@ fn lambda_required_arity(params: &[LambdaParam]) -> usize {
 
 fn helper_parameter_name(expr: &CompiledExpr) -> Option<String> {
     match expr {
-        CompiledExpr::HelperParameterName(name)
-        | CompiledExpr::HelperOptionalParameterName(name) => Some(name.clone()),
+        CompiledExpr::HelperParameterName { name, .. }
+        | CompiledExpr::HelperOptionalParameterName { name, .. } => Some(name.clone()),
         _ => None,
     }
 }
@@ -3170,17 +4182,32 @@ fn helper_parameter_name(expr: &CompiledExpr) -> Option<String> {
 fn helper_free_names_in_expr(
     expr: &CompiledExpr,
     bound_names: &mut BTreeSet<String>,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
 ) -> BTreeSet<String> {
     match expr {
-        CompiledExpr::NumberLiteral(_)
+        CompiledExpr::NumberLiteral { .. }
         | CompiledExpr::StringLiteral(_)
         | CompiledExpr::LogicalLiteral(_)
-        | CompiledExpr::ArrayLiteral(_)
         | CompiledExpr::OmittedArgument
-        | CompiledExpr::HelperParameterName(_)
-        | CompiledExpr::HelperOptionalParameterName(_)
+        | CompiledExpr::HelperParameterName { .. }
+        | CompiledExpr::HelperOptionalParameterName { .. }
         | CompiledExpr::BuiltinCallable(_) => BTreeSet::new(),
+        CompiledExpr::PrecomputedValue { source, .. } => {
+            helper_free_names_in_expr(source, bound_names, helper_bindings)
+        }
+        CompiledExpr::ArrayLiteral(rows) => {
+            let mut names = BTreeSet::new();
+            for row in rows {
+                for cell in row {
+                    names.extend(helper_free_names_in_expr(
+                        cell,
+                        bound_names,
+                        helper_bindings,
+                    ));
+                }
+            }
+            names
+        }
         CompiledExpr::Unary { expr, .. } => {
             helper_free_names_in_expr(expr, bound_names, helper_bindings)
         }
@@ -3193,17 +4220,16 @@ fn helper_free_names_in_expr(
             ));
             names
         }
-        CompiledExpr::FunctionCall {
-            call_site, args, ..
-        } if call_site.has_special_form(CompiledFunctionSpecialForm::Let) => {
+        CompiledExpr::Let { args, .. } => {
             helper_free_names_in_let(args, bound_names, helper_bindings)
         }
-        CompiledExpr::FunctionCall {
-            call_site, args, ..
-        } if call_site.has_special_form(CompiledFunctionSpecialForm::Lambda) => {
+        CompiledExpr::LambdaLiteral { args, .. } => {
             helper_free_names_in_lambda(args, bound_names, helper_bindings)
         }
-        CompiledExpr::FunctionCall { args, .. } => {
+        CompiledExpr::FunctionCall { args, .. }
+        | CompiledExpr::SurfaceCall { args, .. }
+        | CompiledExpr::If { args }
+        | CompiledExpr::IfError { args } => {
             let mut names = BTreeSet::new();
             for arg in args {
                 names.extend(helper_free_names_in_expr(arg, bound_names, helper_bindings));
@@ -3229,7 +4255,7 @@ fn helper_free_names_in_expr(
 fn helper_free_names_in_let(
     args: &[CompiledExpr],
     bound_names: &mut BTreeSet<String>,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
 ) -> BTreeSet<String> {
     if args.is_empty() {
         return BTreeSet::new();
@@ -3264,7 +4290,7 @@ fn helper_free_names_in_let(
 fn helper_free_names_in_lambda(
     args: &[CompiledExpr],
     bound_names: &mut BTreeSet<String>,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
 ) -> BTreeSet<String> {
     if args.is_empty() {
         return BTreeSet::new();
@@ -3283,7 +4309,7 @@ fn helper_free_names_in_lambda(
 fn helper_free_names_in_reference(
     reference: &CompiledReferenceExpr,
     bound_names: &mut BTreeSet<String>,
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
 ) -> BTreeSet<String> {
     match reference {
         CompiledReferenceExpr::Atom(NormalizedReference::Name(name))
@@ -3293,6 +4319,13 @@ fn helper_free_names_in_reference(
         {
             BTreeSet::from([name.name.clone()])
         }
+        CompiledReferenceExpr::HelperLocalSlot { name, .. }
+            if !bound_names.contains(&helper_name_key(&name.name))
+                && helper_binding_contains(helper_bindings, &name.name) =>
+        {
+            BTreeSet::from([name.name.clone()])
+        }
+        CompiledReferenceExpr::HelperLocalSlot { .. } => BTreeSet::new(),
         CompiledReferenceExpr::Atom(_) => BTreeSet::new(),
         CompiledReferenceExpr::Spill { anchor, .. } => {
             helper_free_names_in_reference(anchor, bound_names, helper_bindings)
@@ -3320,22 +4353,31 @@ fn helper_free_names_in_reference(
 }
 
 fn helper_closure_from_names(
-    helper_bindings: &BTreeMap<String, HelperBinding>,
+    helper_bindings: &HelperBindingFrame,
     capture_names: &BTreeSet<String>,
-) -> BTreeMap<String, HelperBinding> {
-    helper_bindings
-        .iter()
-        .filter_map(|(name, binding)| {
-            if capture_names
-                .iter()
-                .any(|capture_name| capture_name.eq_ignore_ascii_case(name))
-            {
-                Some((name.clone(), binding.clone()))
-            } else {
-                None
-            }
-        })
-        .collect()
+) -> HelperBindingFrame {
+    let mut closure = HelperBindingFrame {
+        layers: Vec::new(),
+        slots: empty_slot_cells(helper_bindings.slots.len()),
+    };
+    for entry in helper_bindings.entries() {
+        if capture_names
+            .iter()
+            .any(|capture_name| capture_name.eq_ignore_ascii_case(&entry.display_name))
+        {
+            let binding = entry
+                .slot
+                .and_then(|slot| helper_bindings.get_slot_clone(slot))
+                .unwrap_or_else(|| entry.binding.clone());
+            insert_helper_slot_binding(
+                &mut closure,
+                entry.display_name.clone(),
+                entry.slot,
+                binding,
+            );
+        }
+    }
+    closure
 }
 
 fn materialize_call_arg(
@@ -3416,15 +4458,20 @@ fn prepared_argument_for_call_arg(
 
 fn prepared_source_class(expr: &CompiledExpr) -> PreparedSourceClass {
     match expr {
-        CompiledExpr::NumberLiteral(_)
+        CompiledExpr::NumberLiteral { .. }
         | CompiledExpr::StringLiteral(_)
         | CompiledExpr::LogicalLiteral(_)
         | CompiledExpr::ArrayLiteral(_)
         | CompiledExpr::OmittedArgument => PreparedSourceClass::Literal,
-        CompiledExpr::HelperParameterName(_) | CompiledExpr::HelperOptionalParameterName(_) => {
-            PreparedSourceClass::HelperParameter
-        }
+        CompiledExpr::PrecomputedValue { source, .. } => prepared_source_class(source),
+        CompiledExpr::HelperParameterName { .. }
+        | CompiledExpr::HelperOptionalParameterName { .. } => PreparedSourceClass::HelperParameter,
         CompiledExpr::FunctionCall { .. }
+        | CompiledExpr::SurfaceCall { .. }
+        | CompiledExpr::Let { .. }
+        | CompiledExpr::LambdaLiteral { .. }
+        | CompiledExpr::If { .. }
+        | CompiledExpr::IfError { .. }
         | CompiledExpr::BuiltinCallable(_)
         | CompiledExpr::Invocation { .. } => PreparedSourceClass::FunctionCall,
         CompiledExpr::Binary { .. } | CompiledExpr::Unary { .. } => {
@@ -3447,6 +4494,7 @@ fn prepared_source_class(expr: &CompiledExpr) -> PreparedSourceClass {
             CompiledReferenceExpr::Atom(NormalizedReference::Name(_)) => {
                 PreparedSourceClass::NameReference
             }
+            CompiledReferenceExpr::HelperLocalSlot { .. } => PreparedSourceClass::NameReference,
             CompiledReferenceExpr::Atom(NormalizedReference::Structured(structured)) => {
                 match structured.resolved_reference {
                     StructuredResolvedRef::Cell(_) => PreparedSourceClass::CellReference,
@@ -3520,14 +4568,7 @@ fn push_special_prepared_call(
     Some(index)
 }
 
-fn push_prepared_call(
-    trace: &mut EvaluationTrace,
-    context: &EvaluationContext<'_>,
-    call: PreparedCall,
-) -> Option<usize> {
-    if !context.records_prepared_calls() {
-        return None;
-    }
+fn push_prepared_call_unchecked(trace: &mut EvaluationTrace, call: PreparedCall) -> Option<usize> {
     let index = trace.prepared_calls.len();
     trace.prepared_calls.push(call);
     Some(index)
@@ -4027,16 +5068,18 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
             })?;
         let mut local_bindings = binding.lambda.closure;
         for (param, arg) in binding.lambda.params.iter().zip(args.iter()) {
-            insert_helper_binding(
+            insert_helper_slot_binding(
                 &mut local_bindings,
                 param.name.clone(),
+                param.slot,
                 HelperBinding::Arg(call_arg_from_prepared(arg, self.callable_registry)),
             );
         }
         for param in binding.lambda.params.iter().skip(args.len()) {
-            insert_helper_binding(
+            insert_helper_slot_binding(
                 &mut local_bindings,
                 param.name.clone(),
+                param.slot,
                 HelperBinding::Arg(CallArgValue::MissingArg),
             );
         }
@@ -4047,7 +5090,7 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
                 .count()
                 * LOCAL_CALLABLE_RECURSION_LAMBDA_ARG_COST_UNITS;
         let Some(_recursion_guard) = try_enter_callable_recursion(
-            &self.context.callable_recursion_state,
+            &self.context.frame_state.callable_recursion_state,
             recursion_cost_units,
         ) else {
             return Ok(prepared_arg_from_eval_value(EvalValue::Error(
@@ -4103,8 +5146,12 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
             .iter()
             .map(|param| param.name.clone())
             .collect::<Vec<_>>();
+        let param_keys = param_names
+            .iter()
+            .map(|name| helper_name_key(name))
+            .collect::<Vec<_>>();
         let mut local_bindings = binding.lambda.closure;
-        prime_local_callable_param_slots(&mut local_bindings, &param_names);
+        prime_local_callable_param_slots(&mut local_bindings, &binding.lambda.params, &param_keys);
         let mut trace = EvaluationTrace {
             prepared_calls: Vec::new(),
         };
@@ -4130,20 +5177,17 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
                         actual: argc,
                     });
                 }
-                set_local_callable_arg_slots(
+                let lambda_arg_count = set_local_callable_arg_slots(
                     &mut local_bindings,
-                    &param_names,
+                    &binding.lambda.params,
+                    &param_keys,
                     &args,
                     self.callable_registry,
                 );
                 let recursion_cost_units = LOCAL_CALLABLE_RECURSION_BASE_COST_UNITS
-                    + args
-                        .iter()
-                        .filter(|arg| prepared_arg_contains_lambda(arg, self.callable_registry))
-                        .count()
-                        * LOCAL_CALLABLE_RECURSION_LAMBDA_ARG_COST_UNITS;
+                    + lambda_arg_count * LOCAL_CALLABLE_RECURSION_LAMBDA_ARG_COST_UNITS;
                 let Some(_recursion_guard) = try_enter_callable_recursion(
-                    &self.context.callable_recursion_state,
+                    &self.context.frame_state.callable_recursion_state,
                     recursion_cost_units,
                 ) else {
                     batch.accept_result(prepared_arg_from_eval_value(EvalValue::Error(
@@ -4234,42 +5278,49 @@ fn build_scratch_from_prepared_args(
 }
 
 fn prime_local_callable_param_slots(
-    local_bindings: &mut BTreeMap<String, HelperBinding>,
-    param_names: &[String],
+    local_bindings: &mut HelperBindingFrame,
+    params: &[LambdaParam],
+    param_keys: &[String],
 ) {
-    for param_name in param_names {
-        if let Some(existing_name) = local_bindings
-            .keys()
-            .find(|binding_name| binding_name.eq_ignore_ascii_case(param_name))
-            .cloned()
-        {
-            local_bindings.remove(&existing_name);
-        }
-    }
-    for param_name in param_names {
-        local_bindings.insert(
-            param_name.clone(),
+    for (param, param_key) in params.iter().zip(param_keys.iter()) {
+        local_bindings.insert_key(
+            param_key.clone(),
+            param.name.clone(),
+            param.slot,
             HelperBinding::Arg(CallArgValue::MissingArg),
         );
     }
 }
 
 fn set_local_callable_arg_slots(
-    local_bindings: &mut BTreeMap<String, HelperBinding>,
-    param_names: &[String],
+    local_bindings: &mut HelperBindingFrame,
+    params: &[LambdaParam],
+    param_keys: &[String],
     args: &[PreparedArgValue],
     callable_registry: &RefCell<CallableRegistry>,
-) {
-    for (param_name, arg) in param_names.iter().zip(args.iter()) {
-        if let Some(slot) = local_bindings.get_mut(param_name.as_str()) {
-            *slot = HelperBinding::Arg(call_arg_from_prepared(arg, callable_registry));
+) -> usize {
+    let mut lambda_arg_count = 0usize;
+    for ((param, param_key), arg) in params.iter().zip(param_keys.iter()).zip(args.iter()) {
+        let call_arg = call_arg_from_prepared(arg, callable_registry);
+        if matches!(call_arg, CallArgValue::Eval(EvalValue::Lambda(_))) {
+            lambda_arg_count += 1;
+        }
+        let binding = HelperBinding::Arg(call_arg);
+        if let Some(slot) = param.slot {
+            local_bindings.set_slot(slot, binding);
+        } else {
+            local_bindings.set_key_binding(param_key, None, binding);
         }
     }
-    for param_name in param_names.iter().skip(args.len()) {
-        if let Some(slot) = local_bindings.get_mut(param_name.as_str()) {
-            *slot = HelperBinding::Arg(CallArgValue::MissingArg);
+    for (param, param_key) in params.iter().zip(param_keys.iter()).skip(args.len()) {
+        let binding = HelperBinding::Arg(CallArgValue::MissingArg);
+        if let Some(slot) = param.slot {
+            local_bindings.set_slot(slot, binding);
+        } else {
+            local_bindings.set_key_binding(param_key, None, binding);
         }
     }
+    lambda_arg_count
 }
 
 fn call_arg_from_prepared(
