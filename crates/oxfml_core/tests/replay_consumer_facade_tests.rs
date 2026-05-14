@@ -980,6 +980,18 @@ fn replay_projection_service_projects_runtime_managed_session_results() {
     );
     assert!(execution_projection.candidate_result_id.is_some());
     assert!(execution_projection.library_context_snapshot_ref.is_none());
+    assert_eq!(
+        execution_projection
+            .prepared_formula_identity
+            .as_ref()
+            .map(|identity| identity.prepared_formula_key.as_str()),
+        Some(
+            execution
+                .prepared_formula_identity
+                .prepared_formula_key
+                .as_str()
+        )
+    );
 
     let session_snapshot = session
         .managed_session_snapshot()
@@ -994,6 +1006,18 @@ fn replay_projection_service_projects_runtime_managed_session_results() {
     assert_eq!(session_projection.phase.as_deref(), Some("Executed"));
     assert!(session_projection.candidate_result_id.is_some());
     assert_eq!(session_projection.execution_outcome_surface, None);
+    assert_eq!(
+        session_projection
+            .prepared_formula_identity
+            .as_ref()
+            .map(|identity| identity.prepared_formula_key.as_str()),
+        Some(
+            execution
+                .prepared_formula_identity
+                .prepared_formula_key
+                .as_str()
+        )
+    );
 
     let commit = session
         .commit_managed(
@@ -1019,6 +1043,18 @@ fn replay_projection_service_projects_runtime_managed_session_results() {
     assert_eq!(
         commit_projection.execution_outcome_surface,
         Some(commit.execution_outcome_surface.clone())
+    );
+    assert_eq!(
+        commit_projection
+            .prepared_formula_identity
+            .as_ref()
+            .map(|identity| identity.prepared_formula_key.as_str()),
+        Some(
+            execution
+                .prepared_formula_identity
+                .prepared_formula_key
+                .as_str()
+        )
     );
     let committed_session_snapshot = session
         .managed_session_snapshot()

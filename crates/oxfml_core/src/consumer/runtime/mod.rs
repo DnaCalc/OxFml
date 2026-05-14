@@ -1,8 +1,12 @@
 use std::collections::BTreeMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
 use oxfunc_core::value::EvalValue;
 
-use crate::binding::{BindContext, BindDiagnostic, NameKind, bind_formula};
+use crate::binding::{
+    BindContext, BindDiagnostic, BoundFormula, NameKind, NormalizedReference, bind_formula,
+};
 use crate::consumer::ConsumerLibraryContextState;
 use crate::eval::{DefinedNameBinding, EvaluationBackend, EvaluationOutput, EvaluationTraceMode};
 use crate::host::{
@@ -186,6 +190,12 @@ impl<'a> RuntimeEnvironment<'a> {
         request: RuntimeFormulaRequest<'q>,
     ) -> Result<RuntimeFormulaResult, String> {
         let compiled = compile_runtime_prepare_request(self, &request)?;
+        let prepared_formula_identity = runtime_prepared_formula_identity(
+            &compiled.prepare_request.source,
+            &compiled.prepare_request.bound_formula,
+            &compiled.prepare_request.semantic_plan,
+            &self.primary_locus,
+        );
         if compiled
             .prepare_request
             .semantic_plan
@@ -206,7 +216,10 @@ impl<'a> RuntimeEnvironment<'a> {
             self.library_context.pinned_view(),
             request.verification_publication_context(),
         )?;
-        Ok(RuntimeFormulaResult::from_host_output(output))
+        Ok(RuntimeFormulaResult::from_host_output(
+            output,
+            prepared_formula_identity,
+        ))
     }
 
     fn build_host(&self, source: &FormulaSourceRecord) -> SingleFormulaHost {
@@ -320,10 +333,18 @@ pub struct RuntimeFormulaResult {
     pub trace_events: Vec<TraceEvent>,
     pub artifact_reuse: ArtifactReuseReport,
     pub first_host_replay_capture_packet: FirstHostReplayCapturePacket,
+    pub prepared_formula_identity: RuntimePreparedFormulaIdentity,
 }
 
 impl RuntimeFormulaResult {
-    fn from_host_output(host_output: HostRecalcOutput) -> Self {
+    fn from_host_output(
+        host_output: HostRecalcOutput,
+        mut prepared_formula_identity: RuntimePreparedFormulaIdentity,
+    ) -> Self {
+        refresh_runtime_prepared_formula_identity_for_plan(
+            &mut prepared_formula_identity,
+            &host_output.semantic_plan,
+        );
         let verification_publication_surface = host_output.verification_publication_surface.clone();
         let first_host_replay_capture_packet = host_output.to_first_host_replay_capture_packet();
         let comparison_views =
@@ -347,8 +368,60 @@ impl RuntimeFormulaResult {
             trace_events: host_output.trace_events,
             artifact_reuse: host_output.artifact_reuse,
             first_host_replay_capture_packet,
+            prepared_formula_identity,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimePreparedFormulaIdentity {
+    pub prepared_formula_key: String,
+    pub formula_stable_id: String,
+    pub formula_text_version: u64,
+    pub formula_token: String,
+    pub library_context_snapshot_ref: Option<LibraryContextSnapshotRef>,
+    pub structure_context_version: String,
+    pub caller_context_key: Option<String>,
+    pub plan_template: RuntimePlanTemplateIdentity,
+    pub hole_binding: RuntimeHoleBindingIdentity,
+    pub formal_references: Vec<RuntimeFormalReference>,
+    pub projection_status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimePlanTemplateIdentity {
+    pub shape_key: Option<String>,
+    pub dispatch_skeleton_key: String,
+    pub plan_template_key: String,
+    pub folded_plan_key: Option<String>,
+    pub template_holes: Vec<RuntimeTemplateHole>,
+    pub projection_status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeTemplateHole {
+    pub hole_id: String,
+    pub ordinal: usize,
+    pub path: Option<String>,
+    pub hole_kind: String,
+    pub hole_kind_key: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeHoleBindingIdentity {
+    pub hole_binding_fingerprint: String,
+    pub binding_count: usize,
+    pub projection_status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeFormalReference {
+    pub reference_handle: String,
+    pub reference_descriptor: String,
+    pub reference_family: String,
+    pub caller_context_dependent: bool,
+    pub host_mappable_identity: Option<String>,
+    pub linked_hole_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -371,6 +444,7 @@ pub struct RuntimeManagedOpenResult {
     pub syntax_diagnostics: Vec<SyntaxDiagnostic>,
     pub bind_diagnostics: Vec<BindDiagnostic>,
     pub semantic_plan: SemanticPlan,
+    pub prepared_formula_identity: RuntimePreparedFormulaIdentity,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -381,6 +455,7 @@ pub struct RuntimeManagedExecutionResult {
     pub candidate_result: AcceptedCandidateResult,
     pub typed_query_bundle_spec: TypedContextQueryBundleSpec,
     pub trace_events: Vec<TraceEvent>,
+    pub prepared_formula_identity: RuntimePreparedFormulaIdentity,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -419,6 +494,7 @@ pub struct RuntimeManagedSessionSnapshot {
     pub last_reject: Option<RejectRecord>,
     pub execution_outcome_surface: Option<ExecutionOutcomeSurface>,
     pub trace_events: Vec<TraceEvent>,
+    pub prepared_formula_identity: RuntimePreparedFormulaIdentity,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -483,6 +559,12 @@ impl<'a> RuntimeSessionFacade<'a> {
         let syntax_diagnostics = prepared.syntax_diagnostics;
         let bind_diagnostics = prepared.bind_diagnostics.clone();
         let semantic_plan = prepared.prepare_request.semantic_plan.clone();
+        let prepared_formula_identity = runtime_prepared_formula_identity(
+            &prepared.prepare_request.source,
+            &prepared.prepare_request.bound_formula,
+            &prepared.prepare_request.semantic_plan,
+            &self.environment.primary_locus,
+        );
         let prepared_session = self.managed_service.prepare(prepared.prepare_request)?;
         let open = self.managed_service.open_session(prepared_session);
         self.managed_formula_token = Some(request.source().formula_token().0);
@@ -495,6 +577,7 @@ impl<'a> RuntimeSessionFacade<'a> {
             syntax_diagnostics,
             bind_diagnostics,
             semantic_plan,
+            prepared_formula_identity,
         })
     }
 
@@ -539,6 +622,7 @@ impl<'a> RuntimeSessionFacade<'a> {
             candidate_result,
             typed_query_bundle_spec,
             trace_events: snapshot.trace_events,
+            prepared_formula_identity: snapshot.prepared_formula_identity,
         })
     }
 
@@ -683,6 +767,173 @@ impl<'a> RuntimeSessionFacade<'a> {
     }
 }
 
+fn runtime_prepared_formula_identity(
+    source: &FormulaSourceRecord,
+    bound_formula: &BoundFormula,
+    semantic_plan: &SemanticPlan,
+    primary_locus: &Locus,
+) -> RuntimePreparedFormulaIdentity {
+    let formula_token = source.formula_token().0;
+    let caller_context_key = Some(format!(
+        "locus:{}:{}:{}",
+        primary_locus.sheet_id, primary_locus.row, primary_locus.col
+    ));
+    let dispatch_skeleton_key = runtime_hash_debug(&(
+        &semantic_plan.function_bindings,
+        &semantic_plan.availability_summaries,
+        &semantic_plan.oxfunc_catalog_identity,
+        &semantic_plan.library_context_snapshot_ref,
+    ));
+    let plan_template_key = semantic_plan.semantic_plan_key.clone();
+    let hole_binding_fingerprint = runtime_hash_debug(&(
+        &bound_formula.normalized_references,
+        &bound_formula.unresolved_references,
+        &semantic_plan.helper_profile,
+        &semantic_plan.capability_requirements,
+    ));
+    let prepared_formula_key = runtime_hash_debug(&(
+        &source.formula_stable_id.0,
+        source.formula_text_version.0,
+        &formula_token,
+        &bound_formula.bind_hash,
+        &semantic_plan.semantic_plan_key,
+        &semantic_plan.library_context_snapshot_ref,
+        &bound_formula.structure_context_version,
+        &caller_context_key,
+    ));
+
+    RuntimePreparedFormulaIdentity {
+        prepared_formula_key,
+        formula_stable_id: source.formula_stable_id.0.clone(),
+        formula_text_version: source.formula_text_version.0,
+        formula_token,
+        library_context_snapshot_ref: semantic_plan.library_context_snapshot_ref.clone(),
+        structure_context_version: bound_formula.structure_context_version.clone(),
+        caller_context_key,
+        plan_template: RuntimePlanTemplateIdentity {
+            shape_key: None,
+            dispatch_skeleton_key,
+            plan_template_key,
+            folded_plan_key: None,
+            template_holes: Vec::new(),
+            projection_status: "current_floor:template_key_only;shape_and_hole_skeleton_deferred"
+                .to_string(),
+        },
+        hole_binding: RuntimeHoleBindingIdentity {
+            hole_binding_fingerprint,
+            binding_count: bound_formula.normalized_references.len()
+                + bound_formula.unresolved_references.len(),
+            projection_status:
+                "current_floor:fingerprint_from_public_bind_references;canonical_holes_deferred"
+                    .to_string(),
+        },
+        formal_references: runtime_formal_references(bound_formula),
+        projection_status: "current_floor:derived_from_public_runtime_prepare".to_string(),
+    }
+}
+
+fn refresh_runtime_prepared_formula_identity_for_plan(
+    identity: &mut RuntimePreparedFormulaIdentity,
+    semantic_plan: &SemanticPlan,
+) {
+    identity.library_context_snapshot_ref = semantic_plan.library_context_snapshot_ref.clone();
+    identity.plan_template.dispatch_skeleton_key = runtime_hash_debug(&(
+        &semantic_plan.function_bindings,
+        &semantic_plan.availability_summaries,
+        &semantic_plan.oxfunc_catalog_identity,
+        &semantic_plan.library_context_snapshot_ref,
+    ));
+    identity.plan_template.plan_template_key = semantic_plan.semantic_plan_key.clone();
+    identity.prepared_formula_key = runtime_hash_debug(&(
+        &identity.formula_stable_id,
+        identity.formula_text_version,
+        &identity.formula_token,
+        &semantic_plan.bind_hash,
+        &semantic_plan.semantic_plan_key,
+        &semantic_plan.library_context_snapshot_ref,
+        &identity.structure_context_version,
+        &identity.caller_context_key,
+    ));
+}
+
+fn runtime_formal_references(bound_formula: &BoundFormula) -> Vec<RuntimeFormalReference> {
+    let mut references = bound_formula
+        .normalized_references
+        .iter()
+        .enumerate()
+        .map(|(index, reference)| RuntimeFormalReference {
+            reference_handle: format!(
+                "formal-ref:{}:{index}",
+                runtime_hash_debug(&(bound_formula.bind_hash.as_str(), reference))
+            ),
+            reference_descriptor: reference.to_string(),
+            reference_family: runtime_reference_family(reference).to_string(),
+            caller_context_dependent: runtime_reference_caller_context_dependent(reference),
+            host_mappable_identity: Some(reference.to_string()),
+            linked_hole_id: None,
+        })
+        .collect::<Vec<_>>();
+    references.extend(bound_formula.unresolved_references.iter().enumerate().map(
+        |(index, unresolved)| RuntimeFormalReference {
+            reference_handle: format!(
+                "formal-ref:{}:unresolved:{index}",
+                runtime_hash_debug(&(
+                    bound_formula.bind_hash.as_str(),
+                    unresolved.source_text.as_str(),
+                    unresolved.reason.as_str()
+                ))
+            ),
+            reference_descriptor: unresolved.source_text.clone(),
+            reference_family: "unresolved".to_string(),
+            caller_context_dependent: false,
+            host_mappable_identity: None,
+            linked_hole_id: None,
+        },
+    ));
+    references
+}
+
+fn runtime_reference_family(reference: &NormalizedReference) -> &'static str {
+    match reference {
+        NormalizedReference::Cell(_) | NormalizedReference::Area(_) => "direct",
+        NormalizedReference::WholeRow(_) | NormalizedReference::WholeColumn(_) => {
+            "shape_topology_sensitive"
+        }
+        NormalizedReference::Name(name) if name.caller_context_dependent => {
+            "relative_or_caller_sensitive"
+        }
+        NormalizedReference::Name(name) if matches!(name.kind, NameKind::MixedOrDeferred) => {
+            "host_sensitive"
+        }
+        NormalizedReference::Name(_) => "direct",
+        NormalizedReference::External(_) => "dynamic_potential",
+        NormalizedReference::Structured(structured) if structured.caller_row_sensitive => {
+            "relative_or_caller_sensitive"
+        }
+        NormalizedReference::Structured(_) => "direct",
+        NormalizedReference::Error(_) => "unresolved",
+    }
+}
+
+fn runtime_reference_caller_context_dependent(reference: &NormalizedReference) -> bool {
+    match reference {
+        NormalizedReference::Cell(cell) => cell.caller_anchor_used,
+        NormalizedReference::Area(area) => area.caller_anchor_used,
+        NormalizedReference::Name(name) => name.caller_context_dependent,
+        NormalizedReference::Structured(structured) => structured.caller_row_sensitive,
+        NormalizedReference::WholeRow(_)
+        | NormalizedReference::WholeColumn(_)
+        | NormalizedReference::External(_)
+        | NormalizedReference::Error(_) => false,
+    }
+}
+
+fn runtime_hash_debug<T: std::fmt::Debug>(value: &T) -> String {
+    let mut hasher = DefaultHasher::new();
+    format!("{value:?}").hash(&mut hasher);
+    format!("{:016x}", hasher.finish())
+}
+
 struct CompiledRuntimePrepareRequest {
     prepare_request: PrepareRequest,
     syntax_diagnostics: Vec<SyntaxDiagnostic>,
@@ -804,6 +1055,12 @@ fn runtime_managed_session_snapshot(record: &SessionRecord) -> RuntimeManagedSes
         ),
         last_reject,
         trace_events: record.trace_events.clone(),
+        prepared_formula_identity: runtime_prepared_formula_identity(
+            &record.prepared.source,
+            &record.prepared.bound_formula,
+            &record.prepared.semantic_plan,
+            &record.prepared.primary_locus,
+        ),
     }
 }
 

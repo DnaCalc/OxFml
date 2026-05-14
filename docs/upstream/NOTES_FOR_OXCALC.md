@@ -844,3 +844,118 @@ After the latest Wave 4 packaging cut, OxFml's current public consumer read is:
 3. any remaining host/session/adapter reach that still exists is explicit
    `test_support` support surface for bounded internal or integration-test use,
    not ordinary downstream integration contract.
+
+## 24. Receiving Review Of OxCalc W050 Handoffs
+OxFml has reviewed the three OxCalc W050 handoffs:
+1. `HANDOFF-CALC-002`
+2. `HANDOFF-CALC-003`
+3. `HANDOFF-CALC-004`
+
+Receipt notes:
+1. `docs/handoffs/HANDOFF_CALC_002_OXFML_RECEIPT.md`
+2. `docs/handoffs/HANDOFF_CALC_003_OXFML_RECEIPT.md`
+3. `docs/handoffs/HANDOFF_CALC_004_OXFML_RECEIPT.md`
+
+Current OxFml decisions for OxCalc:
+1. `CALC-002`: accepted as a narrower successor-contract trigger. OxFml will
+   use OxFml-owned terminology for prepared formula identity:
+   `PreparedFormulaPackage` or equivalent, `PlanTemplate`, `HoleBindingSet`,
+   and `FormalReference` / `FormalReferenceSet`. OxCalc's W050 compatibility
+   fingerprints should stay temporary until canonical public fields exist.
+2. `CALC-003`: accepted only after splitting ownership. OxFml owns
+   `CorrectnessFloorContext` carriage through semantic-plan, runtime/session,
+   trace, and replay surfaces. OxFunc owns kernel enforcement, affected-function
+   metadata, worksheet-error precedence definitions, and invalidation version
+   signals.
+3. `CALC-004`: accepted as identity reservation, not activation.
+   `ValueHole`, `RefOrValueHole`, `CallableHole`, `ShapeSensitiveHole`,
+   `SparseRangeHole`, and `RichValueHole` are the default template-hole
+   taxonomy direction. Sparse/rich producer support, rich-kernel execution, and
+   `RichArgAccepted` or equivalent metadata remain successor work.
+
+Current OxFml posture:
+1. this pass records contract direction only,
+2. runtime/replay field emission remains deferred unless backed by actual
+   emitted OxFml/OxFunc facts,
+3. absence of template-hole or producer capability facts must not be interpreted
+   as rich/sparse producer support.
+
+Canonical OxFml docs updated for this receiving pass:
+1. `docs/spec/OXFML_CANONICAL_ARTIFACT_SHAPES.md`
+2. `docs/spec/OXFML_MINIMUM_SEAM_SCHEMAS.md`
+3. `docs/spec/OXFML_CONSUMER_INTERFACE_AND_FACADE_CONTRACT_V1.md`
+4. `docs/spec/formula-language/OXFML_OXFUNC_SEMANTIC_BOUNDARY.md`
+
+Concrete decisions back to OxCalc:
+1. managed-session result parity should be solved by full-result carriage or
+   stable links to the exact candidate/execution result, not by parsing
+   diagnostics.
+2. OxCalc's `session_path_evidence.json` remains local evidence and should not
+   be treated as the shared OxFml schema.
+3. formal-reference/input transport should retire synthetic A1 and defined-name
+   compatibility inputs only after canonical OxFml fields exist.
+4. current empty capability columns mean reserved/no-producer evidence, not
+   sparse or rich support.
+5. replay selector mismatch for correctness-floor context is invalid unless a
+   migration proof is attached.
+
+Open lanes:
+1. OxFml implementation of prepared-package, plan-template, hole-binding,
+   formal-reference, managed-result, and replay/correlation fields beyond the
+   current prepared-identity floor.
+2. OxFunc cooperation for argument-preparation profile versioning,
+   correctness-floor kernel metadata, rich/sparse admission metadata, and any
+   affected-function invalidation surfaces.
+3. OxCalc migration away from W050 compatibility projections after canonical
+   fields are emitted.
+4. successor sparse/rich producer activation and exact numerical/error-algebra
+   enforcement evidence.
+
+Current status:
+1. this is receiving acknowledgement and integration-dependency update only,
+2. OxFml is only acknowledging receipt and decisions for the OxCalc W050
+   handoffs,
+3. all three lanes remain `in_progress` until the relevant receiving and
+   producer-side fields land and are acknowledged across repos.
+
+## 25. OxFunc Receiving Response Intake For CALC-003 And CALC-004
+OxFml has now consumed the OxFunc receiving responses for the two W050 packets
+that require OxFunc-owned metadata:
+1. `../OxFunc/docs/handoffs/HANDOFF-CALC-003_OXFUNC_RECEIPT.md`
+2. `../OxFunc/docs/handoffs/HANDOFF-CALC-004_OXFUNC_RECEIPT.md`
+3. `../OxFunc/docs/function-lane/OXFUNC_KERNEL_METADATA_AND_ADMISSION_PROFILE_CONTRACT.md`
+
+Concrete migration consequences for OxCalc:
+1. For `CALC-003`, OxCalc should treat
+   `semantic_kernel_metadata_version` as the reserved OxFunc-owned
+   prepared-package invalidation bridge for reduction-sensitive and
+   error-collapse-sensitive kernel metadata changes.
+2. OxCalc should keep its local correctness-floor selector artifacts as
+   compatibility evidence until OxFml emits canonical runtime/replay fields and
+   OxFunc emits real metadata.
+3. Runtime/replay fields for `profile_version`,
+   `numerical_reduction_policy`, `error_algebra`, and
+   `semantic_kernel_metadata_version` are reserved contract fields, not current
+   selector-enforcement evidence.
+4. Exact numerical reduction behavior, exact worksheet-error algebra, affected
+   kernel metadata, and enforcement tests remain OxFunc-owned.
+5. For `CALC-004`, OxCalc should treat `arg_admission_metadata_version` as the
+   reserved OxFunc-owned prepared-package invalidation bridge for
+   argument-preparation/admission metadata changes.
+6. OxFunc has accepted a metadata shape equivalent to
+   `RichArgAccepted(required_capability_set)`. OxFml will consume that metadata
+   when emitted; OxCalc should keep W050 local reserved columns until canonical
+   producer/exercised facts exist.
+7. Producer capability publication should be typed metadata on returned
+   rich/sparse carriers, using `producer_capability_set_keys` and
+   `exercised_capability_keys` when emitted.
+8. `IMAGE` / `_webimage` is the preferred first rich producer activation lane.
+   Sparse range readers remain deferred pending a concrete sparse reader API and
+   replay-visible sparse iteration semantics.
+
+Current non-claims:
+1. OxFml is not claiming Rust implementation of these new fields.
+2. OxFml is not claiming selector enforcement.
+3. OxFml is not claiming rich/sparse execution.
+4. OxFml is not claiming replay-field finalization beyond the reserved field
+   families above.

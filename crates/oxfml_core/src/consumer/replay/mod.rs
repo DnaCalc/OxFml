@@ -1,6 +1,7 @@
 use crate::consumer::runtime::{
     RuntimeFormulaResult, RuntimeManagedCommitResult, RuntimeManagedExecutionResult,
     RuntimeManagedOpenResult, RuntimeManagedSessionSnapshot, RuntimeManagedTerminationResult,
+    RuntimePreparedFormulaIdentity,
 };
 use crate::host::FirstHostReplayCapturePacket;
 use crate::interface::{LibraryContextSnapshotRef, TypedContextQueryBundleSpec};
@@ -190,6 +191,7 @@ pub struct ReplayProjectionResult {
     pub comparison_views: Option<Vec<ReplayComparisonView>>,
     pub verification_publication_surface: Option<VerificationPublicationSurface>,
     pub first_host_replay_capture_packet: Option<FirstHostReplayCapturePacket>,
+    pub prepared_formula_identity: Option<RuntimePreparedFormulaIdentity>,
 }
 
 pub struct ReplayProjectionService;
@@ -328,6 +330,7 @@ fn project_runtime_result(
         )),
         verification_publication_surface: Some(verification_publication_surface),
         first_host_replay_capture_packet: Some(result.first_host_replay_capture_packet.clone()),
+        prepared_formula_identity: Some(result.prepared_formula_identity.clone()),
     }
 }
 
@@ -366,6 +369,7 @@ fn project_first_host_capture(
             source.packet.verification_publication_surface.clone(),
         ),
         first_host_replay_capture_packet: Some(source.packet.clone()),
+        prepared_formula_identity: None,
     }
 }
 
@@ -399,6 +403,7 @@ fn project_runtime_managed_open(
         comparison_views: None,
         verification_publication_surface: None,
         first_host_replay_capture_packet: None,
+        prepared_formula_identity: Some(result.prepared_formula_identity.clone()),
     }
 }
 
@@ -436,6 +441,7 @@ fn project_runtime_managed_execution(
         comparison_views: None,
         verification_publication_surface: None,
         first_host_replay_capture_packet: None,
+        prepared_formula_identity: Some(result.prepared_formula_identity.clone()),
     }
 }
 
@@ -486,6 +492,7 @@ fn project_runtime_managed_session(
         comparison_views: None,
         verification_publication_surface: None,
         first_host_replay_capture_packet: None,
+        prepared_formula_identity: Some(result.prepared_formula_identity.clone()),
     }
 }
 
@@ -534,6 +541,7 @@ fn project_runtime_managed_commit(
         comparison_views: None,
         verification_publication_surface: None,
         first_host_replay_capture_packet: None,
+        prepared_formula_identity: Some(result.session.prepared_formula_identity.clone()),
     }
 }
 
@@ -580,6 +588,7 @@ fn project_runtime_managed_termination(
         comparison_views: None,
         verification_publication_surface: None,
         first_host_replay_capture_packet: None,
+        prepared_formula_identity: Some(result.session.prepared_formula_identity.clone()),
     }
 }
 
@@ -613,6 +622,7 @@ fn project_fixture_family(
         comparison_views: None,
         verification_publication_surface: None,
         first_host_replay_capture_packet: None,
+        prepared_formula_identity: None,
     }
 }
 
@@ -646,5 +656,6 @@ fn project_retained_witness(
         comparison_views: None,
         verification_publication_surface: None,
         first_host_replay_capture_packet: None,
+        prepared_formula_identity: None,
     }
 }

@@ -132,6 +132,156 @@ Canonical property:
    - accepted formula text with bind-time unresolved-name or unsupported-lane diagnostics,
    - later runtime capability denial or provider-failure outcomes.
 
+### 6A. Prepared Formula Package, Plan Template, And Hole Bindings
+OxCalc `HANDOFF-CALC-002` is accepted as a narrower successor-contract trigger:
+OxFml should expose an OxFml-owned prepared formula package through the public
+runtime/session surface, without requiring consumers to inspect private binder or
+semantic-plan internals.
+
+Canonical field families:
+1. prepared package identity:
+   - `prepared_formula_key` or an equivalent OxFml-owned prepared-callable key,
+   - `formula_stable_id`,
+   - source formula text/version identity,
+   - `library_context_snapshot_ref`,
+   - structure-context identity,
+   - caller/locus context where binding or relative-reference meaning depends on it.
+2. plan-template identity:
+   - `shape_key`,
+   - `dispatch_skeleton_key`,
+   - `plan_template_key`,
+   - semantic-plan or folded-plan identity where OxFml has admitted identity-affecting folding.
+3. hole-binding identity:
+   - ordered template holes with stable `hole_id`,
+   - stable hole-kind serialization,
+   - `hole_binding_fingerprint`,
+   - per-hole binding payload category.
+4. formal-reference/input identity:
+   - stable formal reference handle,
+   - canonical reference descriptor or normalized reference text,
+   - reference family,
+   - caller-anchor/address-mode dependence where present,
+   - reference-to-hole or reference-to-input binding identity.
+
+Naming rule:
+1. `PreparedCallable`, `PlanTemplate`, and `HoleBindings` are accepted as
+   compatibility aliases from OxCalc, but OxFml may expose the final public
+   names as `PreparedFormulaPackage`, `PlanTemplate`, and `HoleBindingSet` or
+   equivalent OxFml-owned names.
+2. the canonical distinction is prepared package identity versus template
+   identity versus invocation binding identity, not the exact spelling of the
+   first public struct names.
+
+Canonical property:
+1. one-shot execution and managed-session execution should expose the same
+   prepared-package identity for the same source/version, binding world,
+   library-context snapshot, caller/locus context, and structure context.
+2. literal values, concrete references, omitted arguments, and helper names are
+   binding payloads by default, not template narrowing inputs, unless a later
+   evidence-backed producer explicitly admits a narrower template hole.
+3. OxCalc remains owner of workbook graph targets, scheduling, invalidation, and
+   publication policy; OxFml owns formula reference identity, formal input shape,
+   and callable invocation semantics.
+4. OxFml accepts two OxFunc-owned metadata-version bridges as
+   prepared-package invalidation inputs:
+   - `semantic_kernel_metadata_version` for reduction-sensitive and
+     error-collapse-sensitive kernel metadata changes,
+   - `arg_admission_metadata_version` for argument-preparation/admission profile
+     changes, including future rich or sparse admission.
+5. until narrower affected-function fingerprints exist, consumers may
+   conservatively invalidate all prepared packages that rely on OxFunc function
+   metadata when either bridge changes.
+
+### 6B. Template Hole Taxonomy And Capability-Set Reservation
+OxCalc `HANDOFF-CALC-004` is accepted as an identity-reservation trigger, not as
+a claim that sparse or rich producers are active in the current OxFml/OxFunc
+runtime.
+
+Canonical default hole-kind families:
+1. `ValueHole(value_class_bound)`
+2. `RefOrValueHole(ref_observability)`
+3. `CallableHole(callable_signature)`
+4. `ShapeSensitiveHole(extent_class)`
+5. `SparseRangeHole(extent_class, cardinality_class)`
+6. `RichValueHole(required_capability_set)`
+
+Wide-by-default mapping:
+1. OxFunc `ValuesOnlyPreAdapter` arguments map to
+   `ValueHole(AnyValue)` unless a future narrower producer is admitted.
+2. OxFunc `RefsVisibleInAdapter` arguments map to
+   `RefOrValueHole(ReferenceIdentityVisible)`.
+3. invocation callees map to `CallableHole(AnyCallable)` while the concrete
+   callee payload remains in the binding set.
+4. shape-sensitive calls may use `ShapeSensitiveHole(extent_class)` when shape
+   participates in semantics.
+
+Rich capability identity:
+1. `RichValueHole` identity is the sorted, deduplicated required capability set,
+   not the producer's concrete rich-value class and not the producer's full
+   published capability set.
+2. the initial reserved selectors are `Indexable`, `Enumerable`, `Shaped`, and
+   `Materialisable`, each with typed stable-key parameters.
+3. producer admission is a stable-key superset check when producer facts exist.
+
+Sparse-range reservation:
+1. `SparseRangeHole` reserves sparse value-reader identity only.
+2. a future sparse reader should distinguish `Defined(EvalValue)` from `Blank`,
+   where `Defined` includes assigned empty-string text and `Blank` covers
+   never-assigned or assigned-then-cleared cell values.
+3. sheet-structural state that persists across clear operations remains
+   host/coordinator-owned, not sparse-value-reader state.
+
+Current boundary:
+1. sparse reader kernel activation, rich producer publication, and
+   `RichArgAccepted` or sparse-reader OxFunc metadata are successor work.
+2. switching an existing function argument-preparation profile to a rich or
+   sparse admission profile is bind-visible and must feed prepared-package
+   invalidation.
+3. OxFunc has accepted an argument-admission metadata shape equivalent to
+   `RichArgAccepted(required_capability_set)` and reserves
+   `arg_admission_metadata_version` as the bind-visible invalidation signal.
+4. producer capability publication belongs on typed producer metadata or the
+   returned rich/sparse carrier, using `producer_capability_set_keys` and
+   `exercised_capability_keys` when those facts exist.
+5. `IMAGE` / `_webimage` rich-value producer capability publication is the
+   preferred first activation lane because the rich-value return carrier and
+   OxFml `TypedContextQueryFamily::Image` evidence already exist.
+6. sparse range reader activation remains deferred pending a concrete sparse
+   reader API and replay-visible sparse iteration semantics.
+
+### 6C. Correctness-Floor Context
+OxCalc `HANDOFF-CALC-003` is accepted for OxFml context threading and replay
+identity, while kernel-side numerical and worksheet-error semantics remain
+OxFunc-owned.
+
+Minimum correctness-floor context fields:
+1. `profile_version`
+2. `numerical_reduction_policy`
+3. `error_algebra`
+
+Canonical property:
+1. the active correctness-floor context is semantic evaluation state, not an
+   optimization hint.
+2. semantic-plan compilation, runtime/session execution, prepared-call trace,
+   and replay projection must carry this context directly or through a stable
+   linked profile context when a call path can reach reduction-sensitive or
+   error-collapse-sensitive kernels.
+3. replay recorded under one selector value is invalid under a different
+   selector value unless an explicit migration proof is attached.
+4. OxFml must not infer selector values from source text, scheduler choice, or
+   host runtime behavior.
+
+Deferred exact semantics:
+1. exact reduction algorithms, affected function families, error precedence
+   rules, and kernel metadata are OxFunc-owned and require OxFunc-side
+   acknowledgment before OxFml can claim enforcement.
+2. OxFml may carry selector values before all kernels consume them, but such
+   carriage is context threading, not kernel compliance evidence.
+3. OxFunc has accepted `semantic_kernel_metadata_version` as the
+   prepared-package invalidation bridge for selector behavior,
+   affected-function classification, and reduction/error-collapse metadata
+   changes.
+
 ## 7. PreparedArgument
 Prepared arguments are the canonical OxFml-to-OxFunc call-shape units.
 

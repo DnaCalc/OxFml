@@ -245,6 +245,28 @@ fn runtime_session_facade_runs_managed_session_through_commit() {
 
     assert_eq!(execution.formula_stable_id, "runtime:managed");
     assert_eq!(
+        open.prepared_formula_identity.prepared_formula_key,
+        execution.prepared_formula_identity.prepared_formula_key
+    );
+    assert_eq!(
+        execution.prepared_formula_identity.formula_stable_id,
+        "runtime:managed"
+    );
+    assert_eq!(
+        execution
+            .prepared_formula_identity
+            .plan_template
+            .plan_template_key,
+        open.semantic_plan.semantic_plan_key
+    );
+    assert!(
+        execution
+            .prepared_formula_identity
+            .formal_references
+            .iter()
+            .any(|reference| reference.reference_descriptor == "name:InputValue")
+    );
+    assert_eq!(
         execution.typed_query_bundle_spec,
         TypedContextQueryBundle::default().freeze_candidate_spec()
     );
@@ -290,6 +312,63 @@ fn runtime_session_facade_runs_managed_session_through_commit() {
     assert_eq!(
         snapshot.candidate_result_id,
         Some(execution.candidate_result.candidate_result_id)
+    );
+    assert_eq!(
+        snapshot.prepared_formula_identity.prepared_formula_key,
+        open.prepared_formula_identity.prepared_formula_key
+    );
+}
+
+#[test]
+fn runtime_result_exposes_prepared_formula_identity_for_direct_execution() {
+    let mut cell_values = std::collections::BTreeMap::new();
+    cell_values.insert("A1".to_string(), EvalValue::Number(4.0));
+    let environment = RuntimeEnvironment::new().with_cell_values(cell_values);
+    let request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new("runtime:prepared-identity", 1, "=SUM(A1,2)"),
+        TypedContextQueryBundle::default(),
+    );
+
+    let result = environment
+        .execute(request)
+        .expect("runtime execution should succeed");
+
+    assert_eq!(
+        result.prepared_formula_identity.formula_stable_id,
+        "runtime:prepared-identity"
+    );
+    assert_eq!(result.prepared_formula_identity.formula_text_version, 1);
+    assert_eq!(
+        result
+            .prepared_formula_identity
+            .plan_template
+            .plan_template_key,
+        result.semantic_plan.semantic_plan_key
+    );
+    assert!(
+        result
+            .prepared_formula_identity
+            .plan_template
+            .shape_key
+            .is_none(),
+        "shape key remains deferred until canonical shape abstraction exists"
+    );
+    assert!(
+        result
+            .prepared_formula_identity
+            .formal_references
+            .iter()
+            .any(|reference| {
+                reference.reference_family == "direct"
+                    && reference.reference_descriptor == "sheet:default!R1C1"
+            })
+    );
+    assert!(
+        result
+            .prepared_formula_identity
+            .hole_binding
+            .projection_status
+            .contains("canonical_holes_deferred")
     );
 }
 

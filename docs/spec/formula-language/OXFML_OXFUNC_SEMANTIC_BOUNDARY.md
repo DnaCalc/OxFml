@@ -211,6 +211,99 @@ Boundary rule:
 2. OxFml owns the formula- and call-level semantic-plan profile derived from those traits plus formula structure,
 3. OxCalc or other hosts may consume the exposed execution-profile result for scheduling, but that scheduler policy remains outside OxFunc and outside the evaluator seam contract itself.
 
+## 5B. Correctness-Floor Selector Boundary
+Numerical reduction policy and worksheet-error algebra are semantic selectors,
+not scheduler hints and not removable optimizations.
+
+Current OxFml/OxFunc split:
+1. OxFml owns carriage of the active correctness-floor context through
+   semantic-plan, runtime/session, prepared-call trace, and replay projection
+   surfaces.
+2. OxFunc owns the kernel-side metadata and execution behavior for functions
+   whose results depend on numeric reduction order or worksheet-error collapse
+   precedence.
+3. OxCalc may record and validate selector values in coordinator replay
+   artifacts, but it must not simulate kernel compliance outside OxFml/OxFunc.
+
+Minimum selector fields:
+1. `profile_version`
+2. `numerical_reduction_policy`
+3. `error_algebra`
+
+Current receiving decision for `HANDOFF-CALC-003`:
+1. accept selector threading and replay identity in OxFml canonical text,
+2. adapt exact names only if the eventual shared profile object uses a broader
+   profile-context wrapper,
+3. route exact numerical algorithms, affected function-family metadata,
+   worksheet-error precedence definitions, and invalidation version signals to
+   OxFunc cooperation,
+4. defer any claim that current kernels enforce these selectors until OxFunc
+   acknowledges and evidence exists.
+5. consume OxFunc's reserved `semantic_kernel_metadata_version` as the
+   prepared-package invalidation signal for selector behavior,
+   affected-function classification, and reduction/error-collapse metadata
+   changes.
+
+Replay rule:
+1. a trace recorded under one selector value is not replay-valid under another
+   selector value unless an explicit migration proof is attached.
+2. pairwise or compensated numerical policies require replay-visible algorithm
+   identity sufficient to make deterministic replay meaningful.
+3. error algebra replay requires the active total worksheet-error precedence
+   order or a stable reference to it.
+
+Runtime/replay readiness:
+1. `profile_version`, `numerical_reduction_policy`, `error_algebra`, and
+   `semantic_kernel_metadata_version` are reserved runtime/replay fields until
+   OxFml has a real profile-context source and OxFunc metadata source to emit.
+2. selector fields may be carried before kernel enforcement exists, but such
+   carriage is not evidence that OxFunc kernels enforce the selected policy.
+
+## 5C. Rich And Sparse Admission Metadata Boundary
+Rich and sparse argument admission is now an explicit OxFml/OxFunc boundary
+rather than an OxCalc-local compatibility projection.
+
+Current OxFml/OxFunc split:
+1. OxFml owns template-hole identity, required capability-set identity,
+   capability mismatch surfaces, and replay columns.
+2. OxFunc owns argument-admission metadata, producer capability publication,
+   kernel activation, and admission metadata versioning.
+3. OxCalc may keep local empty/reserved W050 columns as compatibility evidence
+   until receiving repos emit canonical producer and exercised capability facts.
+
+Accepted OxFunc metadata shape:
+1. `RichArgAccepted(required_capability_set)` or an equivalent
+   OxFunc-owned admission profile,
+2. future sparse-reader admission metadata equivalent to
+   `SparseRangeAccepted(extent_class, cardinality_class)`, with exact naming
+   deferred.
+
+Accepted invalidation bridge:
+1. OxFml consumes `arg_admission_metadata_version` as the prepared-package
+   invalidation signal when OxFunc argument-preparation/admission metadata
+   changes.
+2. until narrower affected-function metadata exists, all prepared packages that
+   rely on OxFunc argument-preparation metadata may be conservatively
+   invalidated when this signal changes.
+
+Producer capability publication:
+1. producer capability facts should be typed metadata on the producer or
+   returned rich/sparse carrier,
+2. `producer_capability_set_keys` describes what the value or carrier can
+   provide,
+3. `exercised_capability_keys` describes what a kernel actually invoked,
+4. empty producer or exercised keys mean the facts were not emitted, not support
+   for all capabilities.
+
+Activation posture:
+1. `IMAGE` / `_webimage` producer capability publication is the preferred first
+   rich activation lane.
+2. sparse range readers remain deferred until their reader API and
+   replay-visible iteration semantics are specified.
+3. OxFml must preserve the current `IMAGE` semantic carrier as
+   `ReturnedValueSurfaceKind::RichValue` with `_webimage` identity and keep the
+   published fallback separate from the semantic carrier.
+
 ## 6. Host-Query Capability Boundary
 Some function families observe workbook, cell, or host facts rather than only local value payloads.
 

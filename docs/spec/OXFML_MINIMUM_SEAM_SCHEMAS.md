@@ -172,6 +172,125 @@ Minimum fields:
 7. optional `blocking_reason_class`
 8. correlation to candidate result or commit attempt
 
+### 4.7 `PreparedFormulaIdentity`
+Minimum fields:
+1. `prepared_formula_key`
+2. `formula_stable_id`
+3. `formula_text_version`
+4. source token identity or source payload fingerprint
+5. `library_context_snapshot_ref`
+6. `structure_context_version`
+7. optional caller/locus context key
+8. `plan_template_key`
+9. `hole_binding_fingerprint`
+10. optional `formal_reference_set_ref`
+11. optional `semantic_kernel_metadata_version`
+12. optional `arg_admission_metadata_version`
+
+Minimum rules:
+1. this schema is the OxFml-owned replacement target for OxCalc W050
+   compatibility fingerprints.
+2. exact public type names remain open, but the identity categories must stay
+   distinct.
+3. `semantic_kernel_metadata_version` and `arg_admission_metadata_version` are
+   OxFunc-owned invalidation bridges when present; they are not OxFml-owned
+   kernel or admission semantics.
+
+### 4.8 `PlanTemplateIdentity`
+Minimum fields:
+1. `shape_key`
+2. `dispatch_skeleton_key`
+3. `plan_template_key`
+4. optional folded-plan identity or folding classification when OxFml admits
+   identity-affecting folding
+5. ordered `TemplateHole` entries
+
+Minimum `TemplateHole` fields:
+1. `hole_id`
+2. `ordinal`
+3. optional path within the semantic plan
+4. `hole_kind`
+5. stable `hole_kind_key`
+
+Allowed initial `hole_kind` families:
+1. `ValueHole`
+2. `RefOrValueHole`
+3. `CallableHole`
+4. `ShapeSensitiveHole`
+5. `SparseRangeHole`
+6. `RichValueHole`
+
+### 4.9 `HoleBindingSet`
+Minimum fields:
+1. `hole_binding_fingerprint`
+2. per-hole binding records keyed by `hole_id`
+3. binding payload category
+4. optional formal-reference or invocation-input link
+
+Minimum rules:
+1. literal values, concrete references, omitted arguments, and helper names are
+   binding payloads by default.
+2. future narrower producers must add stable-keyed template identity rather than
+   silently changing this default.
+
+### 4.10 `FormalReference`
+Minimum fields:
+1. `reference_handle`
+2. canonical reference descriptor or normalized reference text
+3. reference family
+4. optional caller-anchor/address-mode dependence
+5. optional host-mappable identity payload
+6. optional reference-to-hole or reference-to-input binding identity
+
+Minimum reference families:
+1. direct
+2. relative or caller-sensitive
+3. unresolved
+4. host-sensitive
+5. dynamic-potential
+6. capability-sensitive
+7. shape/topology-sensitive
+
+### 4.11 `CorrectnessFloorContext`
+Minimum fields:
+1. `profile_version`
+2. `numerical_reduction_policy`
+3. `error_algebra`
+4. optional `semantic_kernel_metadata_version`
+
+Minimum rules:
+1. selector values are semantic context and replay identity.
+2. selector mismatch is replay-invalid unless a migration proof is attached.
+3. OxFml carries the context; OxFunc owns kernel enforcement and metadata for
+   affected functions.
+4. `semantic_kernel_metadata_version` is the prepared-package invalidation
+   bridge when OxFunc selector behavior, affected-function classification, or
+   reduction/error-collapse metadata changes.
+5. runtime and replay fields for selector values and the metadata version are
+   reserved until OxFml emits them from a real profile-context source.
+
+### 4.12 `RichValueCapabilityColumns`
+Minimum fields:
+1. `required_capability_set_keys`
+2. optional `producer_capability_set_keys`
+3. optional `exercised_capability_keys`
+4. optional producer carrier identity or returned rich/sparse carrier identity
+5. optional `arg_admission_metadata_version`
+
+Minimum rules:
+1. required capability-set keys are template/replay identity for
+   `RichValueHole`.
+2. producer and exercised keys remain absent or empty until concrete producer
+   and kernel activation exists.
+3. empty current output means reserved/no-producer evidence, not rich-value
+   capability support.
+4. producer capability publication is typed metadata on the producer or returned
+   rich/sparse carrier, not a function-name-specific diagnostic string.
+5. `arg_admission_metadata_version` is the prepared-package invalidation bridge
+   when OxFunc argument-preparation/admission metadata changes.
+6. `IMAGE` / `_webimage` is the preferred first rich producer activation lane;
+   sparse range readers remain deferred.
+
 ## 5. Typed Reject-Context Schemas
 ### 5.1 `FenceMismatchContext`
 Minimum fields:
@@ -222,6 +341,24 @@ Minimum fields:
 3. optional `resource_class`
 4. optional implementation-only debug detail kept outside the canonical minimum
 
+### 5.8 `CapabilitySetMismatchContext`
+Minimum fields:
+1. `required_capability_set_keys`
+2. optional `producer_capability_set_keys`
+3. mismatch phase
+4. mismatch class
+5. optional template hole identity
+
+Minimum rules:
+1. if producer capability facts are known during bind or plan admission,
+   mismatch may surface as a bind or semantic-plan diagnostic.
+2. if producer facts are only known during execution, mismatch must surface as a
+   typed evaluation reject or diagnostic.
+3. producer-superset admission must not rewrite the required-set identity
+   recorded in the template.
+4. mismatch timing depends on when OxFml can observe OxFunc producer metadata;
+   OxFml must not invent producer capabilities when OxFunc has not emitted them.
+
 ## 6. Host-Query Capability Schema
 ### 6.1 `HostQueryCapabilityView`
 This schema supports functions like `CELL` and `INFO`.
@@ -259,6 +396,9 @@ Minimum rules:
 1. trace events must distinguish candidate construction from publication,
 2. reject events must be correlatable to typed reject contexts,
 3. surfaced evaluator effects must be representable either directly in `event_payload` or by stable typed references.
+4. prepared-package, plan-template, hole-binding, formal-reference,
+   correctness-floor, and rich-capability columns should be structured fields or
+   typed payload members when present, not diagnostic strings.
 
 ## 8. Replay Adapter Additive Schema Fields
 The replay rollout adds optional projection-facing fields without changing OxFml seam meaning.

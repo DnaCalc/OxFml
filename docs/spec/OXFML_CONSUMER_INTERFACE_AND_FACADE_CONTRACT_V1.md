@@ -238,6 +238,18 @@ It should return:
 11. explicit caller-context dependence signal for the first admitted
     caller-sensitive subset where OxFml can determine that dependence honestly
 12. enough stable identity to support retained evidence, compare, and replay
+13. prepared formula identity where available, including:
+    - prepared package key,
+    - plan-template key,
+    - hole-binding fingerprint,
+    - formal-reference set reference,
+14. correctness-floor context where the active profile affects reduction or
+    error-collapse-sensitive evaluation,
+15. OxFunc metadata-version bridges where present:
+    - `semantic_kernel_metadata_version`,
+    - `arg_admission_metadata_version`,
+16. structured capability/hole columns where admitted by the prepared plan or
+    replay projection.
 
 It must preserve:
 1. candidate versus commit separation,
@@ -266,6 +278,64 @@ Working rule:
 3. some implementation steps may temporarily use a mixed facade-plus-lower-level
    session phase while the refactor lands, but the endpoint is that direct
    session-lifecycle consumers migrate onto this facade.
+4. managed-session execution and one-shot execution should expose equivalent
+   coordinator-relevant result truth; if commit remains a separate phase, the
+   commit result should carry or link to the exact candidate/execution result it
+   accepted or rejected.
+5. rejected managed work remains no-publish and replay-visible.
+
+### 6.5 W050 OxCalc Successor Surface Intake
+OxCalc `HANDOFF-CALC-002`, `HANDOFF-CALC-003`, and `HANDOFF-CALC-004` are
+accepted as bounded successor-surface inputs, not as a reopening of the frozen
+`OxFml_V1` facade.
+
+Current accepted directions:
+1. `HANDOFF-CALC-002`: promote a narrow OxFml-owned prepared formula package,
+   plan-template identity, hole-binding identity, formal-reference/input
+   transport, full managed-result parity or stable links, structured
+   correlation/replay columns, metadata-invalidation hooks, and
+   folding/template-reuse trace fields.
+2. `HANDOFF-CALC-003`: promote selector carriage for a
+   `CorrectnessFloorContext` through semantic-plan, runtime/session, trace, and
+   replay surfaces; defer kernel enforcement and exact selector semantics to
+   OxFunc.
+3. `HANDOFF-CALC-004`: promote template-hole and rich-capability identity
+   reservation; defer sparse/rich producer activation and OxFunc
+   `ArgPreparationProfile` expansion to successor work.
+
+OxFunc receiving-response alignment:
+1. OxFml accepts `semantic_kernel_metadata_version` as the OxFunc-owned
+   prepared-package invalidation bridge for reduction-sensitive and
+   error-collapse-sensitive kernel metadata changes.
+2. OxFml accepts `arg_admission_metadata_version` as the OxFunc-owned
+   prepared-package invalidation bridge for argument-preparation/admission
+   metadata changes.
+3. OxFunc-owned selector enforcement, exact numerical-reduction semantics, and
+   exact worksheet-error algebra stay outside OxFml.
+4. OxFunc-owned rich/sparse admission metadata and producer capability
+   publication are consumed by OxFml when emitted; current runtime/replay fields
+   are reserved unless backed by emitted producer facts.
+5. producer capability publication should appear as typed metadata on returned
+   rich/sparse carriers; `IMAGE` / `_webimage` is the preferred first rich
+   producer activation lane.
+6. sparse range readers remain deferred.
+
+Naming adaptation:
+1. OxFml may expose `PreparedFormulaPackage`, `PlanTemplate`, and
+   `HoleBindingSet` instead of OxCalc's compatibility names
+   `PreparedCallable`, `PlanTemplate`, and `HoleBindings`.
+2. OxCalc compatibility fingerprints should remain temporary until these
+   canonical public fields exist.
+
+Explicit non-assumptions:
+1. this packet does not make OxCalc's `session_path_evidence.json` a shared
+   OxFml schema.
+2. this packet does not claim current sparse reader, rich-value producer, or
+   rich-kernel execution support.
+3. this packet does not move numerical reduction, worksheet-error algebra,
+   function metadata, or argument-preparation profile semantics out of OxFunc.
+4. this packet does not move graph targets, scheduling, invalidation, or
+   publication policy out of OxCalc.
 
 ## 7. Editor Facade Contract
 The editor facade is the second implementation priority.
