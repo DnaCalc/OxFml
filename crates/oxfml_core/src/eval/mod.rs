@@ -15,16 +15,18 @@ use oxfunc_core::functions::callable_helpers::{
 use oxfunc_core::functions::cell::{CellEvalError, eval_cell_surface};
 use oxfunc_core::functions::if_fn::{eval_if_surface, map_if_error_to_ws};
 use oxfunc_core::functions::iferror::{eval_iferror_surface, map_iferror_error_to_ws};
+use oxfunc_core::functions::image_fn::eval_image_surface_extended_with_capabilities;
 use oxfunc_core::functions::info_fn::{InfoEvalError, eval_info_surface};
 use oxfunc_core::functions::rtd_fn::RtdProvider;
 use oxfunc_core::functions::surface_dispatch::{
-    FUNC_ID_CALL, FUNC_ID_CELL, FUNC_ID_HSTACK, FUNC_ID_INDEX, FUNC_ID_INFO, FUNC_ID_OP_ADD,
-    FUNC_ID_OP_CONCAT, FUNC_ID_OP_DIVIDE, FUNC_ID_OP_EQUAL, FUNC_ID_OP_GREATER_EQUAL,
-    FUNC_ID_OP_GREATER_THAN, FUNC_ID_OP_IMPLICIT_INTERSECTION, FUNC_ID_OP_INTERSECTION_REF,
-    FUNC_ID_OP_LESS_EQUAL, FUNC_ID_OP_LESS_THAN, FUNC_ID_OP_MULTIPLY, FUNC_ID_OP_NEGATE,
-    FUNC_ID_OP_NOT_EQUAL, FUNC_ID_OP_PERCENT, FUNC_ID_OP_POWER, FUNC_ID_OP_RANGE_REF,
-    FUNC_ID_OP_SPILL_REF, FUNC_ID_OP_SUBTRACT, FUNC_ID_OP_UNARY_PLUS, FUNC_ID_OP_UNION_REF,
-    FUNC_ID_REGISTER_ID, FUNC_ID_RTD, FUNC_ID_TAKE, FUNC_ID_XLOOKUP, eval_surface_extended_call,
+    FUNC_ID_CALL, FUNC_ID_CELL, FUNC_ID_HSTACK, FUNC_ID_IMAGE, FUNC_ID_INDEX, FUNC_ID_INFO,
+    FUNC_ID_OP_ADD, FUNC_ID_OP_CONCAT, FUNC_ID_OP_DIVIDE, FUNC_ID_OP_EQUAL,
+    FUNC_ID_OP_GREATER_EQUAL, FUNC_ID_OP_GREATER_THAN, FUNC_ID_OP_IMPLICIT_INTERSECTION,
+    FUNC_ID_OP_INTERSECTION_REF, FUNC_ID_OP_LESS_EQUAL, FUNC_ID_OP_LESS_THAN, FUNC_ID_OP_MULTIPLY,
+    FUNC_ID_OP_NEGATE, FUNC_ID_OP_NOT_EQUAL, FUNC_ID_OP_PERCENT, FUNC_ID_OP_POWER,
+    FUNC_ID_OP_RANGE_REF, FUNC_ID_OP_SPILL_REF, FUNC_ID_OP_SUBTRACT, FUNC_ID_OP_UNARY_PLUS,
+    FUNC_ID_OP_UNION_REF, FUNC_ID_REGISTER_ID, FUNC_ID_RTD, FUNC_ID_TAKE, FUNC_ID_XLOOKUP,
+    eval_surface_extended_call,
 };
 use oxfunc_core::host_info::HostInfoProvider;
 use oxfunc_core::locale_format::LocaleFormatContext;
@@ -1661,6 +1663,21 @@ fn extended_surface_for_top_level_function_call(
                 caller_col: context.caller_col,
                 callable_registry: &callable_registry,
             };
+            if function_id == FUNC_ID_IMAGE {
+                let image_result = eval_image_surface_extended_with_capabilities(
+                    &call_args,
+                    &resolver,
+                    context.host_info,
+                )
+                .ok()?;
+                return Some(
+                    ReturnedValueSurface::from_extended_value_with_capability_keys(
+                        &image_result.value,
+                        image_result.producer_capability_set_keys,
+                        image_result.exercised_capability_keys,
+                    ),
+                );
+            }
             let extended = eval_surface_extended_call(
                 function_id,
                 &call_args,

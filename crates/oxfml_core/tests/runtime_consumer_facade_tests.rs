@@ -1,8 +1,9 @@
 use std::cell::RefCell;
 
 use oxfml_core::consumer::runtime::{
-    RuntimeEnvironment, RuntimeFormulaRequest, RuntimeManagedSessionError,
-    RuntimeManagedSessionPhase, RuntimeSessionFacade,
+    RuntimeEnvironment, RuntimeFormalInputBinding, RuntimeFormulaRequest,
+    RuntimeManagedSessionError, RuntimeManagedSessionPhase, RuntimeOxFuncBridgeMetadata,
+    RuntimeSessionFacade,
 };
 use oxfml_core::format::{
     oxfml_en_us_format_profile, oxfml_en_us_locale_context, worksheet_error_text,
@@ -320,6 +321,46 @@ fn runtime_session_facade_runs_managed_session_through_commit() {
 }
 
 #[test]
+fn runtime_formal_input_binding_executes_without_synthetic_cells_or_defined_names() {
+    let source = FormulaSourceRecord::new("runtime:formal-input", 1, "=SUM(InputValue,2)");
+    let prepare_binding = RuntimeFormalInputBinding {
+        reference_handle: None,
+        reference_descriptor: "InputValue".to_string(),
+        binding: oxfml_core::DefinedNameBinding::Value(EvalValue::Number(5.0)),
+    };
+    let mut prepare_session = RuntimeEnvironment::new()
+        .with_formal_input_bindings(vec![prepare_binding])
+        .open_session();
+    let request = RuntimeFormulaRequest::new(source.clone(), TypedContextQueryBundle::default());
+
+    let open = prepare_session
+        .open_managed_session(&request)
+        .expect("formal input should participate in prepare/bind");
+    let formal_reference = open
+        .prepared_formula_identity
+        .formal_references
+        .iter()
+        .find(|reference| reference.reference_descriptor == "name:InputValue")
+        .expect("prepared identity should expose the formal reference")
+        .clone();
+
+    let execute_binding = RuntimeFormalInputBinding {
+        reference_handle: Some(formal_reference.reference_handle.clone()),
+        reference_descriptor: formal_reference.reference_descriptor,
+        binding: oxfml_core::DefinedNameBinding::Value(EvalValue::Number(5.0)),
+    };
+    let result = RuntimeEnvironment::new()
+        .with_formal_input_bindings(vec![execute_binding])
+        .execute(RuntimeFormulaRequest::new(
+            source,
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("formal input binding should execute without cell_values/defined_names");
+
+    assert_eq!(result.published_worksheet_value, EvalValue::Number(7.0));
+}
+
+#[test]
 fn runtime_result_exposes_prepared_formula_identity_for_direct_execution() {
     let mut cell_values = std::collections::BTreeMap::new();
     cell_values.insert("A1".to_string(), EvalValue::Number(4.0));
@@ -356,12 +397,35 @@ fn runtime_result_exposes_prepared_formula_identity_for_direct_execution() {
     assert!(
         result
             .prepared_formula_identity
+            .plan_template
+            .template_holes
+            .iter()
+            .any(|hole| hole.hole_kind == "RefOrValueHole"
+                && hole.path.as_deref() == Some("sheet:default!R1C1")),
+        "prepared identity should expose reference template-hole detail"
+    );
+    assert!(
+        result
+            .prepared_formula_identity
             .formal_references
             .iter()
             .any(|reference| {
                 reference.reference_family == "direct"
                     && reference.reference_descriptor == "sheet:default!R1C1"
+                    && reference.linked_hole_id.as_deref() == Some("hole:reference:0")
             })
+    );
+    let package = result.prepared_formula_package();
+    assert_eq!(
+        package.package_key,
+        result.prepared_formula_identity.prepared_formula_key
+    );
+    assert_eq!(
+        package.plan_template.template_holes,
+        result
+            .prepared_formula_identity
+            .plan_template
+            .template_holes
     );
     assert!(
         result
@@ -370,6 +434,117 @@ fn runtime_result_exposes_prepared_formula_identity_for_direct_execution() {
             .projection_status
             .contains("canonical_holes_deferred")
     );
+}
+
+#[test]
+fn runtime_prepared_identity_carries_oxfunc_bridge_versions_without_enforcement() {
+    let result = RuntimeEnvironment::new()
+        .with_oxfunc_bridge_metadata(RuntimeOxFuncBridgeMetadata {
+            semantic_kernel_metadata_version: Some("sem-kernel:v1".to_string()),
+            arg_admission_metadata_version: Some("arg-admission:v1".to_string()),
+        })
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new("runtime:oxfunc-bridge", 1, "=SUM(1,2)"),
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("runtime execution should succeed");
+
+    assert_eq!(
+        result
+            .prepared_formula_identity
+            .semantic_kernel_metadata_version
+            .as_deref(),
+        Some("sem-kernel:v1")
+    );
+    assert_eq!(
+        result
+            .prepared_formula_identity
+            .arg_admission_metadata_version
+            .as_deref(),
+        Some("arg-admission:v1")
+    );
+
+    let changed_semantic_version = RuntimeEnvironment::new()
+        .with_semantic_kernel_metadata_version("sem-kernel:v2")
+        .with_arg_admission_metadata_version("arg-admission:v1")
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new("runtime:oxfunc-bridge", 1, "=SUM(1,2)"),
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("runtime execution should succeed");
+
+    assert_ne!(
+        result.prepared_formula_identity.prepared_formula_key,
+        changed_semantic_version
+            .prepared_formula_identity
+            .prepared_formula_key,
+        "semantic kernel metadata version participates in prepared-package invalidation"
+    );
+}
+
+#[test]
+fn runtime_prepared_identity_derives_oxfunc_bridge_versions_from_registry_metadata() {
+    let result = RuntimeEnvironment::new()
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new("runtime:registry-bridge", 1, "=SUM(1,2)"),
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("runtime execution should succeed");
+
+    assert!(
+        result
+            .prepared_formula_identity
+            .semantic_kernel_metadata_version
+            .as_deref()
+            .is_some_and(
+                |version| version.contains("numerical_reduction_policy=SequentialLeftFold")
+            ),
+        "SUM should carry OxFunc registry semantic kernel metadata version"
+    );
+    assert_eq!(
+        result
+            .prepared_formula_identity
+            .arg_admission_metadata_version
+            .as_deref(),
+        Some("arg_admission_metadata.v1;existing_arg_preparation=values_only_pre_adapter")
+    );
+}
+
+#[test]
+fn managed_runtime_snapshots_carry_oxfunc_bridge_versions() {
+    let environment = RuntimeEnvironment::new()
+        .with_semantic_kernel_metadata_version("sem-kernel:managed:v1")
+        .with_arg_admission_metadata_version("arg-admission:managed:v1");
+    let mut session = RuntimeSessionFacade::new(environment);
+    let request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new("runtime:managed-oxfunc-bridge", 1, "=SUM(1,2)"),
+        TypedContextQueryBundle::default(),
+    );
+
+    let open = session
+        .open_managed_session(&request)
+        .expect("managed open should succeed");
+    let execution = session
+        .execute_managed(request)
+        .expect("managed execution should succeed");
+    let snapshot = session
+        .managed_session_snapshot()
+        .expect("managed snapshot should exist");
+
+    for identity in [
+        &open.prepared_formula_identity,
+        &execution.prepared_formula_identity,
+        &snapshot.prepared_formula_identity,
+    ] {
+        assert_eq!(
+            identity.semantic_kernel_metadata_version.as_deref(),
+            Some("sem-kernel:managed:v1")
+        );
+        assert_eq!(
+            identity.arg_admission_metadata_version.as_deref(),
+            Some("arg-admission:managed:v1")
+        );
+    }
 }
 
 #[test]

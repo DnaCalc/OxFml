@@ -1,0 +1,1161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OxFml Technical Showcase</title>
+  <style>
+    :root {
+      --ink: #14212b;
+      --muted: #51616d;
+      --paper: #f7f8fa;
+      --page: #ffffff;
+      --line: #cdd7df;
+      --blue: #265c8d;
+      --teal: #117f78;
+      --green: #4f7f2a;
+      --gold: #a56f16;
+      --red: #a13c42;
+      --violet: #5a518f;
+      --code: #0f1720;
+      --code2: #162533;
+      --soft-blue: #e8f1f8;
+      --soft-teal: #e5f4f1;
+      --soft-green: #eef4e5;
+      --soft-gold: #fff2d9;
+      --soft-red: #fae8ea;
+      --soft-violet: #ecebfa;
+      --shadow: 0 18px 50px rgba(24, 39, 55, 0.14);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 8% 0%, rgba(38, 92, 141, 0.10), transparent 28rem),
+        radial-gradient(circle at 94% 8%, rgba(17, 127, 120, 0.12), transparent 24rem),
+        var(--paper);
+      color: var(--ink);
+      font: 15px/1.45 "Segoe UI", Arial, sans-serif;
+    }
+
+    a { color: var(--blue); }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 18px;
+      background: rgba(255, 255, 255, 0.94);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(8px);
+    }
+
+    .topbar strong { color: var(--blue); letter-spacing: 0.02em; }
+    .topbar nav { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+    .topbar a {
+      text-decoration: none;
+      font-size: 12px;
+      color: var(--muted);
+      padding: 4px 7px;
+      border: 1px solid #dbe3ea;
+      border-radius: 999px;
+      background: #fff;
+    }
+
+    main {
+      width: min(1220px, calc(100vw - 28px));
+      margin: 22px auto 70px;
+    }
+
+    .page {
+      min-height: 980px;
+      margin: 0 auto 28px;
+      padding: 42px 46px;
+      background: var(--page);
+      border: 1px solid #d9e1e8;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      position: relative;
+      page-break-after: always;
+    }
+
+    .page::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(90deg, rgba(38, 92, 141, 0.07), transparent 32%),
+        linear-gradient(0deg, rgba(17, 127, 120, 0.06), transparent 28%);
+      opacity: 0.85;
+    }
+
+    .page > * { position: relative; z-index: 1; }
+
+    .page-id {
+      position: absolute;
+      right: 34px;
+      top: 22px;
+      color: #6d7a85;
+      font-size: 12px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3 { margin: 0; line-height: 1.06; }
+    h1 { font-size: 50px; color: #12324a; max-width: 820px; }
+    h2 { font-size: 32px; color: #18364d; margin-bottom: 14px; }
+    h3 { font-size: 17px; color: #243f55; margin-bottom: 8px; }
+    p { margin: 0 0 10px; }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 19px;
+      max-width: 880px;
+      margin-top: 16px;
+    }
+
+    .kicker {
+      color: var(--teal);
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .wide { grid-column: 1 / -1; }
+
+    .card {
+      background: rgba(255,255,255,0.86);
+      border: 1px solid #d9e2e9;
+      border-radius: 8px;
+      padding: 14px 15px;
+    }
+
+    .callout {
+      border-left: 5px solid var(--teal);
+      background: var(--soft-teal);
+      padding: 14px 16px;
+      border-radius: 6px;
+      color: #143b3b;
+    }
+
+    .warn { border-left-color: var(--gold); background: var(--soft-gold); color: #4c3716; }
+    .red { border-left-color: var(--red); background: var(--soft-red); }
+
+    ul { margin: 8px 0 0 20px; padding: 0; }
+    li { margin: 5px 0; }
+
+    code, pre { font-family: Consolas, "Cascadia Mono", monospace; }
+    code { color: #173f60; background: #edf3f7; padding: 1px 4px; border-radius: 4px; }
+    pre {
+      margin: 10px 0 0;
+      padding: 13px 14px;
+      color: #d6e5ee;
+      background: linear-gradient(140deg, var(--code), var(--code2));
+      border-radius: 8px;
+      border: 1px solid #2b4255;
+      overflow: auto;
+      font-size: 12px;
+      line-height: 1.38;
+      max-height: 320px;
+    }
+
+    .mini { font-size: 12px; color: var(--muted); }
+    .caption { color: var(--muted); font-size: 12px; margin-top: 7px; }
+
+    .badge-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+    .badge {
+      border: 1px solid #c9d8e2;
+      border-radius: 999px;
+      padding: 6px 10px;
+      color: #274a5f;
+      background: #fff;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .hero-visual {
+      margin-top: 34px;
+      min-height: 300px;
+      display: grid;
+      grid-template-columns: 1.08fr 0.92fr;
+      gap: 22px;
+      align-items: stretch;
+    }
+
+    .system-map {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .system-map .node,
+    .flow .node,
+    .stack .node {
+      border: 1px solid #cbd8e2;
+      border-radius: 8px;
+      background: #fff;
+      padding: 11px;
+      min-height: 74px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .node b { color: #18364d; }
+    .node span { font-size: 12px; color: var(--muted); }
+    .node.blue { background: var(--soft-blue); border-color: #bbd1e3; }
+    .node.teal { background: var(--soft-teal); border-color: #afd8d3; }
+    .node.green { background: var(--soft-green); border-color: #cbdab9; }
+    .node.gold { background: var(--soft-gold); border-color: #e7ca8f; }
+    .node.red { background: var(--soft-red); border-color: #e4b4b8; }
+    .node.violet { background: var(--soft-violet); border-color: #c8c2ef; }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+      align-items: center;
+    }
+
+    .flow .arrow,
+    .stack .arrow {
+      color: var(--blue);
+      text-align: center;
+      font-weight: 800;
+    }
+
+    .stack { display: grid; gap: 9px; }
+    .stack.compact .node { min-height: auto; padding: 9px 11px; }
+
+    .matrix {
+      display: grid;
+      grid-template-columns: 1.2fr repeat(4, 1fr);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .matrix div {
+      padding: 9px 10px;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+    }
+    .matrix div:nth-child(5n) { border-right: 0; }
+    .matrix .head { background: #eef4f8; font-weight: 700; color: #23445a; }
+
+    .timeline {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .timeline .step {
+      border-top: 6px solid var(--teal);
+      background: #fff;
+      border-radius: 8px;
+      border-left: 1px solid var(--line);
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      padding: 12px;
+    }
+    .timeline .step:nth-child(2n) { border-top-color: var(--blue); }
+    .timeline .step:nth-child(3n) { border-top-color: var(--gold); }
+
+    .diagram {
+      background: #fbfdff;
+      border: 1px solid #d8e4ec;
+      border-radius: 10px;
+      padding: 14px;
+    }
+    svg { width: 100%; height: auto; display: block; }
+    .svg-title { fill: #18364d; font: 700 15px "Segoe UI", Arial, sans-serif; }
+    .svg-small { fill: #51616d; font: 12px "Segoe UI", Arial, sans-serif; }
+
+    .two-col-text { columns: 2; column-gap: 24px; }
+    .two-col-text p { break-inside: avoid; }
+
+    .toc {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px 18px;
+      margin-top: 18px;
+    }
+    .toc a {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      text-decoration: none;
+      border-bottom: 1px dotted #b9c7d2;
+      padding: 5px 0;
+      color: #213d51;
+    }
+
+    @media (max-width: 860px) {
+      .topbar { position: static; align-items: flex-start; flex-direction: column; }
+      main { width: 100%; margin: 0; }
+      .page { min-height: auto; margin: 0; border-left: 0; border-right: 0; padding: 32px 20px; }
+      .grid-2, .grid-3, .grid-4, .hero-visual, .toc, .timeline { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: 1fr; }
+      .flow .arrow { transform: rotate(90deg); }
+      h1 { font-size: 36px; }
+      h2 { font-size: 26px; }
+    }
+
+    @media print {
+      body { background: white; }
+      .topbar { display: none; }
+      main { width: auto; margin: 0; }
+      .page { box-shadow: none; border: 0; min-height: 100vh; margin: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <strong>OxFml Technical Showcase</strong>
+    <nav>
+      <a href="#p01">Start</a>
+      <a href="#p04">Pipeline</a>
+      <a href="#p08">OxFunc</a>
+      <a href="#p10">Evaluator</a>
+      <a href="#p16">FEC/F3E</a>
+      <a href="#p20">Future</a>
+    </nav>
+  </div>
+
+  <main>
+    <section class="page" id="p01">
+      <div class="page-id">Page 01 / 20</div>
+      <div class="kicker">Deep technical orientation</div>
+      <h1>OxFml: inside the formula-language and evaluator seam</h1>
+      <p class="subtitle">A browser-viewable showcase for engineers working on DNA Calc formula parsing, binding, semantic planning, single-node evaluation, replay, and publication contracts.</p>
+      <div class="badge-row">
+        <span class="badge">Formula grammar</span>
+        <span class="badge">Green / red trees</span>
+        <span class="badge">Binding</span>
+        <span class="badge">Semantic plans</span>
+        <span class="badge">OxFunc boundary</span>
+        <span class="badge">FEC/F3E</span>
+        <span class="badge">Replay</span>
+        <span class="badge">W075 optimizer floor</span>
+      </div>
+      <div class="hero-visual">
+        <div class="diagram">
+          <svg viewBox="0 0 760 300" role="img" aria-label="OxFml system map">
+            <defs>
+              <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+                <path d="M0,0 L0,6 L9,3 z" fill="#265c8d"></path>
+              </marker>
+            </defs>
+            <rect x="20" y="36" width="150" height="70" rx="10" fill="#e8f1f8" stroke="#9dbdd6"></rect>
+            <text x="95" y="65" text-anchor="middle" class="svg-title">Formula text</text>
+            <text x="95" y="86" text-anchor="middle" class="svg-small">entered/stored/channel</text>
+            <rect x="220" y="36" width="150" height="70" rx="10" fill="#e5f4f1" stroke="#9bd0ca"></rect>
+            <text x="295" y="65" text-anchor="middle" class="svg-title">Syntax</text>
+            <text x="295" y="86" text-anchor="middle" class="svg-small">green + red views</text>
+            <rect x="420" y="36" width="150" height="70" rx="10" fill="#eef4e5" stroke="#bfd0a7"></rect>
+            <text x="495" y="65" text-anchor="middle" class="svg-title">Binding</text>
+            <text x="495" y="86" text-anchor="middle" class="svg-small">names + references</text>
+            <rect x="590" y="136" width="150" height="70" rx="10" fill="#fff2d9" stroke="#e2be78"></rect>
+            <text x="665" y="165" text-anchor="middle" class="svg-title">OxFunc</text>
+            <text x="665" y="186" text-anchor="middle" class="svg-small">catalog + kernels</text>
+            <rect x="420" y="216" width="150" height="70" rx="10" fill="#ecebfa" stroke="#c2bce9"></rect>
+            <text x="495" y="245" text-anchor="middle" class="svg-title">Evaluation</text>
+            <text x="495" y="266" text-anchor="middle" class="svg-small">compiled plan + frame</text>
+            <rect x="220" y="216" width="150" height="70" rx="10" fill="#fae8ea" stroke="#e2b0b7"></rect>
+            <text x="295" y="245" text-anchor="middle" class="svg-title">FEC/F3E</text>
+            <text x="295" y="266" text-anchor="middle" class="svg-small">commit + replay</text>
+            <path d="M170 71 H220" stroke="#265c8d" stroke-width="3" marker-end="url(#arrow)"></path>
+            <path d="M370 71 H420" stroke="#265c8d" stroke-width="3" marker-end="url(#arrow)"></path>
+            <path d="M495 106 V216" stroke="#265c8d" stroke-width="3" marker-end="url(#arrow)"></path>
+            <path d="M570 251 C665 250 668 210 668 206" stroke="#265c8d" stroke-width="3" fill="none" marker-end="url(#arrow)"></path>
+            <path d="M420 251 H370" stroke="#265c8d" stroke-width="3" marker-end="url(#arrow)"></path>
+          </svg>
+        </div>
+        <div class="card">
+          <h3>The executive mental model</h3>
+          <p>OxFml owns formula meaning up to the function boundary. It parses and binds Excel-like formula text, prepares semantic/evaluation artifacts, executes a single formula instance, and publishes deterministic outcomes through the FEC/F3E seam.</p>
+          <div class="callout">
+            <b>Boundary rule:</b> OxFml owns grammar, references, helper forms, host-facing evaluator contracts, trace/replay, and publication. OxFunc owns function/operator semantics and callable batching surfaces.
+          </div>
+          <pre>FormulaSourceRecord
+  -> GreenTreeRoot
+  -> RedProjection
+  -> BoundFormula
+  -> SemanticPlan
+  -> EvaluationOutput
+  -> CommitBundle / RejectRecord</pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="page" id="p02">
+      <div class="page-id">Page 02 / 20</div>
+      <div class="kicker">Ownership map</div>
+      <h2>What OxFml owns, consumes, and exposes</h2>
+      <div class="grid-3">
+        <div class="card">
+          <h3>Owns</h3>
+          <ul>
+            <li>Formula source, channels, parse fidelity, syntax diagnostics.</li>
+            <li>Green/red syntax artifacts and incremental reuse evidence.</li>
+            <li>Name/reference binding and normalized reference ADTs.</li>
+            <li>Semantic plan derivation from bound formula plus OxFunc metadata.</li>
+            <li>Single-node evaluation context, trace, publication, and FEC/F3E contracts.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Consumes</h3>
+          <ul>
+            <li>OxFunc function/operator catalog, semantic metadata, surface call sites, and callable invocation APIs.</li>
+            <li>Host/coordinator workbook facts: cells, tables, names, snapshots, caller anchors, host query providers.</li>
+            <li>Runtime context: locale profile, date system, time/random seeds, RTD and registered external providers.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Exposes</h3>
+          <ul>
+            <li>Bound formula artifacts and dependency seeds.</li>
+            <li>Semantic plans and scheduler contracts.</li>
+            <li>Evaluation outputs and returned value surfaces.</li>
+            <li>Commit bundles, typed rejects, replay traces, publication surfaces.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="matrix" style="margin-top:18px">
+        <div class="head">Concern</div><div class="head">OxFml</div><div class="head">OxFunc</div><div class="head">OxCalc / host</div><div class="head">Foundation</div>
+        <div>Formula syntax</div><div>Owner</div><div>-</div><div>Supplies text</div><div>Doctrine</div>
+        <div>Function semantics</div><div>Prepares arguments</div><div>Owner</div><div>Supplies providers</div><div>Boundary rules</div>
+        <div>References</div><div>Owner of normalized representation</div><div>Consumes resolver where needed</div><div>Owns workbook structure</div><div>Conformance</div>
+        <div>Commit/replay seam</div><div>Canonical owner</div><div>Value producer partner</div><div>Coordinator consumer</div><div>Governance mirror</div>
+      </div>
+      <div class="callout warn" style="margin-top:18px">
+        <b>Practical implication:</b> avoid moving function-specific shortcuts into OxFml. If a behavior is a function or operator semantic, route it through OxFunc metadata or a shared seam instead.
+      </div>
+    </section>
+
+    <section class="page" id="p03">
+      <div class="page-id">Page 03 / 20</div>
+      <div class="kicker">Module atlas</div>
+      <h2>The codebase at one good detail level</h2>
+      <div class="system-map">
+        <div class="node blue"><b>source</b><span>`FormulaSourceRecord`, tokens, channel, text version</span></div>
+        <div class="node teal"><b>syntax</b><span>lexer, parser, green tree, diagnostics</span></div>
+        <div class="node teal"><b>red</b><span>parent/position projection over green</span></div>
+        <div class="node green"><b>binding</b><span>`BoundExpr`, references, names, tables</span></div>
+        <div class="node green"><b>semantics</b><span>`SemanticPlan`, OxFunc catalog metadata</span></div>
+        <div class="node violet"><b>eval</b><span>compiled plan, frame, trace, local resolver</span></div>
+        <div class="node gold"><b>scheduler</b><span>execution contract from semantic profile</span></div>
+        <div class="node red"><b>seam</b><span>FEC/F3E commit, rejects, deltas, trace payloads</span></div>
+        <div class="node red"><b>publication</b><span>verification surface, formatting, CF</span></div>
+        <div class="node blue"><b>host</b><span>single formula host, artifact cache, recalc packet</span></div>
+        <div class="node blue"><b>consumer</b><span>runtime, editor, replay facades</span></div>
+        <div class="node gold"><b>interface</b><span>library snapshots, typed query bundles, returned surfaces</span></div>
+      </div>
+      <div class="grid-2" style="margin-top:18px">
+        <div class="card">
+          <h3>Public API shape</h3>
+          <pre>pub use binding::{BindContext, BoundFormula, bind_formula};
+pub use eval::{EvaluationContext, evaluate_formula};
+pub use semantics::{SemanticPlan, compile_semantic_plan};
+pub use seam::{CommitBundle, RejectRecord, commit_candidate};</pre>
+        </div>
+        <div class="card">
+          <h3>Design pattern</h3>
+          <p>Most layers expose immutable artifacts with stable identity/fingerprint fields. Mutable state exists primarily inside host caches or one evaluation frame, where it is explainable as optimization state rather than semantic truth.</p>
+          <p class="caption">This supports deterministic replay, artifact reuse, and future distributed coordination.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="page" id="p04">
+      <div class="page-id">Page 04 / 20</div>
+      <div class="kicker">End-to-end flow</div>
+      <h2>The formula lifecycle pipeline</h2>
+      <div class="flow">
+        <div class="node blue"><b>Source</b><span>stable id, channel, text version</span></div>
+        <div class="arrow">-&gt;</div>
+        <div class="node teal"><b>Parse</b><span>green tree, tokens, syntax diagnostics</span></div>
+        <div class="arrow">-&gt;</div>
+        <div class="node teal"><b>Red</b><span>contextual node projection</span></div>
+        <div class="arrow">-&gt;</div>
+        <div class="node green"><b>Bind</b><span>names, references, dependencies</span></div>
+      </div>
+      <div class="flow" style="margin-top:10px">
+        <div class="node green"><b>Semantic plan</b><span>OxFunc metadata, requirements</span></div>
+        <div class="arrow">-&gt;</div>
+        <div class="node gold"><b>Contract</b><span>scheduler/replay sensitivity</span></div>
+        <div class="arrow">-&gt;</div>
+        <div class="node violet"><b>Evaluate</b><span>compiled plan, frame, trace</span></div>
+        <div class="arrow">-&gt;</div>
+        <div class="node red"><b>Publish</b><span>deltas, surface, replay packet</span></div>
+      </div>
+      <div class="grid-2" style="margin-top:22px">
+        <div class="card">
+          <h3>SingleFormulaHost orchestration</h3>
+          <pre>parse_formula_incremental(...)
+project_red_view_incremental(...)
+bind_formula_incremental(...)
+compile_semantic_plan(...)
+build_execution_contract(...)
+evaluate_formula(...)
+build_verification_publication_surface(...)
+commit_candidate(...)</pre>
+        </div>
+        <div class="card">
+          <h3>Why separate layers?</h3>
+          <ul>
+            <li>Text edits and structure edits invalidate different artifacts.</li>
+            <li>Binding can change without parsing changing.</li>
+            <li>Semantic planning can change when catalog/profile facts change.</li>
+            <li>Evaluation can change when values/providers/time/random seeds change.</li>
+            <li>Publication can change when formatting or host surface requirements change.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="page" id="p05">
+      <div class="page-id">Page 05 / 20</div>
+      <div class="kicker">Source and syntax</div>
+      <h2>Formula source, channels, tokens, and green trees</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>`FormulaSourceRecord`</h3>
+          <pre>pub struct FormulaSourceRecord {
+  pub formula_stable_id: FormulaStableId,
+  pub formula_text_version: FormulaTextVersion,
+  pub formula_channel_kind: FormulaChannelKind,
+  pub entered_formula_text: String,
+  pub stored_formula_text: Option&lt;String&gt;,
+}</pre>
+          <p class="caption">The formula token hashes stable id, text version, channel, entered text, and stored text.</p>
+        </div>
+        <div class="diagram">
+          <svg viewBox="0 0 520 260" role="img" aria-label="Green tree">
+            <rect x="170" y="20" width="180" height="42" rx="8" fill="#e8f1f8" stroke="#9dbdd6"></rect>
+            <text x="260" y="46" text-anchor="middle" class="svg-title">FormulaRoot</text>
+            <rect x="60" y="100" width="150" height="42" rx="8" fill="#e5f4f1" stroke="#9bd0ca"></rect>
+            <text x="135" y="126" text-anchor="middle" class="svg-title">CallExpr</text>
+            <rect x="310" y="100" width="150" height="42" rx="8" fill="#e5f4f1" stroke="#9bd0ca"></rect>
+            <text x="385" y="126" text-anchor="middle" class="svg-title">ArgumentList</text>
+            <rect x="20" y="190" width="105" height="38" rx="8" fill="#fff2d9" stroke="#e2be78"></rect>
+            <text x="72" y="214" text-anchor="middle" class="svg-small">Token: SUM</text>
+            <rect x="140" y="190" width="105" height="38" rx="8" fill="#fff2d9" stroke="#e2be78"></rect>
+            <text x="192" y="214" text-anchor="middle" class="svg-small">Token: (</text>
+            <rect x="275" y="190" width="105" height="38" rx="8" fill="#eef4e5" stroke="#bfd0a7"></rect>
+            <text x="327" y="214" text-anchor="middle" class="svg-small">RangeExpr</text>
+            <rect x="395" y="190" width="105" height="38" rx="8" fill="#fff2d9" stroke="#e2be78"></rect>
+            <text x="447" y="214" text-anchor="middle" class="svg-small">Token: )</text>
+            <path d="M260 62 L135 100" stroke="#265c8d"></path>
+            <path d="M260 62 L385 100" stroke="#265c8d"></path>
+            <path d="M135 142 L72 190" stroke="#265c8d"></path>
+            <path d="M135 142 L192 190" stroke="#265c8d"></path>
+            <path d="M385 142 L327 190" stroke="#265c8d"></path>
+            <path d="M385 142 L447 190" stroke="#265c8d"></path>
+          </svg>
+        </div>
+      </div>
+      <div class="callout" style="margin-top:18px">
+        Green trees are immutable, parentless, full-fidelity syntax. They retain tokens, trivia, spans, delimiters, recovery diagnostics, explicit `@`, spill `#`, whitespace intersection, and structured-reference syntax so later editing/replay layers can explain exactly what was parsed.
+      </div>
+    </section>
+
+    <section class="page" id="p06">
+      <div class="page-id">Page 06 / 20</div>
+      <div class="kicker">Red views and incremental reuse</div>
+      <h2>Red projection: context over immutable syntax</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Red nodes add navigation</h3>
+          <pre>pub struct RedNode {
+  pub index: usize,
+  pub kind: SyntaxKind,
+  pub span: TextSpan,
+  pub parent: Option&lt;usize&gt;,
+  pub children: Vec&lt;usize&gt;,
+}</pre>
+          <p>Red projection is disposable and reconstructible. It flattens the green tree into an arena with parent/child indices and formula identity.</p>
+        </div>
+        <div class="card">
+          <h3>Reuse rule</h3>
+          <pre>if previous.formula_stable_id == formula_stable_id
+   &amp;&amp; previous.green_tree_key == green_tree.green_tree_key {
+  reuse previous_red_projection
+}</pre>
+          <p>When syntax is unchanged, red projection can be reused. When structure changes but source does not, green can remain stable while binding/semantics are recomputed.</p>
+        </div>
+      </div>
+      <div class="timeline">
+        <div class="step"><h3>Edit text</h3><p>Formula text version changes. Green may change.</p></div>
+        <div class="step"><h3>Same tokens</h3><p>Green key unchanged. Red can be reused.</p></div>
+        <div class="step"><h3>Move formula</h3><p>Caller row/col changes. Bind context changes.</p></div>
+        <div class="step"><h3>Rename table</h3><p>Structure context changes. Binding changes.</p></div>
+        <div class="step"><h3>Catalog update</h3><p>Semantic plan changes without syntax change.</p></div>
+      </div>
+    </section>
+
+    <section class="page" id="p07">
+      <div class="page-id">Page 07 / 20</div>
+      <div class="kicker">Binding and reference normalization</div>
+      <h2>From syntax to `BoundFormula`</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Bound expression tree</h3>
+          <pre>pub enum BoundExpr {
+  NumberLiteral(String),
+  FunctionCall { function_name: String, args: Vec&lt;BoundExpr&gt; },
+  Invocation { callee: Box&lt;BoundExpr&gt;, args: Vec&lt;BoundExpr&gt; },
+  Reference(ReferenceExpr),
+  Binary { op: BinaryOp, left: Box&lt;BoundExpr&gt;, right: Box&lt;BoundExpr&gt; },
+  HelperParameterName(String),
+  HelperOptionalParameterName(String),
+}</pre>
+        </div>
+        <div class="card">
+          <h3>`BoundFormula` carries evidence</h3>
+          <pre>pub struct BoundFormula {
+  pub bind_hash: String,
+  pub root: BoundExpr,
+  pub normalized_references: Vec&lt;NormalizedReference&gt;,
+  pub dependency_seeds: Vec&lt;DependencySeed&gt;,
+  pub unresolved_references: Vec&lt;UnresolvedReferenceRecord&gt;,
+  pub capability_requirements: Vec&lt;String&gt;,
+  pub function_call_sources: Vec&lt;FunctionCallSourceRecord&gt;,
+}</pre>
+        </div>
+      </div>
+      <div class="diagram" style="margin-top:18px">
+        <div class="grid-4">
+          <div class="node blue"><b>NameKind</b><span>helper local, defined name, table name, unresolved</span></div>
+          <div class="node teal"><b>ReferenceExpr</b><span>atom, range, union, intersection, spill</span></div>
+          <div class="node green"><b>NormalizedReference</b><span>cell, area, whole row/col, structured, external</span></div>
+          <div class="node gold"><b>Bind diagnostics</b><span>exact spans and authoring rejects</span></div>
+        </div>
+      </div>
+      <div class="callout warn" style="margin-top:18px">
+        Binding is where syntax becomes workbook-relative truth. This is why caller anchor, sheet/workbook identity, table catalog, name scope, formula channel, and structure-context version all participate in the bind fingerprint.
+      </div>
+    </section>
+
+    <section class="page" id="p08">
+      <div class="page-id">Page 08 / 20</div>
+      <div class="kicker">Semantic planning</div>
+      <h2>`SemanticPlan`: function metadata plus formula structure</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Plan surface</h3>
+          <pre>pub struct SemanticPlan {
+  pub semantic_plan_key: String,
+  pub bind_hash: String,
+  pub oxfunc_catalog_identity: String,
+  pub function_bindings: Vec&lt;FunctionPlanBinding&gt;,
+  pub availability_summaries: Vec&lt;FunctionAvailabilitySummary&gt;,
+  pub evaluation_requirements: Vec&lt;EvaluationRequirement&gt;,
+  pub execution_profile: ExecutionProfileSummary,
+  pub helper_profile: HelperEnvironmentProfile,
+}</pre>
+        </div>
+        <div class="card">
+          <h3>Function binding example</h3>
+          <pre>pub struct FunctionPlanBinding {
+  pub function_name: String,
+  pub function_id: &amp;'static str,
+  pub arg_preparation_profile: ArgPreparationProfile,
+  pub fec_dependency_profile: FecDependencyProfile,
+  pub host_interaction: HostInteractionClass,
+  pub volatility: VolatilityClass,
+}</pre>
+        </div>
+      </div>
+      <div class="flow" style="margin-top:18px">
+        <div class="node green"><b>Bound calls</b><span>surface names + spans</span></div>
+        <div class="arrow">-&gt;</div>
+        <div class="node gold"><b>OxFunc registry</b><span>ids, arity, traits</span></div>
+        <div class="arrow">-&gt;</div>
+        <div class="node blue"><b>Availability</b><span>snapshot/profile gates</span></div>
+        <div class="arrow">-&gt;</div>
+        <div class="node violet"><b>Requirements</b><span>lazy, ref, locale, host</span></div>
+      </div>
+      <p class="caption">A semantic plan is not the evaluator VM. It is the replayable contract that explains why the evaluator will need particular providers, preservation modes, or scheduler restrictions.</p>
+    </section>
+
+    <section class="page" id="p09">
+      <div class="page-id">Page 09 / 20</div>
+      <div class="kicker">Scheduling profile</div>
+      <h2>Execution contracts: what a coordinator can know before running</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Profile dimensions</h3>
+          <ul>
+            <li>Thread safety: safe concurrent, host serialized, not thread safe.</li>
+            <li>Volatility: stable, contextual, volatile.</li>
+            <li>Determinism: deterministic, contextual, non-deterministic.</li>
+            <li>Dependency families: host query, locale, caller context, reference preservation, branch/fallback laziness.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Contract surface</h3>
+          <pre>pub struct ExecutionContract {
+  pub lane_class: SchedulerLaneClass,
+  pub replay_sensitivity: ReplaySensitivityClass,
+  pub restrictions: Vec&lt;ExecutionRestriction&gt;,
+  pub single_flight_advisable: bool,
+}</pre>
+        </div>
+      </div>
+      <div class="matrix" style="margin-top:18px">
+        <div class="head">Signal</div><div class="head">Example</div><div class="head">Risk</div><div class="head">Restriction</div><div class="head">Owner</div>
+        <div>Host query</div><div>`CELL`, `INFO`</div><div>Host facts</div><div>HostQuery</div><div>OxFml plan from OxFunc traits</div>
+        <div>Time/random</div><div>`NOW`, `RAND`</div><div>Replay sensitivity</div><div>TimeDependent / PseudoRandom</div><div>OxFunc trait, OxFml contract</div>
+        <div>References</div><div>`INDEX`, `OFFSET`, `@`, `#`</div><div>Need identity preservation</div><div>ReferencePreserved</div><div>OxFml binder/evaluator</div>
+        <div>Locale</div><div>`TEXT`, `VALUE`</div><div>Profile-dependent result</div><div>LocaleSensitive</div><div>OxFml context + OxFunc semantics</div>
+      </div>
+    </section>
+
+    <section class="page" id="p10">
+      <div class="page-id">Page 10 / 20</div>
+      <div class="kicker">Evaluator entrypoint</div>
+      <h2>`EvaluationContext`, `EvaluationFrame`, and the current compiled plan</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Context: inputs and providers</h3>
+          <pre>pub struct EvaluationContext&lt;'a&gt; {
+  pub bind_formula: &amp;'a BoundFormula,
+  pub plan: &amp;'a SemanticPlan,
+  pub cell_values: BTreeMap&lt;String, EvalValue&gt;,
+  pub defined_names: BTreeMap&lt;String, DefinedNameBinding&gt;,
+  pub locale_ctx: Option&lt;&amp;'a LocaleFormatContext&lt;'a&gt;&gt;,
+  pub host_info: Option&lt;&amp;'a dyn HostInfoProvider&gt;,
+  pub now_serial: Option&lt;f64&gt;,
+  pub random_value: Option&lt;f64&gt;,
+  pub trace_mode: EvaluationTraceMode,
+}</pre>
+        </div>
+        <div class="card">
+          <h3>Frame: per-evaluation mutable state</h3>
+          <pre>struct EvaluationFrame {
+  trace: EvaluationTrace,
+  callable_registry: RefCell&lt;CallableRegistry&gt;,
+  root_helper_bindings: HelperBindingFrame,
+  state: Rc&lt;EvaluationFrameState&gt;,
+}</pre>
+          <p>The frame owns mutable scratch and registries for one evaluation, keeping semantic truth in explicit artifacts while allowing a faster execution path.</p>
+        </div>
+      </div>
+      <div class="callout" style="margin-top:18px">
+        W075 moved the evaluator toward compiled execution: resolved call sites, parsed literals, compiled OxFml special nodes, helper slots, frame-owned scratch, value-only trace discipline, and strict context-free precompute.
+      </div>
+    </section>
+
+    <section class="page" id="p11">
+      <div class="page-id">Page 11 / 20</div>
+      <div class="kicker">Compiled expression model</div>
+      <h2>`CompiledExpr`: the evaluator-facing formula plan</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Key variants</h3>
+          <pre>enum CompiledExpr {
+  NumberLiteral { source: String, value: Option&lt;f64&gt; },
+  PrecomputedValue { value: EvalValue, source: Box&lt;CompiledExpr&gt; },
+  Binary { op, call_site, left, right },
+  SurfaceCall { function_name, call_site, args },
+  Let { args, slot_only },
+  LambdaLiteral { args },
+  If { args },
+  IfError { args },
+  Reference(CompiledReferenceExpr),
+}</pre>
+        </div>
+        <div class="card">
+          <h3>Call site caching</h3>
+          <pre>struct CompiledFunctionCallSite {
+  special_form: CompiledFunctionSpecialForm,
+  surface_call_site: Option&lt;SurfaceCallSite&gt;,
+  special_operator_call_site: Option&lt;SurfaceCallSite&gt;,
+  callable_argument_ordinals: Vec&lt;usize&gt;,
+}</pre>
+          <p>Callable argument ordinals and OxFunc surface call sites are resolved once during plan construction rather than rediscovered in hot loops.</p>
+        </div>
+      </div>
+      <div class="diagram" style="margin-top:18px">
+        <svg viewBox="0 0 840 210" role="img" aria-label="Compiled evaluator dispatch">
+          <rect x="20" y="35" width="150" height="56" rx="8" fill="#e8f1f8" stroke="#9dbdd6"></rect>
+          <text x="95" y="60" text-anchor="middle" class="svg-title">BoundExpr</text>
+          <text x="95" y="78" text-anchor="middle" class="svg-small">syntax semantics</text>
+          <rect x="230" y="35" width="150" height="56" rx="8" fill="#e5f4f1" stroke="#9bd0ca"></rect>
+          <text x="305" y="60" text-anchor="middle" class="svg-title">CompileHelperScope</text>
+          <text x="305" y="78" text-anchor="middle" class="svg-small">slot assignment</text>
+          <rect x="440" y="35" width="150" height="56" rx="8" fill="#fff2d9" stroke="#e2be78"></rect>
+          <text x="515" y="60" text-anchor="middle" class="svg-title">SurfaceCallSite</text>
+          <text x="515" y="78" text-anchor="middle" class="svg-small">OxFunc handle</text>
+          <rect x="650" y="35" width="150" height="56" rx="8" fill="#ecebfa" stroke="#c2bce9"></rect>
+          <text x="725" y="60" text-anchor="middle" class="svg-title">CompiledExpr</text>
+          <text x="725" y="78" text-anchor="middle" class="svg-small">execution nodes</text>
+          <path d="M170 63 H230" stroke="#265c8d" stroke-width="3"></path>
+          <path d="M380 63 H440" stroke="#265c8d" stroke-width="3"></path>
+          <path d="M590 63 H650" stroke="#265c8d" stroke-width="3"></path>
+          <rect x="165" y="130" width="510" height="50" rx="8" fill="#eef4e5" stroke="#bfd0a7"></rect>
+          <text x="420" y="154" text-anchor="middle" class="svg-title">precompute_context_free_expr</text>
+          <text x="420" y="172" text-anchor="middle" class="svg-small">only literal/helper-free pure OxFunc metadata-backed subtrees</text>
+        </svg>
+      </div>
+    </section>
+
+    <section class="page" id="p12">
+      <div class="page-id">Page 12 / 20</div>
+      <div class="kicker">LET, LAMBDA, helper locals</div>
+      <h2>Helper environments, slots, and callable transport</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Helper frame</h3>
+          <pre>struct HelperBindingFrame {
+  layers: Vec&lt;Rc&lt;BTreeMap&lt;String, HelperBindingEntry&gt;&gt;&gt;,
+  slots: Rc&lt;Vec&lt;RefCell&lt;Option&lt;HelperBinding&gt;&gt;&gt;&gt;,
+}</pre>
+          <p>Layers preserve case-insensitive helper map semantics. Slots give compiled hot paths direct helper-local access where slot identity is known.</p>
+        </div>
+        <div class="card">
+          <h3>Lambda binding</h3>
+          <pre>struct LambdaBinding {
+  origin_kind: CallableOriginKind,
+  params: Rc&lt;[LambdaParam]&gt;,
+  body: Rc&lt;CompiledExpr&gt;,
+  closure: HelperBindingFrame,
+}</pre>
+          <p>Closures now capture only named helper slots that are free in the body, not every helper visible in scope.</p>
+        </div>
+      </div>
+      <div class="flow" style="margin-top:18px">
+        <div class="node blue"><b>`LET` bind name</b><span>compile slot</span></div>
+        <div class="arrow">-&gt;</div>
+        <div class="node teal"><b>Value expr</b><span>evaluate before exposing next binding</span></div>
+        <div class="arrow">-&gt;</div>
+        <div class="node green"><b>slot write</b><span>slot-only when lambda-free</span></div>
+        <div class="arrow">-&gt;</div>
+        <div class="node violet"><b>body</b><span>direct HelperLocalSlot read</span></div>
+      </div>
+      <div class="callout warn" style="margin-top:18px">
+        Important invariant: OxFml may compile helper storage and control forms, but ordinary functions/operators still dispatch through OxFunc call sites. There is no `INDEX` or arithmetic special case in OxFml.
+      </div>
+    </section>
+
+    <section class="page" id="p13">
+      <div class="page-id">Page 13 / 20</div>
+      <div class="kicker">OxFunc call boundary</div>
+      <h2>Prepared arguments, surface calls, and callable batching</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Prepared argument trace</h3>
+          <pre>pub struct PreparedArgument {
+  pub ordinal: usize,
+  pub structure_class: PreparedStructureClass,
+  pub source_class: PreparedSourceClass,
+  pub evaluation_mode: PreparedEvaluationMode,
+  pub blankness_class: PreparedBlanknessClass,
+  pub reference_target: Option&lt;String&gt;,
+  pub resolved_value: Option&lt;EvalValue&gt;,
+}</pre>
+        </div>
+        <div class="card">
+          <h3>Ordinary call hot path</h3>
+          <pre>let mut scratch = context.take_surface_call_scratch(args.len());
+for arg in args {
+  let call_arg = evaluate_expr_as_call_arg(...);
+  scratch.push_arg(call_arg);
+}
+surface_call_site.invoke_scratch(&amp;scratch, &amp;mut runtime)</pre>
+        </div>
+      </div>
+      <div class="diagram" style="margin-top:18px">
+        <div class="grid-4">
+          <div class="node blue"><b>RefsVisible</b><span>preserve identity for reference-observable functions</span></div>
+          <div class="node teal"><b>ValuesOnly</b><span>eager scalar/array value preparation</span></div>
+          <div class="node green"><b>Callable slot</b><span>lambda argument prepared as callable carrier</span></div>
+          <div class="node gold"><b>invoke_many</b><span>OxFunc batching for REDUCE/SCAN/MAP/BYROW/etc.</span></div>
+        </div>
+      </div>
+      <p class="caption">The trace can be switched off for value-only evaluation. In prepared-call mode, OxFml records enough structure for replay and debugging.</p>
+    </section>
+
+    <section class="page" id="p14">
+      <div class="page-id">Page 14 / 20</div>
+      <div class="kicker">References and resolver boundary</div>
+      <h2>Reference preservation is a semantic requirement, not an implementation detail</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Compiled reference expression</h3>
+          <pre>enum CompiledReferenceExpr {
+  Atom(NormalizedReference),
+  HelperLocalSlot { name: NameRef, slot: usize },
+  Spill { call_site, anchor },
+  Range { call_site, start, end },
+  Union { call_site, left, right },
+  Intersection { call_site, left, right },
+}</pre>
+        </div>
+        <div class="card">
+          <h3>Local resolver</h3>
+          <pre>struct LocalReferenceResolver&lt;'a&gt; {
+  cell_values: &amp;'a BTreeMap&lt;String, EvalValue&gt;,
+  defined_names: &amp;'a BTreeMap&lt;String, DefinedNameBinding&gt;,
+  caller_row: usize,
+  caller_col: usize,
+  callable_registry: &amp;'a RefCell&lt;CallableRegistry&gt;,
+}</pre>
+        </div>
+      </div>
+      <div class="callout" style="margin-top:18px">
+        Value-only lanes dereference references into values. Reference-visible lanes pass `ReferenceLike` identity through OxFunc so functions such as `INDEX`, `OFFSET`, `ROW`, `COLUMN`, `CELL`, and explicit reference operators can observe the correct shape and caller context.
+      </div>
+      <div class="grid-3" style="margin-top:18px">
+        <div class="node blue"><b>Cell/area</b><span>local value lookup or preserved reference</span></div>
+        <div class="node green"><b>Whole row/column</b><span>first-class reference; reject if unsafe to flatten</span></div>
+        <div class="node gold"><b>External</b><span>deferred typed outcome and trace evidence</span></div>
+      </div>
+    </section>
+
+    <section class="page" id="p15">
+      <div class="page-id">Page 15 / 20</div>
+      <div class="kicker">Trace, replay, diagnostics</div>
+      <h2>OxFml makes execution explainable</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Trace mode</h3>
+          <pre>pub enum EvaluationTraceMode {
+  ValueOnly,
+  PreparedCalls,
+}</pre>
+          <p>Value-only mode is the default. Prepared-call mode records call surfaces, argument preparation, provider/context flags, and returned values.</p>
+        </div>
+        <div class="card">
+          <h3>Prepared call</h3>
+          <pre>pub struct PreparedCall {
+  pub function_name: String,
+  pub function_id: &amp;'static str,
+  pub arg_preparation_profile: ArgPreparationProfile,
+  pub prepared_arguments: Vec&lt;PreparedArgument&gt;,
+  pub register_id_request: Option&lt;RegisterIdRequest&gt;,
+  pub locale_profile_id: Option&lt;String&gt;,
+  pub returned_value: Option&lt;EvalValue&gt;,
+}</pre>
+        </div>
+      </div>
+      <div class="timeline">
+        <div class="step"><h3>Parse diagnostics</h3><p>Syntax spans, recovery, malformed formula evidence.</p></div>
+        <div class="step"><h3>Bind diagnostics</h3><p>Unknown names, invalid references, authoring errors.</p></div>
+        <div class="step"><h3>Semantic diagnostics</h3><p>Unknown/gated functions, arity, profile mismatch.</p></div>
+        <div class="step"><h3>Prepared call trace</h3><p>What each call received and returned.</p></div>
+        <div class="step"><h3>Replay packets</h3><p>Stable reduced evidence for consumers.</p></div>
+      </div>
+    </section>
+
+    <section class="page" id="p16">
+      <div class="page-id">Page 16 / 20</div>
+      <div class="kicker">FEC/F3E seam</div>
+      <h2>Commit bundles, rejects, and topology consequences</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Accepted candidate</h3>
+          <pre>pub struct CommitBundle {
+  pub formula_stable_id: String,
+  pub fence_snapshot: FenceSnapshot,
+  pub value_delta: ValueDelta,
+  pub shape_delta: ShapeDelta,
+  pub topology_delta: TopologyDelta,
+  pub format_delta: Option&lt;FormatDelta&gt;,
+  pub display_delta: Option&lt;DisplayDelta&gt;,
+  pub returned_value_surface: ReturnedValueSurface,
+  pub spill_events: Vec&lt;SpillEvent&gt;,
+  pub execution_profile: Option&lt;ExecutionProfileSummary&gt;,
+}</pre>
+        </div>
+        <div class="card">
+          <h3>Typed reject</h3>
+          <pre>pub enum RejectCode {
+  FenceMismatch,
+  CapabilityDenied,
+  SessionTerminated,
+  BindMismatch,
+  StructuralConflict,
+  DynamicReferenceFailure,
+  ResourceInvariantFailure,
+}</pre>
+          <p>Rejects are structured so coordinator-facing behavior can be replayed and tested.</p>
+        </div>
+      </div>
+      <div class="flow" style="margin-top:18px">
+        <div class="node blue"><b>Fence</b><span>formula token, bind hash, profile</span></div>
+        <div class="arrow">-&gt;</div>
+        <div class="node teal"><b>Value delta</b><span>payload and extent</span></div>
+        <div class="arrow">-&gt;</div>
+        <div class="node green"><b>Shape delta</b><span>spill and blockers</span></div>
+        <div class="arrow">-&gt;</div>
+        <div class="node gold"><b>Topology</b><span>dependency consequences</span></div>
+      </div>
+    </section>
+
+    <section class="page" id="p17">
+      <div class="page-id">Page 17 / 20</div>
+      <div class="kicker">Publication and formatting</div>
+      <h2>Worksheet value is not the whole result surface</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Verification publication surface</h3>
+          <pre>pub struct VerificationPublicationSurface {
+  pub effective_display_text: String,
+  pub published_worksheet_value: EvalValue,
+  pub returned_value_surface: ReturnedValueSurface,
+  pub effective_number_format_code: Option&lt;String&gt;,
+  pub effective_font_color: Option&lt;String&gt;,
+  pub conditional_formatting_rules: Vec&lt;...&gt;,
+}</pre>
+          <p class="caption">The exact fields continue beyond this excerpt; the purpose is to project verification-grade display and formatting effects.</p>
+        </div>
+        <div class="card">
+          <h3>Formatting lanes</h3>
+          <ul>
+            <li>`TEXT` and format-code semantics cross formula evaluation.</li>
+            <li>Number/date/time/fraction/accounting rendering consume locale/date-system context.</li>
+            <li>Conditional formatting can become array-per-cell publication evidence.</li>
+            <li>Custom-format color tokens flow through `effective_font_color`.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="diagram" style="margin-top:18px">
+        <div class="grid-4">
+          <div class="node blue"><b>EvalValue</b><span>core worksheet value</span></div>
+          <div class="node teal"><b>ReturnedValueSurface</b><span>rich/image/hyperlink/provider lanes</span></div>
+          <div class="node green"><b>FormatDelta</b><span>semantic display/format effect</span></div>
+          <div class="node gold"><b>Verification surface</b><span>what test/replay can inspect</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page" id="p18">
+      <div class="page-id">Page 18 / 20</div>
+      <div class="kicker">Consumer-facing facades</div>
+      <h2>Host, runtime, editor, and replay surfaces</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>`SingleFormulaHost`</h3>
+          <pre>pub struct SingleFormulaHost {
+  pub formula_stable_id: String,
+  pub formula_text: String,
+  pub formula_text_version: u64,
+  pub structure_context_version: String,
+  pub defined_names: BTreeMap&lt;String, DefinedNameBinding&gt;,
+  pub cell_values: BTreeMap&lt;String, EvalValue&gt;,
+  cached_artifacts: Option&lt;CachedHostArtifacts&gt;,
+}</pre>
+          <p>SingleFormulaHost is the integration harness that chains parse, red, bind, semantic plan, evaluation, publication, commit, and replay capture.</p>
+        </div>
+        <div class="card">
+          <h3>Consumer groups</h3>
+          <ul>
+            <li><b>runtime</b>: runtime environment and managed session facade.</li>
+            <li><b>editor</b>: live diagnostics, completion, signature help, function help.</li>
+            <li><b>replay</b>: projection of retained witness and first-host packets.</li>
+            <li><b>host</b>: empirical oracle and single-formula capture pipeline.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout" style="margin-top:18px">
+        The facades are not a second formula engine. They package canonical artifacts for different consumers while preserving the same parse/bind/plan/evaluate/commit semantics.
+      </div>
+    </section>
+
+    <section class="page" id="p19">
+      <div class="page-id">Page 19 / 20</div>
+      <div class="kicker">Optimizer floor</div>
+      <h2>W075: what changed in the hot evaluator path</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Promoted improvements</h3>
+          <ul>
+            <li>Resolved `SurfaceCallSite` handles in compiled plan nodes.</li>
+            <li>Parsed number/string literal payloads during compile.</li>
+            <li>Explicit `LET`, `LAMBDA`, `IF`, `IFERROR`, ordinary `SurfaceCall` nodes.</li>
+            <li>Helper slots and slot-only lambda-free `LET` execution.</li>
+            <li>Narrowed closure capture and shared lambda body/parameter storage.</li>
+            <li>Frame-owned scratch stack and callable recursion/stack guard state.</li>
+            <li>Strict pure/context-free precompute with trace preservation.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Rejected experiments</h3>
+          <ul>
+            <li>Layered runtime slot overlays: semantics held, Mandelbrot regressed.</li>
+            <li>Captured-helper invariant cache wrappers: timing variance/regression.</li>
+            <li>Precomputed helper-key metadata on `LambdaParam`: regression and variance spike.</li>
+          </ul>
+          <p class="caption">The workset kept generic infrastructure and avoided function-specific OxFml shortcuts.</p>
+        </div>
+      </div>
+      <div class="matrix" style="margin-top:18px">
+        <div class="head">Fixture</div><div class="head">Min</div><div class="head">Avg</div><div class="head">Max</div><div class="head">Result</div>
+        <div>MAKEARRAY constant</div><div>1.964 ms</div><div>1.993 ms</div><div>2.012 ms</div><div>Array 100x60</div>
+        <div>REDUCE scalar</div><div>4.832 ms</div><div>4.837 ms</div><div>4.845 ms</div><div>Number</div>
+        <div>Stateful REDUCE</div><div>12.346 ms</div><div>12.462 ms</div><div>12.548 ms</div><div>Array 1x3</div>
+        <div>Mandelbrot 100x60x30</div><div>1427.692 ms</div><div>1453.733 ms</div><div>1483.027 ms</div><div>Array 100x60</div>
+      </div>
+    </section>
+
+    <section class="page" id="p20">
+      <div class="page-id">Page 20 / 20</div>
+      <div class="kicker">Future orientation</div>
+      <h2>Where future work should attach</h2>
+      <div class="grid-3">
+        <div class="card">
+          <h3>Near-term engineering</h3>
+          <ul>
+            <li>Separate evaluator frame helpers into smaller modules once the shape stabilizes.</li>
+            <li>Keep adding regression tests around slots, capture, trace, and references.</li>
+            <li>Use profiling to justify node-indexed scratch or deeper plan lowering.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Cross-repo seam work</h3>
+          <ul>
+            <li>Prefer OxFunc metadata/cooperation for semantic optimizations.</li>
+            <li>Keep function/operator behavior out of OxFml except via call sites and metadata.</li>
+            <li>Promote shared seam changes with handoff packets and replay evidence.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Longer-term architecture</h3>
+          <ul>
+            <li>Workbook-level graph planning belongs above OxFml.</li>
+            <li>Green/red/bind/semantic artifacts should remain replayable.</li>
+            <li>Evaluation can become more VM-like without hiding semantic state.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout" style="margin-top:18px">
+        The durable idea: OxFml is a specification-bearing evaluator layer. Its internal optimizer can get faster, but it should continue to expose explicit artifacts that make formula meaning, execution requirements, and commit consequences inspectable.
+      </div>
+      <div class="toc">
+        <a href="#p01"><span>01 Start</span><span>mental model</span></a>
+        <a href="#p04"><span>04 Pipeline</span><span>source to commit</span></a>
+        <a href="#p08"><span>08 Semantic plan</span><span>OxFunc metadata</span></a>
+        <a href="#p10"><span>10 Evaluator</span><span>frame and plan</span></a>
+        <a href="#p16"><span>16 FEC/F3E</span><span>deltas and rejects</span></a>
+        <a href="#p19"><span>19 W075</span><span>optimizer floor</span></a>
+      </div>
+      <p class="caption" style="margin-top:24px">Generated as `docs/showcase/index.html`. Open directly in a browser or print to PDF for a slide-like 20-page handout.</p>
+    </section>
+  </main>
+</body>
+</html>

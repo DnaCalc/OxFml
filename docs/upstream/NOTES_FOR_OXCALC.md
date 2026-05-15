@@ -959,3 +959,51 @@ Current non-claims:
 3. OxFml is not claiming rich/sparse execution.
 4. OxFml is not claiming replay-field finalization beyond the reserved field
    families above.
+
+## 26. W050 Landing-Space Classification After OxFunc Metadata Publication
+This section supersedes the older receipt-only posture for CALC-002,
+CALC-003, and CALC-004 where current OxFml code evidence now exists. It is a
+landing-space classification for OxCalc W050 closure planning, not an OxCalc
+handoff completion claim.
+
+Classification table:
+
+| item | classification | OxFml evidence or lane |
+| --- | --- | --- |
+| PreparedFormulaPackage / plan-template / hole-binding identity as canonical replacement for OxCalc compatibility projections | current evidence exists in OxFml | Current runtime prepared identity carries `RuntimePreparedFormulaIdentity`, `RuntimePlanTemplateIdentity`, and `RuntimeHoleBindingIdentity`; tests: `runtime_result_exposes_prepared_formula_identity_for_direct_execution`, `managed_runtime_snapshots_carry_oxfunc_bridge_versions`, `replay_projection_carries_oxfunc_bridge_versions_from_runtime_artifacts`. Public `PreparedFormulaPackage` naming/full packaging remains successor polish under proposed lane `W054 prepared-package canonicalization`. |
+| FormalReference / formal input transport needed to retire OxCalc wrong-shape formula/reference surfaces | current evidence exists in OxFml | `RuntimeFormalReference` is emitted from bound normalized/unresolved references; test: `runtime_result_exposes_prepared_formula_identity_for_direct_execution`. Full OxCalc compatibility-projection retirement is blocked on OxCalc migration after adopting these fields. |
+| `semantic_kernel_metadata_version` carriage into runtime/replay prepared identity | current evidence exists in OxFml | Runtime prepared identity and replay projection carry the field; tests: `runtime_prepared_identity_carries_oxfunc_bridge_versions_without_enforcement`, `runtime_prepared_identity_derives_oxfunc_bridge_versions_from_registry_metadata`, `managed_runtime_snapshots_carry_oxfunc_bridge_versions`, `replay_projection_carries_oxfunc_bridge_versions_from_runtime_artifacts`. |
+| `arg_admission_metadata_version` carriage into runtime/replay prepared identity | current evidence exists in OxFml | Runtime prepared identity and replay projection carry the field; same tests as `semantic_kernel_metadata_version`. |
+| CorrectnessFloorContext carriage and replay identity | successor work, with proposed workset/lane | Proposed lane: `W054 correctness-floor replay identity`. OxFml currently carries `semantic_kernel_metadata_version`; it does not yet emit a full `CorrectnessFloorContext` object with profile version, numerical policy, and error algebra replay identity. Selector/error semantics remain OxFunc-owned. |
+| `producer_capability_set_keys` emission on returned rich/sparse carriers | current evidence exists in OxFml | `ReturnedValueSurface` and replay projection carry producer keys for `IMAGE` / `_webimage`; tests: `adapter_preserves_image_rich_value_surface`, `replay_projection_carries_image_producer_capability_columns`. Generic rich/sparse producers remain successor work. |
+| `exercised_capability_keys` emission on returned rich/sparse carriers | current evidence exists in OxFml | OxFml consumes OxFunc `eval_image_surface_extended_with_capabilities(...)` for top-level `IMAGE`; successful `_webimage` runs populate exercised keys; tests: `adapter_preserves_image_rich_value_surface`, `replay_projection_carries_image_producer_capability_columns`. Generic rich/sparse producers remain successor work. |
+| IMAGE / `_webimage` carrier contract coverage | current evidence exists in OxFml | Tests: `adapter_preserves_image_rich_value_surface`, `replay_projection_carries_image_producer_capability_columns`; existing W053 fixture coverage also includes `_webimage` expected rich-value identity. |
+| `RichArgAccepted` metadata consumption | blocked on OxFunc | OxFunc now exposes `ArgAdmissionMetadata::RichArgAccepted { required_capability_set_keys }` and mismatch validation, but no current built-in consumes rich arguments. OxFml should not claim runtime admission until OxFunc exposes a consuming surface. Proposed follow-up lane after OxFunc activation: `W054 rich-argument admission replay`. |
+| Sparse range reader API and replay-visible sparse iteration semantics | blocked on OxFunc | OxFunc explicitly keeps sparse readers deferred pending a stable sparse-reader API and runtime boundary. OxFml should not add sparse replay fields yet. Proposed successor lane after OxFunc API: `W054 sparse-reader replay contract`. |
+
+Remaining blockers by owner:
+1. OxFunc:
+   - broad selector/error enforcement beyond the current SUM/helper boundary,
+   - first built-in rich-argument consumer for `RichArgAccepted`,
+   - generic rich producer protocol beyond `IMAGE`,
+   - sparse reader API/runtime/replay shape.
+2. OxFml:
+   - public `PreparedFormulaPackage` naming/full packaging polish,
+   - full `CorrectnessFloorContext` replay object after deciding the replay
+     identity shape.
+3. OxCalc:
+   - migration away from W050 compatibility projections after adopting the
+     current OxFml runtime/replay fields,
+   - retirement of local wrong-shape formula/reference surfaces against
+     `RuntimeFormalReference` evidence.
+
+Current status:
+1. `CALC-002` now has current OxFml evidence for prepared identity,
+   plan-template identity, hole-binding identity, and formal-reference carriage,
+   with public package-shape polish still in successor work.
+2. `CALC-003` now has current OxFml evidence for
+   `semantic_kernel_metadata_version` carriage, but not full
+   `CorrectnessFloorContext` replay identity or OxFunc selector enforcement.
+3. `CALC-004` now has current OxFml evidence for `arg_admission_metadata_version`
+   carriage and `IMAGE` / `_webimage` producer/exercised capability emission,
+   but not generic rich-argument consumers or sparse readers.

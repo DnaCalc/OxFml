@@ -191,6 +191,10 @@ pub struct ReplayProjectionResult {
     pub comparison_views: Option<Vec<ReplayComparisonView>>,
     pub verification_publication_surface: Option<VerificationPublicationSurface>,
     pub first_host_replay_capture_packet: Option<FirstHostReplayCapturePacket>,
+    pub semantic_kernel_metadata_version: Option<String>,
+    pub arg_admission_metadata_version: Option<String>,
+    pub producer_capability_set_keys: Vec<String>,
+    pub exercised_capability_keys: Vec<String>,
     pub prepared_formula_identity: Option<RuntimePreparedFormulaIdentity>,
 }
 
@@ -330,6 +334,22 @@ fn project_runtime_result(
         )),
         verification_publication_surface: Some(verification_publication_surface),
         first_host_replay_capture_packet: Some(result.first_host_replay_capture_packet.clone()),
+        semantic_kernel_metadata_version: result
+            .prepared_formula_identity
+            .semantic_kernel_metadata_version
+            .clone(),
+        arg_admission_metadata_version: result
+            .prepared_formula_identity
+            .arg_admission_metadata_version
+            .clone(),
+        producer_capability_set_keys: result
+            .returned_value_surface
+            .producer_capability_set_keys
+            .clone(),
+        exercised_capability_keys: result
+            .returned_value_surface
+            .exercised_capability_keys
+            .clone(),
         prepared_formula_identity: Some(result.prepared_formula_identity.clone()),
     }
 }
@@ -369,6 +389,10 @@ fn project_first_host_capture(
             source.packet.verification_publication_surface.clone(),
         ),
         first_host_replay_capture_packet: Some(source.packet.clone()),
+        semantic_kernel_metadata_version: None,
+        arg_admission_metadata_version: None,
+        producer_capability_set_keys: Vec::new(),
+        exercised_capability_keys: Vec::new(),
         prepared_formula_identity: None,
     }
 }
@@ -403,6 +427,16 @@ fn project_runtime_managed_open(
         comparison_views: None,
         verification_publication_surface: None,
         first_host_replay_capture_packet: None,
+        semantic_kernel_metadata_version: result
+            .prepared_formula_identity
+            .semantic_kernel_metadata_version
+            .clone(),
+        arg_admission_metadata_version: result
+            .prepared_formula_identity
+            .arg_admission_metadata_version
+            .clone(),
+        producer_capability_set_keys: Vec::new(),
+        exercised_capability_keys: Vec::new(),
         prepared_formula_identity: Some(result.prepared_formula_identity.clone()),
     }
 }
@@ -441,6 +475,16 @@ fn project_runtime_managed_execution(
         comparison_views: None,
         verification_publication_surface: None,
         first_host_replay_capture_packet: None,
+        semantic_kernel_metadata_version: result
+            .prepared_formula_identity
+            .semantic_kernel_metadata_version
+            .clone(),
+        arg_admission_metadata_version: result
+            .prepared_formula_identity
+            .arg_admission_metadata_version
+            .clone(),
+        producer_capability_set_keys: Vec::new(),
+        exercised_capability_keys: Vec::new(),
         prepared_formula_identity: Some(result.prepared_formula_identity.clone()),
     }
 }
@@ -492,6 +536,16 @@ fn project_runtime_managed_session(
         comparison_views: None,
         verification_publication_surface: None,
         first_host_replay_capture_packet: None,
+        semantic_kernel_metadata_version: result
+            .prepared_formula_identity
+            .semantic_kernel_metadata_version
+            .clone(),
+        arg_admission_metadata_version: result
+            .prepared_formula_identity
+            .arg_admission_metadata_version
+            .clone(),
+        producer_capability_set_keys: Vec::new(),
+        exercised_capability_keys: Vec::new(),
         prepared_formula_identity: Some(result.prepared_formula_identity.clone()),
     }
 }
@@ -541,6 +595,18 @@ fn project_runtime_managed_commit(
         comparison_views: None,
         verification_publication_surface: None,
         first_host_replay_capture_packet: None,
+        semantic_kernel_metadata_version: result
+            .session
+            .prepared_formula_identity
+            .semantic_kernel_metadata_version
+            .clone(),
+        arg_admission_metadata_version: result
+            .session
+            .prepared_formula_identity
+            .arg_admission_metadata_version
+            .clone(),
+        producer_capability_set_keys: Vec::new(),
+        exercised_capability_keys: Vec::new(),
         prepared_formula_identity: Some(result.session.prepared_formula_identity.clone()),
     }
 }
@@ -588,6 +654,18 @@ fn project_runtime_managed_termination(
         comparison_views: None,
         verification_publication_surface: None,
         first_host_replay_capture_packet: None,
+        semantic_kernel_metadata_version: result
+            .session
+            .prepared_formula_identity
+            .semantic_kernel_metadata_version
+            .clone(),
+        arg_admission_metadata_version: result
+            .session
+            .prepared_formula_identity
+            .arg_admission_metadata_version
+            .clone(),
+        producer_capability_set_keys: Vec::new(),
+        exercised_capability_keys: Vec::new(),
         prepared_formula_identity: Some(result.session.prepared_formula_identity.clone()),
     }
 }
@@ -622,6 +700,10 @@ fn project_fixture_family(
         comparison_views: None,
         verification_publication_surface: None,
         first_host_replay_capture_packet: None,
+        semantic_kernel_metadata_version: None,
+        arg_admission_metadata_version: None,
+        producer_capability_set_keys: Vec::new(),
+        exercised_capability_keys: Vec::new(),
         prepared_formula_identity: None,
     }
 }
@@ -656,6 +738,10 @@ fn project_retained_witness(
         comparison_views: None,
         verification_publication_surface: None,
         first_host_replay_capture_packet: None,
+        semantic_kernel_metadata_version: None,
+        arg_admission_metadata_version: None,
+        producer_capability_set_keys: Vec::new(),
+        exercised_capability_keys: Vec::new(),
         prepared_formula_identity: None,
     }
 }

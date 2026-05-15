@@ -7,6 +7,7 @@ use oxfunc_core::functions::call_register_id_family::{
 use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult};
 use oxfunc_core::host_info::{HostInfoError, HostInfoProvider};
 use oxfunc_core::locale_format::LocaleFormatContext;
+use oxfunc_core::registry::builtin_registry;
 use oxfunc_core::value::{EvalValue, ExtendedValue, PresentationHint, WorksheetErrorCode};
 
 use crate::semantics::{LibraryContextSnapshot, LibraryContextSnapshotEntry};
@@ -468,6 +469,8 @@ pub struct ReturnedValueSurface {
     pub kind: ReturnedValueSurfaceKind,
     pub payload_summary: String,
     pub rich_value_type_name: Option<String>,
+    pub producer_capability_set_keys: Vec<String>,
+    pub exercised_capability_keys: Vec<String>,
     pub presentation_hint: Option<PresentationHint>,
     pub host_provider_outcome: Option<HostProviderOutcomeSurface>,
 }
@@ -479,6 +482,8 @@ impl ReturnedValueSurface {
                 kind: ReturnedValueSurfaceKind::OrdinaryValue,
                 payload_summary: eval_value_summary(core),
                 rich_value_type_name: None,
+                producer_capability_set_keys: Vec::new(),
+                exercised_capability_keys: Vec::new(),
                 presentation_hint: None,
                 host_provider_outcome: None,
             },
@@ -486,6 +491,10 @@ impl ReturnedValueSurface {
                 kind: ReturnedValueSurfaceKind::RichValue,
                 payload_summary: format!("RichValue({})", rich.value_type.type_name),
                 rich_value_type_name: Some(rich.value_type.type_name.clone()),
+                producer_capability_set_keys: rich_value_producer_capability_set_keys(
+                    &rich.value_type.type_name,
+                ),
+                exercised_capability_keys: Vec::new(),
                 presentation_hint: None,
                 host_provider_outcome: None,
             },
@@ -493,6 +502,8 @@ impl ReturnedValueSurface {
                 kind: ReturnedValueSurfaceKind::ValueWithPresentation,
                 payload_summary: eval_value_summary(value),
                 rich_value_type_name: None,
+                producer_capability_set_keys: Vec::new(),
+                exercised_capability_keys: Vec::new(),
                 presentation_hint: Some(*hint),
                 host_provider_outcome: None,
             },
@@ -500,10 +511,23 @@ impl ReturnedValueSurface {
                 kind: ReturnedValueSurfaceKind::OrdinaryValue,
                 payload_summary: format!("Error({code:?})"),
                 rich_value_type_name: None,
+                producer_capability_set_keys: Vec::new(),
+                exercised_capability_keys: Vec::new(),
                 presentation_hint: None,
                 host_provider_outcome: None,
             },
         }
+    }
+
+    pub fn from_extended_value_with_capability_keys(
+        value: &ExtendedValue,
+        producer_capability_set_keys: Vec<String>,
+        exercised_capability_keys: Vec<String>,
+    ) -> Self {
+        let mut surface = Self::from_extended_value(value);
+        surface.producer_capability_set_keys = producer_capability_set_keys;
+        surface.exercised_capability_keys = exercised_capability_keys;
+        surface
     }
 
     pub fn from_host_info_error(error: &HostInfoError) -> Self {
@@ -529,6 +553,8 @@ impl ReturnedValueSurface {
             kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
             payload_summary: format!("{outcome_kind:?}"),
             rich_value_type_name: None,
+            producer_capability_set_keys: Vec::new(),
+            exercised_capability_keys: Vec::new(),
             presentation_hint: None,
             host_provider_outcome: Some(HostProviderOutcomeSurface {
                 outcome_kind,
@@ -544,6 +570,8 @@ impl ReturnedValueSurface {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: eval_value_summary(value),
                 rich_value_type_name: None,
+                producer_capability_set_keys: Vec::new(),
+                exercised_capability_keys: Vec::new(),
                 presentation_hint: None,
                 host_provider_outcome: Some(HostProviderOutcomeSurface {
                     outcome_kind: HostProviderOutcomeKind::Value,
@@ -555,6 +583,8 @@ impl ReturnedValueSurface {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: "NoValueYet".to_string(),
                 rich_value_type_name: None,
+                producer_capability_set_keys: Vec::new(),
+                exercised_capability_keys: Vec::new(),
                 presentation_hint: None,
                 host_provider_outcome: Some(HostProviderOutcomeSurface {
                     outcome_kind: HostProviderOutcomeKind::NoValueYet,
@@ -566,6 +596,8 @@ impl ReturnedValueSurface {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: "CapabilityDenied".to_string(),
                 rich_value_type_name: None,
+                producer_capability_set_keys: Vec::new(),
+                exercised_capability_keys: Vec::new(),
                 presentation_hint: None,
                 host_provider_outcome: Some(HostProviderOutcomeSurface {
                     outcome_kind: HostProviderOutcomeKind::CapabilityDenied,
@@ -577,6 +609,8 @@ impl ReturnedValueSurface {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: "ConnectionFailed".to_string(),
                 rich_value_type_name: None,
+                producer_capability_set_keys: Vec::new(),
+                exercised_capability_keys: Vec::new(),
                 presentation_hint: None,
                 host_provider_outcome: Some(HostProviderOutcomeSurface {
                     outcome_kind: HostProviderOutcomeKind::ConnectionFailed,
@@ -588,6 +622,8 @@ impl ReturnedValueSurface {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: format!("ProviderError({code:?})"),
                 rich_value_type_name: None,
+                producer_capability_set_keys: Vec::new(),
+                exercised_capability_keys: Vec::new(),
                 presentation_hint: None,
                 host_provider_outcome: Some(HostProviderOutcomeSurface {
                     outcome_kind: HostProviderOutcomeKind::ProviderError,
@@ -604,6 +640,8 @@ impl ReturnedValueSurface {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: "NoValueYet".to_string(),
                 rich_value_type_name: None,
+                producer_capability_set_keys: Vec::new(),
+                exercised_capability_keys: Vec::new(),
                 presentation_hint: None,
                 host_provider_outcome: Some(HostProviderOutcomeSurface {
                     outcome_kind: HostProviderOutcomeKind::NoValueYet,
@@ -615,6 +653,8 @@ impl ReturnedValueSurface {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: "CapabilityDenied".to_string(),
                 rich_value_type_name: None,
+                producer_capability_set_keys: Vec::new(),
+                exercised_capability_keys: Vec::new(),
                 presentation_hint: None,
                 host_provider_outcome: Some(HostProviderOutcomeSurface {
                     outcome_kind: HostProviderOutcomeKind::CapabilityDenied,
@@ -626,6 +666,8 @@ impl ReturnedValueSurface {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: "ConnectionFailed".to_string(),
                 rich_value_type_name: None,
+                producer_capability_set_keys: Vec::new(),
+                exercised_capability_keys: Vec::new(),
                 presentation_hint: None,
                 host_provider_outcome: Some(HostProviderOutcomeSurface {
                     outcome_kind: HostProviderOutcomeKind::ConnectionFailed,
@@ -637,6 +679,8 @@ impl ReturnedValueSurface {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: format!("ProviderError({code:?})"),
                 rich_value_type_name: None,
+                producer_capability_set_keys: Vec::new(),
+                exercised_capability_keys: Vec::new(),
                 presentation_hint: None,
                 host_provider_outcome: Some(HostProviderOutcomeSurface {
                     outcome_kind: HostProviderOutcomeKind::ProviderError,
@@ -648,6 +692,8 @@ impl ReturnedValueSurface {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: eval_value_summary(value),
                 rich_value_type_name: None,
+                producer_capability_set_keys: Vec::new(),
+                exercised_capability_keys: Vec::new(),
                 presentation_hint: None,
                 host_provider_outcome: Some(HostProviderOutcomeSurface {
                     outcome_kind: HostProviderOutcomeKind::Value,
@@ -656,6 +702,16 @@ impl ReturnedValueSurface {
                 }),
             },
         }
+    }
+}
+
+fn rich_value_producer_capability_set_keys(type_name: &str) -> Vec<String> {
+    match type_name {
+        "_webimage" => builtin_registry()
+            .lookup_by_surface_name("IMAGE")
+            .map(|entry| entry.meta.producer_capability_set_keys.clone())
+            .unwrap_or_default(),
+        _ => Vec::new(),
     }
 }
 

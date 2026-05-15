@@ -27,7 +27,11 @@ use oxfml_core::semantics::{
 };
 use oxfml_core::source::FormulaSourceRecord;
 use oxfml_core::{FormulaChannelKind, TypedContextQueryBundle};
+use oxfunc_core::host_info::{
+    HostInfoError, HostInfoProvider, ImageProviderResult, ImageRequest, ResolvedWebImage,
+};
 use oxfunc_core::value::EvalValue;
+use oxfunc_core::value::ExcelText;
 use serde_json::Value;
 
 #[test]
@@ -1073,6 +1077,126 @@ fn replay_projection_service_projects_runtime_managed_session_results() {
 }
 
 #[test]
+fn replay_projection_carries_oxfunc_bridge_versions_from_runtime_artifacts() {
+    let runtime_result = RuntimeEnvironment::new()
+        .with_semantic_kernel_metadata_version("sem-kernel:replay:v1")
+        .with_arg_admission_metadata_version("arg-admission:replay:v1")
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new("replay:oxfunc-bridge", 1, "=SUM(1,2)"),
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("runtime execution should succeed");
+
+    let runtime_projection =
+        ReplayProjectionService::project(ReplayProjectionRequest::runtime_result(&runtime_result));
+    let runtime_identity = runtime_projection
+        .prepared_formula_identity
+        .as_ref()
+        .expect("runtime replay projection should carry prepared identity");
+    assert_eq!(
+        runtime_identity.semantic_kernel_metadata_version.as_deref(),
+        Some("sem-kernel:replay:v1")
+    );
+    assert_eq!(
+        runtime_projection
+            .semantic_kernel_metadata_version
+            .as_deref(),
+        Some("sem-kernel:replay:v1")
+    );
+    assert_eq!(
+        runtime_identity.arg_admission_metadata_version.as_deref(),
+        Some("arg-admission:replay:v1")
+    );
+    assert_eq!(
+        runtime_projection.arg_admission_metadata_version.as_deref(),
+        Some("arg-admission:replay:v1")
+    );
+
+    let environment = RuntimeEnvironment::new()
+        .with_semantic_kernel_metadata_version("sem-kernel:managed-replay:v1")
+        .with_arg_admission_metadata_version("arg-admission:managed-replay:v1");
+    let mut session = RuntimeSessionFacade::new(environment);
+    let request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new("replay:managed-oxfunc-bridge", 1, "=SUM(1,2)"),
+        TypedContextQueryBundle::default(),
+    );
+
+    let _open = session
+        .open_managed_session(&request)
+        .expect("managed open should succeed");
+    let execution = session
+        .execute_managed(request)
+        .expect("managed execution should succeed");
+    let execution_projection = ReplayProjectionService::project(
+        ReplayProjectionRequest::runtime_managed_execution(&execution),
+    );
+    let execution_identity = execution_projection
+        .prepared_formula_identity
+        .as_ref()
+        .expect("managed replay projection should carry prepared identity");
+    assert_eq!(
+        execution_identity
+            .semantic_kernel_metadata_version
+            .as_deref(),
+        Some("sem-kernel:managed-replay:v1")
+    );
+    assert_eq!(
+        execution_projection
+            .semantic_kernel_metadata_version
+            .as_deref(),
+        Some("sem-kernel:managed-replay:v1")
+    );
+    assert_eq!(
+        execution_identity.arg_admission_metadata_version.as_deref(),
+        Some("arg-admission:managed-replay:v1")
+    );
+    assert_eq!(
+        execution_projection
+            .arg_admission_metadata_version
+            .as_deref(),
+        Some("arg-admission:managed-replay:v1")
+    );
+}
+
+#[test]
+fn replay_projection_carries_image_producer_capability_columns() {
+    let runtime_result = RuntimeEnvironment::new()
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new(
+                "replay:image-capability-columns",
+                1,
+                "=IMAGE(\"https://example.com/sphere.png\",\"Sphere\")",
+            ),
+            TypedContextQueryBundle::new(
+                Some(&ReplayImageHostInfoProvider),
+                None,
+                None,
+                None,
+                None,
+            ),
+        ))
+        .expect("IMAGE runtime execution should succeed");
+
+    let projection =
+        ReplayProjectionService::project(ReplayProjectionRequest::runtime_result(&runtime_result));
+
+    assert!(
+        projection
+            .producer_capability_set_keys
+            .iter()
+            .any(|key| key.starts_with("Materialisable(")),
+        "runtime replay projection should expose IMAGE/_webimage producer capability keys"
+    );
+    assert!(
+        projection
+            .exercised_capability_keys
+            .iter()
+            .any(|key| key.starts_with("Materialisable(")),
+        "runtime replay projection should expose successful IMAGE/_webimage exercised capability keys"
+    );
+}
+
+#[test]
 fn replay_projection_service_projects_runtime_managed_termination_results() {
     let environment = RuntimeEnvironment::new();
     let mut session = RuntimeSessionFacade::new(environment);
@@ -1230,5 +1354,20 @@ fn editor_snapshot() -> LibraryContextSnapshot {
             runtime_capability_state: Some(LibraryAvailabilityState::CatalogKnown),
             post_dispatch_state: None,
         }],
+    }
+}
+
+struct ReplayImageHostInfoProvider;
+
+impl HostInfoProvider for ReplayImageHostInfoProvider {
+    fn query_image(&self, request: &ImageRequest) -> Result<ImageProviderResult, HostInfoError> {
+        assert_eq!(
+            request.source.to_string_lossy(),
+            "https://example.com/sphere.png"
+        );
+        Ok(ImageProviderResult::Image(ResolvedWebImage {
+            web_image_identifier: "img-1".to_string(),
+            published_fallback: ExcelText::from_interop_assignment("-2146826273"),
+        }))
     }
 }

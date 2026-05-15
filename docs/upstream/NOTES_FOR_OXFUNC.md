@@ -806,3 +806,36 @@ Current reply direction from OxFml:
 1. OxFml now reads `docs/handoffs/HANDOFF_SHARED_INTERFACE_FREEZE_PROMOTION_TO_OXFML_V1.md` as acceptable current shared freeze wording for the narrowed seam families
 2. the mirrored packet at `docs/spec/formula-language/OXFML_OXFUNC_SHARED_INTERFACE_FREEZE_CANDIDATE_V1.md` plus `HO-FN-004` is now the shared freeze floor OxFml wants used for owner-packet promotion and propagation
 3. later widening should now be mismatch-driven rather than another broad seam re-derivation
+
+## 13. W050 Metadata Bridge Consumption
+
+Current OxFml follow-up after OxFunc registry metadata progress:
+1. OxFml now consumes OxFunc registry `semantic_kernel_metadata_version` and
+   `arg_admission_metadata_version` as default runtime prepared-identity bridge
+   values when a caller does not provide explicit override metadata.
+2. Those version values participate in `prepared_formula_key` identity, so
+   registry metadata changes can invalidate prepared-package identity without
+   claiming OxFunc selector enforcement.
+3. OxFml carries `IMAGE` / `_webimage` `producer_capability_set_keys` on
+   `ReturnedValueSurface` for the rich-value carrier.
+4. OxFml now consumes OxFunc
+   `eval_image_surface_extended_with_capabilities(...)` for top-level
+   `IMAGE`, so successful `_webimage` runs populate `exercised_capability_keys`
+   from OxFunc's adjacent runtime facts.
+5. OxFml now projects these fields as first-class replay columns:
+   - `semantic_kernel_metadata_version`
+   - `arg_admission_metadata_version`
+   - `producer_capability_set_keys`
+   - `exercised_capability_keys`
+
+Current non-claims:
+1. OxFml is not claiming numerical reduction selector enforcement.
+2. OxFml is not claiming error algebra enforcement.
+3. OxFml is not claiming `RichArgAccepted` runtime admission or generic
+   rich/sparse producer protocol activation.
+4. OxFml is not claiming sparse range reader support.
+
+Validation:
+1. `cargo test -p oxfml_core oxfunc_bridge`
+2. `cargo test -p oxfml_core adapter_preserves_image_rich_value_surface`
+3. `cargo test -p oxfml_core replay_projection_carries_image_producer_capability_columns`

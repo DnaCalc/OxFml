@@ -344,6 +344,22 @@ fn adapter_preserves_image_rich_value_surface() {
             .as_deref(),
         Some("_webimage")
     );
+    assert!(
+        run.evaluation_artifact
+            .returned_value_surface
+            .producer_capability_set_keys
+            .iter()
+            .any(|key| key.starts_with("Materialisable(")),
+        "IMAGE/_webimage should carry OxFunc registry producer capability metadata"
+    );
+    assert!(
+        run.evaluation_artifact
+            .returned_value_surface
+            .exercised_capability_keys
+            .iter()
+            .any(|key| key.starts_with("Materialisable(")),
+        "successful IMAGE/_webimage should carry OxFunc per-run exercised capability metadata"
+    );
 }
 
 #[test]

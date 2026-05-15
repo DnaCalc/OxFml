@@ -1,7 +1,9 @@
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
+use oxfunc_core::registry::builtin_registry;
 use oxfunc_core::value::EvalValue;
 
 use crate::binding::{
@@ -48,10 +50,12 @@ pub struct RuntimeEnvironment<'a> {
     primary_locus: Locus,
     defined_names: BTreeMap<String, DefinedNameBinding>,
     cell_values: BTreeMap<String, EvalValue>,
+    formal_input_bindings: Vec<RuntimeFormalInputBinding>,
     table_catalog: Vec<TableDescriptor>,
     enclosing_table_ref: Option<TableRef>,
     caller_table_region: Option<TableCallerRegion>,
     library_context: ConsumerLibraryContextState<'a>,
+    oxfunc_bridge_metadata: RuntimeOxFuncBridgeMetadata,
 }
 
 impl<'a> RuntimeEnvironment<'a> {
@@ -67,10 +71,12 @@ impl<'a> RuntimeEnvironment<'a> {
             },
             defined_names: BTreeMap::new(),
             cell_values: BTreeMap::new(),
+            formal_input_bindings: Vec::new(),
             table_catalog: Vec::new(),
             enclosing_table_ref: None,
             caller_table_region: None,
             library_context: ConsumerLibraryContextState::new(),
+            oxfunc_bridge_metadata: RuntimeOxFuncBridgeMetadata::default(),
         }
     }
 
@@ -123,6 +129,14 @@ impl<'a> RuntimeEnvironment<'a> {
 
     pub fn with_cell_values(mut self, cell_values: BTreeMap<String, EvalValue>) -> Self {
         self.cell_values = cell_values;
+        self
+    }
+
+    pub fn with_formal_input_bindings(
+        mut self,
+        formal_input_bindings: Vec<RuntimeFormalInputBinding>,
+    ) -> Self {
+        self.formal_input_bindings = formal_input_bindings;
         self
     }
 
@@ -184,6 +198,21 @@ impl<'a> RuntimeEnvironment<'a> {
         self
     }
 
+    pub fn with_oxfunc_bridge_metadata(mut self, metadata: RuntimeOxFuncBridgeMetadata) -> Self {
+        self.oxfunc_bridge_metadata = metadata;
+        self
+    }
+
+    pub fn with_semantic_kernel_metadata_version(mut self, version: impl Into<String>) -> Self {
+        self.oxfunc_bridge_metadata.semantic_kernel_metadata_version = Some(version.into());
+        self
+    }
+
+    pub fn with_arg_admission_metadata_version(mut self, version: impl Into<String>) -> Self {
+        self.oxfunc_bridge_metadata.arg_admission_metadata_version = Some(version.into());
+        self
+    }
+
     fn execute_with_host<'q>(
         &self,
         host: &mut SingleFormulaHost,
@@ -195,6 +224,7 @@ impl<'a> RuntimeEnvironment<'a> {
             &compiled.prepare_request.bound_formula,
             &compiled.prepare_request.semantic_plan,
             &self.primary_locus,
+            &self.oxfunc_bridge_metadata,
         );
         if compiled
             .prepare_request
@@ -209,6 +239,11 @@ impl<'a> RuntimeEnvironment<'a> {
             );
         }
         self.apply_to_host(host, request.source());
+        apply_formal_input_bindings_to_host(
+            host,
+            &self.formal_input_bindings,
+            &prepared_formula_identity,
+        )?;
         host.set_trace_mode(request.trace_mode());
         let output = host.recalc_with_library_context_view(
             request.backend(),
@@ -243,6 +278,60 @@ impl<'a> RuntimeEnvironment<'a> {
         host.enclosing_table_ref = self.enclosing_table_ref.clone();
         host.caller_table_region = self.caller_table_region.clone();
     }
+}
+
+fn formal_input_defined_names(
+    formal_input_bindings: &[RuntimeFormalInputBinding],
+) -> BTreeMap<String, DefinedNameBinding> {
+    formal_input_bindings
+        .iter()
+        .map(|binding| {
+            (
+                formal_input_binding_name(&binding.reference_descriptor),
+                binding.binding.clone(),
+            )
+        })
+        .collect()
+}
+
+fn formal_input_binding_name(reference_descriptor: &str) -> String {
+    reference_descriptor
+        .strip_prefix("name:")
+        .unwrap_or(reference_descriptor)
+        .to_string()
+}
+
+fn apply_formal_input_bindings_to_host(
+    host: &mut SingleFormulaHost,
+    formal_input_bindings: &[RuntimeFormalInputBinding],
+    prepared_formula_identity: &RuntimePreparedFormulaIdentity,
+) -> Result<(), String> {
+    let formal_references_by_handle = prepared_formula_identity
+        .formal_references
+        .iter()
+        .map(|reference| (reference.reference_handle.as_str(), reference))
+        .collect::<BTreeMap<_, _>>();
+
+    for binding in formal_input_bindings {
+        if let Some(reference_handle) = &binding.reference_handle {
+            let formal_reference = formal_references_by_handle
+                .get(reference_handle.as_str())
+                .ok_or_else(|| {
+                    format!("formal input binding references unknown handle {reference_handle}")
+                })?;
+            if formal_reference.reference_descriptor != binding.reference_descriptor {
+                return Err(format!(
+                    "formal input binding descriptor mismatch for {reference_handle}: expected {}, got {}",
+                    formal_reference.reference_descriptor, binding.reference_descriptor
+                ));
+            }
+        }
+        host.defined_names.insert(
+            formal_input_binding_name(&binding.reference_descriptor),
+            binding.binding.clone(),
+        );
+    }
+    Ok(())
 }
 
 impl Default for RuntimeEnvironment<'_> {
@@ -337,6 +426,10 @@ pub struct RuntimeFormulaResult {
 }
 
 impl RuntimeFormulaResult {
+    pub fn prepared_formula_package(&self) -> RuntimePreparedFormulaPackage {
+        self.prepared_formula_identity.prepared_formula_package()
+    }
+
     fn from_host_output(
         host_output: HostRecalcOutput,
         mut prepared_formula_identity: RuntimePreparedFormulaIdentity,
@@ -382,10 +475,41 @@ pub struct RuntimePreparedFormulaIdentity {
     pub library_context_snapshot_ref: Option<LibraryContextSnapshotRef>,
     pub structure_context_version: String,
     pub caller_context_key: Option<String>,
+    pub semantic_kernel_metadata_version: Option<String>,
+    pub arg_admission_metadata_version: Option<String>,
     pub plan_template: RuntimePlanTemplateIdentity,
     pub hole_binding: RuntimeHoleBindingIdentity,
     pub formal_references: Vec<RuntimeFormalReference>,
     pub projection_status: String,
+}
+
+impl RuntimePreparedFormulaIdentity {
+    pub fn prepared_formula_package(&self) -> RuntimePreparedFormulaPackage {
+        RuntimePreparedFormulaPackage {
+            package_key: self.prepared_formula_key.clone(),
+            identity: self.clone(),
+            plan_template: self.plan_template.clone(),
+            hole_binding: self.hole_binding.clone(),
+            formal_references: self.formal_references.clone(),
+            projection_status: "current_floor:runtime_identity_package".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimePreparedFormulaPackage {
+    pub package_key: String,
+    pub identity: RuntimePreparedFormulaIdentity,
+    pub plan_template: RuntimePlanTemplateIdentity,
+    pub hole_binding: RuntimeHoleBindingIdentity,
+    pub formal_references: Vec<RuntimeFormalReference>,
+    pub projection_status: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RuntimeOxFuncBridgeMetadata {
+    pub semantic_kernel_metadata_version: Option<String>,
+    pub arg_admission_metadata_version: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -422,6 +546,13 @@ pub struct RuntimeFormalReference {
     pub caller_context_dependent: bool,
     pub host_mappable_identity: Option<String>,
     pub linked_hole_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RuntimeFormalInputBinding {
+    pub reference_handle: Option<String>,
+    pub reference_descriptor: String,
+    pub binding: DefinedNameBinding,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -564,6 +695,7 @@ impl<'a> RuntimeSessionFacade<'a> {
             &prepared.prepare_request.bound_formula,
             &prepared.prepare_request.semantic_plan,
             &self.environment.primary_locus,
+            &self.environment.oxfunc_bridge_metadata,
         );
         let prepared_session = self.managed_service.prepare(prepared.prepare_request)?;
         let open = self.managed_service.open_session(prepared_session);
@@ -595,13 +727,43 @@ impl<'a> RuntimeSessionFacade<'a> {
             RuntimeManagedSessionError::Preparation("managed session not open".to_string())
         })?;
         self.ensure_managed_capability_view_for(&session_id, &request)?;
+        let snapshot_before_execute = self.managed_session_snapshot().ok_or_else(|| {
+            RuntimeManagedSessionError::Preparation(
+                "managed session missing before execute".to_string(),
+            )
+        })?;
+        let mut defined_names = self.environment.defined_names.clone();
+        for binding in &self.environment.formal_input_bindings {
+            if let Some(reference_handle) = &binding.reference_handle {
+                let formal_reference = snapshot_before_execute
+                    .prepared_formula_identity
+                    .formal_references
+                    .iter()
+                    .find(|reference| reference.reference_handle == *reference_handle)
+                    .ok_or_else(|| {
+                        RuntimeManagedSessionError::Preparation(format!(
+                            "formal input binding references unknown handle {reference_handle}"
+                        ))
+                    })?;
+                if formal_reference.reference_descriptor != binding.reference_descriptor {
+                    return Err(RuntimeManagedSessionError::Preparation(format!(
+                        "formal input binding descriptor mismatch for {reference_handle}: expected {}, got {}",
+                        formal_reference.reference_descriptor, binding.reference_descriptor
+                    )));
+                }
+            }
+            defined_names.insert(
+                formal_input_binding_name(&binding.reference_descriptor),
+                binding.binding.clone(),
+            );
+        }
         let candidate_result = self.managed_service.execute(ExecuteRequest {
             session_id: session_id.clone(),
             backend: request.backend(),
             caller_row: self.environment.caller_row as usize,
             caller_col: self.environment.caller_col as usize,
             cell_values: self.environment.cell_values.clone(),
-            defined_names: self.environment.defined_names.clone(),
+            defined_names,
             typed_query_bundle: *request.typed_query_bundle(),
         })?;
         let snapshot = self.managed_session_snapshot().ok_or_else(|| {
@@ -707,7 +869,10 @@ impl<'a> RuntimeSessionFacade<'a> {
     pub fn managed_session_snapshot(&self) -> Option<RuntimeManagedSessionSnapshot> {
         let session_id = self.managed_session_id.as_ref()?;
         let record = self.managed_service.session(session_id)?;
-        Some(runtime_managed_session_snapshot(record))
+        Some(runtime_managed_session_snapshot(
+            record,
+            &self.environment.oxfunc_bridge_metadata,
+        ))
     }
 
     pub fn managed_session_diagnostics(&self) -> Option<RuntimeManagedSessionDiagnostics> {
@@ -772,8 +937,11 @@ fn runtime_prepared_formula_identity(
     bound_formula: &BoundFormula,
     semantic_plan: &SemanticPlan,
     primary_locus: &Locus,
+    oxfunc_bridge_metadata: &RuntimeOxFuncBridgeMetadata,
 ) -> RuntimePreparedFormulaIdentity {
     let formula_token = source.formula_token().0;
+    let oxfunc_bridge_metadata =
+        runtime_oxfunc_bridge_metadata_for_plan(semantic_plan, oxfunc_bridge_metadata);
     let caller_context_key = Some(format!(
         "locus:{}:{}:{}",
         primary_locus.sheet_id, primary_locus.row, primary_locus.col
@@ -800,6 +968,8 @@ fn runtime_prepared_formula_identity(
         &semantic_plan.library_context_snapshot_ref,
         &bound_formula.structure_context_version,
         &caller_context_key,
+        &oxfunc_bridge_metadata.semantic_kernel_metadata_version,
+        &oxfunc_bridge_metadata.arg_admission_metadata_version,
     ));
 
     RuntimePreparedFormulaIdentity {
@@ -810,14 +980,19 @@ fn runtime_prepared_formula_identity(
         library_context_snapshot_ref: semantic_plan.library_context_snapshot_ref.clone(),
         structure_context_version: bound_formula.structure_context_version.clone(),
         caller_context_key,
+        semantic_kernel_metadata_version: oxfunc_bridge_metadata
+            .semantic_kernel_metadata_version
+            .clone(),
+        arg_admission_metadata_version: oxfunc_bridge_metadata
+            .arg_admission_metadata_version
+            .clone(),
         plan_template: RuntimePlanTemplateIdentity {
             shape_key: None,
             dispatch_skeleton_key,
             plan_template_key,
             folded_plan_key: None,
-            template_holes: Vec::new(),
-            projection_status: "current_floor:template_key_only;shape_and_hole_skeleton_deferred"
-                .to_string(),
+            template_holes: runtime_template_holes(bound_formula),
+            projection_status: "current_floor:template_key_and_reference_holes".to_string(),
         },
         hole_binding: RuntimeHoleBindingIdentity {
             hole_binding_fingerprint,
@@ -829,6 +1004,61 @@ fn runtime_prepared_formula_identity(
         },
         formal_references: runtime_formal_references(bound_formula),
         projection_status: "current_floor:derived_from_public_runtime_prepare".to_string(),
+    }
+}
+
+fn runtime_oxfunc_bridge_metadata_for_plan(
+    semantic_plan: &SemanticPlan,
+    override_metadata: &RuntimeOxFuncBridgeMetadata,
+) -> RuntimeOxFuncBridgeMetadata {
+    RuntimeOxFuncBridgeMetadata {
+        semantic_kernel_metadata_version: override_metadata
+            .semantic_kernel_metadata_version
+            .clone()
+            .or_else(|| {
+                runtime_metadata_version_summary(
+                    semantic_plan
+                        .function_bindings
+                        .iter()
+                        .filter_map(|binding| {
+                            builtin_registry()
+                                .lookup_by_id(binding.function_id)
+                                .map(|entry| entry.meta.semantic_kernel_metadata_version.clone())
+                        }),
+                    "semantic_kernel_metadata",
+                )
+            }),
+        arg_admission_metadata_version: override_metadata
+            .arg_admission_metadata_version
+            .clone()
+            .or_else(|| {
+                runtime_metadata_version_summary(
+                    semantic_plan
+                        .function_bindings
+                        .iter()
+                        .filter_map(|binding| {
+                            builtin_registry()
+                                .lookup_by_id(binding.function_id)
+                                .map(|entry| entry.meta.arg_admission_metadata_version.clone())
+                        }),
+                    "arg_admission_metadata",
+                )
+            }),
+    }
+}
+
+fn runtime_metadata_version_summary(
+    versions: impl IntoIterator<Item = String>,
+    version_family: &str,
+) -> Option<String> {
+    let versions = versions.into_iter().collect::<BTreeSet<_>>();
+    match versions.len() {
+        0 => None,
+        1 => versions.into_iter().next(),
+        _ => Some(format!(
+            "{version_family}.set.v1;{}",
+            versions.into_iter().collect::<Vec<_>>().join("|")
+        )),
     }
 }
 
@@ -853,6 +1083,8 @@ fn refresh_runtime_prepared_formula_identity_for_plan(
         &semantic_plan.library_context_snapshot_ref,
         &identity.structure_context_version,
         &identity.caller_context_key,
+        &identity.semantic_kernel_metadata_version,
+        &identity.arg_admission_metadata_version,
     ));
 }
 
@@ -870,7 +1102,7 @@ fn runtime_formal_references(bound_formula: &BoundFormula) -> Vec<RuntimeFormalR
             reference_family: runtime_reference_family(reference).to_string(),
             caller_context_dependent: runtime_reference_caller_context_dependent(reference),
             host_mappable_identity: Some(reference.to_string()),
-            linked_hole_id: None,
+            linked_hole_id: Some(runtime_reference_hole_id(index)),
         })
         .collect::<Vec<_>>();
     references.extend(bound_formula.unresolved_references.iter().enumerate().map(
@@ -887,10 +1119,60 @@ fn runtime_formal_references(bound_formula: &BoundFormula) -> Vec<RuntimeFormalR
             reference_family: "unresolved".to_string(),
             caller_context_dependent: false,
             host_mappable_identity: None,
-            linked_hole_id: None,
+            linked_hole_id: Some(runtime_unresolved_hole_id(index)),
         },
     ));
     references
+}
+
+fn runtime_template_holes(bound_formula: &BoundFormula) -> Vec<RuntimeTemplateHole> {
+    let mut holes = bound_formula
+        .normalized_references
+        .iter()
+        .enumerate()
+        .map(|(index, reference)| {
+            let hole_kind = runtime_template_hole_kind(reference).to_string();
+            RuntimeTemplateHole {
+                hole_id: runtime_reference_hole_id(index),
+                ordinal: index,
+                path: Some(reference.to_string()),
+                hole_kind_key: format!("{hole_kind}:{}", runtime_reference_family(reference)),
+                hole_kind,
+            }
+        })
+        .collect::<Vec<_>>();
+    let offset = holes.len();
+    holes.extend(bound_formula.unresolved_references.iter().enumerate().map(
+        |(index, unresolved)| RuntimeTemplateHole {
+            hole_id: runtime_unresolved_hole_id(index),
+            ordinal: offset + index,
+            path: Some(unresolved.source_text.clone()),
+            hole_kind: "UnresolvedReferenceHole".to_string(),
+            hole_kind_key: format!("UnresolvedReferenceHole:{}", unresolved.reason),
+        },
+    ));
+    holes
+}
+
+fn runtime_reference_hole_id(index: usize) -> String {
+    format!("hole:reference:{index}")
+}
+
+fn runtime_unresolved_hole_id(index: usize) -> String {
+    format!("hole:unresolved:{index}")
+}
+
+fn runtime_template_hole_kind(reference: &NormalizedReference) -> &'static str {
+    match reference {
+        NormalizedReference::WholeRow(_)
+        | NormalizedReference::WholeColumn(_)
+        | NormalizedReference::Structured(_) => "ShapeSensitiveHole",
+        NormalizedReference::External(_) => "RichValueHole",
+        NormalizedReference::Error(_) => "UnresolvedReferenceHole",
+        NormalizedReference::Cell(_)
+        | NormalizedReference::Area(_)
+        | NormalizedReference::Name(_) => "RefOrValueHole",
+    }
 }
 
 fn runtime_reference_family(reference: &NormalizedReference) -> &'static str {
@@ -950,6 +1232,10 @@ fn compile_runtime_prepare_request(
     });
     let syntax_diagnostics = parse.green_tree.diagnostics.clone();
     let red_projection = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
+    let mut bind_names = environment.defined_names.clone();
+    bind_names.extend(formal_input_defined_names(
+        &environment.formal_input_bindings,
+    ));
     let bind = bind_formula(crate::binding::BindRequest {
         source: source.clone(),
         green_tree: parse.green_tree,
@@ -959,8 +1245,7 @@ fn compile_runtime_prepare_request(
             caller_row: environment.caller_row,
             caller_col: environment.caller_col,
             formula_token: source.formula_token(),
-            names: environment
-                .defined_names
+            names: bind_names
                 .iter()
                 .map(|(name, binding)| {
                     (
@@ -1036,7 +1321,10 @@ fn runtime_capability_view_spec(request: &RuntimeFormulaRequest<'_>) -> Capabili
     }
 }
 
-fn runtime_managed_session_snapshot(record: &SessionRecord) -> RuntimeManagedSessionSnapshot {
+fn runtime_managed_session_snapshot(
+    record: &SessionRecord,
+    oxfunc_bridge_metadata: &RuntimeOxFuncBridgeMetadata,
+) -> RuntimeManagedSessionSnapshot {
     let phase = runtime_managed_phase(record.phase.clone());
     let last_reject = record.last_reject.clone();
     RuntimeManagedSessionSnapshot {
@@ -1060,6 +1348,7 @@ fn runtime_managed_session_snapshot(record: &SessionRecord) -> RuntimeManagedSes
             &record.prepared.bound_formula,
             &record.prepared.semantic_plan,
             &record.prepared.primary_locus,
+            oxfunc_bridge_metadata,
         ),
     }
 }

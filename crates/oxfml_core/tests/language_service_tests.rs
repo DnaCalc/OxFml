@@ -20,8 +20,9 @@ use oxfunc_core::function::{
     HostInteractionClass, KernelSignatureClass, ThreadSafetyClass, VolatilityClass,
 };
 use oxfunc_core::registry::{
-    CapabilityOverlay, FunctionEntry, FunctionRegistryMetadata, FunctionSource,
-    ParameterDescriptor, RegistryFunctionMeta, SignatureForm, builtin_registry,
+    ArgAdmissionMetadata, CapabilityOverlay, FunctionEntry, FunctionRegistryMetadata,
+    FunctionSource, ParameterDescriptor, RegistryFunctionMeta, SemanticKernelMetadata,
+    SignatureForm, builtin_registry,
 };
 
 #[test]
@@ -1187,6 +1188,22 @@ fn test_udf_entry() -> FunctionEntry {
             kernel_signature_class: KernelSignatureClass::Custom,
             fec_dependency_profile: FecDependencyProfile::None,
             surface_fec_dependency_profile: FecDependencyProfile::None,
+            semantic_kernel_metadata: SemanticKernelMetadata {
+                reduction_sensitive: false,
+                error_collapse_sensitive: false,
+                numerical_reduction_policy: None,
+                error_algebra: None,
+            },
+            semantic_kernel_metadata_version:
+                "semantic_kernel_metadata.v1;reduction_sensitive=false;error_collapse_sensitive=false;numerical_reduction_policy=none;error_algebra=none"
+                    .to_string(),
+            arg_admission_metadata: ArgAdmissionMetadata::ExistingArgPreparation {
+                profile: ArgPreparationProfile::ValuesOnlyPreAdapter,
+            },
+            arg_admission_metadata_version:
+                "arg_admission_metadata.v1;existing_arg_preparation=values_only_pre_adapter"
+                    .to_string(),
+            producer_capability_set_keys: Vec::new(),
         },
         surface_name: "MYFUNC".to_string(),
         display_signature: SignatureForm {
