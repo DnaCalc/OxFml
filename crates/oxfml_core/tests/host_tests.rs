@@ -11,13 +11,14 @@ use oxfunc_core::value::{
 };
 use serde::Deserialize;
 
+use oxfml_core::consumer::runtime::SingleFormulaHost;
 use oxfml_core::format::{oxfml_current_excel_host_locale_context, oxfml_en_us_locale_context};
 use oxfml_core::seam::{AcceptDecision, TraceEventKind};
 use oxfml_core::semantics::{
     LibraryAvailabilityState, LibraryContextSnapshot, LibraryContextSnapshotEntry,
     RegistrationSourceKind,
 };
-use oxfml_core::test_support::host::{EmpiricalOracleScenario, SingleFormulaHost};
+use oxfml_core::test_support::host::EmpiricalOracleScenario;
 use oxfml_core::{
     EvaluationBackend, FenceSnapshot, InMemoryLibraryContextProvider, LibraryContextSnapshotRef,
     ReturnedValueSurfaceKind,

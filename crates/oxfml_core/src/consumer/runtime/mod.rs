@@ -13,9 +13,8 @@ use crate::consumer::ConsumerLibraryContextState;
 use crate::eval::{
     DefinedNameBinding, EvaluationBackend, EvaluationOutput, EvaluationTraceMode, PreparedCall,
 };
-use crate::host::{
-    ArtifactReuseReport, FirstHostReplayCapturePacket, HostRecalcOutput, SingleFormulaHost,
-};
+use crate::host::{ArtifactReuseReport, FirstHostReplayCapturePacket};
+pub use crate::host::{HostRecalcOutput, SingleFormulaHost};
 use crate::interface::{
     LibraryContextProvider, LibraryContextSnapshotRef, RegisteredExternalCatalogController,
     RegisteredExternalCatalogMutationRequest, RegisteredExternalCatalogMutationResult,
