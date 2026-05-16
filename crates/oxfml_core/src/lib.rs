@@ -55,6 +55,7 @@ pub use eval::{
     PreparedResultClass, PreparedSourceClass, PreparedStructureClass, evaluate_formula,
 };
 pub use interface::{
+    HostFunctionInvocation, HostFunctionProvider, HostFunctionProviderError,
     HostProviderOutcomeKind, HostProviderOutcomeSurface, InMemoryLibraryContextProvider,
     LibraryContextFieldClass, LibraryContextProvider, LibraryContextSnapshotRef,
     PinnedLibraryContextView, RegisteredExternalCatalogController,

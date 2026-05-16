@@ -486,6 +486,15 @@ impl SemanticCompiler {
             .push(availability_summary.clone());
 
         let Some(meta) = meta else {
+            if availability_summary_describes_host_callback(&availability_summary) {
+                self.execution_profile.requires_host_interaction = true;
+                self.execution_profile.requires_serial_scheduler_lane = true;
+                self.execution_profile.requires_thread_affinity = true;
+                self.execution_profile.single_flight_advisable = true;
+                self.execution_profile.requires_async_coupling = true;
+                self.push_capability_requirement("host_function_provider");
+                return;
+            }
             if availability_summary.parse_bind_state != LibraryAvailabilityState::UnknownSurface {
                 self.diagnostics.push(SemanticDiagnostic {
                     message: format!(
@@ -882,6 +891,19 @@ impl SemanticCompiler {
             self.capability_requirements.push(requirement.to_string());
         }
     }
+}
+
+fn availability_summary_describes_host_callback(summary: &FunctionAvailabilitySummary) -> bool {
+    summary.parse_bind_state == LibraryAvailabilityState::CatalogKnown
+        && summary.semantic_plan_state == LibraryAvailabilityState::CatalogKnown
+        && matches!(
+            summary.registration_source_kind,
+            Some(RegistrationSourceKind::Vba | RegistrationSourceKind::UserDefined)
+        )
+        && matches!(
+            summary.runtime_boundary_kind.as_deref(),
+            Some("host_callback" | "vba_host_callback")
+        )
 }
 
 fn registry_field_or_function_id(

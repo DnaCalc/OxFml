@@ -1015,6 +1015,7 @@ fn effective_query_bundle<'a>(
         host_info: query_bundle.host_info,
         rtd_provider: query_bundle.rtd_provider,
         registered_external_provider: query_bundle.registered_external_provider,
+        host_function_provider: query_bundle.host_function_provider,
         locale_ctx: query_bundle.locale_ctx,
         now_serial: query_bundle.now_serial.or(host.now_serial),
         random_value: query_bundle.random_value.or(host.random_value),

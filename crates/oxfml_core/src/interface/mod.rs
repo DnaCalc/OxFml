@@ -26,6 +26,7 @@ pub enum TypedContextQueryFamily {
     Translate,
     Rtd,
     RegisteredExternal,
+    HostFunction,
     NowSerial,
     RandomValue,
     LocaleFormatContext,
@@ -80,6 +81,7 @@ pub struct TypedContextQueryBundle<'a> {
     pub host_info: Option<&'a dyn HostInfoProvider>,
     pub rtd_provider: Option<&'a dyn RtdProvider>,
     pub registered_external_provider: Option<&'a dyn RegisteredExternalProvider>,
+    pub host_function_provider: Option<&'a dyn HostFunctionProvider>,
     pub locale_ctx: Option<&'a LocaleFormatContext<'a>>,
     pub now_serial: Option<f64>,
     pub random_value: Option<f64>,
@@ -94,6 +96,10 @@ impl std::fmt::Debug for TypedContextQueryBundle<'_> {
                 "registered_external_provider_enabled",
                 &self.registered_external_provider.is_some(),
             )
+            .field(
+                "host_function_provider_enabled",
+                &self.host_function_provider.is_some(),
+            )
             .field("locale_ctx_enabled", &self.locale_ctx.is_some())
             .field("now_serial_enabled", &self.now_serial.is_some())
             .field("random_value_enabled", &self.random_value.is_some())
@@ -107,6 +113,7 @@ impl<'a> Default for TypedContextQueryBundle<'a> {
             host_info: None,
             rtd_provider: None,
             registered_external_provider: None,
+            host_function_provider: None,
             locale_ctx: None,
             now_serial: None,
             random_value: None,
@@ -126,6 +133,7 @@ impl<'a> TypedContextQueryBundle<'a> {
             host_info,
             rtd_provider,
             registered_external_provider: None,
+            host_function_provider: None,
             locale_ctx,
             now_serial,
             random_value,
@@ -137,6 +145,14 @@ impl<'a> TypedContextQueryBundle<'a> {
         registered_external_provider: Option<&'a dyn RegisteredExternalProvider>,
     ) -> Self {
         self.registered_external_provider = registered_external_provider;
+        self
+    }
+
+    pub fn with_host_function_provider(
+        mut self,
+        host_function_provider: Option<&'a dyn HostFunctionProvider>,
+    ) -> Self {
+        self.host_function_provider = host_function_provider;
         self
     }
 
@@ -161,6 +177,9 @@ impl<'a> TypedContextQueryBundle<'a> {
         if self.registered_external_provider.is_some() {
             families.insert(TypedContextQueryFamily::RegisteredExternal);
         }
+        if self.host_function_provider.is_some() {
+            families.insert(TypedContextQueryFamily::HostFunction);
+        }
         if self.now_serial.is_some() {
             families.insert(TypedContextQueryFamily::NowSerial);
         }
@@ -175,6 +194,32 @@ impl<'a> TypedContextQueryBundle<'a> {
             families: families.into_iter().collect(),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct HostFunctionInvocation {
+    pub function_name: String,
+    pub args: Vec<EvalValue>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostFunctionProviderError {
+    pub message: String,
+}
+
+impl HostFunctionProviderError {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
+pub trait HostFunctionProvider {
+    fn invoke_host_function(
+        &self,
+        invocation: &HostFunctionInvocation,
+    ) -> Result<EvalValue, HostFunctionProviderError>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

@@ -48,7 +48,9 @@ use crate::binding::{
     AreaRef, BinaryOp, BoundExpr, BoundFormula, CellRef, ErrorRef, NameKind, NameRef,
     NormalizedReference, ReferenceExpr, StructuredResolvedRef,
 };
-use crate::interface::{ReturnedValueSurface, TypedContextQueryBundle};
+use crate::interface::{
+    HostFunctionInvocation, HostFunctionProvider, ReturnedValueSurface, TypedContextQueryBundle,
+};
 use crate::semantics::SemanticPlan;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1399,6 +1401,7 @@ pub struct EvaluationContext<'a> {
     pub host_info: Option<&'a dyn HostInfoProvider>,
     pub rtd_provider: Option<&'a dyn RtdProvider>,
     pub registered_external_provider: Option<&'a dyn RegisteredExternalProvider>,
+    pub host_function_provider: Option<&'a dyn HostFunctionProvider>,
     pub now_serial: Option<f64>,
     pub random_value: Option<f64>,
     pub trace_mode: EvaluationTraceMode,
@@ -1420,6 +1423,7 @@ impl<'a> EvaluationContext<'a> {
             host_info: None,
             rtd_provider: None,
             registered_external_provider: None,
+            host_function_provider: None,
             now_serial: None,
             random_value: None,
             trace_mode: EvaluationTraceMode::default(),
@@ -1436,12 +1440,14 @@ impl<'a> EvaluationContext<'a> {
             self.random_value,
         )
         .with_registered_external_provider(self.registered_external_provider)
+        .with_host_function_provider(self.host_function_provider)
     }
 
     pub fn apply_typed_context_query_bundle(&mut self, bundle: TypedContextQueryBundle<'a>) {
         self.host_info = bundle.host_info;
         self.rtd_provider = bundle.rtd_provider;
         self.registered_external_provider = bundle.registered_external_provider;
+        self.host_function_provider = bundle.host_function_provider;
         self.locale_ctx = bundle.locale_ctx;
         self.now_serial = bundle.now_serial;
         self.random_value = bundle.random_value;
@@ -2041,6 +2047,20 @@ fn evaluate_ordinary_surface_call(
     trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
     let Some(surface_call_site) = call_site.surface_call_site.as_ref() else {
+        if let Some(host_function_provider) = context.host_function_provider
+            && context_allows_host_function_call(context, function_name)
+        {
+            return evaluate_host_function_call(
+                function_name,
+                args,
+                host_function_provider,
+                context,
+                resolver,
+                helper_bindings,
+                callable_registry,
+                trace,
+            );
+        }
         return Ok(EvalValue::Error(WorksheetErrorCode::Name));
     };
     let meta = surface_call_site.function_meta();
@@ -2173,6 +2193,102 @@ fn evaluate_ordinary_surface_call(
         }
     };
 
+    record_prepared_call_returned_value(trace, prepared_call_index, &returned_value);
+    Ok(returned_value)
+}
+
+fn context_allows_host_function_call(context: &EvaluationContext<'_>, function_name: &str) -> bool {
+    context.plan.availability_summaries.iter().any(|summary| {
+        summary.surface_name.eq_ignore_ascii_case(function_name)
+            && matches!(
+                summary.runtime_boundary_kind.as_deref(),
+                Some("host_callback" | "vba_host_callback")
+            )
+    })
+}
+
+fn evaluate_host_function_call(
+    function_name: &str,
+    args: &[CompiledExpr],
+    host_function_provider: &dyn HostFunctionProvider,
+    context: &EvaluationContext<'_>,
+    resolver: &mut LocalReferenceResolver<'_>,
+    helper_bindings: &HelperBindingFrame,
+    callable_registry: &RefCell<CallableRegistry>,
+    trace: &mut EvaluationTrace,
+) -> Result<EvalValue, EvaluationError> {
+    if context.backend == EvaluationBackend::LocalBootstrap {
+        return Err(EvaluationError {
+            message: format!(
+                "local bootstrap backend does not support host function calls: {function_name}"
+            ),
+        });
+    }
+
+    let records_prepared_calls = context.records_prepared_calls();
+    let mut prepared_arguments = if records_prepared_calls {
+        Vec::with_capacity(args.len())
+    } else {
+        Vec::new()
+    };
+    let mut invocation_args = Vec::with_capacity(args.len());
+    for (ordinal, arg) in args.iter().enumerate() {
+        let call_arg = evaluate_expr_as_call_arg(
+            arg,
+            context,
+            resolver,
+            helper_bindings,
+            callable_registry,
+            false,
+            false,
+            trace,
+        )?;
+        if records_prepared_calls {
+            prepared_arguments.push(prepared_argument_for_call_arg(
+                ordinal, arg, &call_arg, false,
+            ));
+        }
+        let invocation_arg = match call_arg {
+            CallArgValue::Eval(value) => value,
+            CallArgValue::EmptyCell | CallArgValue::MissingArg | CallArgValue::Reference(_) => {
+                EvalValue::Error(WorksheetErrorCode::Value)
+            }
+        };
+        invocation_args.push(invocation_arg);
+    }
+
+    let prepared_call_index = if records_prepared_calls {
+        push_prepared_call_unchecked(
+            trace,
+            PreparedCall {
+                function_name: function_name.to_string(),
+                function_id: "FUNC.HOST_CALLBACK",
+                arg_preparation_profile: ArgPreparationProfile::ValuesOnlyPreAdapter,
+                prepared_arguments,
+                register_id_request: None,
+                registered_external_call_request: None,
+                locale_profile_id: context
+                    .locale_ctx
+                    .map(|ctx| format!("{:?}", ctx.profile.id)),
+                date_system: context
+                    .locale_ctx
+                    .map(|ctx| format!("{:?}", ctx.date_system)),
+                host_query_enabled: context.host_info.is_some(),
+                returned_value: None,
+            },
+        )
+    } else {
+        None
+    };
+
+    let returned_value =
+        match host_function_provider.invoke_host_function(&HostFunctionInvocation {
+            function_name: function_name.to_string(),
+            args: invocation_args,
+        }) {
+            Ok(value) => value,
+            Err(_) => EvalValue::Error(WorksheetErrorCode::Value),
+        };
     record_prepared_call_returned_value(trace, prepared_call_index, &returned_value);
     Ok(returned_value)
 }

@@ -17,11 +17,11 @@ use oxfml_core::semantics::{
 };
 use oxfml_core::{
     AcceptDecision, EvaluationTraceMode, ExecutionOutcomeKind, ExecutionOutcomeStage,
-    FormulaChannelKind, FormulaSourceRecord, InMemoryLibraryContextProvider,
-    LibraryContextSnapshotRef, RegisteredExternalCatalogController,
-    RegisteredExternalCatalogMutationRequest, RegisteredExternalCatalogMutationResult,
-    RegisteredExternalHostRegistrationRequest, RegisteredExternalRegistrationChannel,
-    TypedContextQueryBundle, TypedContextQueryFamily,
+    FormulaChannelKind, FormulaSourceRecord, HostFunctionInvocation, HostFunctionProvider,
+    HostFunctionProviderError, InMemoryLibraryContextProvider, LibraryContextSnapshotRef,
+    RegisteredExternalCatalogController, RegisteredExternalCatalogMutationRequest,
+    RegisteredExternalCatalogMutationResult, RegisteredExternalHostRegistrationRequest,
+    RegisteredExternalRegistrationChannel, TypedContextQueryBundle, TypedContextQueryFamily,
 };
 use oxfunc_core::functions::call_register_id_family::{
     RegisterIdRequest, RegisteredExternalDescriptor, RegisteredExternalOriginKind,
@@ -838,6 +838,61 @@ fn runtime_environment_executes_registered_external_formula_through_typed_query_
         }
         other => panic!("unexpected normalized call request: {other:?}"),
     }
+}
+
+#[test]
+fn runtime_environment_executes_bind_visible_host_function_through_typed_query_bundle() {
+    let provider = RecordingHostFunctionProvider::default();
+    let request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new("runtime:vba-addthem", 1, "=AddThem(2,3)"),
+        TypedContextQueryBundle::default().with_host_function_provider(Some(&provider)),
+    )
+    .with_trace_mode(EvaluationTraceMode::PreparedCalls);
+    let environment =
+        RuntimeEnvironment::new().with_inline_library_context_snapshot(vba_udf_snapshot());
+
+    let result = environment
+        .execute(request)
+        .expect("runtime host function execution should succeed");
+
+    assert!(
+        result
+            .typed_query_bundle_spec
+            .families
+            .contains(&TypedContextQueryFamily::HostFunction)
+    );
+    assert!(result.semantic_plan.diagnostics.is_empty());
+    assert_eq!(result.published_worksheet_value, EvalValue::Number(5.0));
+    assert_eq!(
+        provider.last_invocation.borrow().as_ref(),
+        Some(&HostFunctionInvocation {
+            function_name: "ADDTHEM".to_string(),
+            args: vec![EvalValue::Number(2.0), EvalValue::Number(3.0)],
+        })
+    );
+    let prepared_call = &result.evaluation.trace.prepared_calls[0];
+    assert_eq!(prepared_call.function_name, "ADDTHEM");
+    assert_eq!(prepared_call.function_id, "FUNC.HOST_CALLBACK");
+    assert_eq!(prepared_call.returned_value, Some(EvalValue::Number(5.0)));
+}
+
+#[test]
+fn runtime_environment_keeps_unknown_function_as_name_error_with_host_provider() {
+    let provider = RecordingHostFunctionProvider::default();
+    let request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new("runtime:vba-unknown", 1, "=NotRegistered(2,3)"),
+        TypedContextQueryBundle::default().with_host_function_provider(Some(&provider)),
+    );
+
+    let result = RuntimeEnvironment::new()
+        .execute(request)
+        .expect("runtime unknown function execution should still produce worksheet value");
+
+    assert_eq!(
+        result.published_worksheet_value,
+        EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Name)
+    );
+    assert!(provider.last_invocation.borrow().is_none());
 }
 
 #[test]
@@ -2036,6 +2091,28 @@ impl RegisteredExternalProvider for RecordingRegisteredExternalProvider {
 }
 
 #[derive(Default)]
+struct RecordingHostFunctionProvider {
+    last_invocation: RefCell<Option<HostFunctionInvocation>>,
+}
+
+impl HostFunctionProvider for RecordingHostFunctionProvider {
+    fn invoke_host_function(
+        &self,
+        invocation: &HostFunctionInvocation,
+    ) -> Result<EvalValue, HostFunctionProviderError> {
+        self.last_invocation.replace(Some(invocation.clone()));
+        match invocation.args.as_slice() {
+            [EvalValue::Number(a), EvalValue::Number(b)]
+                if invocation.function_name.eq_ignore_ascii_case("AddThem") =>
+            {
+                Ok(EvalValue::Number(a + b))
+            }
+            _ => Err(HostFunctionProviderError::new("unsupported host function")),
+        }
+    }
+}
+
+#[derive(Default)]
 struct RecordingCatalogController {
     recorded: RefCell<Vec<RegisteredExternalCatalogMutationRequest>>,
 }
@@ -2121,4 +2198,30 @@ fn runtime_snapshot_v2() -> LibraryContextSnapshot {
         post_dispatch_state: None,
     });
     snapshot
+}
+
+fn vba_udf_snapshot() -> LibraryContextSnapshot {
+    LibraryContextSnapshot {
+        snapshot_id: "runtime-vba-udf".to_string(),
+        snapshot_version: "v1".to_string(),
+        entries: vec![LibraryContextSnapshotEntry {
+            surface_name: "AddThem".to_string(),
+            canonical_id: Some("FUNC.VBA.ADDTHEM".to_string()),
+            surface_stable_id: Some("vba:project:main:addthem".to_string()),
+            name_resolution_table_ref: Some("vba:project:main".to_string()),
+            semantic_trait_profile_ref: Some("vba-udf-double.v1".to_string()),
+            gating_profile_ref: None,
+            metadata_status: Some("host_registered".to_string()),
+            special_interface_kind: None,
+            admission_interface_kind: Some("excel_observed_double_first_slice".to_string()),
+            preparation_owner: Some("OxFml".to_string()),
+            runtime_boundary_kind: Some("vba_host_callback".to_string()),
+            interface_contract_ref: Some("dnaonecalc-vba-udf-first-slice".to_string()),
+            registration_source_kind: RegistrationSourceKind::Vba,
+            parse_bind_state: LibraryAvailabilityState::CatalogKnown,
+            semantic_plan_state: LibraryAvailabilityState::CatalogKnown,
+            runtime_capability_state: Some(LibraryAvailabilityState::CatalogKnown),
+            post_dispatch_state: None,
+        }],
+    }
 }
