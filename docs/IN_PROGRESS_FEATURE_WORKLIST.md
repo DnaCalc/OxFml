@@ -170,6 +170,24 @@ Last updated: 2026-05-07.
 - **Why still open**: not applicable for W075. Future optimizer follow-ons require new bounded worksets if taken up.
 - **Canonical owner**: `W075` closure packet.
 
+### IP-24: Formula Drill Trace Model
+
+- **Status**: in_progress
+- **Current floor**: DnaOneCalc has filed a formula drill-down handoff asking
+  OxFml to expose a drill-ready expression trace rather than requiring the host
+  to render the flat prepared-call trace as a tree. OxFml now has a planned
+  `W076` lane and a first `FormulaDrillTrace` V1 contract draft in the
+  consumer facade, public API sketch, and DNA OneCalc downstream consumer
+  contract. The draft names tree nodes, node ids, source spans, evaluation
+  states, branch disposition, LET/LAMBDA binding flow, error causality,
+  diagnostic links, and typed array/rich-value previews.
+- **Remaining gaps**: runtime facade emission, focused corpus evidence,
+  source-span and causal-link implementation, full `oxfml_core` validation,
+  and DNA OneCalc uptake acknowledgement.
+- **Why still open**: the current floor is `spec_drafted`; no runtime
+  projection or deterministic corpus evidence exists yet.
+- **Canonical owner**: active owner `W076`.
+
 ### IP-18: Format Engine Time, Fraction, And Accounting Coverage
 
 - **Status**: validated

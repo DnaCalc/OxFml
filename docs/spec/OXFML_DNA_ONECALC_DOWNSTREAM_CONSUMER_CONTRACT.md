@@ -364,6 +364,53 @@ DNA OneCalc must handle each value class as follows.
 7. for the admitted SpreadsheetML XML verification lane, `comparison_views` may use a narrower comparison-oriented envelope than the richer `VerificationPublicationSurface`; this is an OxFml-owned projection choice for family comparison, not downstream synthesis,
 8. do not over-read the current first slice as full display-code parity or broad OxFml-owned conditional-formatting evaluation.
 
+### 5.6 Formula Drill Trace
+DNA OneCalc formula drill-down should consume an OxFml-owned
+`FormulaDrillTrace` once `W076` emits it through the runtime facade or an
+equivalent stable projection service.
+
+Purpose:
+1. provide a user-facing formula explanation tree,
+2. preserve actual expression parent/child structure,
+3. keep evaluation order separate from tree order,
+4. attach source spans to drill rows,
+5. show lazy branch disposition,
+6. show LET/LAMBDA binding flow,
+7. expose argument names and roles from OxFunc metadata where available,
+8. preserve typed error causality and diagnostics,
+9. expose typed array/rich-value previews without display-string parsing.
+
+DNA OneCalc must not:
+1. reconstruct a parse tree from formula text,
+2. infer `IF` branch semantics from argument positions,
+3. invent `LET` binding nodes from raw argument rows,
+4. parse debug strings such as `eval=EagerValue`,
+5. assign argument names from a host-local function registry mirror,
+6. guess error causality from the final error value,
+7. treat `EvaluationTrace.prepared_calls` as a user-facing drill tree.
+
+Current W076 minimum corpus:
+1. `=SUM(1,2,3)` shows one `SUM` call with named number arguments and result
+   `6`,
+2. `=SUM(IF(TRUE,2,3),4)` shows `IF` nested under the first `SUM` argument
+   with the false branch skipped,
+3. `=IF(FALSE,SUM(1,2),SUM(3,4))` shows the true branch skipped and the false
+   branch evaluated,
+4. `=LET(x,1,y,2,SUM(x,y))` shows `x` and `y` binding nodes and visible
+   reference resolution in the body,
+5. `=1/0` shows divide/operator causality and the right operand zero,
+6. `=SEQUENCE(2,2)` shows typed array shape and preview,
+7. `=SUM(` shows a partial call or diagnostic placeholder linked to source
+   diagnostics.
+
+Uptake rule:
+1. after OxFml emits the artifact, DNA OneCalc should map its formula drill UI
+   from `FormulaDrillTrace`, not from raw `prepared_calls`,
+2. DNA OneCalc may still render a developer view over preparation/coercion and
+   prepared-call correlation fields when OxFml exposes them,
+3. downstream UI uptake remains a DNA OneCalc lane and does not close merely
+   because OxFml files or updates a handoff.
+
 ---
 
 ## 6. Not-Authorized List

@@ -250,6 +250,16 @@ It should return:
     - `arg_admission_metadata_version`,
 16. structured capability/hole columns where admitted by the prepared plan or
     replay projection.
+17. additive formula drill trace projection where admitted by a successor
+    workset:
+    - `FormulaDrillTrace`
+    - schema id `oxfml.formula_drill_trace.v1`
+    - source text and formula identity,
+    - tree-root node id,
+    - tree-ordered nodes,
+    - separate evaluation-order node list,
+    - source-linked diagnostics,
+    - final value.
 
 It must preserve:
 1. candidate versus commit separation,
@@ -260,6 +270,185 @@ It must preserve:
 5. pinned library-context identity,
 6. the current consume-now packet truth without implying closure of still
    narrower `W026` residuals beyond the admitted slice.
+
+### 6.3A FormulaDrillTrace V1 Successor Contract
+`FormulaDrillTrace` is the OxFml-owned host-facing explanation artifact for
+formula drill-down views. It is additive over `RuntimeFormulaResult`; it does
+not replace `prepared_calls`, candidate/commit/reject truth, replay projection,
+or verification publication surfaces.
+
+Current status:
+1. successor workset `W076` owns the contract and runtime projection,
+2. this section defines the intended V1 public shape,
+3. until `W076` runtime evidence exists, this is `spec_drafted`, not an
+   implementation claim.
+
+The artifact exists because `EvaluationTrace.prepared_calls` is a lower-level
+preparation/evaluator trace. It is ordered by evaluation facts and preparation
+records; it is not sufficient for a user-facing expression tree. Downstream
+hosts must not reconstruct formula structure, lazy branch disposition, LET
+binding flow, argument names, or error causality from raw `prepared_calls`.
+
+Minimum artifact shape:
+1. `schema_id`: stable string, first value
+   `oxfml.formula_drill_trace.v1`,
+2. `formula_stable_id`: formula identity from the source record,
+3. `source_text`: exact formula or cell-entry source text used for the
+   projection,
+4. `root_node_id`: node id of the formula root,
+5. `nodes`: tree-bearing node records,
+6. `evaluation_order`: node ids in actual evaluation order where evaluation
+   occurred,
+7. `diagnostics`: diagnostic links to node ids or source spans,
+8. `final_value`: final evaluator value or final diagnostic/error value where
+   no ordinary value exists,
+9. optional projection-loss facts when a source span, causal link, or
+   preparation correlation is unavailable in the admitted slice.
+
+Minimum node shape:
+1. deterministic `node_id` for this parse/evaluation result,
+2. optional `parent_node_id`,
+3. ordered `child_node_ids`,
+4. optional `source_span` using the same unit documented by the runtime packet,
+5. optional `expression_text`,
+6. `kind`,
+7. optional `function_id` and `function_surface_name`,
+8. optional `operator_kind`,
+9. optional `argument_ordinal`,
+10. optional `argument_name`,
+11. optional `argument_role`,
+12. explicit `argument_name_source` or equivalent fallback marker when an
+    ordinal label is used because OxFunc metadata did not provide a name,
+13. user-facing label that does not leak debug preparation text,
+14. developer-facing label that may expose prepared-call correlation,
+15. evaluation state,
+16. optional branch disposition for lazy and choice forms,
+17. optional `value_before_coercion`,
+18. optional `value_after_coercion`,
+19. optional `returned_value`,
+20. optional `published_value`,
+21. optional typed error with causal node link,
+22. optional typed array or rich-value preview,
+23. optional `prepared_call_index` and `prepared_argument_index` for developer
+    trace correlation.
+
+Minimum node kinds:
+1. `FormulaRoot`,
+2. `FunctionCall`,
+3. `OperatorCall`,
+4. `Argument`,
+5. `Literal`,
+6. `NameReference`,
+7. `LetBinding`,
+8. `LambdaBinding`,
+9. `ArrayLiteral`,
+10. `SpillRange`,
+11. `RichValue`,
+12. `Error`,
+13. `DiagnosticPlaceholder`.
+
+Minimum evaluation states:
+1. `Pending`,
+2. `Bound`,
+3. `Evaluated`,
+4. `Skipped`,
+5. `ShortCircuited`,
+6. `Omitted`,
+7. `Blocked`,
+8. `Error`.
+
+Minimum branch dispositions:
+1. `Taken`,
+2. `Skipped`,
+3. `NotReached`,
+4. `ErrorWhileChoosing`,
+5. `ErrorWhileEvaluatingBranch`.
+
+Argument names and roles:
+1. OxFunc registry or resolved call-site metadata is the preferred source for
+   function argument labels such as `logical_test`, `value_if_true`,
+   `value_if_false`, `number1`, and `number2`,
+2. OxFml owns the placement of those labels on expression-tree nodes,
+3. ordinal fallback is allowed only when metadata is unavailable and must be
+   explicit in the artifact,
+4. DNA OneCalc must not maintain a private argument-name registry mirror.
+
+LET and LAMBDA flow:
+1. `LET` must project name/value pairs as binding nodes and the final argument
+   as a body node,
+2. name references should show the resolved value when the evaluator has that
+   truth,
+3. helper-local, lexical-slot, or capture details may appear in developer
+   fields, but user labels should present binding meaning rather than debug
+   slot names,
+4. `LAMBDA` binding nodes should distinguish declared parameters from ordinary
+   argument values when they are projected.
+
+Lazy branch flow:
+1. choice/lazy families such as `IF`, `IFS`, `CHOOSE`, and `SWITCH` should
+   represent every declared branch slot where practical,
+2. skipped branches must not appear as evaluated child results,
+3. skipped branches must not leak raw preparation strings such as
+   `eval=EagerValue`,
+4. the tree view and evaluation-order list must remain distinct.
+
+Error causality:
+1. final error values should link to the smallest causal node OxFml can
+   identify,
+2. for `=1/0`, the first admitted projection should identify the divide
+   operator node or a more specific zero-denominator child if modeled,
+3. error records should include a worksheet error code where one exists and a
+   semantic message suitable for developer explanation.
+
+Diagnostic linkage:
+1. invalid or incomplete formulas may still produce partial drill traces,
+2. diagnostics should link to a node id or source span,
+3. missing argument slots and expected delimiters may use
+   `DiagnosticPlaceholder` nodes,
+4. partial traces must carry explicit projection-loss facts where tree shape is
+   necessarily incomplete.
+
+Array and rich-value previews:
+1. array nodes should expose shape, compact preview, and truncation status,
+2. rich-value nodes should expose returned-value class and relevant capability
+   facts where OxFml already carries them,
+3. hosts must not parse display strings to recover shape, truncation, or rich
+   carrier class.
+
+Minimum W076 acceptance corpus:
+1. `=SUM(1,2,3)`:
+   - one `SUM` node under the formula root,
+   - named number arguments,
+   - final value `6`.
+2. `=SUM(IF(TRUE,2,3),4)`:
+   - `SUM` is the root call,
+   - `IF` is nested under the first `SUM` argument,
+   - false branch is marked skipped,
+   - evaluation-order list remains separate from tree order.
+3. `=IF(FALSE,SUM(1,2),SUM(3,4))`:
+   - true branch is skipped,
+   - false branch is evaluated,
+   - nested `SUM` result is visible.
+4. `=LET(x,1,y,2,SUM(x,y))`:
+   - binding nodes exist for `x` and `y`,
+   - body node exists,
+   - references to `x` and `y` visibly resolve to `1` and `2`.
+5. `=1/0`:
+   - divide/operator node exists,
+   - left and right operands are visible,
+   - final error links to the causal node.
+6. `=SEQUENCE(2,2)`:
+   - typed array shape and preview are present.
+7. `=SUM(`:
+   - partial call or diagnostic placeholder exists,
+   - diagnostics link to a node or source span.
+
+Non-assumptions:
+1. this does not authorize downstream parse-tree reconstruction,
+2. this does not move function/operator semantics out of OxFunc,
+3. this does not make `prepared_calls` a user-facing drill tree,
+4. this does not satisfy DnaOneCalc host uptake by filing a handoff,
+5. this does not claim pack-grade replay evidence.
 
 ### 6.4 RuntimeSessionFacade
 `RuntimeSessionFacade` is the stable repeated-execution surface.

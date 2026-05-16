@@ -272,6 +272,61 @@ Working rule:
 3. publication-aware value hints remain distinct from typed host/provider outcome projection,
 4. consumer-facing packaging work must preserve this frozen shared split rather than reinterpret it.
 
+## 8B.1 Formula Drill Trace Projection
+For host-facing formula drill-down, OxFml should expose an additive
+`FormulaDrillTrace` projection through the runtime facade after `W076`.
+
+Current status:
+1. this is the intended public code-shape target for the DnaOneCalc formula
+   drill handoff,
+2. it is additive over `RuntimeFormulaResult`,
+3. it is `spec_drafted` until the runtime facade emits compile-checked packets
+   and deterministic W076 evidence.
+
+Preferred public shape:
+1. either `RuntimeFormulaResult.formula_drill_trace:
+   Option<FormulaDrillTrace>` or an equivalent stable projection service over
+   `RuntimeFormulaResult`,
+2. schema id `oxfml.formula_drill_trace.v1`,
+3. formula identity and source text,
+4. root node id,
+5. node vector carrying parent/child links,
+6. evaluation-order node list,
+7. diagnostic links,
+8. final value,
+9. explicit projection-loss facts when a source span, causal link, or
+   preparation correlation is not available.
+
+Minimum node fields:
+1. node id,
+2. parent id,
+3. child ids,
+4. source span,
+5. expression text,
+6. node kind,
+7. function or operator identity,
+8. argument ordinal/name/role,
+9. argument-name source or ordinal-fallback marker,
+10. user and developer labels,
+11. evaluation state,
+12. branch disposition where applicable,
+13. before/after coercion values,
+14. returned and published values where applicable,
+15. typed error and causal node id,
+16. typed array or rich-value preview,
+17. prepared-call and prepared-argument correlation indexes.
+
+Projection rules:
+1. expression tree structure is primary,
+2. evaluation order is a secondary list,
+3. skipped lazy branches remain visible as skipped nodes,
+4. `LET` projects binding nodes plus body node,
+5. error records point to the smallest causal node OxFml can identify,
+6. diagnostics for partial formulas link to nodes or source spans,
+7. argument names come from OxFunc registry/call metadata where available,
+8. downstream hosts must not derive this tree from raw source text or
+   `prepared_calls`.
+
 ## 8C. First Runtime Library-Context Consumer Model
 For the current covered OxFunc scope, OxFml should also model a real runtime consumer for built-in catalog truth rather than rely only on export-file pinning.
 
