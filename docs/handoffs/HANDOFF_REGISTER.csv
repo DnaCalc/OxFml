@@ -29,6 +29,7 @@ HANDOFF-DNAONECALC-009,outbound,W072 CF Aggregate Visualization Intake,acknowled
 HANDOFF-DNAONECALC-010,outbound,W072 Aggregate Predicate Slice,acknowledged,W072,DnaOneCalc-TBD,2026-05-04,2026-05-04
 HANDOFF-DNAONECALC-011,outbound,W072 Visualization Rule Slice,acknowledged,W072,DnaOneCalc-TBD,2026-05-04,2026-05-04
 HANDOFF-DNAONECALC-012,outbound,W073 Typed CF Payload First Slice,filed,W073,DnaOneCalc-TBD,2026-05-04,
+HANDOFF-DNAONECALC-013,outbound,W076 Formula Drill Trace Runtime Projection,filed,W076,DnaOneCalc-TBD,2026-05-16,
 HO-FN-013,inbound,Owned Runtime Registry Metadata Shape,acknowledged,OxFunc/W091,W068,2026-05-04,2026-05-06
 HO-FN-014,inbound,UDF Registry Mutation And Name-Resolution Invalidation,acknowledged,OxFunc/W093,W074,2026-05-04,2026-05-06
 HO-FN-016,inbound,Compiled Surface Call-Site And Full-Catalog Index Dispatch,acknowledged,OxFunc/W096,W075,2026-05-07,2026-05-07

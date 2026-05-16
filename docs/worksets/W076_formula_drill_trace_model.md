@@ -58,25 +58,33 @@ Reviewed inbound observations:
 ### B076-01: FormulaDrillTrace V1 Public Contract
 
 - **Tracker**: `fml-ldv.1`
-- **Status**: in_progress
+- **Status**: validated
 - **Owner**: OxFml
 - **Effect**: define the additive public trace contract in the consumer facade,
   public API sketch, and DNA OneCalc downstream consumer contract.
 - **Evidence target**: spec text names the artifact shape, node shape, state
   vocabulary, branch disposition, LET/LAMBDA flow, diagnostic links, error
   causality, typed previews, and minimum corpus.
-- **Current note**: this is `spec_drafted` until runtime emission and tests
-  exist; it must not be reported as implementation evidence.
+- **Evidence**: contract text is backed by the B076-02 runtime projection and
+  deterministic W076 corpus evidence.
 
 ### B076-02: Runtime Projection And Corpus Evidence
 
 - **Tracker**: `fml-ldv.2`
-- **Status**: planned
+- **Status**: validated
 - **Owner**: OxFml
 - **Effect**: emit the first `FormulaDrillTrace` through the runtime facade or
   approved projection service and add deterministic corpus evidence.
-- **Evidence target**: focused W076 tests plus `cargo test -p oxfml_core`
-  before any gate/closure claim.
+- **Evidence**:
+  - `RuntimeFormulaResult.formula_drill_trace` exposes the trace for successful
+    runtime executions.
+  - `RuntimeEnvironment::formula_drill_trace_for_source(...)` exposes the
+    diagnostic projection path for invalid/incomplete formula source.
+  - `crates/oxfml_core/tests/w076_formula_drill_trace_tests.rs` covers the
+    minimum DNA OneCalc corpus plus same-named nested/sibling call correlation.
+  - `cargo test -p oxfml_core --test w076_formula_drill_trace_tests -- --nocapture`
+    passes: 8 passed.
+  - `cargo test -p oxfml_core` passes.
 
 ## Minimal Acceptance Corpus
 1. `=SUM(1,2,3)`
@@ -109,9 +117,11 @@ Reviewed inbound observations:
 - Contract text and implementation agree.
 - Focused W076 evidence passes.
 - `cargo test -p oxfml_core` passes.
-- DNA OneCalc follow-up status or handoff note is prepared, with downstream
-  uptake explicitly left open until acknowledged.
-- Pre-Closure Verification Checklist and Completion Claim Self-Audit pass.
+- DNA OneCalc follow-up status note is prepared, with downstream uptake
+  explicitly left open until acknowledged:
+  `docs/handoffs/HANDOFF-DNAONECALC-013_W076_FORMULA_DRILL_TRACE_RUNTIME_PROJECTION.md`.
+- Pre-Closure Verification Checklist and Completion Claim Self-Audit are not
+  used to claim full W076 closure while DNA OneCalc uptake remains open.
 
 ## Pre-Closure Verification Checklist
 
@@ -127,14 +137,25 @@ Reviewed inbound observations:
 | 8 | IN_PROGRESS_FEATURE_WORKLIST.md updated? | |
 | 9 | CURRENT_BLOCKERS.md updated (new/resolved)? | |
 
+Current checklist reading:
+1. Yes.
+2. N/A for this local consumer-runtime additive artifact; no shared FEC/F3E
+   conformance matrix changed.
+3. Yes for deterministic local corpus evidence; no pack-grade replay promotion
+   is claimed.
+4. Yes; outbound DNA OneCalc status note is filed and registered.
+5. Yes: focused W076 tests and `cargo test -p oxfml_core` pass.
+6. Yes for the declared OxFml first-slice corpus; broader formula-language
+   closure remains outside W076.
+7. Yes for this status note; full W076 closure is not claimed.
+8. Yes.
+9. Yes; no new blocker entry required.
+
 ## Status
 - execution_state: in_progress
 - scope_completeness: scope_partial
-- target_completeness: target_partial
+- target_completeness: target_complete
 - integration_completeness: partial
 - open_lanes:
-  - runtime projection,
-  - focused corpus evidence,
-  - full validation,
   - DNA OneCalc uptake acknowledgement
-- claim_confidence: draft
+- claim_confidence: local_artifact_validated

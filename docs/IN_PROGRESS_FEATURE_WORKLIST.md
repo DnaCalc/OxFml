@@ -175,17 +175,21 @@ Last updated: 2026-05-07.
 - **Status**: in_progress
 - **Current floor**: DnaOneCalc has filed a formula drill-down handoff asking
   OxFml to expose a drill-ready expression trace rather than requiring the host
-  to render the flat prepared-call trace as a tree. OxFml now has a planned
-  `W076` lane and a first `FormulaDrillTrace` V1 contract draft in the
-  consumer facade, public API sketch, and DNA OneCalc downstream consumer
-  contract. The draft names tree nodes, node ids, source spans, evaluation
-  states, branch disposition, LET/LAMBDA binding flow, error causality,
-  diagnostic links, and typed array/rich-value previews.
-- **Remaining gaps**: runtime facade emission, focused corpus evidence,
-  source-span and causal-link implementation, full `oxfml_core` validation,
-  and DNA OneCalc uptake acknowledgement.
-- **Why still open**: the current floor is `spec_drafted`; no runtime
-  projection or deterministic corpus evidence exists yet.
+  to render the flat prepared-call trace as a tree. OxFml now has a `W076`
+  lane with a first `FormulaDrillTrace` V1 contract in the consumer facade,
+  public API sketch, and DNA OneCalc downstream consumer contract. The runtime
+  facade now exposes `RuntimeFormulaResult.formula_drill_trace` for successful
+  formula execution and `RuntimeEnvironment::formula_drill_trace_for_source(...)`
+  for diagnostic-producing source projection. Deterministic W076 evidence
+  covers tree nodes, node ids, source spans, evaluation states, branch
+  disposition, LET binding flow, error causality, diagnostic links, typed array
+  previews, and post-order prepared-call correlation for same-named nested
+  calls.
+- **Remaining gaps**: DNA OneCalc uptake acknowledgement and any broader
+  formula-language drill coverage beyond the first corpus.
+- **Why still open**: the OxFml first-slice artifact is locally validated, but
+  the downstream UI/host mapping lane remains open until DNA OneCalc consumes
+  and acknowledges the trace artifact.
 - **Canonical owner**: active owner `W076`.
 
 ### IP-18: Format Engine Time, Fraction, And Accounting Coverage

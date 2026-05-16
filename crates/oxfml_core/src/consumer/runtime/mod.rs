@@ -4,13 +4,15 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 use oxfunc_core::registry::builtin_registry;
-use oxfunc_core::value::EvalValue;
+use oxfunc_core::value::{ArrayCellValue, EvalValue, WorksheetErrorCode};
 
 use crate::binding::{
     BindContext, BindDiagnostic, BoundFormula, NameKind, NormalizedReference, bind_formula,
 };
 use crate::consumer::ConsumerLibraryContextState;
-use crate::eval::{DefinedNameBinding, EvaluationBackend, EvaluationOutput, EvaluationTraceMode};
+use crate::eval::{
+    DefinedNameBinding, EvaluationBackend, EvaluationOutput, EvaluationTraceMode, PreparedCall,
+};
 use crate::host::{
     ArtifactReuseReport, FirstHostReplayCapturePacket, HostRecalcOutput, SingleFormulaHost,
 };
@@ -40,8 +42,9 @@ use crate::session::{
 };
 use crate::source::{FormulaSourceRecord, StructureContextVersion};
 use crate::syntax::parser::{ParseRequest, parse_formula};
-use crate::syntax::token::SyntaxDiagnostic;
+use crate::syntax::token::{SyntaxDiagnostic, TextSpan};
 use oxfunc_core::functions::call_register_id_family::RegisteredExternalProviderError;
+use oxfunc_core::functions::surface_dispatch::FUNC_ID_OP_DIVIDE;
 
 pub struct RuntimeEnvironment<'a> {
     structure_context_version: StructureContextVersion,
@@ -86,6 +89,18 @@ impl<'a> RuntimeEnvironment<'a> {
     ) -> Result<RuntimeFormulaResult, String> {
         let mut host = self.build_host(request.source());
         self.execute_with_host(&mut host, request)
+    }
+
+    pub fn formula_drill_trace_for_source(&self, source: FormulaSourceRecord) -> FormulaDrillTrace {
+        let parse = parse_formula(ParseRequest {
+            source: source.clone(),
+        });
+        build_formula_drill_trace(
+            &source,
+            &parse.green_tree.diagnostics,
+            &[],
+            &EvalValue::Error(WorksheetErrorCode::Value),
+        )
     }
 
     pub fn open_session(self) -> RuntimeSessionFacade<'a> {
@@ -423,6 +438,7 @@ pub struct RuntimeFormulaResult {
     pub artifact_reuse: ArtifactReuseReport,
     pub first_host_replay_capture_packet: FirstHostReplayCapturePacket,
     pub prepared_formula_identity: RuntimePreparedFormulaIdentity,
+    pub formula_drill_trace: Option<FormulaDrillTrace>,
 }
 
 impl RuntimeFormulaResult {
@@ -442,6 +458,12 @@ impl RuntimeFormulaResult {
         let first_host_replay_capture_packet = host_output.to_first_host_replay_capture_packet();
         let comparison_views =
             build_verification_comparison_views(&verification_publication_surface);
+        let formula_drill_trace = Some(build_formula_drill_trace(
+            &host_output.source,
+            &host_output.syntax_diagnostics,
+            &host_output.evaluation.trace.prepared_calls,
+            &host_output.published_worksheet_value,
+        ));
         Self {
             source: host_output.source,
             syntax_diagnostics: host_output.syntax_diagnostics,
@@ -462,7 +484,1354 @@ impl RuntimeFormulaResult {
             artifact_reuse: host_output.artifact_reuse,
             first_host_replay_capture_packet,
             prepared_formula_identity,
+            formula_drill_trace,
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FormulaDrillTrace {
+    pub schema_id: &'static str,
+    pub formula_stable_id: String,
+    pub source_text: String,
+    pub root_node_id: FormulaDrillNodeId,
+    pub nodes: Vec<FormulaDrillTraceNode>,
+    pub evaluation_order: Vec<FormulaDrillNodeId>,
+    pub diagnostics: Vec<FormulaDrillDiagnosticLink>,
+    pub final_value: EvalValue,
+    pub projection_losses: Vec<FormulaDrillProjectionLoss>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct FormulaDrillNodeId(pub String);
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FormulaDrillTraceNode {
+    pub node_id: FormulaDrillNodeId,
+    pub parent_node_id: Option<FormulaDrillNodeId>,
+    pub source_span: Option<TextSpan>,
+    pub expression_text: Option<String>,
+    pub kind: FormulaDrillNodeKind,
+    pub function_id: Option<String>,
+    pub function_surface_name: Option<String>,
+    pub operator_kind: Option<String>,
+    pub argument_ordinal: Option<usize>,
+    pub argument_name: Option<String>,
+    pub argument_role: Option<FormulaArgumentRole>,
+    pub argument_name_source: FormulaArgumentNameSource,
+    pub label_user: String,
+    pub label_developer: String,
+    pub evaluation_state: FormulaDrillEvaluationState,
+    pub branch_disposition: Option<FormulaDrillBranchDisposition>,
+    pub value_before_coercion: Option<EvalValue>,
+    pub value_after_coercion: Option<EvalValue>,
+    pub returned_value: Option<EvalValue>,
+    pub published_value: Option<EvalValue>,
+    pub value_preview: Option<FormulaDrillValuePreview>,
+    pub error: Option<FormulaDrillError>,
+    pub child_node_ids: Vec<FormulaDrillNodeId>,
+    pub prepared_call_index: Option<usize>,
+    pub prepared_argument_index: Option<usize>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FormulaDrillNodeKind {
+    FormulaRoot,
+    FunctionCall,
+    OperatorCall,
+    Argument,
+    Literal,
+    NameReference,
+    LetBinding,
+    LambdaBinding,
+    ArrayLiteral,
+    SpillRange,
+    RichValue,
+    Error,
+    DiagnosticPlaceholder,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FormulaDrillEvaluationState {
+    Pending,
+    Bound,
+    Evaluated,
+    Skipped,
+    ShortCircuited,
+    Omitted,
+    Blocked,
+    Error,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FormulaDrillBranchDisposition {
+    Taken,
+    Skipped,
+    NotReached,
+    ErrorWhileChoosing,
+    ErrorWhileEvaluatingBranch,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FormulaArgumentRole {
+    LogicalTest,
+    ValueIfTrue,
+    ValueIfFalse,
+    Number,
+    Text,
+    NameSlot,
+    ValueSlot,
+    BodyExpression,
+    Array,
+    Rows,
+    Columns,
+    Step,
+    Other(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FormulaArgumentNameSource {
+    NotApplicable,
+    OxFuncMetadata,
+    OxFmlSpecialForm,
+    OrdinalFallback,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FormulaDrillValuePreview {
+    pub value_kind: String,
+    pub array_shape: Option<FormulaDrillArrayShape>,
+    pub preview: Vec<String>,
+    pub truncated: bool,
+    pub rich_value_type_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FormulaDrillArrayShape {
+    pub rows: usize,
+    pub cols: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct FormulaDrillError {
+    pub code: Option<String>,
+    pub message: String,
+    pub causal_node_id: Option<FormulaDrillNodeId>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FormulaDrillDiagnosticLink {
+    pub diagnostic_id: String,
+    pub node_id: Option<FormulaDrillNodeId>,
+    pub source_span: TextSpan,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FormulaDrillProjectionLoss {
+    pub node_id: Option<FormulaDrillNodeId>,
+    pub loss_kind: String,
+    pub message: String,
+}
+
+fn build_formula_drill_trace(
+    source: &FormulaSourceRecord,
+    syntax_diagnostics: &[SyntaxDiagnostic],
+    prepared_calls: &[PreparedCall],
+    final_value: &EvalValue,
+) -> FormulaDrillTrace {
+    let source_text = source.entered_formula_text.clone();
+    let parsed = parse_drill_expression_source(&source_text);
+    let mut builder = FormulaDrillTraceBuilder::new(prepared_calls, final_value);
+    let root_span = TextSpan::new(0, source_text.len());
+    let root_node_id = builder.push_node(FormulaDrillTraceNode {
+        node_id: FormulaDrillNodeId(String::new()),
+        parent_node_id: None,
+        source_span: Some(root_span),
+        expression_text: Some(source_text.clone()),
+        kind: FormulaDrillNodeKind::FormulaRoot,
+        function_id: None,
+        function_surface_name: None,
+        operator_kind: None,
+        argument_ordinal: None,
+        argument_name: None,
+        argument_role: None,
+        argument_name_source: FormulaArgumentNameSource::NotApplicable,
+        label_user: format!("Formula = {}", eval_value_label(final_value)),
+        label_developer: format!("Formula = {:?}", final_value),
+        evaluation_state: evaluation_state_for_value(final_value),
+        branch_disposition: None,
+        value_before_coercion: None,
+        value_after_coercion: None,
+        returned_value: Some(final_value.clone()),
+        published_value: Some(final_value.clone()),
+        value_preview: value_preview(final_value),
+        error: error_for_value(final_value, None),
+        child_node_ids: Vec::new(),
+        prepared_call_index: None,
+        prepared_argument_index: None,
+    });
+
+    if let Some(expr) = parsed {
+        builder.build_expr_node(&expr, Some(root_node_id.clone()), false);
+    } else if !syntax_diagnostics.is_empty() {
+        builder.push_diagnostic_placeholder(
+            Some(root_node_id.clone()),
+            root_span,
+            "formula syntax pending".to_string(),
+        );
+    }
+
+    let diagnostics = syntax_diagnostics
+        .iter()
+        .enumerate()
+        .map(|(index, diagnostic)| FormulaDrillDiagnosticLink {
+            diagnostic_id: format!("syntax:{index}"),
+            node_id: Some(root_node_id.clone()),
+            source_span: diagnostic.span,
+            message: diagnostic.message.clone(),
+        })
+        .collect();
+
+    FormulaDrillTrace {
+        schema_id: "oxfml.formula_drill_trace.v1",
+        formula_stable_id: source.formula_stable_id.0.clone(),
+        source_text,
+        root_node_id,
+        nodes: builder.nodes,
+        evaluation_order: builder.evaluation_order,
+        diagnostics,
+        final_value: final_value.clone(),
+        projection_losses: builder.projection_losses,
+    }
+}
+
+struct FormulaDrillTraceBuilder<'a> {
+    prepared_calls: &'a [PreparedCall],
+    root_fallback_value: &'a EvalValue,
+    nodes: Vec<FormulaDrillTraceNode>,
+    evaluation_order: Vec<FormulaDrillNodeId>,
+    projection_losses: Vec<FormulaDrillProjectionLoss>,
+    next_node_ordinal: usize,
+    consumed_prepared_calls: BTreeSet<usize>,
+}
+
+impl<'a> FormulaDrillTraceBuilder<'a> {
+    fn new(prepared_calls: &'a [PreparedCall], root_fallback_value: &'a EvalValue) -> Self {
+        Self {
+            prepared_calls,
+            root_fallback_value,
+            nodes: Vec::new(),
+            evaluation_order: Vec::new(),
+            projection_losses: Vec::new(),
+            next_node_ordinal: 0,
+            consumed_prepared_calls: BTreeSet::new(),
+        }
+    }
+
+    fn push_node(&mut self, mut node: FormulaDrillTraceNode) -> FormulaDrillNodeId {
+        let id = FormulaDrillNodeId(format!("drill-node:{}", self.next_node_ordinal));
+        self.next_node_ordinal += 1;
+        node.node_id = id.clone();
+        if let Some(parent_id) = node.parent_node_id.clone() {
+            if let Some(parent) = self
+                .nodes
+                .iter_mut()
+                .find(|candidate| candidate.node_id == parent_id)
+            {
+                parent.child_node_ids.push(id.clone());
+            }
+        }
+        self.nodes.push(node);
+        id
+    }
+
+    fn record_evaluation_order(&mut self, id: &FormulaDrillNodeId) {
+        if self.nodes.iter().any(|node| {
+            &node.node_id == id
+                && matches!(
+                    node.kind,
+                    FormulaDrillNodeKind::FunctionCall | FormulaDrillNodeKind::OperatorCall
+                )
+                && matches!(
+                    node.evaluation_state,
+                    FormulaDrillEvaluationState::Evaluated | FormulaDrillEvaluationState::Error
+                )
+        }) {
+            self.evaluation_order.push(id.clone());
+        }
+    }
+
+    fn apply_prepared_call_to_node(
+        &mut self,
+        id: &FormulaDrillNodeId,
+        label: &str,
+        prepared: Option<&(usize, PreparedCall)>,
+        skipped: bool,
+        fallback_value: Option<EvalValue>,
+    ) {
+        let returned_value = prepared
+            .and_then(|(_, call)| call.returned_value.clone())
+            .or(fallback_value);
+        if let Some(node) = self.nodes.iter_mut().find(|node| &node.node_id == id) {
+            let causal_node_id = if matches!(node.kind, FormulaDrillNodeKind::OperatorCall) {
+                Some(id.clone())
+            } else {
+                None
+            };
+            node.function_id = prepared
+                .map(|(_, call)| call.function_id.to_string())
+                .or_else(|| node.function_id.clone());
+            node.label_user = drill_call_label(label, returned_value.as_ref(), skipped);
+            node.label_developer = format!(
+                "{} prepared_call={:?}",
+                node.function_id.as_deref().unwrap_or(label),
+                prepared.map(|(index, _)| *index)
+            );
+            node.evaluation_state = if skipped {
+                FormulaDrillEvaluationState::Skipped
+            } else {
+                returned_value
+                    .as_ref()
+                    .map(evaluation_state_for_value)
+                    .unwrap_or(FormulaDrillEvaluationState::Evaluated)
+            };
+            node.returned_value = returned_value.clone();
+            node.value_preview = returned_value.as_ref().and_then(value_preview);
+            node.error = returned_value
+                .as_ref()
+                .and_then(|value| error_for_value(value, causal_node_id));
+            node.prepared_call_index = prepared.map(|(index, _)| *index);
+        }
+    }
+
+    fn apply_prepared_argument_values(
+        &mut self,
+        parent: &FormulaDrillNodeId,
+        call_index: usize,
+        call: &PreparedCall,
+    ) {
+        let child_node_ids = self
+            .nodes
+            .iter()
+            .find(|node| &node.node_id == parent)
+            .map(|node| node.child_node_ids.clone())
+            .unwrap_or_default();
+        for child_node_id in child_node_ids {
+            let Some(node) = self
+                .nodes
+                .iter_mut()
+                .find(|node| node.node_id == child_node_id)
+            else {
+                continue;
+            };
+            if node.kind != FormulaDrillNodeKind::Argument {
+                continue;
+            }
+            let Some(ordinal) = node.prepared_argument_index else {
+                continue;
+            };
+            let Some(value) = prepared_argument_value(call, ordinal) else {
+                continue;
+            };
+            node.value_before_coercion = Some(value.clone());
+            node.value_after_coercion = Some(value.clone());
+            node.value_preview = value_preview(&value);
+            node.prepared_call_index = Some(call_index);
+        }
+    }
+
+    fn build_expr_node(
+        &mut self,
+        expr: &DrillParsedExpr,
+        parent: Option<FormulaDrillNodeId>,
+        skipped: bool,
+    ) -> FormulaDrillNodeId {
+        match &expr.kind {
+            DrillParsedExprKind::Function { name, args, closed } => {
+                self.build_function_node(expr, name, args, *closed, parent, skipped)
+            }
+            DrillParsedExprKind::Binary { op, left, right } => {
+                self.build_operator_node(expr, *op, left, right, parent, skipped)
+            }
+            DrillParsedExprKind::Number
+            | DrillParsedExprKind::String
+            | DrillParsedExprKind::Logical(_)
+            | DrillParsedExprKind::Name => self.build_leaf_node(expr, parent, skipped),
+            DrillParsedExprKind::Missing => self.push_diagnostic_placeholder(
+                parent,
+                expr.span,
+                "missing expression".to_string(),
+            ),
+        }
+    }
+
+    fn build_function_node(
+        &mut self,
+        expr: &DrillParsedExpr,
+        name: &str,
+        args: &[DrillParsedArgument],
+        closed: bool,
+        parent: Option<FormulaDrillNodeId>,
+        skipped: bool,
+    ) -> FormulaDrillNodeId {
+        let node_id = self.push_node(FormulaDrillTraceNode {
+            node_id: FormulaDrillNodeId(String::new()),
+            parent_node_id: parent,
+            source_span: Some(expr.span),
+            expression_text: Some(expr.text.clone()),
+            kind: FormulaDrillNodeKind::FunctionCall,
+            function_id: None,
+            function_surface_name: Some(name.to_string()),
+            operator_kind: None,
+            argument_ordinal: None,
+            argument_name: None,
+            argument_role: None,
+            argument_name_source: FormulaArgumentNameSource::NotApplicable,
+            label_user: drill_call_label(name, None, skipped),
+            label_developer: format!("{name} prepared_call=None"),
+            evaluation_state: if skipped {
+                FormulaDrillEvaluationState::Skipped
+            } else {
+                FormulaDrillEvaluationState::Pending
+            },
+            branch_disposition: None,
+            value_before_coercion: None,
+            value_after_coercion: None,
+            returned_value: None,
+            published_value: None,
+            value_preview: None,
+            error: None,
+            child_node_ids: Vec::new(),
+            prepared_call_index: None,
+            prepared_argument_index: None,
+        });
+
+        if name.eq_ignore_ascii_case("LET") {
+            self.build_let_children(args, node_id.clone(), skipped);
+        } else if name.eq_ignore_ascii_case("IF") {
+            self.build_if_children(args, node_id.clone(), skipped);
+        } else if name.eq_ignore_ascii_case("LAMBDA") {
+            self.build_lambda_children(args, node_id.clone(), skipped);
+        } else {
+            for (ordinal, arg) in args.iter().enumerate() {
+                self.build_argument_node(name, ordinal, arg, node_id.clone(), skipped, None, None);
+            }
+        }
+
+        let prepared = if skipped {
+            None
+        } else {
+            self.take_prepared_call(name, None)
+        };
+        self.apply_prepared_call_to_node(&node_id, name, prepared.as_ref(), skipped, None);
+        if let Some((index, call)) = prepared.as_ref() {
+            self.apply_prepared_argument_values(&node_id, *index, call);
+        }
+
+        if !closed {
+            self.push_diagnostic_placeholder(
+                Some(node_id.clone()),
+                TextSpan::new(expr.span.end(), 0),
+                "expected ')'".to_string(),
+            );
+        }
+        self.record_evaluation_order(&node_id);
+        node_id
+    }
+
+    fn build_operator_node(
+        &mut self,
+        expr: &DrillParsedExpr,
+        op: DrillParsedOperator,
+        left: &DrillParsedExpr,
+        right: &DrillParsedExpr,
+        parent: Option<FormulaDrillNodeId>,
+        skipped: bool,
+    ) -> FormulaDrillNodeId {
+        let function_id = match op {
+            DrillParsedOperator::Divide => FUNC_ID_OP_DIVIDE,
+        };
+        let fallback_value = if parent.is_some() {
+            None
+        } else {
+            Some(self.root_fallback_value.clone())
+        };
+        let node_id = self.push_node(FormulaDrillTraceNode {
+            node_id: FormulaDrillNodeId(String::new()),
+            parent_node_id: parent,
+            source_span: Some(expr.span),
+            expression_text: Some(expr.text.clone()),
+            kind: FormulaDrillNodeKind::OperatorCall,
+            function_id: Some(function_id.to_string()),
+            function_surface_name: None,
+            operator_kind: Some(op.label().to_string()),
+            argument_ordinal: None,
+            argument_name: None,
+            argument_role: None,
+            argument_name_source: FormulaArgumentNameSource::NotApplicable,
+            label_user: drill_call_label(op.label(), None, skipped),
+            label_developer: format!("{function_id} prepared_call=None"),
+            evaluation_state: if skipped {
+                FormulaDrillEvaluationState::Skipped
+            } else {
+                FormulaDrillEvaluationState::Pending
+            },
+            branch_disposition: None,
+            value_before_coercion: None,
+            value_after_coercion: None,
+            returned_value: None,
+            published_value: None,
+            value_preview: None,
+            error: None,
+            child_node_ids: Vec::new(),
+            prepared_call_index: None,
+            prepared_argument_index: None,
+        });
+        self.build_argument_expr_node("left", 0, left, node_id.clone(), skipped);
+        self.build_argument_expr_node("right", 1, right, node_id.clone(), skipped);
+        let prepared = if skipped {
+            None
+        } else {
+            self.take_prepared_call("OP_DIVIDE", Some(function_id))
+        };
+        self.apply_prepared_call_to_node(
+            &node_id,
+            op.label(),
+            prepared.as_ref(),
+            skipped,
+            fallback_value,
+        );
+        if let Some((index, call)) = prepared.as_ref() {
+            self.apply_prepared_argument_values(&node_id, *index, call);
+        }
+        self.record_evaluation_order(&node_id);
+        node_id
+    }
+
+    fn build_leaf_node(
+        &mut self,
+        expr: &DrillParsedExpr,
+        parent: Option<FormulaDrillNodeId>,
+        skipped: bool,
+    ) -> FormulaDrillNodeId {
+        let value = if skipped {
+            None
+        } else {
+            literal_eval_value(expr)
+        };
+        let kind = match expr.kind {
+            DrillParsedExprKind::Name => FormulaDrillNodeKind::NameReference,
+            _ => FormulaDrillNodeKind::Literal,
+        };
+        self.push_node(FormulaDrillTraceNode {
+            node_id: FormulaDrillNodeId(String::new()),
+            parent_node_id: parent,
+            source_span: Some(expr.span),
+            expression_text: Some(expr.text.clone()),
+            kind,
+            function_id: None,
+            function_surface_name: None,
+            operator_kind: None,
+            argument_ordinal: None,
+            argument_name: None,
+            argument_role: None,
+            argument_name_source: FormulaArgumentNameSource::NotApplicable,
+            label_user: if skipped {
+                format!("{} skipped", expr.text)
+            } else if let Some(value) = value.as_ref() {
+                format!("{} = {}", expr.text, eval_value_label(value))
+            } else {
+                expr.text.clone()
+            },
+            label_developer: expr.text.clone(),
+            evaluation_state: if skipped {
+                FormulaDrillEvaluationState::Skipped
+            } else {
+                value
+                    .as_ref()
+                    .map(evaluation_state_for_value)
+                    .unwrap_or(FormulaDrillEvaluationState::Bound)
+            },
+            branch_disposition: None,
+            value_before_coercion: value.clone(),
+            value_after_coercion: value.clone(),
+            returned_value: value.clone(),
+            published_value: None,
+            value_preview: value.as_ref().and_then(value_preview),
+            error: value
+                .as_ref()
+                .and_then(|value| error_for_value(value, None)),
+            child_node_ids: Vec::new(),
+            prepared_call_index: None,
+            prepared_argument_index: None,
+        })
+    }
+
+    fn build_let_children(
+        &mut self,
+        args: &[DrillParsedArgument],
+        parent: FormulaDrillNodeId,
+        skipped: bool,
+    ) {
+        let mut index = 0;
+        while index + 1 < args.len().saturating_sub(1) {
+            let name = args[index].text.trim().to_string();
+            let value_arg = &args[index + 1];
+            let binding_id = self.push_node(FormulaDrillTraceNode {
+                node_id: FormulaDrillNodeId(String::new()),
+                parent_node_id: Some(parent.clone()),
+                source_span: Some(TextSpan::covering(args[index].span, value_arg.span)),
+                expression_text: Some(format!("{name},{}", value_arg.text)),
+                kind: FormulaDrillNodeKind::LetBinding,
+                function_id: None,
+                function_surface_name: None,
+                operator_kind: None,
+                argument_ordinal: Some(index),
+                argument_name: Some(name.clone()),
+                argument_role: Some(FormulaArgumentRole::NameSlot),
+                argument_name_source: FormulaArgumentNameSource::OxFmlSpecialForm,
+                label_user: format!("bind {name}"),
+                label_developer: format!("LET binding {name}"),
+                evaluation_state: if skipped {
+                    FormulaDrillEvaluationState::Skipped
+                } else {
+                    FormulaDrillEvaluationState::Bound
+                },
+                branch_disposition: None,
+                value_before_coercion: None,
+                value_after_coercion: None,
+                returned_value: None,
+                published_value: None,
+                value_preview: None,
+                error: None,
+                child_node_ids: Vec::new(),
+                prepared_call_index: None,
+                prepared_argument_index: None,
+            });
+            if let Some(expr) = value_arg.expr.as_ref() {
+                self.build_expr_node(expr, Some(binding_id), skipped);
+            }
+            index += 2;
+        }
+        if let Some(body) = args.last() {
+            self.build_argument_expr_node(
+                "body",
+                args.len() - 1,
+                body.expr_or_missing(),
+                parent,
+                skipped,
+            );
+        }
+    }
+
+    fn build_lambda_children(
+        &mut self,
+        args: &[DrillParsedArgument],
+        parent: FormulaDrillNodeId,
+        skipped: bool,
+    ) {
+        for (ordinal, arg) in args.iter().enumerate() {
+            let role = if ordinal + 1 == args.len() {
+                FormulaArgumentRole::BodyExpression
+            } else {
+                FormulaArgumentRole::NameSlot
+            };
+            self.build_argument_node_with_metadata(
+                arg.text.trim(),
+                ordinal,
+                arg,
+                parent.clone(),
+                skipped,
+                Some(role),
+                FormulaArgumentNameSource::OxFmlSpecialForm,
+                None,
+                None,
+            );
+        }
+    }
+
+    fn build_if_children(
+        &mut self,
+        args: &[DrillParsedArgument],
+        parent: FormulaDrillNodeId,
+        skipped: bool,
+    ) {
+        let test_truth = args
+            .first()
+            .and_then(|arg| arg.expr.as_ref())
+            .and_then(drill_literal_truth);
+        for (ordinal, arg) in args.iter().enumerate() {
+            let (name, role) = match ordinal {
+                0 => ("logical_test", FormulaArgumentRole::LogicalTest),
+                1 => ("value_if_true", FormulaArgumentRole::ValueIfTrue),
+                2 => ("value_if_false", FormulaArgumentRole::ValueIfFalse),
+                _ => ("arg", FormulaArgumentRole::Other("if_extra".to_string())),
+            };
+            let branch_disposition = if skipped {
+                Some(FormulaDrillBranchDisposition::Skipped)
+            } else {
+                match (ordinal, test_truth) {
+                    (0, _) => None,
+                    (1, Some(true)) | (2, Some(false)) => {
+                        Some(FormulaDrillBranchDisposition::Taken)
+                    }
+                    (1, Some(false)) | (2, Some(true)) => {
+                        Some(FormulaDrillBranchDisposition::Skipped)
+                    }
+                    (1 | 2, None) => Some(FormulaDrillBranchDisposition::NotReached),
+                    _ => None,
+                }
+            };
+            let arg_skipped = skipped
+                || matches!(
+                    branch_disposition,
+                    Some(
+                        FormulaDrillBranchDisposition::Skipped
+                            | FormulaDrillBranchDisposition::NotReached
+                    )
+                );
+            self.build_argument_node_with_metadata(
+                name,
+                ordinal,
+                arg,
+                parent.clone(),
+                arg_skipped,
+                Some(role),
+                FormulaArgumentNameSource::OxFuncMetadata,
+                branch_disposition,
+                None,
+            );
+        }
+    }
+
+    fn build_argument_node(
+        &mut self,
+        function_name: &str,
+        ordinal: usize,
+        arg: &DrillParsedArgument,
+        parent: FormulaDrillNodeId,
+        skipped: bool,
+        branch_disposition: Option<FormulaDrillBranchDisposition>,
+        prepared_argument_value: Option<EvalValue>,
+    ) {
+        let metadata = argument_metadata(function_name, ordinal);
+        let arg_id = self.push_argument_shell(
+            metadata.name,
+            ordinal,
+            arg,
+            Some(parent),
+            skipped,
+            metadata.role,
+            metadata.name_source,
+            branch_disposition,
+            prepared_argument_value,
+        );
+        if let Some(expr) = arg.expr.as_ref() {
+            self.build_expr_node(expr, Some(arg_id), skipped);
+        }
+    }
+
+    fn build_argument_node_with_metadata(
+        &mut self,
+        name: &str,
+        ordinal: usize,
+        arg: &DrillParsedArgument,
+        parent: FormulaDrillNodeId,
+        skipped: bool,
+        role: Option<FormulaArgumentRole>,
+        name_source: FormulaArgumentNameSource,
+        branch_disposition: Option<FormulaDrillBranchDisposition>,
+        prepared_argument_value: Option<EvalValue>,
+    ) {
+        let arg_id = self.push_argument_shell(
+            name.to_string(),
+            ordinal,
+            arg,
+            Some(parent),
+            skipped,
+            role,
+            name_source,
+            branch_disposition,
+            prepared_argument_value,
+        );
+        if let Some(expr) = arg.expr.as_ref() {
+            self.build_expr_node(expr, Some(arg_id), skipped);
+        }
+    }
+
+    fn build_argument_expr_node(
+        &mut self,
+        name: &str,
+        ordinal: usize,
+        expr: &DrillParsedExpr,
+        parent: FormulaDrillNodeId,
+        skipped: bool,
+    ) {
+        let arg = DrillParsedArgument {
+            span: expr.span,
+            text: expr.text.clone(),
+            expr: Some(expr.clone()),
+        };
+        self.build_argument_node_with_metadata(
+            name,
+            ordinal,
+            &arg,
+            parent,
+            skipped,
+            Some(FormulaArgumentRole::Other(name.to_string())),
+            FormulaArgumentNameSource::OxFmlSpecialForm,
+            None,
+            None,
+        );
+    }
+
+    fn push_argument_shell(
+        &mut self,
+        name: String,
+        ordinal: usize,
+        arg: &DrillParsedArgument,
+        parent: Option<FormulaDrillNodeId>,
+        skipped: bool,
+        role: Option<FormulaArgumentRole>,
+        name_source: FormulaArgumentNameSource,
+        branch_disposition: Option<FormulaDrillBranchDisposition>,
+        prepared_argument_value: Option<EvalValue>,
+    ) -> FormulaDrillNodeId {
+        let value_preview = prepared_argument_value.as_ref().and_then(value_preview);
+        self.push_node(FormulaDrillTraceNode {
+            node_id: FormulaDrillNodeId(String::new()),
+            parent_node_id: parent,
+            source_span: Some(arg.span),
+            expression_text: Some(arg.text.clone()),
+            kind: FormulaDrillNodeKind::Argument,
+            function_id: None,
+            function_surface_name: None,
+            operator_kind: None,
+            argument_ordinal: Some(ordinal),
+            argument_name: Some(name.clone()),
+            argument_role: role,
+            argument_name_source: name_source,
+            label_user: if skipped {
+                format!("{name}: {} skipped", arg.text)
+            } else {
+                format!("{name}: {}", arg.text)
+            },
+            label_developer: format!("arg[{ordinal}] {name}: {}", arg.text),
+            evaluation_state: if skipped {
+                FormulaDrillEvaluationState::Skipped
+            } else {
+                FormulaDrillEvaluationState::Bound
+            },
+            branch_disposition,
+            value_before_coercion: prepared_argument_value.clone(),
+            value_after_coercion: prepared_argument_value,
+            returned_value: None,
+            published_value: None,
+            value_preview,
+            error: None,
+            child_node_ids: Vec::new(),
+            prepared_call_index: None,
+            prepared_argument_index: Some(ordinal),
+        })
+    }
+
+    fn push_diagnostic_placeholder(
+        &mut self,
+        parent: Option<FormulaDrillNodeId>,
+        span: TextSpan,
+        message: String,
+    ) -> FormulaDrillNodeId {
+        self.push_node(FormulaDrillTraceNode {
+            node_id: FormulaDrillNodeId(String::new()),
+            parent_node_id: parent,
+            source_span: Some(span),
+            expression_text: None,
+            kind: FormulaDrillNodeKind::DiagnosticPlaceholder,
+            function_id: None,
+            function_surface_name: None,
+            operator_kind: None,
+            argument_ordinal: None,
+            argument_name: None,
+            argument_role: None,
+            argument_name_source: FormulaArgumentNameSource::NotApplicable,
+            label_user: message.clone(),
+            label_developer: message,
+            evaluation_state: FormulaDrillEvaluationState::Pending,
+            branch_disposition: None,
+            value_before_coercion: None,
+            value_after_coercion: None,
+            returned_value: None,
+            published_value: None,
+            value_preview: None,
+            error: None,
+            child_node_ids: Vec::new(),
+            prepared_call_index: None,
+            prepared_argument_index: None,
+        })
+    }
+
+    fn take_prepared_call(
+        &mut self,
+        function_name: &str,
+        function_id: Option<&str>,
+    ) -> Option<(usize, crate::eval::PreparedCall)> {
+        let normalized_name = function_name.to_ascii_uppercase();
+        let found = self
+            .prepared_calls
+            .iter()
+            .enumerate()
+            .find(|(index, call)| {
+                !self.consumed_prepared_calls.contains(index)
+                    && (call.function_name.eq_ignore_ascii_case(&normalized_name)
+                        || call.function_name.eq_ignore_ascii_case(function_name)
+                        || function_id.is_some_and(|id| call.function_id == id))
+            })
+            .map(|(index, call)| (index, call.clone()));
+        if let Some((index, _)) = &found {
+            self.consumed_prepared_calls.insert(*index);
+        }
+        found
+    }
+}
+
+fn prepared_argument_value(call: &PreparedCall, ordinal: usize) -> Option<EvalValue> {
+    call.prepared_arguments
+        .iter()
+        .find(|argument| argument.ordinal == ordinal)
+        .and_then(|argument| argument.resolved_value.clone())
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct DrillParsedExpr {
+    span: TextSpan,
+    text: String,
+    kind: DrillParsedExprKind,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum DrillParsedExprKind {
+    Function {
+        name: String,
+        args: Vec<DrillParsedArgument>,
+        closed: bool,
+    },
+    Binary {
+        op: DrillParsedOperator,
+        left: Box<DrillParsedExpr>,
+        right: Box<DrillParsedExpr>,
+    },
+    Number,
+    String,
+    Logical(bool),
+    Name,
+    Missing,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct DrillParsedArgument {
+    span: TextSpan,
+    text: String,
+    expr: Option<DrillParsedExpr>,
+}
+
+impl DrillParsedArgument {
+    fn expr_or_missing(&self) -> &DrillParsedExpr {
+        self.expr.as_ref().expect("argument expression expected")
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DrillParsedOperator {
+    Divide,
+}
+
+impl DrillParsedOperator {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Divide => "divide",
+        }
+    }
+}
+
+fn parse_drill_expression_source(source_text: &str) -> Option<DrillParsedExpr> {
+    let (start, text) = if let Some(rest) = source_text.strip_prefix('=') {
+        (1, rest)
+    } else {
+        (0, source_text)
+    };
+    parse_drill_expr_at(text, start)
+}
+
+fn parse_drill_expr_at(text: &str, base: usize) -> Option<DrillParsedExpr> {
+    let leading = text.len() - text.trim_start().len();
+    let trailing = text.trim_end().len();
+    let trimmed = &text[leading..trailing];
+    let start = base + leading;
+    if trimmed.is_empty() {
+        return Some(DrillParsedExpr {
+            span: TextSpan::new(start, 0),
+            text: String::new(),
+            kind: DrillParsedExprKind::Missing,
+        });
+    }
+    if let Some((op_index, op)) = find_top_level_operator(trimmed) {
+        let left_text = &trimmed[..op_index];
+        let right_text = &trimmed[op_index + 1..];
+        let left = parse_drill_expr_at(left_text, start)?;
+        let right = parse_drill_expr_at(right_text, start + op_index + 1)?;
+        return Some(DrillParsedExpr {
+            span: TextSpan::new(start, trimmed.len()),
+            text: trimmed.to_string(),
+            kind: DrillParsedExprKind::Binary {
+                op,
+                left: Box::new(left),
+                right: Box::new(right),
+            },
+        });
+    }
+    if let Some(open_index) = function_open_paren_index(trimmed) {
+        let name = trimmed[..open_index].trim().to_string();
+        let close_index = matching_trailing_paren_index(trimmed, open_index);
+        let closed = close_index.is_some();
+        let args_end = close_index.unwrap_or(trimmed.len());
+        let args_text = &trimmed[open_index + 1..args_end];
+        let args_base = start + open_index + 1;
+        let mut args = split_drill_arguments(args_text, args_base);
+        if args.is_empty() && !closed {
+            args.push(DrillParsedArgument {
+                span: TextSpan::new(args_base, 0),
+                text: String::new(),
+                expr: Some(DrillParsedExpr {
+                    span: TextSpan::new(args_base, 0),
+                    text: String::new(),
+                    kind: DrillParsedExprKind::Missing,
+                }),
+            });
+        }
+        return Some(DrillParsedExpr {
+            span: TextSpan::new(start, trimmed.len()),
+            text: trimmed.to_string(),
+            kind: DrillParsedExprKind::Function { name, args, closed },
+        });
+    }
+    let kind = if trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2 {
+        DrillParsedExprKind::String
+    } else if trimmed.eq_ignore_ascii_case("TRUE") {
+        DrillParsedExprKind::Logical(true)
+    } else if trimmed.eq_ignore_ascii_case("FALSE") {
+        DrillParsedExprKind::Logical(false)
+    } else if trimmed.parse::<f64>().is_ok() {
+        DrillParsedExprKind::Number
+    } else {
+        DrillParsedExprKind::Name
+    };
+    Some(DrillParsedExpr {
+        span: TextSpan::new(start, trimmed.len()),
+        text: trimmed.to_string(),
+        kind,
+    })
+}
+
+fn find_top_level_operator(text: &str) -> Option<(usize, DrillParsedOperator)> {
+    let mut depth = 0usize;
+    for (index, ch) in text.char_indices() {
+        match ch {
+            '(' | '{' => depth += 1,
+            ')' | '}' => depth = depth.saturating_sub(1),
+            '/' if depth == 0 => return Some((index, DrillParsedOperator::Divide)),
+            _ => {}
+        }
+    }
+    None
+}
+
+fn function_open_paren_index(text: &str) -> Option<usize> {
+    let open_index = text.find('(')?;
+    let name = text[..open_index].trim();
+    if !name.is_empty()
+        && name
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '.')
+    {
+        Some(open_index)
+    } else {
+        None
+    }
+}
+
+fn matching_trailing_paren_index(text: &str, open_index: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut last_close = None;
+    for (index, ch) in text
+        .char_indices()
+        .skip_while(|(index, _)| *index < open_index)
+    {
+        match ch {
+            '(' => depth += 1,
+            ')' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    last_close = Some(index);
+                }
+            }
+            _ => {}
+        }
+    }
+    last_close.filter(|index| text[*index + 1..].trim().is_empty())
+}
+
+fn split_drill_arguments(text: &str, base: usize) -> Vec<DrillParsedArgument> {
+    if text.trim().is_empty() {
+        return Vec::new();
+    }
+    let mut args = Vec::new();
+    let mut depth = 0usize;
+    let mut start = 0usize;
+    for (index, ch) in text.char_indices() {
+        match ch {
+            '(' | '{' => depth += 1,
+            ')' | '}' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                args.push(drill_argument_from_slice(text, base, start, index));
+                start = index + 1;
+            }
+            _ => {}
+        }
+    }
+    args.push(drill_argument_from_slice(text, base, start, text.len()));
+    args
+}
+
+fn drill_argument_from_slice(
+    text: &str,
+    base: usize,
+    start: usize,
+    end: usize,
+) -> DrillParsedArgument {
+    let raw = &text[start..end];
+    let leading = raw.len() - raw.trim_start().len();
+    let trailing = raw.trim_end().len();
+    let trimmed = &raw[leading..trailing];
+    let arg_start = base + start + leading;
+    DrillParsedArgument {
+        span: TextSpan::new(arg_start, trimmed.len()),
+        text: trimmed.to_string(),
+        expr: parse_drill_expr_at(trimmed, arg_start),
+    }
+}
+
+struct FormulaArgumentMetadata {
+    name: String,
+    role: Option<FormulaArgumentRole>,
+    name_source: FormulaArgumentNameSource,
+}
+
+fn argument_metadata(function_name: &str, ordinal: usize) -> FormulaArgumentMetadata {
+    if let Some(entry) = builtin_registry().lookup_by_surface_name(function_name) {
+        if let Some(parameter) = entry.display_signature.parameters.get(ordinal).or_else(|| {
+            entry
+                .display_signature
+                .parameters
+                .last()
+                .filter(|parameter| parameter.repeats)
+        }) {
+            let name = if parameter.repeats {
+                repeated_argument_name(&parameter.name, ordinal)
+            } else {
+                parameter.name.clone()
+            };
+            return FormulaArgumentMetadata {
+                role: argument_role_for_name(&name),
+                name,
+                name_source: FormulaArgumentNameSource::OxFuncMetadata,
+            };
+        }
+    }
+    FormulaArgumentMetadata {
+        name: format!("arg[{ordinal}]"),
+        role: None,
+        name_source: FormulaArgumentNameSource::OrdinalFallback,
+    }
+}
+
+fn repeated_argument_name(base: &str, ordinal: usize) -> String {
+    let stem = base.trim_end_matches(|ch: char| ch.is_ascii_digit());
+    if stem.is_empty() {
+        format!("{base}{}", ordinal + 1)
+    } else {
+        format!("{stem}{}", ordinal + 1)
+    }
+}
+
+fn argument_role_for_name(name: &str) -> Option<FormulaArgumentRole> {
+    let lower = name.to_ascii_lowercase();
+    match lower.as_str() {
+        "logical_test" => Some(FormulaArgumentRole::LogicalTest),
+        "value_if_true" => Some(FormulaArgumentRole::ValueIfTrue),
+        "value_if_false" => Some(FormulaArgumentRole::ValueIfFalse),
+        "text" => Some(FormulaArgumentRole::Text),
+        "array" => Some(FormulaArgumentRole::Array),
+        "rows" => Some(FormulaArgumentRole::Rows),
+        "columns" => Some(FormulaArgumentRole::Columns),
+        "step" => Some(FormulaArgumentRole::Step),
+        _ if lower.starts_with("number") => Some(FormulaArgumentRole::Number),
+        _ => Some(FormulaArgumentRole::Other(name.to_string())),
+    }
+}
+
+fn literal_eval_value(expr: &DrillParsedExpr) -> Option<EvalValue> {
+    match &expr.kind {
+        DrillParsedExprKind::Number => expr.text.parse::<f64>().ok().map(EvalValue::Number),
+        DrillParsedExprKind::String => Some(EvalValue::Text(
+            oxfunc_core::value::ExcelText::from_interop_assignment(expr.text.trim_matches('"')),
+        )),
+        DrillParsedExprKind::Logical(value) => Some(EvalValue::Logical(*value)),
+        DrillParsedExprKind::Name | DrillParsedExprKind::Missing => None,
+        DrillParsedExprKind::Function { .. } | DrillParsedExprKind::Binary { .. } => None,
+    }
+}
+
+fn drill_literal_truth(expr: &DrillParsedExpr) -> Option<bool> {
+    match expr.kind {
+        DrillParsedExprKind::Logical(value) => Some(value),
+        _ => None,
+    }
+}
+
+fn drill_call_label(name: &str, value: Option<&EvalValue>, skipped: bool) -> String {
+    if skipped {
+        format!("{name} skipped")
+    } else if let Some(value) = value {
+        format!("{name} = {}", eval_value_label(value))
+    } else {
+        name.to_string()
+    }
+}
+
+fn evaluation_state_for_value(value: &EvalValue) -> FormulaDrillEvaluationState {
+    match value {
+        EvalValue::Error(_) => FormulaDrillEvaluationState::Error,
+        _ => FormulaDrillEvaluationState::Evaluated,
+    }
+}
+
+fn error_for_value(
+    value: &EvalValue,
+    causal_node_id: Option<FormulaDrillNodeId>,
+) -> Option<FormulaDrillError> {
+    match value {
+        EvalValue::Error(code) => Some(FormulaDrillError {
+            code: Some(worksheet_error_code_text(*code).to_string()),
+            message: worksheet_error_message(*code).to_string(),
+            causal_node_id,
+        }),
+        _ => None,
+    }
+}
+
+fn value_preview(value: &EvalValue) -> Option<FormulaDrillValuePreview> {
+    match value {
+        EvalValue::Array(array) => {
+            let shape = array.shape();
+            let preview = array
+                .iter_row_major()
+                .take(4)
+                .map(array_cell_label)
+                .collect::<Vec<_>>();
+            Some(FormulaDrillValuePreview {
+                value_kind: "array".to_string(),
+                array_shape: Some(FormulaDrillArrayShape {
+                    rows: shape.rows,
+                    cols: shape.cols,
+                }),
+                preview,
+                truncated: shape.cell_count() > 4,
+                rich_value_type_name: None,
+            })
+        }
+        EvalValue::Lambda(lambda) => Some(FormulaDrillValuePreview {
+            value_kind: "lambda".to_string(),
+            array_shape: None,
+            preview: vec![format!(
+                "callable:{}:{}",
+                lambda.callable_token, lambda.invocation_contract_ref
+            )],
+            truncated: false,
+            rich_value_type_name: None,
+        }),
+        _ => None,
+    }
+}
+
+fn array_cell_label(value: &ArrayCellValue) -> String {
+    match value {
+        ArrayCellValue::Number(number) => format_number(*number),
+        ArrayCellValue::Text(text) => text.to_string_lossy(),
+        ArrayCellValue::Logical(value) => value.to_string().to_ascii_uppercase(),
+        ArrayCellValue::Error(code) => worksheet_error_code_text(*code).to_string(),
+        ArrayCellValue::EmptyCell => String::new(),
+    }
+}
+
+fn eval_value_label(value: &EvalValue) -> String {
+    match value {
+        EvalValue::Number(number) => format_number(*number),
+        EvalValue::Text(text) => text.to_string_lossy(),
+        EvalValue::Logical(value) => value.to_string().to_ascii_uppercase(),
+        EvalValue::Error(code) => worksheet_error_code_text(*code).to_string(),
+        EvalValue::Array(array) => {
+            let shape = array.shape();
+            format!("Array({}x{})", shape.rows, shape.cols)
+        }
+        EvalValue::Reference(reference) => reference.target.clone(),
+        EvalValue::Lambda(lambda) => format!("Lambda({})", lambda.callable_token),
+    }
+}
+
+fn format_number(number: f64) -> String {
+    if number.fract() == 0.0 {
+        format!("{}", number as i64)
+    } else {
+        number.to_string()
+    }
+}
+
+fn worksheet_error_code_text(code: WorksheetErrorCode) -> &'static str {
+    match code {
+        WorksheetErrorCode::Null => "#NULL!",
+        WorksheetErrorCode::Div0 => "#DIV/0!",
+        WorksheetErrorCode::Value => "#VALUE!",
+        WorksheetErrorCode::Ref => "#REF!",
+        WorksheetErrorCode::Name => "#NAME?",
+        WorksheetErrorCode::Num => "#NUM!",
+        WorksheetErrorCode::NA => "#N/A",
+        WorksheetErrorCode::Busy => "#BUSY!",
+        WorksheetErrorCode::GettingData => "#GETTING_DATA",
+        WorksheetErrorCode::Spill => "#SPILL!",
+        WorksheetErrorCode::Calc => "#CALC!",
+        WorksheetErrorCode::Field => "#FIELD!",
+        WorksheetErrorCode::Blocked => "#BLOCKED!",
+        WorksheetErrorCode::Connect => "#CONNECT!",
+    }
+}
+
+fn worksheet_error_message(code: WorksheetErrorCode) -> &'static str {
+    match code {
+        WorksheetErrorCode::Div0 => "division by zero",
+        WorksheetErrorCode::Null => "invalid intersection",
+        WorksheetErrorCode::Value => "value error",
+        WorksheetErrorCode::Ref => "invalid reference",
+        WorksheetErrorCode::Name => "unknown name",
+        WorksheetErrorCode::Num => "numeric error",
+        WorksheetErrorCode::NA => "not available",
+        WorksheetErrorCode::Busy => "busy",
+        WorksheetErrorCode::GettingData => "getting data",
+        WorksheetErrorCode::Spill => "spill error",
+        WorksheetErrorCode::Calc => "calculation error",
+        WorksheetErrorCode::Field => "field error",
+        WorksheetErrorCode::Blocked => "blocked",
+        WorksheetErrorCode::Connect => "connection error",
     }
 }
 
