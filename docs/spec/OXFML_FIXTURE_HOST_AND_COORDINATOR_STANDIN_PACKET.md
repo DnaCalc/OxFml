@@ -61,7 +61,7 @@ The first stand-in fixture packet should be composed from the current converged 
 5. `LocaleFormatContext`
 6. scalar context:
    - `now_serial`
-   - `random_value`
+   - `random_provider`
    - date-system context
 
 ### 4. Runtime catalog facts

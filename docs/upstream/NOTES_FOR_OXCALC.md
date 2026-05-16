@@ -671,7 +671,7 @@ Current proposed first packet families are:
    - optional `RtdProvider`
    - optional `RegisteredExternalProvider`
    - `LocaleFormatContext`
-   - scalar context such as `now_serial`, `random_value`, and date-system identity,
+   - volatile context such as `now_serial`, `random_provider`, and date-system identity,
 4. runtime catalog facts:
    - pinned `library_context_snapshot_ref`
    - local or pinned `LibraryContextProvider`.

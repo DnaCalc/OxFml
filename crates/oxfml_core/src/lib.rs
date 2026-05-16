@@ -29,6 +29,25 @@ pub mod test_support {
     pub mod oxfunc_adapter {
         pub use crate::oxfunc_adapter::*;
     }
+
+    pub mod random {
+        use oxfunc_core::functions::rand_fn::RandomProvider;
+
+        pub struct FixedRandomProvider {
+            pub value: f64,
+        }
+
+        impl RandomProvider for FixedRandomProvider {
+            fn random_unit(&self) -> f64 {
+                self.value
+            }
+        }
+
+        pub static FIXED_RANDOM_PROVIDER_025: FixedRandomProvider =
+            FixedRandomProvider { value: 0.25 };
+        pub static FIXED_RANDOM_PROVIDER_05: FixedRandomProvider =
+            FixedRandomProvider { value: 0.5 };
+    }
 }
 
 pub use oxfunc_core::functions::call_register_id_family::{

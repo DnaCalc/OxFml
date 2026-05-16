@@ -1,3 +1,5 @@
+use std::cell::Cell;
+
 use oxfml_core::interface::{
     HostProviderOutcomeKind, InMemoryLibraryContextProvider, LibraryContextSnapshotRef,
     ReturnedValueSurfaceKind, TypedContextQueryBundle, TypedContextQueryFamily,
@@ -17,11 +19,26 @@ use oxfunc_core::functions::call_register_id_family::{
     RegisterIdRequest, RegisteredExternalOriginKind, RegisteredExternalProvider,
     RegisteredExternalProviderError, RegisteredExternalTarget, RegisteredProcedureSpec,
 };
+use oxfunc_core::functions::rand_fn::RandomProvider;
 use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult, RtdRequest};
 use oxfunc_core::host_info::{
     HostInfoError, HostInfoProvider, ImageProviderResult, ImageRequest, ResolvedWebImage,
 };
-use oxfunc_core::value::{CallArgValue, CellStyleHint, EvalValue, ExcelText, PresentationHint};
+use oxfunc_core::value::{
+    ArrayCellValue, ArrayShape, CallArgValue, CellStyleHint, EvalValue, ExcelText, PresentationHint,
+};
+
+struct SequenceRandomProvider {
+    next: Cell<u32>,
+}
+
+impl RandomProvider for SequenceRandomProvider {
+    fn random_unit(&self) -> f64 {
+        let next = self.next.get();
+        self.next.set(next + 1);
+        next as f64 / 100.0
+    }
+}
 
 #[test]
 fn adapter_projects_direct_scalar_and_array_like_preparation_artifacts() {
@@ -141,14 +158,15 @@ fn adapter_executes_text_with_scientific_format_pattern_ftc_0655() {
 }
 
 #[test]
-fn adapter_preserves_randarray_width_for_columns_ftc_0505_without_explicit_random_bundle() {
+fn adapter_preserves_randarray_width_for_columns_ftc_0505_with_random_provider() {
     let locale = oxfml_core::format::oxfml_en_us_locale_context();
+    let random_provider = SequenceRandomProvider { next: Cell::new(1) };
     let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
         "ftc-0505-randarray-width",
         "formula:foundation:FTC-0505",
         "=COLUMNS(RANDARRAY(5,3))",
         locus(1, 1),
-        TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
+        TypedContextQueryBundle::new(None, None, Some(&locale), None, Some(&random_provider)),
     ))
     .expect("FTC-0505 adapter run should succeed");
 
@@ -164,12 +182,36 @@ fn adapter_preserves_randarray_width_for_columns_ftc_0505_without_explicit_rando
         run.preparation_artifact
             .typed_query_bundle_spec
             .families
-            .contains(&TypedContextQueryFamily::RandomValue)
+            .contains(&TypedContextQueryFamily::RandomProvider)
     );
     assert_eq!(
         run.preparation_artifact.prepared_calls[1].prepared_arguments[0].structure_class,
         PreparedStructureClass::ArrayLike
     );
+}
+
+#[test]
+fn adapter_randarray_consumes_distinct_provider_draws() {
+    let locale = oxfml_core::format::oxfml_en_us_locale_context();
+    let random_provider = SequenceRandomProvider { next: Cell::new(1) };
+    let run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
+        "randarray-5x5-provider-stream",
+        "formula:randarray-5x5-provider-stream",
+        "=RANDARRAY(5,5)",
+        locus(1, 1),
+        TypedContextQueryBundle::new(None, None, Some(&locale), None, Some(&random_provider)),
+    ))
+    .expect("RANDARRAY adapter run should succeed");
+
+    let EvalValue::Array(array) = run.evaluation_artifact.worksheet_value else {
+        panic!("expected array result");
+    };
+    assert_eq!(array.shape(), ArrayShape { rows: 5, cols: 5 });
+    let values = array.iter_row_major().cloned().collect::<Vec<_>>();
+    assert_eq!(values.first(), Some(&ArrayCellValue::Number(0.01)));
+    assert_eq!(values.get(12), Some(&ArrayCellValue::Number(0.13)));
+    assert_eq!(values.last(), Some(&ArrayCellValue::Number(0.25)));
+    assert_eq!(random_provider.next.get(), 26);
 }
 
 #[test]

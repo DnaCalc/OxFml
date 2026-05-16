@@ -429,7 +429,7 @@ fn session_query_bundle<'a>(
         None,
         Some(session_locale_context()),
         Some(46000.0),
-        Some(0.25),
+        Some(&oxfml_core::test_support::random::FIXED_RANDOM_PROVIDER_025),
     )
 }
 

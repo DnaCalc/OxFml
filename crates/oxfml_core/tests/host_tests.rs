@@ -495,7 +495,6 @@ fn first_host_replay_packet_preserves_locale_sensitive_text_date_family_publicat
     for (case_id, formula, expected_value) in cases {
         let mut host = SingleFormulaHost::new(format!("host:{case_id}"), formula);
         host.now_serial = Some(46000.0);
-        host.random_value = Some(0.25);
         let run = host
             .recalc(None, Some(&locale))
             .expect("recalc should succeed");
@@ -539,7 +538,7 @@ fn single_formula_host_uses_pinned_snapshot_ref_over_provider_current_snapshot()
         None,
         Some(&locale),
         Some(46000.0),
-        Some(0.25),
+        Some(&oxfml_core::test_support::random::FIXED_RANDOM_PROVIDER_025),
     );
     let mut host = SingleFormulaHost::new("host:pinned-snapshot", "=TAKE({1,2},1)");
 

@@ -34,7 +34,7 @@ fn typed_context_query_bundle_freeze_candidate_stays_capability_scoped() {
         Some(&MockRtdProvider),
         Some(&locale),
         Some(46000.0),
-        Some(0.25),
+        Some(&oxfml_core::test_support::random::FIXED_RANDOM_PROVIDER_025),
     );
 
     let spec = bundle.freeze_candidate_spec();
@@ -54,7 +54,7 @@ fn typed_context_query_bundle_freeze_candidate_stays_capability_scoped() {
             TypedContextQueryFamily::Translate,
             TypedContextQueryFamily::Rtd,
             TypedContextQueryFamily::NowSerial,
-            TypedContextQueryFamily::RandomValue,
+            TypedContextQueryFamily::RandomProvider,
             TypedContextQueryFamily::LocaleFormatContext,
         ]
     );
@@ -76,7 +76,7 @@ fn evaluation_context_round_trips_typed_context_query_bundle() {
         Some(&MockRtdProvider),
         Some(&locale),
         Some(45000.0),
-        Some(0.5),
+        Some(&oxfml_core::test_support::random::FIXED_RANDOM_PROVIDER_05),
     );
 
     context.apply_typed_context_query_bundle(bundle);

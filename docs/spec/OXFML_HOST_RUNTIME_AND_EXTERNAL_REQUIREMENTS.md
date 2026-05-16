@@ -158,7 +158,7 @@ For the currently covered local scope, a host must be able to supply the first t
    - `RegisteredExternalCatalogController`
 6. scalar context inputs:
    - `now_serial`
-   - `random_value`
+   - `random_provider`
    - `LocaleFormatContext`
    - date-system context
 7. when stable verification or replay-comparison export is required:
@@ -353,7 +353,7 @@ For a first direct single-cell host implementation, the expected implementation 
    - attach `HostInfoProvider` if the formula may use host-query functions,
    - attach `RtdProvider` if `RTD` is in scope,
    - attach locale/date-system context,
-   - attach `now_serial` and `random_value` if the selected scope needs them,
+   - attach `now_serial` and `random_provider` if the selected scope needs them,
 4. run the canonical transform chain
    - `parse`
    - `project_red_view`

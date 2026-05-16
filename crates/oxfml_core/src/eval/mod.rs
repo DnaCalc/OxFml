@@ -17,16 +17,17 @@ use oxfunc_core::functions::if_fn::{eval_if_surface, map_if_error_to_ws};
 use oxfunc_core::functions::iferror::{eval_iferror_surface, map_iferror_error_to_ws};
 use oxfunc_core::functions::image_fn::eval_image_surface_extended_with_capabilities;
 use oxfunc_core::functions::info_fn::{InfoEvalError, eval_info_surface};
+use oxfunc_core::functions::rand_fn::RandomProvider;
 use oxfunc_core::functions::rtd_fn::RtdProvider;
 use oxfunc_core::functions::surface_dispatch::{
-    FUNC_ID_CALL, FUNC_ID_CELL, FUNC_ID_HSTACK, FUNC_ID_IMAGE, FUNC_ID_INDEX, FUNC_ID_INFO,
-    FUNC_ID_OP_ADD, FUNC_ID_OP_CONCAT, FUNC_ID_OP_DIVIDE, FUNC_ID_OP_EQUAL,
-    FUNC_ID_OP_GREATER_EQUAL, FUNC_ID_OP_GREATER_THAN, FUNC_ID_OP_IMPLICIT_INTERSECTION,
-    FUNC_ID_OP_INTERSECTION_REF, FUNC_ID_OP_LESS_EQUAL, FUNC_ID_OP_LESS_THAN, FUNC_ID_OP_MULTIPLY,
-    FUNC_ID_OP_NEGATE, FUNC_ID_OP_NOT_EQUAL, FUNC_ID_OP_PERCENT, FUNC_ID_OP_POWER,
-    FUNC_ID_OP_RANGE_REF, FUNC_ID_OP_SPILL_REF, FUNC_ID_OP_SUBTRACT, FUNC_ID_OP_UNARY_PLUS,
-    FUNC_ID_OP_UNION_REF, FUNC_ID_REGISTER_ID, FUNC_ID_RTD, FUNC_ID_TAKE, FUNC_ID_XLOOKUP,
-    eval_surface_extended_call,
+    FUNC_ID_CALL, FUNC_ID_CELL, FUNC_ID_HSTACK, FUNC_ID_HYPERLINK, FUNC_ID_IMAGE, FUNC_ID_INDEX,
+    FUNC_ID_INFO, FUNC_ID_NOW, FUNC_ID_OP_ADD, FUNC_ID_OP_CONCAT, FUNC_ID_OP_DIVIDE,
+    FUNC_ID_OP_EQUAL, FUNC_ID_OP_GREATER_EQUAL, FUNC_ID_OP_GREATER_THAN,
+    FUNC_ID_OP_IMPLICIT_INTERSECTION, FUNC_ID_OP_INTERSECTION_REF, FUNC_ID_OP_LESS_EQUAL,
+    FUNC_ID_OP_LESS_THAN, FUNC_ID_OP_MULTIPLY, FUNC_ID_OP_NEGATE, FUNC_ID_OP_NOT_EQUAL,
+    FUNC_ID_OP_PERCENT, FUNC_ID_OP_POWER, FUNC_ID_OP_RANGE_REF, FUNC_ID_OP_SPILL_REF,
+    FUNC_ID_OP_SUBTRACT, FUNC_ID_OP_UNARY_PLUS, FUNC_ID_OP_UNION_REF, FUNC_ID_REGISTER_ID,
+    FUNC_ID_RTD, FUNC_ID_TAKE, FUNC_ID_TODAY, FUNC_ID_XLOOKUP, eval_surface_extended_call,
 };
 use oxfunc_core::host_info::HostInfoProvider;
 use oxfunc_core::locale_format::LocaleFormatContext;
@@ -1403,7 +1404,7 @@ pub struct EvaluationContext<'a> {
     pub registered_external_provider: Option<&'a dyn RegisteredExternalProvider>,
     pub host_function_provider: Option<&'a dyn HostFunctionProvider>,
     pub now_serial: Option<f64>,
-    pub random_value: Option<f64>,
+    pub random_provider: Option<&'a dyn RandomProvider>,
     pub trace_mode: EvaluationTraceMode,
     frame_state: Rc<EvaluationFrameState>,
 }
@@ -1425,7 +1426,7 @@ impl<'a> EvaluationContext<'a> {
             registered_external_provider: None,
             host_function_provider: None,
             now_serial: None,
-            random_value: None,
+            random_provider: None,
             trace_mode: EvaluationTraceMode::default(),
             frame_state: Rc::new(EvaluationFrameState::default()),
         }
@@ -1437,7 +1438,7 @@ impl<'a> EvaluationContext<'a> {
             self.rtd_provider,
             self.locale_ctx,
             self.now_serial,
-            self.random_value,
+            self.random_provider,
         )
         .with_registered_external_provider(self.registered_external_provider)
         .with_host_function_provider(self.host_function_provider)
@@ -1450,7 +1451,7 @@ impl<'a> EvaluationContext<'a> {
         self.host_function_provider = bundle.host_function_provider;
         self.locale_ctx = bundle.locale_ctx;
         self.now_serial = bundle.now_serial;
-        self.random_value = bundle.random_value;
+        self.random_provider = bundle.random_provider;
     }
 
     pub fn with_trace_mode(mut self, trace_mode: EvaluationTraceMode) -> Self {
@@ -1684,12 +1685,15 @@ fn extended_surface_for_top_level_function_call(
                     ),
                 );
             }
+            if !matches!(function_id, FUNC_ID_HYPERLINK | FUNC_ID_NOW | FUNC_ID_TODAY) {
+                return None;
+            }
             let extended = eval_surface_extended_call(
                 function_id,
                 &call_args,
                 &resolver,
                 context.now_serial,
-                context.random_value,
+                context.random_provider,
                 context.locale_ctx,
                 context.host_info,
             )
@@ -2325,7 +2329,7 @@ fn evaluate_surface_call_site(
     };
     let mut runtime = SurfaceCallRuntime::new(resolver);
     runtime.now_serial = context.now_serial;
-    runtime.random_value = context.random_value;
+    runtime.random_provider = context.random_provider;
     runtime.locale_ctx = context.locale_ctx;
     runtime.host_info = context.host_info;
     runtime.callable_invoker = Some(&callable_invoker);
@@ -2347,7 +2351,7 @@ fn evaluate_surface_call_site_scratch(
     };
     let mut runtime = SurfaceCallRuntime::new(resolver);
     runtime.now_serial = context.now_serial;
-    runtime.random_value = context.random_value;
+    runtime.random_provider = context.random_provider;
     runtime.locale_ctx = context.locale_ctx;
     runtime.host_info = context.host_info;
     runtime.callable_invoker = Some(&callable_invoker);
@@ -5179,7 +5183,7 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
             };
             let mut runtime = SurfaceCallRuntime::new(&resolver);
             runtime.now_serial = self.context.now_serial;
-            runtime.random_value = self.context.random_value;
+            runtime.random_provider = self.context.random_provider;
             runtime.locale_ctx = self.context.locale_ctx;
             runtime.host_info = self.context.host_info;
             runtime.callable_invoker = Some(self);
@@ -5368,7 +5372,7 @@ impl OxFmlCallableInvoker<'_, '_> {
         };
         let mut runtime = SurfaceCallRuntime::new(&resolver);
         runtime.now_serial = self.context.now_serial;
-        runtime.random_value = self.context.random_value;
+        runtime.random_provider = self.context.random_provider;
         runtime.locale_ctx = self.context.locale_ctx;
         runtime.host_info = self.context.host_info;
         runtime.callable_invoker = Some(self);

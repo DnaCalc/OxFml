@@ -196,7 +196,7 @@ It should carry:
    - structure-context identity
 4. explicit execution mode or trigger kind
 5. per-request `TypedContextQueryBundle`
-6. per-request volatile inputs such as `now_serial` and `random_value`
+6. per-request volatile inputs such as `now_serial` and `random_provider`
 7. explicit-input overrides or recalc-cause fields where they affect semantic
    behavior
 8. optional per-request direct-cell or probe-only context where

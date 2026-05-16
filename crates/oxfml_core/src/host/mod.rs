@@ -81,7 +81,6 @@ pub struct SingleFormulaHost {
     pub enclosing_table_ref: Option<TableRef>,
     pub caller_table_region: Option<TableCallerRegion>,
     pub now_serial: Option<f64>,
-    pub random_value: Option<f64>,
     pub trace_mode: EvaluationTraceMode,
     next_session_id: u64,
     next_commit_attempt_id: u64,
@@ -228,7 +227,6 @@ impl SingleFormulaHost {
             enclosing_table_ref: None,
             caller_table_region: None,
             now_serial: Some(46000.0),
-            random_value: Some(0.25),
             trace_mode: EvaluationTraceMode::default(),
             next_session_id: 1,
             next_commit_attempt_id: 1,
@@ -330,13 +328,8 @@ impl SingleFormulaHost {
         host_info: Option<&dyn HostInfoProvider>,
         locale_ctx: Option<&LocaleFormatContext<'_>>,
     ) -> Result<HostRecalcOutput, String> {
-        let query_bundle = TypedContextQueryBundle::new(
-            host_info,
-            None,
-            locale_ctx,
-            self.now_serial,
-            self.random_value,
-        );
+        let query_bundle =
+            TypedContextQueryBundle::new(host_info, None, locale_ctx, self.now_serial, None);
         self.recalc_with_interfaces(EvaluationBackend::OxFuncBacked, query_bundle, None)
     }
 
@@ -346,13 +339,8 @@ impl SingleFormulaHost {
         host_info: Option<&dyn HostInfoProvider>,
         locale_ctx: Option<&LocaleFormatContext<'_>>,
     ) -> Result<HostRecalcOutput, String> {
-        let query_bundle = TypedContextQueryBundle::new(
-            host_info,
-            None,
-            locale_ctx,
-            self.now_serial,
-            self.random_value,
-        );
+        let query_bundle =
+            TypedContextQueryBundle::new(host_info, None, locale_ctx, self.now_serial, None);
         self.recalc_with_interfaces(backend, query_bundle, None)
     }
 
@@ -671,7 +659,7 @@ impl SingleFormulaHost {
             rtd_provider,
             locale_ctx,
             self.now_serial,
-            self.random_value,
+            None,
         );
         self.recalc_with_interfaces(
             EvaluationBackend::OxFuncBacked,
@@ -687,14 +675,9 @@ impl SingleFormulaHost {
         locale_ctx: Option<&LocaleFormatContext<'_>>,
         library_context_provider: Option<&dyn LibraryContextProvider>,
     ) -> Result<HostRecalcOutput, String> {
-        let query_bundle = TypedContextQueryBundle::new(
-            host_info,
-            None,
-            locale_ctx,
-            self.now_serial,
-            self.random_value,
-        )
-        .with_registered_external_provider(registered_external_provider);
+        let query_bundle =
+            TypedContextQueryBundle::new(host_info, None, locale_ctx, self.now_serial, None)
+                .with_registered_external_provider(registered_external_provider);
         self.recalc_with_interfaces(
             EvaluationBackend::OxFuncBacked,
             query_bundle,
@@ -1018,7 +1001,7 @@ fn effective_query_bundle<'a>(
         host_function_provider: query_bundle.host_function_provider,
         locale_ctx: query_bundle.locale_ctx,
         now_serial: query_bundle.now_serial.or(host.now_serial),
-        random_value: query_bundle.random_value.or(host.random_value),
+        random_provider: query_bundle.random_provider,
     }
 }
 

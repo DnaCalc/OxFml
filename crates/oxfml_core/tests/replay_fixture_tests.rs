@@ -1149,7 +1149,7 @@ fn evaluate_fixture_formula(
         None,
         Some(&locale_ctx),
         Some(46000.0),
-        Some(0.25),
+        Some(&oxfml_core::test_support::random::FIXED_RANDOM_PROVIDER_025),
     ));
     context.set_trace_mode(EvaluationTraceMode::PreparedCalls);
 

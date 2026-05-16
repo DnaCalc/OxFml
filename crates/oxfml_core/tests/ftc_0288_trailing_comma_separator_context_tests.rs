@@ -58,7 +58,7 @@ fn evaluate_text_formula(
         None,
         Some(locale_ctx),
         Some(46000.0),
-        Some(0.25),
+        Some(&oxfml_core::test_support::random::FIXED_RANDOM_PROVIDER_025),
     ));
 
     evaluate_formula(context).expect("evaluation should succeed")
@@ -233,7 +233,7 @@ fn runtime_characterizes_trailing_comma_scaling_patterns_across_separator_contex
                             None,
                             Some(locale),
                             Some(46000.0),
-                            Some(0.25),
+                            Some(&oxfml_core::test_support::random::FIXED_RANDOM_PROVIDER_025),
                         ),
                     )
                     .with_verification_publication_context(verification_context.clone()),

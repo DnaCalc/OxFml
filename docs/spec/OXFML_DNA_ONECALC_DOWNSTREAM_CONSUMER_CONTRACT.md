@@ -57,7 +57,7 @@ The narrowest honest H0 host path requires these fields explicitly:
 | 5 | immutable `LibraryContextSnapshot` | OxFunc-backed | pinned snapshot identity visible to parse/bind/plan |
 | 6 | `LocaleFormatContext` | host | locale and date-system context |
 | 7 | `now_serial` | host | required if any volatile-time function is in scope |
-| 8 | `random_value` | host | required if `RAND` or `RANDBETWEEN` is in scope |
+| 8 | `random_provider` | host | required if `RAND` or `RANDBETWEEN` is in scope |
 
 H0 does not require:
 1. caller-anchor or address-mode context,
@@ -143,7 +143,7 @@ These are OneCalc-local classification names as defined in `DNA_ONECALC_SCOPE_AN
 4. `defined_name_bindings`,
 5. `LibraryContextProvider` / immutable `LibraryContextSnapshot`,
 6. `LocaleFormatContext` (locale, date-system),
-7. `now_serial`, `random_value`,
+7. `now_serial`, `random_provider`,
 8. `HostInfoProvider` (for `INFO`, `CELL`, host-query lanes),
 9. `RtdProvider` (for `RTD` lanes),
 10. display context,

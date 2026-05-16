@@ -54,7 +54,7 @@ fn evaluate_text_formula(locale_ctx: &LocaleFormatContext<'_>) -> oxfml_core::Ev
         None,
         Some(locale_ctx),
         Some(46000.0),
-        Some(0.25),
+        Some(&oxfml_core::test_support::random::FIXED_RANDOM_PROVIDER_025),
     ));
 
     evaluate_formula(context).expect("evaluation should succeed")
@@ -139,7 +139,7 @@ fn runtime_environment_respects_separator_context_for_text_grouping_ftc_0288() {
                         None,
                         Some(&locale),
                         Some(46000.0),
-                        Some(0.25),
+                        Some(&oxfml_core::test_support::random::FIXED_RANDOM_PROVIDER_025),
                     ),
                 )
                 .with_verification_publication_context(verification_context.clone()),

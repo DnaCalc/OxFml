@@ -30,7 +30,7 @@ struct AdmittedFixtureCase {
     expected_prepared_argument_structures: Option<Vec<String>>,
     expected_prepared_argument_sources: Option<Vec<String>>,
     now_serial: Option<f64>,
-    random_value: Option<f64>,
+    random_provider: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -70,7 +70,7 @@ fn w050_admitted_fixture_cases_match_current_adapter_floor() {
                 None,
                 None,
                 fixture.now_serial,
-                fixture.random_value,
+                random_provider_for_fixture(fixture.random_provider.as_deref()),
             ),
         );
         request.library_context_provider = Some(&provider);
@@ -189,6 +189,16 @@ fn w050_admitted_fixture_cases_match_current_adapter_floor() {
         "admitted fixtures diverged:\n{}",
         failures.join("\n")
     );
+}
+
+fn random_provider_for_fixture(
+    provider: Option<&str>,
+) -> Option<&'static dyn oxfunc_core::functions::rand_fn::RandomProvider> {
+    match provider {
+        Some("fixed_0_5") => Some(&oxfml_core::test_support::random::FIXED_RANDOM_PROVIDER_05),
+        None => None,
+        Some(other) => panic!("unsupported fixture random provider {other}"),
+    }
 }
 
 #[test]

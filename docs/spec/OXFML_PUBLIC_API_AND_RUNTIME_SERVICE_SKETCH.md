@@ -250,7 +250,7 @@ Current first-pass families are:
    - `RtdProviderResult::{ Value, NoValueYet, CapabilityDenied, ConnectionFailed, ProviderError }`
 4. host-supplied scalar context providers:
    - `now_serial`
-   - `random_value`
+   - `random_provider`
    - `LocaleFormatContext`
 
 Working rule:

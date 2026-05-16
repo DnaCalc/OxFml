@@ -34,7 +34,7 @@ The shared family set is narrow enough to treat as frozen for the current phase.
 The real remaining work is internal architectural consolidation:
 1. `TypedContextQueryBundle` must become the canonical input packet for every runtime execution surface that needs host/query capabilities.
 2. `TypedContextQueryBundleSpec` must become the canonical durable record of what capability/query families were actually admitted on that run.
-3. New or refactored internal surfaces should stop growing ad hoc `host_info` / `locale_ctx` / `now_serial` / `random_value` plumbing as separate boundary fields.
+3. New or refactored internal surfaces should stop growing ad hoc `host_info` / `locale_ctx` / `now_serial` / `random_provider` plumbing as separate boundary fields.
 4. Family merge/split should now be mismatch-driven only; the default posture is to keep the current family set stable.
 
 ## Target End-State
@@ -44,7 +44,7 @@ The desired `W041` end-state is:
 2. one canonical durable retained/replay packet:
    `TypedContextQueryBundleSpec`
 3. one canonical family vocabulary, stable for the current freeze:
-   `ReferenceResolver`, grouped host-info families, `Rtd`, `RegisteredExternal`, `NowSerial`, `RandomValue`, `LocaleFormatContext`
+   `ReferenceResolver`, grouped host-info families, `Rtd`, `RegisteredExternal`, `NowSerial`, `RandomProvider`, `LocaleFormatContext`
 4. one architectural rule:
    boundary and service surfaces accept the bundle/spec rather than re-spelling the same capability set as unrelated parameters
 

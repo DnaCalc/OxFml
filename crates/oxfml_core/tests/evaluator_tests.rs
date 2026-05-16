@@ -2326,7 +2326,7 @@ fn evaluate_with_cells_result(
         None,
         Some(&locale),
         Some(46000.0),
-        Some(0.25),
+        Some(&oxfml_core::test_support::random::FIXED_RANDOM_PROVIDER_025),
     ));
     context.set_trace_mode(EvaluationTraceMode::PreparedCalls);
 
@@ -2378,7 +2378,7 @@ fn evaluate_with_rtd_provider(
         rtd_provider,
         locale_ctx,
         Some(46000.0),
-        Some(0.25),
+        Some(&oxfml_core::test_support::random::FIXED_RANDOM_PROVIDER_025),
     ));
     context.set_trace_mode(EvaluationTraceMode::PreparedCalls);
 

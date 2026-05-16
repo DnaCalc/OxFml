@@ -198,7 +198,7 @@ fn first_host_replay_capture_packet_preserves_snapshot_and_provider_outcomes() {
         None,
         Some(&locale),
         Some(46000.0),
-        Some(0.25),
+        Some(&oxfml_core::test_support::random::FIXED_RANDOM_PROVIDER_025),
     );
     let mut info_host = SingleFormulaHost::new("host-info", "=INFO(\"system\")");
     let info_output = info_host
@@ -227,7 +227,7 @@ fn first_host_replay_capture_packet_preserves_snapshot_and_provider_outcomes() {
             oxfml_core::TypedContextQueryFamily::WidthConversionMode,
             oxfml_core::TypedContextQueryFamily::Translate,
             oxfml_core::TypedContextQueryFamily::NowSerial,
-            oxfml_core::TypedContextQueryFamily::RandomValue,
+            oxfml_core::TypedContextQueryFamily::RandomProvider,
             oxfml_core::TypedContextQueryFamily::LocaleFormatContext,
         ]
     );
@@ -269,7 +269,7 @@ fn first_host_replay_capture_packet_preserves_snapshot_and_provider_outcomes() {
                 None,
                 Some(&locale),
                 Some(46000.0),
-                Some(0.25),
+                Some(&oxfml_core::test_support::random::FIXED_RANDOM_PROVIDER_025),
             ),
             Some(&provider),
         )
@@ -293,7 +293,7 @@ fn first_host_replay_capture_packet_preserves_snapshot_and_provider_outcomes() {
                 Some(&CapabilityDeniedRtdProvider),
                 Some(&locale),
                 Some(46000.0),
-                Some(0.25),
+                Some(&oxfml_core::test_support::random::FIXED_RANDOM_PROVIDER_025),
             ),
             Some(&provider),
         )

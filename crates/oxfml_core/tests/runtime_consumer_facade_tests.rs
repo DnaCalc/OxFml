@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 use oxfml_core::consumer::runtime::{
     RuntimeEnvironment, RuntimeFormalInputBinding, RuntimeFormulaRequest,
@@ -28,14 +28,27 @@ use oxfunc_core::functions::call_register_id_family::{
     RegisteredExternalProvider, RegisteredExternalProviderError, RegisteredExternalTarget,
     RegisteredProcedureSpec,
 };
+use oxfunc_core::functions::rand_fn::RandomProvider;
 use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult, RtdRequest};
 use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
 use oxfunc_core::locale_format::{
     FormatCodeEngine, FormatFailure, FormatProfile, LocaleFormatContext, LocaleValueParser,
     ParseFailure, WorkbookDateSystem,
 };
-use oxfunc_core::value::EvalValue;
+use oxfunc_core::value::{ArrayCellValue, ArrayShape, EvalValue};
 use oxfunc_core::value::{CallArgValue, ExcelText};
+
+struct SequenceRandomProvider {
+    next: Cell<u32>,
+}
+
+impl RandomProvider for SequenceRandomProvider {
+    fn random_unit(&self) -> f64 {
+        let next = self.next.get();
+        self.next.set(next + 1);
+        next as f64 / 100.0
+    }
+}
 
 #[test]
 fn runtime_environment_evaluates_non_formula_worksheet_entries() {
@@ -1043,9 +1056,9 @@ fn runtime_environment_emits_effective_display_text_comparison_view_for_programm
 }
 
 #[test]
-fn runtime_environment_preserves_randarray_width_for_columns_ftc_0505_without_explicit_random_bundle()
- {
+fn runtime_environment_preserves_randarray_width_for_columns_ftc_0505_with_random_provider() {
     let locale = oxfml_en_us_locale_context();
+    let random_provider = SequenceRandomProvider { next: Cell::new(1) };
     let result = RuntimeEnvironment::new()
         .execute(
             RuntimeFormulaRequest::new(
@@ -1054,7 +1067,13 @@ fn runtime_environment_preserves_randarray_width_for_columns_ftc_0505_without_ex
                     1,
                     "=COLUMNS(RANDARRAY(5,3))",
                 ),
-                TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
+                TypedContextQueryBundle::new(
+                    None,
+                    None,
+                    Some(&locale),
+                    None,
+                    Some(&random_provider),
+                ),
             )
             .with_trace_mode(EvaluationTraceMode::PreparedCalls),
         )
@@ -1084,12 +1103,34 @@ fn runtime_environment_preserves_randarray_width_for_columns_ftc_0505_without_ex
         result
             .typed_query_bundle_spec
             .families
-            .contains(&TypedContextQueryFamily::RandomValue)
+            .contains(&TypedContextQueryFamily::RandomProvider)
     );
     assert_eq!(
         result.evaluation.trace.prepared_calls[1].prepared_arguments[0].structure_class,
         oxfml_core::PreparedStructureClass::ArrayLike
     );
+}
+
+#[test]
+fn runtime_environment_randarray_consumes_distinct_provider_draws() {
+    let locale = oxfml_en_us_locale_context();
+    let random_provider = SequenceRandomProvider { next: Cell::new(1) };
+    let result = RuntimeEnvironment::new()
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new("runtime:randarray-5x5", 1, "=RANDARRAY(5,5)"),
+            TypedContextQueryBundle::new(None, None, Some(&locale), None, Some(&random_provider)),
+        ))
+        .expect("RANDARRAY runtime execution should succeed");
+
+    let EvalValue::Array(array) = result.published_worksheet_value else {
+        panic!("expected array result");
+    };
+    assert_eq!(array.shape(), ArrayShape { rows: 5, cols: 5 });
+    let values = array.iter_row_major().cloned().collect::<Vec<_>>();
+    assert_eq!(values.first(), Some(&ArrayCellValue::Number(0.01)));
+    assert_eq!(values.get(12), Some(&ArrayCellValue::Number(0.13)));
+    assert_eq!(values.last(), Some(&ArrayCellValue::Number(0.25)));
+    assert_eq!(random_provider.next.get(), 26);
 }
 
 #[test]
@@ -1619,7 +1660,7 @@ fn runtime_environment_canonicalizes_en_us_locale_context_engines_for_text_date_
                         None,
                         Some(&locale),
                         Some(46000.0),
-                        Some(0.25),
+                        Some(&oxfml_core::test_support::random::FIXED_RANDOM_PROVIDER_025),
                     ),
                 )
                 .with_verification_publication_context(verification_context.clone()),

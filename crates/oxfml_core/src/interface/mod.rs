@@ -4,6 +4,7 @@ use oxfunc_core::functions::call_register_id_family::{
     RegisterIdRequest, RegisteredExternalDescriptor, RegisteredExternalProvider,
     RegisteredExternalProviderError,
 };
+use oxfunc_core::functions::rand_fn::RandomProvider;
 use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult};
 use oxfunc_core::host_info::{HostInfoError, HostInfoProvider};
 use oxfunc_core::locale_format::LocaleFormatContext;
@@ -28,7 +29,7 @@ pub enum TypedContextQueryFamily {
     RegisteredExternal,
     HostFunction,
     NowSerial,
-    RandomValue,
+    RandomProvider,
     LocaleFormatContext,
 }
 
@@ -84,7 +85,7 @@ pub struct TypedContextQueryBundle<'a> {
     pub host_function_provider: Option<&'a dyn HostFunctionProvider>,
     pub locale_ctx: Option<&'a LocaleFormatContext<'a>>,
     pub now_serial: Option<f64>,
-    pub random_value: Option<f64>,
+    pub random_provider: Option<&'a dyn RandomProvider>,
 }
 
 impl std::fmt::Debug for TypedContextQueryBundle<'_> {
@@ -102,7 +103,7 @@ impl std::fmt::Debug for TypedContextQueryBundle<'_> {
             )
             .field("locale_ctx_enabled", &self.locale_ctx.is_some())
             .field("now_serial_enabled", &self.now_serial.is_some())
-            .field("random_value_enabled", &self.random_value.is_some())
+            .field("random_provider_enabled", &self.random_provider.is_some())
             .finish()
     }
 }
@@ -116,7 +117,7 @@ impl<'a> Default for TypedContextQueryBundle<'a> {
             host_function_provider: None,
             locale_ctx: None,
             now_serial: None,
-            random_value: None,
+            random_provider: None,
         }
     }
 }
@@ -127,7 +128,7 @@ impl<'a> TypedContextQueryBundle<'a> {
         rtd_provider: Option<&'a dyn RtdProvider>,
         locale_ctx: Option<&'a LocaleFormatContext<'a>>,
         now_serial: Option<f64>,
-        random_value: Option<f64>,
+        random_provider: Option<&'a dyn RandomProvider>,
     ) -> Self {
         Self {
             host_info,
@@ -136,7 +137,7 @@ impl<'a> TypedContextQueryBundle<'a> {
             host_function_provider: None,
             locale_ctx,
             now_serial,
-            random_value,
+            random_provider,
         }
     }
 
@@ -183,8 +184,8 @@ impl<'a> TypedContextQueryBundle<'a> {
         if self.now_serial.is_some() {
             families.insert(TypedContextQueryFamily::NowSerial);
         }
-        if self.random_value.is_some() {
-            families.insert(TypedContextQueryFamily::RandomValue);
+        if self.random_provider.is_some() {
+            families.insert(TypedContextQueryFamily::RandomProvider);
         }
         if self.locale_ctx.is_some() {
             families.insert(TypedContextQueryFamily::LocaleFormatContext);

@@ -149,7 +149,7 @@ fn managed_session_carries_library_snapshot_ref_and_typed_query_bundle_spec() {
     assert!(spec.families.contains(&TypedContextQueryFamily::NowSerial));
     assert!(
         spec.families
-            .contains(&TypedContextQueryFamily::RandomValue)
+            .contains(&TypedContextQueryFamily::RandomProvider)
     );
 }
 
@@ -610,7 +610,7 @@ fn session_query_bundle<'a>(
         None,
         Some(session_locale_context()),
         Some(46000.0),
-        Some(0.25),
+        Some(&oxfml_core::test_support::random::FIXED_RANDOM_PROVIDER_025),
     )
 }
 

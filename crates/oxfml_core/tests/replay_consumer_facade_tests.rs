@@ -377,7 +377,6 @@ fn replay_projection_service_preserves_first_host_capture_comparison_value_for_t
             formula,
         );
         host.now_serial = Some(46000.0);
-        host.random_value = Some(0.25);
         let output = host
             .recalc(None, Some(&locale))
             .expect("host recalc should succeed");
@@ -479,7 +478,7 @@ fn replay_projection_service_matches_dnaonecalc_exact_request_shape_for_runtime_
                         None,
                         Some(&locale),
                         Some(46000.0),
-                        Some(0.25),
+                        Some(&oxfml_core::test_support::random::FIXED_RANDOM_PROVIDER_025),
                     ),
                 )
                 .with_verification_publication_context(verification_context.clone()),
@@ -539,7 +538,13 @@ fn replay_projection_service_prefers_first_host_capture_publication_surface_for_
                 1,
                 "=TEXT(DATE(2024,7,1),\"MMMM\")",
             ),
-            TypedContextQueryBundle::new(None, None, Some(&locale), Some(46000.0), Some(0.25)),
+            TypedContextQueryBundle::new(
+                None,
+                None,
+                Some(&locale),
+                Some(46000.0),
+                Some(&oxfml_core::test_support::random::FIXED_RANDOM_PROVIDER_025),
+            ),
         ))
         .expect("runtime result should execute");
 
