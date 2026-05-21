@@ -68,6 +68,31 @@ The first stand-in fixture packet should be composed from the current converged 
 1. `library_context_snapshot_ref`
 2. a local or pinned `LibraryContextProvider`
 
+### 5. Generic host formula context facts
+For non-WorksheetA1 host channels such as the first TreeCalc-facing OxCalc W051 slice, the stand-in packet may also carry a generic host formula context.
+
+Planned packet fields:
+1. `dialect_id`
+2. `capability_profile_id`
+3. host reference parser or bind hook identity
+4. host namespace resolver identity
+5. function registry view identity
+6. caller context identity
+7. host namespace version and resolution-rule version
+
+The stand-in packet may fixture these fields, but it must still mark them as host/coordinator-supplied truth. OxFml owns only the formula grammar, source spans, lexical scope, bind diagnostics, prepared identity, and evaluator consequences that consume the context.
+
+The host reference bind output should be projection-friendly for later OxCalc integration:
+1. host reference handle or formal reference id
+2. source span and source token identity
+3. opaque selector payload
+4. resolution layer
+5. shape hint
+6. caller-context dependency flag
+7. replay-visible diagnostics
+
+TreeCalc selectors such as child/member paths remain opaque host payloads. Fixture data may name them for readability, but OxFml must not depend on their syntax or model meaning.
+
 ## Ownership Rule
 For the fixture packet, ownership should be read as:
 
@@ -83,6 +108,7 @@ For the fixture packet, ownership should be read as:
 4. host-query answers and typed capability denial,
 5. RTD and registered-external provider behavior,
 6. runtime library-context selection and snapshot drift policy.
+7. host namespace resolution, host reference selector payloads, TreeCalc model lowering, set-membership dependency edges, and runtime reader materialization.
 
 Working rule:
 1. the fixture harness may stand in for these host/coordinator-owned truths locally,
@@ -94,12 +120,30 @@ The first reuse goal is:
 2. later direct-host tests can use the same packet families,
 3. later OxCalc-integrated tests can either reuse the packet directly or wrap it in a larger coordinator transport without changing semantic meaning.
 
+## CALC-005 Receiving Plan
+OxCalc `HANDOFF-CALC-005` is accepted into this packet as a planning addendum, not as TreeCalc syntax inside OxFml.
+
+Current disposition:
+1. `W051` owns the generic host formula context and host-reference bind-output packet shape,
+2. `W074` owns the Excel oracle matrix for built-in/UDF/defined-name/defined-name-LAMBDA shadowing and cache invalidation,
+3. TreeCalc host names and lambda-valued nodes map to Excel defined-name-like lanes unless later evidence forces a documented TreeCalc extension,
+4. explicit host-reference syntax may bypass function-name ambiguity through the host namespace resolver,
+5. OxFunc must see only ordinary values, arrays, callable carriers, or opaque reference-like carriers plus resolver authority.
+
+Pending evidence:
+1. Excel behavior for built-in, UDF, workbook-defined-name, sheet-defined-name, and defined-name `LAMBDA` collisions in bare call and non-call positions,
+2. invalidation behavior when UDF registration/unregistration or defined-name add/remove/reclassification changes classification,
+3. deterministic OxFml bind/replay artifacts for the selected first host namespace cases.
+
 ## Current Open Questions For OxCalc
 The next bounded OxCalc round should answer:
 1. is this the right first stand-in packet for coordinator-owned truths in test artifacts,
 2. should `RegisteredExternalProvider` stay present in the fixture packet from the start even if the first OxFunc wave keeps `CALL` / `REGISTER.ID` deferred,
 3. should validated candidate/commit/reject packet capture be part of the same stand-in fixture packet or remain a separate host/runtime projection layer,
 4. does OxCalc want any additional identity or acknowledgment fields before this packet is useful for later TreeCalc-facing integration tests.
+5. for W051, what exact explicit host-reference syntax enters the OxFml host hook and what source-span/source-token identity should be preserved,
+6. what stable host namespace version, caller context identity, and selector-handle identity OxCalc can provide before first W051 implementation,
+7. whether the first TreeCalc reference-collection carrier can expose a reference-preserving resolver/reader path or must begin with an explicitly labeled eager materialization fallback.
 
 ## Current OxCalc Intake
 OxCalc's latest reply is now convergent on this packet direction.

@@ -6,11 +6,13 @@ Process OxFunc `HO-FN-014` by defining the OxFml work needed when the canonical 
 
 W068 closed the editor metadata source-of-truth cleanup. W074 is the broader formula binding, name-resolution, and cache-invalidation follow-up.
 
+W074 is also the required evidence gate for OxCalc `HANDOFF-CALC-005` name/call precedence. It must identify Excel oracle behavior for built-ins, registered UDFs, workbook/sheet defined names, and defined-name `LAMBDA` invocation before OxFml freezes any generic host namespace shadowing rule for W051.
+
 ## Position and Dependencies
 
 - **Depends on**: `W068`, OxFunc `W091`, OxFunc `W093`
 - **Responds to**: `../OxFunc/docs/handoffs/HO-FN-014_udf_registry_mutation_and_name_resolution_invalidation.md`
-- **Cross-repo**: OxFunc owns registry mutation and registry entry truth; OxFml owns formula parse/bind, name resolution, and cache invalidation.
+- **Cross-repo**: OxFunc owns registry mutation and registry entry truth; OxFml owns formula parse/bind, name resolution, and cache invalidation. Also responds to OxCalc `HANDOFF-CALC-005` as the name/call precedence and invalidation counterpart to `W051`.
 
 ## Scope
 
@@ -20,10 +22,11 @@ W068 closed the editor metadata source-of-truth cleanup. W074 is the broader for
 2. Define formula-call binding against an OxFunc registry view or immutable registry-derived snapshot for UDF-aware contexts.
 3. Define `#NAME?` recovery after late UDF registration.
 4. Define unregister and capability-denial invalidation for previously bindable formulas.
-5. Document UDF-vs-defined-name precedence.
+5. Document UDF-vs-defined-name precedence only after the Excel oracle matrix covers bare call and non-call positions.
 6. Identify any OxFml-only metadata needed in an OxFunc `RegistryChangeSet`.
 7. Reconcile bind-visible UDF registration with `REGISTER.ID` / `CALL` registered-external mutation.
 8. Add deterministic tests for the first admitted invalidation and name-resolution cases.
+9. Define how host namespace names from `W051` map onto Excel defined-name lanes, including lambda-valued host nodes, while recording any TreeCalc-only behavior as an explicit extension rather than an implicit precedence rule.
 
 ### Out of Scope
 
@@ -31,6 +34,7 @@ W068 closed the editor metadata source-of-truth cleanup. W074 is the broader for
 2. DNA OneCalc UI for UDF management.
 3. Broad UDF execution semantics beyond first bind/name-resolution and invalidation evidence.
 4. Moving workbook/sheet defined names into OxFunc.
+5. Freezing TreeCalc-specific name/call precedence before Excel oracle evidence exists.
 
 ## Bead Set
 
@@ -57,10 +61,23 @@ W068 closed the editor metadata source-of-truth cleanup. W074 is the broader for
 
 ### B074-04: Name Precedence And Collision Rules
 
-- **Status**: planned
+- **Status**: in_progress
 - **Owner**: OxFml
-- **Effect**: document and test precedence across built-ins, UDF registry entries, workbook/sheet defined names, and helper-local names.
-- **Evidence target**: deterministic bind tests for selected collision cases.
+- **Effect**: document and test precedence across built-ins, UDF registry entries, workbook/sheet defined names, defined-name `LAMBDA` values, helper-local names, and the `W051` host namespace lane mapped through defined-name-like behavior.
+- **Evidence target**: Excel oracle matrix plus deterministic bind tests for selected collision and invalidation cases.
+
+Required oracle cases before freeze:
+1. built-in function name in call position and non-call bare-name position,
+2. registered UDF name in call position and non-call bare-name position,
+3. workbook-defined name and sheet-defined name collisions with built-ins,
+4. workbook-defined name and sheet-defined name collisions with registered UDFs,
+5. defined-name `LAMBDA` invocation by bare call and behavior when referenced in non-call position,
+6. value-like, reference-like, and lambda-valued defined names with the same identifier across workbook/sheet scopes,
+7. lexical `LET` / `LAMBDA` bindings colliding with built-ins, UDFs, and defined names,
+8. late UDF registration changing an unresolved call into a bindable call,
+9. UDF unregister and capability-denial changing a previously bindable call,
+10. defined-name add/remove/reclassification changing non-call and call classification,
+11. explicit host-reference syntax selecting a host object whose display name collides with a function or UDF.
 
 ### B074-05: Unregister And Capability-Denial Invalidation
 
@@ -78,7 +95,7 @@ W068 closed the editor metadata source-of-truth cleanup. W074 is the broader for
 
 ## Status
 
-- execution_state: planned
+- execution_state: in_progress
 - scope_completeness: scope_partial
 - target_completeness: target_partial
 - integration_completeness: partial
@@ -86,4 +103,7 @@ W068 closed the editor metadata source-of-truth cleanup. W074 is the broader for
   - registry snapshot identity packet,
   - formula-call registry lookup migration,
   - cache invalidation implementation,
-  - cross-repo registry change-set shape.
+  - cross-repo registry change-set shape,
+  - Excel oracle matrix for built-in/UDF/defined-name/LAMBDA shadowing,
+  - mapping of `W051` host namespace names and lambda-valued host nodes to Excel defined-name lanes,
+  - evidence-backed cache invalidation for registry and host namespace mutation.

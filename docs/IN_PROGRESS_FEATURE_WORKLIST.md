@@ -3,7 +3,7 @@
 Canonical repo-level register of feature areas that are in-progress under workset completion doctrine.
 
 Status: active.
-Last updated: 2026-05-07.
+Last updated: 2026-05-21.
 
 ## Status Vocabulary
 
@@ -122,9 +122,9 @@ Last updated: 2026-05-07.
 ### IP-14: Fixture Host And Coordinator Stand-In Packet
 
 - **Status**: in-progress
-- **Current floor**: a canonical first stand-in host/coordinator packet now exists in `docs/spec/OXFML_FIXTURE_HOST_AND_COORDINATOR_STANDIN_PACKET.md`; OxCalc has reviewed it as the right bounded deterministic packet for fixture-host and first TreeCalc-facing integration reuse; accepted refinements now include `fixture_input_id`, explicit structure-context identity, optional `formula_slot_id`, optional `RegisteredExternalProvider`, and the explicit rule that candidate/commit/reject capture stays a separate projection layer.
-- **Remaining gaps**: the packet is still only converged for the current narrow first wave; broader reuse across later formula-bearing slot families and any promotion into shared coordinator-API freeze remain open.
-- **Why still open**: `W051` is now past draft-only planning, but the stand-in packet remains intentionally narrower than the production coordinator API and still depends on later implementation reuse or mismatch evidence for further freezing.
+- **Current floor**: a canonical first stand-in host/coordinator packet now exists in `docs/spec/OXFML_FIXTURE_HOST_AND_COORDINATOR_STANDIN_PACKET.md`; OxCalc has reviewed it as the right bounded deterministic packet for fixture-host and first TreeCalc-facing integration reuse; accepted refinements now include `fixture_input_id`, explicit structure-context identity, optional `formula_slot_id`, optional `RegisteredExternalProvider`, and the explicit rule that candidate/commit/reject capture stays a separate projection layer. OxCalc `HANDOFF-CALC-005` is now routed into this lane as the generic `HostFormulaContext` plan for W051, with host namespace/reference authority supplied by OxCalc and no TreeCalc syntax hardcoded into OxFml.
+- **Remaining gaps**: the packet is still only converged for the current narrow first wave; broader reuse across later formula-bearing slot families, reference-preserving host transport, deterministic host-context bind artifacts, and any promotion into shared coordinator-API freeze remain open. Name/call precedence remains evidence-gated under `W074`.
+- **Why still open**: `W051` owns the host-context and stand-in packet plan, but the packet remains intentionally narrower than the production coordinator API and still depends on later implementation reuse, Excel oracle evidence, or mismatch evidence for further freezing.
 - **Canonical owner**: active owner `W051`.
 
 ### IP-16: Consumer-Facing Library Interface Rearchitecture
@@ -156,11 +156,11 @@ Last updated: 2026-05-07.
 
 ### IP-22: Registry Mutation And Name-Resolution Invalidation
 
-- **Status**: planned
-- **Current floor**: OxFunc has filed `HO-FN-014` to separate canonical function-registry mutation from OxFml formula binding, name resolution, editor help, and host cache invalidation. OxFml currently supports registry-backed editor help/completion and UDF registry views, but formula-call bind/evaluation still has static built-in lookup lanes outside the W068 editor metadata cleanup.
-- **Remaining gaps**: registry snapshot identity in bind/editor cache keys, formula-call binding against registry views for UDF-aware contexts, `#NAME?` recovery after late UDF registration, unregister/capability-denial invalidation, UDF-vs-defined-name precedence documentation, and registered-external reconciliation.
-- **Why still open**: this is HO-FN-014 follow-up design and implementation work, not a defect in the W068 editor metadata landing.
-- **Canonical owner**: planned `W074` tracking packet.
+- **Status**: in-progress
+- **Current floor**: OxFunc has filed `HO-FN-014` to separate canonical function-registry mutation from OxFml formula binding, name resolution, editor help, and host cache invalidation. OxCalc `HANDOFF-CALC-005` now adds the W051 host-context pressure case: bare call and non-call resolution must be settled against Excel-observed built-in, registered-UDF, workbook/sheet defined-name, and defined-name `LAMBDA` behavior before TreeCalc host names are mapped onto that lane. OxFml currently supports registry-backed editor help/completion and UDF registry views, but formula-call bind/evaluation still has static built-in lookup lanes outside the W068 editor metadata cleanup.
+- **Remaining gaps**: registry snapshot identity in bind/editor cache keys, formula-call binding against registry views for UDF-aware contexts, `#NAME?` recovery after late UDF registration, unregister/capability-denial invalidation, Excel-oracle-backed UDF-vs-defined-name and defined-name-LAMBDA precedence documentation, host namespace mutation invalidation, and registered-external reconciliation.
+- **Why still open**: this is HO-FN-014 plus CALC-005 follow-up design and implementation work, not a defect in the W068 editor metadata landing. The shadowing rule is deliberately not frozen until the `W074-CALC005` oracle matrix exists.
+- **Canonical owner**: active `W074` tracking packet.
 
 ### IP-23: Compiled Formula Plan And Hot-Loop Optimization
 

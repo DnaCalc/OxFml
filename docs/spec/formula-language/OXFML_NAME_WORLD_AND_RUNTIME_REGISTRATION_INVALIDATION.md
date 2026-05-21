@@ -21,7 +21,7 @@ The common rule is:
 2. if only runtime descriptor truth changes for a lane that is already syntactically and semantically admitted, that is not automatically a bind change.
 
 ## Name Worlds
-The current first invalidation model distinguishes three name-bearing worlds.
+The current first invalidation model distinguishes three canonical name-bearing worlds plus one planned host namespace extension for `W051`.
 
 ### 1. Function Catalog World
 Owned by OxFunc through:
@@ -42,7 +42,22 @@ Examples:
 2. worksheet-scoped names
 3. externally supplied name bindings used during bind/evaluation
 
-### 3. Registered-External Descriptor World
+### 3. Host Namespace World (`W051` planned extension)
+Owned by the consuming host or OxCalc when a formula channel has host-specific reference and namespace facts outside native worksheet A1/R1C1 syntax.
+
+Examples:
+1. TreeCalc node names supplied by OxCalc,
+2. explicit host paths or selectors,
+3. host lambda-valued nodes,
+4. host reference collections such as a child/member set.
+
+Current rule:
+1. host namespace names should map to the closest Excel defined-name lane unless an explicit TreeCalc extension is later documented,
+2. lambda-valued host nodes should map to the closest Excel defined-name `LAMBDA` invocation lane unless evidence forces a separate carrier,
+3. explicit host-reference syntax and explicit paths may bind through the host namespace resolver and bypass ordinary function-name ambiguity,
+4. bare names and bare callees must wait for the Excel oracle matrix before OxFml freezes a host-name precedence rule.
+
+### 4. Registered-External Descriptor World
 Owned by OxFunc runtime registered-external catalog truth for worksheet `CALL` / `REGISTER.ID`.
 
 Examples:
@@ -50,7 +65,28 @@ Examples:
 2. host API registration of a registered external target used only through `CALL`
 3. VBA shim registration that is used only through the registered-external lane
 
-This third world is name-bearing in a broad product sense, but it is not automatically bind-visible as an ordinary function-name world.
+This registered-external world is name-bearing in a broad product sense, but it is not automatically bind-visible as an ordinary function-name world.
+
+## Excel Oracle Matrix Before Precedence Freeze
+`W074` must settle the Excel-visible precedence rule before OxFml promotes any generic host namespace shadowing rule.
+
+Required matrix families:
+1. built-in function name in call position and non-call bare-name position,
+2. registered UDF name in call position and non-call bare-name position,
+3. workbook-defined name and sheet-defined name collisions with built-ins,
+4. workbook-defined name and sheet-defined name collisions with registered UDFs,
+5. defined-name `LAMBDA` invocation by bare call and behavior when referenced in non-call position,
+6. value-like, reference-like, and lambda-valued defined names with the same identifier across workbook and sheet scopes,
+7. lexical `LET` / `LAMBDA` bindings colliding with built-ins, UDFs, and defined names,
+8. late UDF registration changing an unresolved call into a bindable call,
+9. UDF unregister and capability-denial changing a previously bindable call,
+10. defined-name add/remove/reclassification changing non-call and call classification,
+11. explicit host-reference syntax selecting a host object whose display name collides with a function, UDF, or defined name.
+
+Until that evidence exists, the active rule is:
+1. do not freeze built-in/UDF/defined-name/host-name shadowing order,
+2. preserve the candidate resolution layers and diagnostics explicitly,
+3. treat TreeCalc host names as defined-name-like only as a planning mapping, not as final product semantics.
 
 ## Shared Invalidation Principle
 The function catalog world and the defined-name world should be treated the same way for invalidation when they are bind-visible:
@@ -127,6 +163,12 @@ If the change creates, removes, renames, or reclassifies a visible defined name,
 1. change `structure_context_version`,
 2. treat formulas pinned to the old structure context as stale for bind where affected.
 
+### Host namespace changes
+If a host namespace change creates, removes, renames, or reclassifies a visible host name/reference in a formula channel that admits host-context names, the host/coordinator should:
+1. change the host namespace version or structure-context version used by the `HostFormulaContext`,
+2. treat formulas pinned to the old host context as stale for bind where affected,
+3. preserve whether the change was caused by function registry mutation, workbook/defined-name mutation, or host namespace/model mutation in replay-visible invalidation facts.
+
 ### Registered-external descriptor changes
 If the change only affects `CALL` / `REGISTER.ID` descriptor truth, the host/OxFunc runtime should:
 1. preserve the mutation through the registered-external packet lane,
@@ -157,6 +199,18 @@ On defined-name change:
 1. rebind formulas that mention the changed identifier,
 2. also rebind formulas with unresolved identifiers that may now resolve under the changed scope,
 3. conservatively rebind more broadly if scope or precedence effects are not cheaply indexable.
+
+### For host namespace changes
+Index formulas by:
+1. host reference handles where already known,
+2. host namespace identifiers or explicit path/source-token identities,
+3. unresolved host identifiers,
+4. caller-context-dependent usages.
+
+On host namespace change:
+1. rebind formulas that mention changed host identifiers or handles,
+2. also rebind formulas with unresolved identifiers that may now resolve under the changed host context,
+3. conservatively rebind more broadly if caller-context or precedence effects are not cheaply indexable.
 
 ### For registered-external descriptor changes
 Index formulas by:

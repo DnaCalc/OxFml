@@ -3,10 +3,12 @@
 ## Purpose
 Freeze the first bounded stand-in host/coordinator packet that OxFml can use in deterministic integration artifacts while keeping production OxCalc coordinator semantics out of scope.
 
+This workset is also the OxFml owner for OxCalc `HANDOFF-CALC-005` on the generic host formula context needed by OxCalc W051. The accepted direction is a generic host context and namespace/reference hook, not a TreeCalc parser mode inside OxFml.
+
 ## Position and Dependencies
 - **Depends on**: `W045`, `W049`, `W050`
 - **Blocks**: none
-- **Cross-repo**: bounded OxCalc seam round keyed to the reuse of host/coordinator-owned truths in OxFunc-facing adapter and fixture artifacts
+- **Cross-repo**: bounded OxCalc seam round keyed to the reuse of host/coordinator-owned truths in OxFunc-facing adapter and fixture artifacts; inbound `HANDOFF-CALC-005` from OxCalc W051
 
 ## Scope
 ### In scope
@@ -15,17 +17,26 @@ Freeze the first bounded stand-in host/coordinator packet that OxFml can use in 
 3. Reuse current host/runtime packet families rather than inventing a separate ad hoc mock interface.
 4. Initiate a bounded OxCalc note round on that packet.
 5. Keep `CALL` / `REGISTER.ID` and broader production coordinator policy explicitly out of the first stand-in packet wave.
+6. Define the OxFml-side plan for a generic `HostFormulaContext` that carries host namespace/reference authority without hardcoding TreeCalc syntax into OxFml.
+7. Define the planned host-reference bind output and runtime transport requirements for host references as values or opaque reference-like carriers.
+8. Route Excel-oracle-derived function/UDF/defined-name/LAMBDA name and call precedence to `W074` before any shadowing rule is frozen.
 
 ### Out of scope
 1. Production OxCalc coordinator API freeze.
 2. Full graph scheduler policy.
 3. Full distributed/runtime ownership.
 4. Deferred registered-external runtime beyond current first-wave fixture needs.
+5. TreeCalc-specific reference syntax or selector semantics inside OxFml.
+6. Final Excel name/call shadowing order before the `W074` oracle matrix has evidence.
+7. OxCalc-owned TreeCalc reference-collection carriers, set-membership dependency edges, invalidation policy, or runtime reader materialization.
 
 ## Deliverables
 1. A canonical first stand-in host/coordinator packet draft.
 2. A bounded OxCalc note round keyed to that draft.
 3. An explicit list of non-assumptions so fixture-host reuse does not get mistaken for coordinator API freeze.
+4. A `HostFormulaContext` planning shape covering dialect/profile identity, host reference parse/bind hooks, host namespace resolution, function registry view, caller context, and version identity.
+5. A host-reference bind-output plan covering handle, source span, opaque selector, resolution layer, shape hint, caller-context dependency, and diagnostics.
+6. A runtime transport plan keeping OxFunc insulated from host syntax while preserving a `ReferenceLike` plus resolver path where function metadata permits reference visibility.
 
 ## Gate Model
 ### Entry gate
@@ -36,6 +47,55 @@ Freeze the first bounded stand-in host/coordinator packet that OxFml can use in 
 - One canonical OxFml draft stand-in packet exists.
 - OxCalc coordination has been initiated against that packet.
 - Host/coordinator-owned truths versus OxFml-owned truths are explicit and non-collapsed.
+- `HANDOFF-CALC-005` has an OxFml receipt and its W051/W074 ownership split is recorded.
+- Generic host context clauses are present in the host/runtime and stand-in packet specs.
+- Name/call shadowing remains explicitly evidence-gated on the `W074` Excel oracle matrix.
+
+## CALC-005 Host Formula Context Plan
+
+### Ownership
+
+Primary OxFml owner: `W051`.
+
+Related owner: `W074` for registry mutation, UDF-aware formula binding, defined-name/LAMBDA precedence, cache invalidation, and the Excel oracle matrix that must settle name/call shadowing.
+
+OxCalc remains owner of TreeCalc model structure, TreeCalc host names, explicit host reference syntax, reference-collection carriers, set-membership dependency edges, invalidation over the TreeCalc model, and resolver/reader materialization.
+
+OxFunc remains owner of built-in and UDF function semantics and the canonical function registry surface. OxFunc must not receive TreeCalc syntax or selector payloads.
+
+### Planned `HostFormulaContext` Shape
+
+The planned context shape is semantic rather than TreeCalc-specific:
+
+1. `dialect_id` and `capability_profile_id`
+2. host reference parser and/or bind hook for host reference syntax in operand and explicit-host-reference positions
+3. host namespace resolver for host names, paths, selectors, defined names, and host-sensitive references
+4. OxFunc-backed function registry view for built-ins, registered UDFs, and capability overlays
+5. caller context for relative references, caller-sensitive names, and lexical walk-up
+6. version identity for prepared formula cache keys and replay, including host namespace version, structure context version, registry snapshot identity, caller context identity where relevant, and resolution rule version
+
+OxFml owns calls, argument lists, operators, literals, arrays, `LET`, `LAMBDA`, lexical scopes, source spans, bind diagnostics, and prepared identity around that host hook.
+
+### Planned Host Reference Bind Output
+
+The host reference bind output must carry:
+
+1. host reference handle or formal reference id
+2. source span plus source token identity or source text
+3. active `dialect_id` and `capability_profile_id`
+4. opaque host selector payload supplied by the host resolver
+5. resolution layer such as `lexical`, `function`, `defined_name`, `host_name`, `explicit_host_ref`, or `unresolved`
+6. shape hint such as `single`, `collection`, `dynamic`, or `unknown`
+7. caller-context-dependent flag and caller context identity input when applicable
+8. typed diagnostics for ambiguity, unresolved host name, capability denial, unknown function, and set/reference-as-callable mismatch
+
+### Runtime Transport Rule
+
+Host references may be materialized to values for values-only calls. Reference-sensitive or reference-preserving calls must have a path to receive an opaque `ReferenceLike` plus resolver/reader authority. Eager value-array materialization is permitted only as a fallback for a bounded compatibility slice and does not satisfy the reference-preserving scenario by itself.
+
+### Evidence Gate
+
+Name/call precedence is not frozen in this workset. `W074` must first identify and run the Excel oracle matrix for built-in functions, registered UDFs, workbook/sheet defined names, and defined-name `LAMBDA` invocation in both bare call and non-call positions. TreeCalc host names and lambda-valued nodes map to the closest Excel defined-name lane unless a future packet records a TreeCalc extension explicitly.
 
 ## Pre-Closure Verification Checklist
 
@@ -58,6 +118,9 @@ Freeze the first bounded stand-in host/coordinator packet that OxFml can use in 
 - integration_completeness: partial
 - open_lanes:
   - a canonical stand-in host/coordinator packet draft now exists and OxCalc has reviewed it as settled enough for deterministic fixture-host and first TreeCalc-facing integration reuse, but the packet is not yet frozen beyond the current narrow first wave
+  - inbound `HANDOFF-CALC-005` is accepted into `W051` planning with `W074` as the required evidence gate for Excel name/call precedence
+  - `HostFormulaContext`, host-reference bind output, and runtime reference transport are spec-planned but not yet exercised
+  - final built-in/UDF/defined-name/LAMBDA shadowing remains pending Excel oracle evidence
   - the accepted identity refinements are now part of the packet direction:
     - `fixture_input_id`
     - structure-context identity

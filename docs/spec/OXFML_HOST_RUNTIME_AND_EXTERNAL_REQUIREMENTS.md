@@ -116,6 +116,52 @@ Working rule:
 2. host ownership of tables matches the broader rule that workbook objects remain host/coordinator-owned,
 3. OxFml owns grammar, bind, and evaluator consequences once the packet is supplied.
 
+### 4.1B Generic Host Formula Context Inputs
+When a consumer formula channel has host-specific reference or namespace syntax outside native WorksheetA1/R1C1, the host must supply a generic host formula context rather than asking OxFml to learn that product syntax.
+
+Current planning owner:
+1. `W051` owns the generic host formula context and stand-in packet shape,
+2. `W074` owns the Excel-oracle-backed name/call precedence and invalidation evidence gate.
+
+The first planned `HostFormulaContext` shape carries:
+1. `dialect_id` and `capability_profile_id`,
+2. a host reference parser and/or bind hook for explicit host reference syntax and host-owned name/path/selectors,
+3. a host namespace resolver for host names, explicit paths, selectors, defined-name-like objects, and host-sensitive references,
+4. an OxFunc-backed function registry view covering built-ins, registered UDFs, and capability overlays,
+5. caller context needed for relative references, caller-sensitive host names, and lexical walk-up,
+6. context version identity for cache and replay, including structure-context version, host namespace version, registry snapshot identity, caller context identity where relevant, and resolution-rule version.
+
+OxFml owns the surrounding formula language:
+1. calls and argument lists,
+2. operators, literals, arrays, and ordinary expression structure,
+3. `LET`, `LAMBDA`, lexical scope, and local helper binding,
+4. source spans, bind diagnostics, prepared formula identity, and semantic-plan consequences.
+
+The host hook owns only the host reference/name surface and returns opaque syntax or bind objects. OxFml must not inspect TreeCalc selectors, node paths, node-walk rules, sibling/child relationships, or set-membership semantics.
+
+Explicit host-reference syntax and explicit host paths bind through the host namespace resolver and may intentionally select a host object whose display name collides with a function, UDF, or defined name. Bare names and bare callees remain subject to the Excel-oracle-derived name/call rule owned by `W074`.
+
+Planned host-reference bind output must carry:
+1. host reference handle or formal reference id,
+2. source span plus source token identity or source text,
+3. active `dialect_id` and `capability_profile_id`,
+4. opaque selector payload supplied by the host resolver,
+5. resolution layer such as `lexical`, `function`, `defined_name`, `host_name`, `explicit_host_ref`, or `unresolved`,
+6. shape hint such as `single`, `collection`, `dynamic`, or `unknown`,
+7. caller-context-dependent flag and caller context identity input when applicable,
+8. typed diagnostics for ambiguity, unresolved host name, capability denial, unknown function, and set/reference-as-callable mismatch.
+
+Runtime transport rule:
+1. host references may materialize to values for values-only calls,
+2. reference-sensitive or reference-preserving calls must have a path to receive an opaque `ReferenceLike` plus resolver/reader authority,
+3. OxFunc receives ordinary values, arrays, callable carriers, or opaque reference-like carriers through the existing semantic seams; it never parses host reference text or host selector payloads,
+4. eager value-array materialization is a bounded fallback only and does not satisfy a reference-preserving W051 scenario by itself.
+
+TreeCalc mapping rule:
+1. TreeCalc host names and lambda-valued nodes should map to the closest Excel defined-name or defined-name `LAMBDA` lane,
+2. any TreeCalc-only callable host-name behavior must be recorded as an explicit extension with replay-visible diagnostics and invalidation consequences,
+3. no such extension is accepted until the Excel oracle matrix in `W074` identifies the closest Excel behavior.
+
 ### 4.2 Runtime Catalog Inputs
 1. `LibraryContextProvider`
 2. immutable `LibraryContextSnapshot`

@@ -36,3 +36,4 @@ HO-FN-016,inbound,Compiled Surface Call-Site And Full-Catalog Index Dispatch,ack
 HANDOFF-CALC-002,inbound,Recalc Session And Plan Template Support For W050,acknowledged,OxCalc/W050,OxFml-successor,2026-05-14,2026-05-14
 HANDOFF-CALC-003,inbound,Numerical Reduction And Error Algebra For W050,acknowledged,OxCalc/W050,OxFml/OxFunc-successor,2026-05-14,2026-05-14
 HANDOFF-CALC-004,inbound,Capability-Set Hole Admission For W050,acknowledged,OxCalc/W050,OxFml/OxFunc-successor,2026-05-14,2026-05-14
+HANDOFF-CALC-005,inbound,Generic Host Formula Context And Namespace Resolution For W051,acknowledged,OxCalc/W051,W051/W074,2026-05-21,2026-05-21

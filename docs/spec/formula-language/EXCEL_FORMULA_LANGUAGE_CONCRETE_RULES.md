@@ -38,6 +38,7 @@ Working interpretation rule:
 | FML-R-015 | Name formulas and external-name formulas are distinct formula-bearing carriers; external-name formulas are narrower than generic external references and require explicit external-book identity. | XLS-CF-FL-008 | CONF-discovered-ms-oe376-220816-823374c7-0362;CONF-discovered-ms-oe376-220816-823374c7-0363;SPEC-discovered-ms-oe376-88e93023-48443;SPEC-discovered-ms-oe376-88e93023-48448;SPEC-discovered-ms-oe376-88e93023-48451 | provisional |
 | FML-R-016 | Conditional-formatting and data-validation formulas are restricted formula-bearing sublanguages; they are similar but not safely identical, and their rule-host fields remain formula-semantic rather than display-only metadata. | XLS-CF-FL-006 | CONF-discovered-ms-oe376-220816-823374c7-1427;CONF-discovered-ms-oe376-220816-823374c7-1428;CONF-discovered-ms-oe376-220816-823374c7-1429;CONF-discovered-ms-oe376-220816-823374c7-1430;CONF-discovered-ms-oe376-220816-823374c7-1431 | provisional |
 | FML-R-018 | Ordinary arithmetic operators must preserve array payloads and apply numeric coercion/error mapping elementwise for admitted array-lifted shapes rather than collapsing arrays to a single scalar before evaluation. | XLS-CF-FL-012 | evaluator_tests.rs;replay_fixture_tests.rs;replay_retained_and_host_policy_tests.rs | provisional |
+| FML-R-019 | Bare-name and call-callee resolution across built-in functions, registered UDFs, workbook/sheet defined names, and defined-name `LAMBDA` values must be Excel-oracle-derived before product host namespaces map onto that lane. | XLS-CF-FL-008;XLS-CF-FL-012 | W074-CALC005-ORACLE-PLANNED | draft |
 
 ## 3. Current Local Floors For Newer Rule Families
 
@@ -152,6 +153,24 @@ Evidence posture:
 1. Current public sources provide only thin direct guidance for this lane.
 2. Therefore this rule remains provisional until dedicated empirical matrices are promoted.
 
+### 6.4 Name/Call Shadowing Oracle Boundary (Planning Note)
+`FML-R-019` is intentionally not frozen yet.
+
+Before OxFml promotes a generic host namespace rule for OxCalc W051, the `W074` oracle matrix must identify Excel behavior for:
+1. built-in function names in call position and non-call bare-name position,
+2. registered UDF names in call position and non-call bare-name position,
+3. workbook-defined name and sheet-defined name collisions with built-ins,
+4. workbook-defined name and sheet-defined name collisions with registered UDFs,
+5. defined-name `LAMBDA` invocation by bare call and behavior when referenced in non-call position,
+6. value-like, reference-like, and lambda-valued defined names with the same identifier across workbook and sheet scopes,
+7. lexical `LET` / `LAMBDA` bindings colliding with built-ins, UDFs, and defined names,
+8. late UDF registration, UDF unregister, capability-denial, defined-name mutation, and host namespace mutation as cache-invalidation triggers.
+
+Current host mapping rule:
+1. TreeCalc host names and lambda-valued nodes map to the closest Excel defined-name lane only as a planning default,
+2. explicit host-reference syntax can intentionally select host objects that collide with function names,
+3. any TreeCalc-specific divergence must be documented as an extension with replay-visible diagnostics and invalidation effects.
+
 ## 7. Open Items For Next Tightening Pass
 1. Replicate scoped-name and precedence lanes across target channels/builds to verify current provisional policy wording.
 2. Expand external/workbook reference lane to cover additional link-update policy variants and workbook-open/closed permutations across builds/channels (same-build baseline captured in `EMP-0011`).
@@ -160,6 +179,7 @@ Evidence posture:
 5. Replicate argument-gap and normalization lanes across additional target builds/channels for status promotion to validated.
 6. Execute `P2-FML-011` function-admission/coercion edge matrix (`SIN`/`ASIN` seeds), then split stable sub-rules from remaining provisional rows.
 7. Execute `P2-FML-012` operator array-lift matrix, then confirm ordinary arithmetic elementwise semantics across targeted channels/builds.
+8. Execute the `W074-CALC005` name/call shadowing oracle matrix before freezing generic host namespace precedence for W051.
 
 ## 8. Conformance Matrix And Archive Evidence
 This rule set is operationalized by:
@@ -176,3 +196,4 @@ Primary unresolved closures currently depend on:
 5. cross-build replay of `P2-FML-003`, `P2-FML-005`, `P2-FML-009`, and `P2-FML-010`.
 6. `P2-FML-011` required-argument omission vs runtime error mapping (`FML-R-012`).
 7. `W036` and `W038` for the remaining `MS-OE376`-reviewed carrier families not yet at the same local floor as `FML-R-014` and `FML-R-016`.
+8. `W074-CALC005` built-in/UDF/defined-name/defined-name-LAMBDA shadowing and invalidation oracle matrix (`FML-R-019`).
