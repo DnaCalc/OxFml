@@ -79,6 +79,8 @@ Planned packet fields:
 5. function registry view identity
 6. caller context identity
 7. host namespace version and resolution-rule version
+8. registry snapshot identity
+9. table-context identity when structured references are admitted
 
 The stand-in packet may fixture these fields, but it must still mark them as host/coordinator-supplied truth. OxFml owns only the formula grammar, source spans, lexical scope, bind diagnostics, prepared identity, and evaluator consequences that consume the context.
 
@@ -90,6 +92,7 @@ The host reference bind output should be projection-friendly for later OxCalc in
 5. shape hint
 6. caller-context dependency flag
 7. replay-visible diagnostics
+8. prepared-identity/cache contribution
 
 TreeCalc selectors such as child/member paths remain opaque host payloads. Fixture data may name them for readability, but OxFml must not depend on their syntax or model meaning.
 
@@ -133,7 +136,9 @@ Current disposition:
 Pending evidence:
 1. Excel behavior for built-in, UDF, workbook-defined-name, sheet-defined-name, and defined-name `LAMBDA` collisions in bare call and non-call positions,
 2. invalidation behavior when UDF registration/unregistration or defined-name add/remove/reclassification changes classification,
-3. deterministic OxFml bind/replay artifacts for the selected first host namespace cases.
+3. deterministic OxFml bind/replay artifacts for the selected first host namespace cases,
+4. invalidation behavior when registry snapshot, structure context, host namespace version, caller context identity, table context, or resolution-rule version changes prepared identity,
+5. DNA OneCalc guardrail evidence that no-host-reference `LET` / `LAMBDA` lexical variables, callable locals, captures, and returned lambdas stay OxFml-internal.
 
 ## Current Open Questions For OxCalc
 The next bounded OxCalc round should answer:

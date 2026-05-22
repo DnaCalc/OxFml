@@ -56,6 +56,53 @@ Before precedence promotion, `W074` must cover:
 9. explicit host-reference syntax selecting a host object whose display name
    collides with a function, UDF, or defined name.
 
+Matrix row contract:
+1. rows must distinguish `call_callee`, `non_call_bare_name`,
+   `let_lambda_lexical`, and `explicit_host_reference` source positions,
+2. rows must list all competing candidates visible in the scenario:
+   built-in function, registered UDF, workbook-defined name, sheet-defined
+   name, defined-name `LAMBDA`, lexical local, and host namespace name,
+3. rows must record the observed winner, value/error/callable outcome,
+   invalidation inputs, and whether a prepared identity changes after the
+   mutation,
+4. defined-name `LAMBDA` invocation and defined-name `LAMBDA` value-reference
+   behavior must be separate rows,
+5. `LET` / `LAMBDA` lexical rows are guardrail rows only. OxFml must keep
+   lexical variables, callable locals, captures, and returned lambdas internal
+   to OxFml rather than exposing them as host namespace or OxCalc objects.
+
+## Generic Host Hook And Bind Result
+The `W051` host hook accepted by this receipt remains product-neutral.
+
+Required host-context inputs:
+1. `dialect_id`,
+2. `capability_profile_id`,
+3. `resolution_rule_version`,
+4. host namespace version,
+5. registry snapshot identity,
+6. structure-context version,
+7. caller context identity where resolution is caller-sensitive.
+
+Host-reference bind results must be replay-visible and include:
+1. host reference handle or formal reference id,
+2. source span plus source token/text,
+3. opaque selector payload,
+4. resolution layer,
+5. shape hint,
+6. caller-context dependency flag,
+7. typed diagnostics,
+8. replay/cache identity contribution.
+
+Structured references stay on the existing table-context lane:
+`table_catalog + enclosing_table_ref + caller_table_region`. The generic host
+hook does not replace table-name parsing, structured-reference binding, or
+table-name-versus-defined-name disambiguation.
+
+Prepared identity and cache invalidation must include every supplied identity
+that can change bind or prepared-call shape: registry snapshot, structure
+context, host namespace version, caller context identity, table-context identity,
+and resolution-rule version.
+
 ## OxCalc Shape Changes Needed Before W051 Implementation
 OxFml needs OxCalc to supply or confirm:
 1. stable `dialect_id` and `capability_profile_id` values for the TreeCalc
@@ -96,7 +143,12 @@ Behavior that remains pending evidence:
    overlay denial, defined-name mutation, and host namespace mutation,
 5. reference-preserving host transport through `ReferenceLike` plus resolver,
 6. deterministic replay artifacts for selected host namespace and explicit
-   host-reference collision cases.
+   host-reference collision cases,
+7. table-context mutation and structured-reference bind invalidation when the
+   table packet changes name/column/current-row meaning,
+8. DNA OneCalc no-host-reference LET/LAMBDA lexical guardrail evidence showing
+   that lexical variables, callable locals, captures, and returned lambdas do
+   not become host-reference or host-namespace bindings.
 
 ## Status
 - execution_state: in_progress
@@ -108,6 +160,9 @@ Behavior that remains pending evidence:
 - open_lanes:
   - `W074-CALC005` Excel oracle matrix,
   - `W051` public host-context and bind-output packet spelling,
+  - prepared identity/cache invalidation inputs for registry, structure,
+    table context, host namespace, caller context, and resolution-rule changes,
+  - DnaOneCalc no-host-reference LET/LAMBDA lexical guardrail,
   - OxCalc TreeCalc reference-collection and resolver/reader carrier,
   - deterministic replay evidence for host namespace resolution and
     invalidation.

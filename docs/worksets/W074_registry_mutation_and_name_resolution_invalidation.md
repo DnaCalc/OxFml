@@ -77,7 +77,19 @@ Required oracle cases before freeze:
 8. late UDF registration changing an unresolved call into a bindable call,
 9. UDF unregister and capability-denial changing a previously bindable call,
 10. defined-name add/remove/reclassification changing non-call and call classification,
-11. explicit host-reference syntax selecting a host object whose display name collides with a function or UDF.
+11. explicit host-reference syntax selecting a host object whose display name collides with a function, UDF, or defined name.
+
+Current oracle-matrix shape:
+1. each row must identify the source position as `call_callee`, `non_call_bare_name`, `let_lambda_lexical`, or `explicit_host_reference`,
+2. each row must identify all visible candidates among `builtin_function`, `registered_udf`, `workbook_defined_name`, `sheet_defined_name`, `defined_name_lambda`, `lexical_local`, and `host_namespace_name`,
+3. each row must record the Excel-observed winner, the observable value or error, whether a callable value remains callable after resolution, and which mutation inputs would invalidate the prepared identity,
+4. defined-name `LAMBDA` rows must keep value reference and invocation behavior separate; a lambda-valued defined name is not assumed to be identical to a registered UDF,
+5. lexical `LET` / `LAMBDA` rows are guardrail rows only: OxFml records their precedence against external name worlds, but lexical variables, callable locals, captures, and returned lambdas remain OxFml-internal and are not exposed as host namespace entries.
+
+Current product-host mapping rule:
+1. TreeCalc host names map to the closest Excel defined-name lane until this matrix proves a different extension is needed,
+2. TreeCalc lambda-valued host nodes map to the closest Excel defined-name `LAMBDA` lane until evidence justifies a separate extension,
+3. explicit host-reference syntax may bypass ordinary name/call ambiguity only through the generic host hook and must still emit replay-visible resolution-layer facts.
 
 ### B074-05: Unregister And Capability-Denial Invalidation
 
@@ -93,6 +105,20 @@ Required oracle cases before freeze:
 - **Effect**: preserve the distinction between bind-visible UDF metadata and descriptor-only `REGISTER.ID` / `CALL` registered-external mutation.
 - **Evidence target**: spec or handoff note plus first non-regression test if local behavior changes.
 
+### B074-07: Generic Host Hook And Prepared Identity Inputs
+
+- **Status**: in_progress
+- **Owner**: OxFml with OxCalc input
+- **Effect**: spell the generic host hook, host-reference bind result, structured-reference coexistence, and prepared-identity/cache invalidation inputs needed by `W051` without hardcoding TreeCalc syntax.
+- **Evidence target**: updated spec and handoff surfaces naming required inputs and non-assumptions.
+
+Required packet facts:
+1. the host hook is generic and keyed by `dialect_id`, `capability_profile_id`, `resolution_rule_version`, host namespace version, registry snapshot identity, structure-context version, and caller context identity where relevant,
+2. host-reference bind results carry a handle or formal reference id, source span/token text, opaque selector payload, resolution layer, shape hint, caller-context dependency, diagnostics, and replay identity,
+3. table and structured-reference binding stays on the existing `table_catalog + enclosing_table_ref + caller_table_region` packet; generic host hooks do not replace structured-reference grammar or table-context bind,
+4. prepared identity and cache keys must include the name-world and host-context version inputs that can change resolution,
+5. late UDF registration, unregister, capability-overlay denial, defined-name mutation, host namespace mutation, table context mutation, and resolution-rule changes are invalidation inputs when they can change bind or prepared-call shape.
+
 ## Status
 
 - execution_state: in_progress
@@ -106,4 +132,7 @@ Required oracle cases before freeze:
   - cross-repo registry change-set shape,
   - Excel oracle matrix for built-in/UDF/defined-name/LAMBDA shadowing,
   - mapping of `W051` host namespace names and lambda-valued host nodes to Excel defined-name lanes,
+  - generic host hook and host-reference bind-result packet spelling,
+  - prepared identity/cache invalidation inputs for registry, structure, host namespace, table context, caller context, and resolution-rule changes,
+  - DNA OneCalc no-host-reference LET/LAMBDA lexical guardrail,
   - evidence-backed cache invalidation for registry and host namespace mutation.

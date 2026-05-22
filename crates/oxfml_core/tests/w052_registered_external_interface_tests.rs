@@ -71,7 +71,6 @@ fn host_executes_register_id_and_call_through_registered_external_provider() {
                 TypedContextQueryFamily::ReferenceResolver,
                 TypedContextQueryFamily::RegisteredExternal,
                 TypedContextQueryFamily::NowSerial,
-                TypedContextQueryFamily::RandomProvider,
             ],
         }
     );

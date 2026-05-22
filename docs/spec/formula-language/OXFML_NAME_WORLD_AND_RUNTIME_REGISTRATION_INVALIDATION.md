@@ -56,6 +56,7 @@ Current rule:
 2. lambda-valued host nodes should map to the closest Excel defined-name `LAMBDA` invocation lane unless evidence forces a separate carrier,
 3. explicit host-reference syntax and explicit paths may bind through the host namespace resolver and bypass ordinary function-name ambiguity,
 4. bare names and bare callees must wait for the Excel oracle matrix before OxFml freezes a host-name precedence rule.
+5. `LET` / `LAMBDA` lexical variables, callable locals, captures, and returned lambdas are not a host namespace. They remain OxFml-internal bind/evaluation facts even when the oracle matrix observes their precedence against built-ins, UDFs, or defined names.
 
 ### 4. Registered-External Descriptor World
 Owned by OxFunc runtime registered-external catalog truth for worksheet `CALL` / `REGISTER.ID`.
@@ -82,6 +83,14 @@ Required matrix families:
 9. UDF unregister and capability-denial changing a previously bindable call,
 10. defined-name add/remove/reclassification changing non-call and call classification,
 11. explicit host-reference syntax selecting a host object whose display name collides with a function, UDF, or defined name.
+
+Required row fields:
+1. source position: `call_callee`, `non_call_bare_name`, `let_lambda_lexical`, or `explicit_host_reference`,
+2. visible candidate set: built-in function, registered UDF, workbook-defined name, sheet-defined name, defined-name `LAMBDA`, lexical local, host namespace name,
+3. observed winner and observable result class,
+4. whether the result is callable, value-like, reference-like, or unresolved,
+5. mutation inputs that invalidate the prepared identity or semantic-plan cache,
+6. replay-visible resolution layer and diagnostics.
 
 Until that evidence exists, the active rule is:
 1. do not freeze built-in/UDF/defined-name/host-name shadowing order,
@@ -114,7 +123,13 @@ Current affected version contexts:
    - for workbook-structure-owned name worlds such as defined names,
 2. `LibraryContextSnapshotRef`
    - for OxFunc-owned function catalog truth and name-bindable runtime function registration,
-3. both, where a host change affects both workbook structure and the OxFunc-visible callable world.
+3. host namespace version and `resolution_rule_version`
+   - for generic host-reference/name hooks admitted by `W051`,
+4. caller context identity
+   - where host names, relative references, or explicit host references are caller-sensitive,
+5. table-context identity
+   - where structured-reference binding depends on `table_catalog`, `enclosing_table_ref`, or `caller_table_region`,
+6. both or more than one context, where a host change affects several name worlds at once.
 
 ## Runtime-Descriptor Rule
 Not every runtime registration is a bind-visible name-world change.
@@ -169,6 +184,12 @@ If a host namespace change creates, removes, renames, or reclassifies a visible 
 2. treat formulas pinned to the old host context as stale for bind where affected,
 3. preserve whether the change was caused by function registry mutation, workbook/defined-name mutation, or host namespace/model mutation in replay-visible invalidation facts.
 
+### Structured-reference context changes
+If a table-context change creates, removes, renames, or reclassifies table or column meaning visible to structured-reference binding, the host/coordinator should:
+1. change the table-context identity or structure-context version used by the prepared formula,
+2. rebind formulas whose structured-reference syntax mentions the changed table/column or depends on the enclosing table/current-row context,
+3. preserve table-name-versus-defined-name disambiguation as an OxFml bind consequence over host-owned table packet truth.
+
 ### Registered-external descriptor changes
 If the change only affects `CALL` / `REGISTER.ID` descriptor truth, the host/OxFunc runtime should:
 1. preserve the mutation through the registered-external packet lane,
@@ -212,6 +233,18 @@ On host namespace change:
 2. also rebind formulas with unresolved identifiers that may now resolve under the changed host context,
 3. conservatively rebind more broadly if caller-context or precedence effects are not cheaply indexable.
 
+### For structured-reference context changes
+Index formulas by:
+1. structured-reference table names and table ids,
+2. structured-reference column names and column ids,
+3. omitted-table-name/current-row-sensitive usages,
+4. unresolved table or column identifiers.
+
+On table-context change:
+1. rebind formulas that mention changed table or column identifiers,
+2. also rebind formulas with omitted-table-name forms when the enclosing table or caller region changed,
+3. conservatively rebind more broadly if table-name-versus-defined-name precedence or caller-region effects are not cheaply indexable.
+
 ### For registered-external descriptor changes
 Index formulas by:
 1. presence of worksheet `CALL`,
@@ -243,6 +276,8 @@ This note does not claim:
 3. that every registration must always force both snapshot and structure invalidation,
 4. that registered externals used only through `CALL` are bind-visible ordinary function names,
 5. that host/coordinator can skip conservative fallback rebinding when dependency/index truth is incomplete.
+6. that TreeCalc host names have product-specific precedence in OxFml before the `W074` Excel oracle matrix justifies an extension,
+7. that OxFml exposes lexical `LET` / `LAMBDA` internals as host-visible namespace bindings.
 
 ## Current Recommendation
 The current recommended operational model is:

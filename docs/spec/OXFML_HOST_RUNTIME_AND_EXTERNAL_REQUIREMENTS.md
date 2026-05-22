@@ -129,13 +129,18 @@ The first planned `HostFormulaContext` shape carries:
 3. a host namespace resolver for host names, explicit paths, selectors, defined-name-like objects, and host-sensitive references,
 4. an OxFunc-backed function registry view covering built-ins, registered UDFs, and capability overlays,
 5. caller context needed for relative references, caller-sensitive host names, and lexical walk-up,
-6. context version identity for cache and replay, including structure-context version, host namespace version, registry snapshot identity, caller context identity where relevant, and resolution-rule version.
+6. context version identity for cache and replay, including structure-context version, host namespace version, registry snapshot identity, caller context identity where relevant, table-context identity where structured references are admitted, and resolution-rule version.
 
 OxFml owns the surrounding formula language:
 1. calls and argument lists,
 2. operators, literals, arrays, and ordinary expression structure,
 3. `LET`, `LAMBDA`, lexical scope, and local helper binding,
 4. source spans, bind diagnostics, prepared formula identity, and semantic-plan consequences.
+
+Lexical-scope guardrail:
+1. `LET` / `LAMBDA` lexical variables, callable locals, captures, and returned lambdas are evaluator-internal OxFml facts,
+2. they may affect OxFml bind, semantic-plan, trace, and returned-value-surface artifacts,
+3. they must not be surfaced as host namespace entries, TreeCalc objects, or host-reference bind results.
 
 The host hook owns only the host reference/name surface and returns opaque syntax or bind objects. OxFml must not inspect TreeCalc selectors, node paths, node-walk rules, sibling/child relationships, or set-membership semantics.
 
@@ -149,7 +154,14 @@ Planned host-reference bind output must carry:
 5. resolution layer such as `lexical`, `function`, `defined_name`, `host_name`, `explicit_host_ref`, or `unresolved`,
 6. shape hint such as `single`, `collection`, `dynamic`, or `unknown`,
 7. caller-context-dependent flag and caller context identity input when applicable,
-8. typed diagnostics for ambiguity, unresolved host name, capability denial, unknown function, and set/reference-as-callable mismatch.
+8. typed diagnostics for ambiguity, unresolved host name, capability denial, unknown function, and set/reference-as-callable mismatch,
+9. prepared-identity/cache contribution naming every context version that affected resolution.
+
+Structured-reference support remains separate from the generic host hook:
+1. worksheet table syntax is parsed and bound by OxFml as structured-reference syntax, not as a TreeCalc or generic host-selector language,
+2. hosts supply `table_catalog`, `enclosing_table_ref`, and `caller_table_region` as table-context inputs,
+3. table-name-versus-defined-name disambiguation remains an OxFml bind consequence over that host-owned packet truth,
+4. table-context identity must participate in prepared identity and cache invalidation when table names, column identities, enclosing table, or caller row/region can change resolution.
 
 Runtime transport rule:
 1. host references may materialize to values for values-only calls,
@@ -161,6 +173,7 @@ TreeCalc mapping rule:
 1. TreeCalc host names and lambda-valued nodes should map to the closest Excel defined-name or defined-name `LAMBDA` lane,
 2. any TreeCalc-only callable host-name behavior must be recorded as an explicit extension with replay-visible diagnostics and invalidation consequences,
 3. no such extension is accepted until the Excel oracle matrix in `W074` identifies the closest Excel behavior.
+4. OxFml must not hardcode TreeCalc node-path, child/member, or set semantics in formula parsing, binding, or LET/LAMBDA evaluation.
 
 ### 4.2 Runtime Catalog Inputs
 1. `LibraryContextProvider`

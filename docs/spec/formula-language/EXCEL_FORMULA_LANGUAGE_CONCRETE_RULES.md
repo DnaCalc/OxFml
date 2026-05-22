@@ -166,10 +166,24 @@ Before OxFml promotes a generic host namespace rule for OxCalc W051, the `W074` 
 7. lexical `LET` / `LAMBDA` bindings colliding with built-ins, UDFs, and defined names,
 8. late UDF registration, UDF unregister, capability-denial, defined-name mutation, and host namespace mutation as cache-invalidation triggers.
 
+Matrix rows must keep these dimensions explicit:
+1. source position: `call_callee`, `non_call_bare_name`, `let_lambda_lexical`, or `explicit_host_reference`,
+2. visible candidates: built-in function, registered UDF, workbook-defined name, sheet-defined name, defined-name `LAMBDA`, lexical local, and host namespace name,
+3. observed outcome: callable, ordinary value, reference-like value, worksheet error, admission rejection, or unresolved diagnostic,
+4. invalidation inputs: registry snapshot, structure context, defined-name scope/kind, host namespace version, caller context, table context, and resolution-rule version,
+5. replay-visible resolution layer and diagnostic class.
+
 Current host mapping rule:
 1. TreeCalc host names and lambda-valued nodes map to the closest Excel defined-name lane only as a planning default,
 2. explicit host-reference syntax can intentionally select host objects that collide with function names,
 3. any TreeCalc-specific divergence must be documented as an extension with replay-visible diagnostics and invalidation effects.
+4. `LET` / `LAMBDA` lexical variables, callable locals, captures, and returned lambdas remain OxFml-internal and must not be projected as host namespace entries.
+
+Structured-reference interaction:
+1. `W074` host-name work does not replace the structured-reference lane,
+2. table syntax continues to bind through `table_catalog`, `enclosing_table_ref`, and `caller_table_region`,
+3. table-name-versus-defined-name disambiguation is an OxFml bind result over host-owned table context,
+4. table-context changes are prepared-identity/cache invalidation inputs where they can change structured-reference resolution.
 
 ## 7. Open Items For Next Tightening Pass
 1. Replicate scoped-name and precedence lanes across target channels/builds to verify current provisional policy wording.

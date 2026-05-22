@@ -2,7 +2,7 @@
 
 Status: 1 active blocker.
 
-Last reviewed: 2026-05-06 after consuming the OxFunc final `FormatProfile` semantics and rerunning focused locale/custom-format evidence.
+Last reviewed: 2026-05-22 during W074 cross-repo validation follow-up.
 
 ---
 
@@ -19,6 +19,16 @@ Last reviewed: 2026-05-06 after consuming the OxFunc final `FormatProfile` seman
 ---
 
 ## Resolved Blockers
+
+### BLK-FML-007: OxFunc registry compile failure blocks OxFml validation
+
+- **Status**: resolved
+- **Impact**: previously blocked full `cargo test -p oxfml_core` validation for the W074 docs/spec tranche because the build failed in sibling `oxfunc_core` before OxFml tests executed
+- **Current state**: OxFunc W093 now provides the missing registry symbols. A follow-up OxFml helper-slot fix also cleared the prior full OxFunc integration panic in `ftc_0907_and_map_true_array_scalarizes_to_true_through_adapter`.
+- **Exact unblock steps**: completed; reran `cargo test -p oxfml_core` from OxFml and `cargo test --manifest-path crates\oxfunc_core\Cargo.toml` from OxFunc successfully.
+- **Recommendation**: resolved
+- **Opened**: 2026-05-22
+- **Resolved**: 2026-05-22
 
 ### BLK-FML-005: Locale expansion requires final OxFunc FormatProfile semantics
 

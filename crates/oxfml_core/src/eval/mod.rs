@@ -481,6 +481,20 @@ impl HelperBindingFrame {
         }
     }
 
+    fn with_min_slot_count(mut self, min_slot_count: usize) -> Self {
+        if self.slots.len() >= min_slot_count {
+            return self;
+        }
+        let mut expanded_slots = self
+            .slots
+            .iter()
+            .map(|cell| RefCell::new(cell.borrow().clone()))
+            .collect::<Vec<_>>();
+        expanded_slots.extend((expanded_slots.len()..min_slot_count).map(|_| RefCell::new(None)));
+        self.slots = Rc::new(expanded_slots);
+        self
+    }
+
     fn contains(&self, name: &str) -> bool {
         let key = helper_name_key(name);
         self.layers
@@ -667,6 +681,76 @@ fn lambda_params_from_exprs(args: &[CompiledExpr]) -> Option<Rc<[LambdaParam]>> 
         .map(lambda_param_from_expr)
         .collect::<Option<Vec<_>>>()
         .map(|params| Rc::from(params.into_boxed_slice()))
+}
+
+fn lambda_slot_count(params: &[LambdaParam], body: &CompiledExpr) -> usize {
+    params
+        .iter()
+        .filter_map(|param| param.slot)
+        .chain(compiled_expr_max_helper_slot(body))
+        .max()
+        .map_or(0, |slot| slot + 1)
+}
+
+fn compiled_expr_max_helper_slot(expr: &CompiledExpr) -> Option<usize> {
+    match expr {
+        CompiledExpr::HelperParameterName { slot, .. }
+        | CompiledExpr::HelperOptionalParameterName { slot, .. } => *slot,
+        CompiledExpr::Binary { left, right, .. } => compiled_expr_max_helper_slot(left)
+            .into_iter()
+            .chain(compiled_expr_max_helper_slot(right))
+            .max(),
+        CompiledExpr::Unary { expr, .. }
+        | CompiledExpr::ImplicitIntersection { expr, .. }
+        | CompiledExpr::PrecomputedValue { source: expr, .. } => {
+            compiled_expr_max_helper_slot(expr)
+        }
+        CompiledExpr::ArrayLiteral(rows) => rows
+            .iter()
+            .flatten()
+            .filter_map(compiled_expr_max_helper_slot)
+            .max(),
+        CompiledExpr::FunctionCall { args, .. }
+        | CompiledExpr::SurfaceCall { args, .. }
+        | CompiledExpr::Let { args, .. }
+        | CompiledExpr::LambdaLiteral { args }
+        | CompiledExpr::If { args }
+        | CompiledExpr::IfError { args } => {
+            args.iter().filter_map(compiled_expr_max_helper_slot).max()
+        }
+        CompiledExpr::Invocation { callee, args } => compiled_expr_max_helper_slot(callee)
+            .into_iter()
+            .chain(args.iter().filter_map(compiled_expr_max_helper_slot))
+            .max(),
+        CompiledExpr::Reference(reference) => compiled_reference_max_helper_slot(reference),
+        CompiledExpr::NumberLiteral { .. }
+        | CompiledExpr::StringLiteral(_)
+        | CompiledExpr::LogicalLiteral(_)
+        | CompiledExpr::OmittedArgument
+        | CompiledExpr::BuiltinCallable(_) => None,
+    }
+}
+
+fn compiled_reference_max_helper_slot(reference: &CompiledReferenceExpr) -> Option<usize> {
+    match reference {
+        CompiledReferenceExpr::HelperLocalSlot { slot, .. } => Some(*slot),
+        CompiledReferenceExpr::Spill { anchor, .. } => compiled_reference_max_helper_slot(anchor),
+        CompiledReferenceExpr::Range { start, end, .. }
+        | CompiledReferenceExpr::Union {
+            left: start,
+            right: end,
+            ..
+        }
+        | CompiledReferenceExpr::Intersection {
+            left: start,
+            right: end,
+            ..
+        } => compiled_reference_max_helper_slot(start)
+            .into_iter()
+            .chain(compiled_reference_max_helper_slot(end))
+            .max(),
+        CompiledReferenceExpr::Atom(_) => None,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -5203,7 +5287,8 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
             .ok_or_else(|| {
                 CallableInvocationError::UnsupportedCallableToken(callable.callable_token.clone())
             })?;
-        let mut local_bindings = binding.lambda.closure;
+        let local_slot_count = lambda_slot_count(&binding.lambda.params, &binding.lambda.body);
+        let mut local_bindings = binding.lambda.closure.with_min_slot_count(local_slot_count);
         for (param, arg) in binding.lambda.params.iter().zip(args.iter()) {
             insert_helper_slot_binding(
                 &mut local_bindings,
@@ -5287,7 +5372,8 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
             .iter()
             .map(|name| helper_name_key(name))
             .collect::<Vec<_>>();
-        let mut local_bindings = binding.lambda.closure;
+        let local_slot_count = lambda_slot_count(&binding.lambda.params, &binding.lambda.body);
+        let mut local_bindings = binding.lambda.closure.with_min_slot_count(local_slot_count);
         prime_local_callable_param_slots(&mut local_bindings, &binding.lambda.params, &param_keys);
         let mut trace = EvaluationTrace {
             prepared_calls: Vec::new(),

@@ -169,6 +169,21 @@ These are OneCalc-local classification names as defined in `DNA_ONECALC_SCOPE_AN
 7. semantic formatting through `TEXT`, `VALUE`, `NOW`, `TODAY`, `CELL`, `INFO`,
 8. `HYPERLINK` publication-intent preservation.
 
+No-host-reference LET/LAMBDA guardrail:
+1. in the default DNA OneCalc explicit-input host path, `LET` and `LAMBDA`
+   lexical variables are OxFml-internal binding facts, not host input names,
+2. callable locals, captured values, captured callables, and returned lambdas
+   remain inside OxFml's formula/evaluator lane unless a future explicit
+   returned-callable consumer contract exposes a typed callable carrier,
+3. DNA OneCalc must not reinterpret lexical locals as `defined_name_bindings`
+   or host-reference bindings,
+4. a returned lambda may be displayed or replay-projected through the current
+   returned-value surface, but it must not be materialized as a host namespace
+   object or persisted host-defined name by default,
+5. this guardrail does not prevent explicit host-supplied defined-name
+   callables; it only keeps formula-local lexical machinery separate from host
+   namespace/reference machinery.
+
 ### 3.2 ReferenceProbePacket
 
 **Role**: bounded probe-only packet admitted only when a real upstream semantic lane requires reference-sensitive truth.
@@ -215,6 +230,14 @@ May also carry `ReferenceProbePacket` fields when the lane requires both table c
 3. multi-column section-qualified selectors: `Table1[[#All],[Amount]:[Tax]]`, `Table1[[#Data],[Amount]:[Tax]]`,
 4. current-row-sensitive structured-reference evaluation,
 5. defined-name collision disambiguation within table scope.
+
+Prepared identity and invalidation rule:
+1. `table_catalog`, `enclosing_table_ref`, and `caller_table_region` are
+   semantic bind inputs for this packet,
+2. changing table name, column identity, enclosing table, or caller table
+   region can require rebind and prepared-identity/cache invalidation,
+3. the generic host hook documented for OxCalc W051 does not replace this
+   structured-reference packet.
 
 ### 3.4 RegisteredExternalProbePacket
 
