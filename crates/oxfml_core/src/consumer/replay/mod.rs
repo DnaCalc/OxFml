@@ -312,7 +312,10 @@ fn project_runtime_result(
         session_id: result.candidate_result.session_id.clone(),
         library_context_snapshot_ref: result.library_context_snapshot_ref.clone(),
         typed_query_bundle_spec: Some(result.typed_query_bundle_spec.clone()),
-        registry_pin: None,
+        registry_pin: result
+            .prepared_formula_identity
+            .registry_snapshot_identity
+            .clone(),
         witness_id: None,
         witness_lifecycle_state: None,
         retention_policy_id: None,
@@ -419,7 +422,10 @@ fn project_runtime_managed_open(
         session_id: Some(result.session_id.clone()),
         library_context_snapshot_ref: result.library_context_snapshot_ref.clone(),
         typed_query_bundle_spec: None,
-        registry_pin: None,
+        registry_pin: result
+            .prepared_formula_identity
+            .registry_snapshot_identity
+            .clone(),
         witness_id: None,
         witness_lifecycle_state: None,
         retention_policy_id: None,
@@ -471,7 +477,10 @@ fn project_runtime_managed_execution(
         session_id: Some(result.session_id.clone()),
         library_context_snapshot_ref: result.library_context_snapshot_ref.clone(),
         typed_query_bundle_spec: Some(result.typed_query_bundle_spec.clone()),
-        registry_pin: None,
+        registry_pin: result
+            .prepared_formula_identity
+            .registry_snapshot_identity
+            .clone(),
         witness_id: None,
         witness_lifecycle_state: None,
         retention_policy_id: None,
@@ -527,7 +536,10 @@ fn project_runtime_managed_session(
         session_id: Some(result.session_id.clone()),
         library_context_snapshot_ref: result.library_context_snapshot_ref.clone(),
         typed_query_bundle_spec: result.typed_query_bundle_spec.clone(),
-        registry_pin: None,
+        registry_pin: result
+            .prepared_formula_identity
+            .registry_snapshot_identity
+            .clone(),
         witness_id: None,
         witness_lifecycle_state: None,
         retention_policy_id: None,
@@ -596,7 +608,11 @@ fn project_runtime_managed_commit(
         session_id: Some(result.session.session_id.clone()),
         library_context_snapshot_ref: result.session.library_context_snapshot_ref.clone(),
         typed_query_bundle_spec: result.session.typed_query_bundle_spec.clone(),
-        registry_pin: None,
+        registry_pin: result
+            .session
+            .prepared_formula_identity
+            .registry_snapshot_identity
+            .clone(),
         witness_id: None,
         witness_lifecycle_state: None,
         retention_policy_id: None,

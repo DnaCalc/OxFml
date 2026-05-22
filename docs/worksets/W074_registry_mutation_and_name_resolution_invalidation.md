@@ -103,10 +103,15 @@ Current observed tranche:
    bypass row through OxCalc host-resolver/replay facts plus OxFml runtime and
    replay facade preservation of `resolution_layer=explicit_host_ref`, source
    token/span, opaque selector payload, and prepared identity inputs.
-3. A focused OxFml/OxFunc probe now covers capability-overlay denial at the
-   registry/editor layer: the denied registry entry remains present but
-   unavailable and completion filters it. Formula-call binding/evaluation
-   invalidation under denied registry views remains open.
+3. Focused OxFml/OxFunc probes now cover capability-overlay denial at the
+   registry/editor layer and the runtime formula-call layer: the denied
+   registry entry remains present but unavailable, editor completion filters
+   it, runtime semantic availability preserves the entry identity, execution
+   blocks before ordinary built-in `SurfaceCallSite` dispatch, and replay
+   projection carries the registry snapshot plus capability-denial identity.
+   The same runtime tranche admits registered UDF calls as registry-present
+   without implementing actual UDF invocation and returns to `#NAME?`-style
+   unknown classification after unregister/default registry.
 4. Table-context evidence is partial: structured syntax disambiguates from a
    defined-name collision, and table-context mutation that changes a structured
    column target changes prepared identity. Bare non-call table-name
@@ -172,12 +177,11 @@ Current runtime/replay evidence:
 - integration_completeness: partial
 - open_lanes:
   - registry snapshot identity packet,
-  - formula-call registry lookup migration,
   - cache invalidation implementation,
   - cross-repo registry change-set shape,
   - Excel oracle matrix for built-in/UDF/defined-name/LAMBDA shadowing,
   - mapping of `W051` host namespace names and lambda-valued host nodes to Excel defined-name lanes,
-  - formula-call binding/evaluation against registry views and capability-overlay denial,
+  - broader formula-call name/call precedence freeze beyond the bounded registry-view admission and capability-denial runtime classification tranche,
   - table-context residuals beyond structured-syntax disambiguation and prepared-identity mutation,
   - prepared identity/cache invalidation inputs for registry, structure, host namespace, table context, caller context, and resolution-rule changes,
   - evidence-backed cache invalidation for registry and host namespace mutation.

@@ -3,7 +3,10 @@ use std::collections::BTreeSet;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-use oxfunc_core::registry::builtin_registry;
+use oxfunc_core::registry::{
+    CapabilityOverlay, FunctionAvailability, FunctionEntry, FunctionRegistry, FunctionSource,
+    builtin_registry,
+};
 use oxfunc_core::resolver::{
     ResolvedReferenceCell, ResolvedReferenceExtent, ResolvedReferenceValues,
 };
@@ -20,10 +23,10 @@ use crate::eval::{
 use crate::host::{ArtifactReuseReport, FirstHostReplayCapturePacket};
 pub use crate::host::{HostRecalcOutput, SingleFormulaHost};
 use crate::interface::{
-    LibraryContextProvider, LibraryContextSnapshotRef, RegisteredExternalCatalogController,
-    RegisteredExternalCatalogMutationRequest, RegisteredExternalCatalogMutationResult,
-    ReturnedValueSurface, TableCallerRegion, TableDescriptor, TableRef, TypedContextQueryBundle,
-    TypedContextQueryBundleSpec,
+    LibraryContextProvider, LibraryContextSnapshotRef, PinnedLibraryContextView,
+    RegisteredExternalCatalogController, RegisteredExternalCatalogMutationRequest,
+    RegisteredExternalCatalogMutationResult, ReturnedValueSurface, TableCallerRegion,
+    TableDescriptor, TableRef, TypedContextQueryBundle, TypedContextQueryBundleSpec,
 };
 use crate::publication::{
     VerificationComparisonView, VerificationPublicationContext, VerificationPublicationSurface,
@@ -37,7 +40,8 @@ use crate::seam::{
     execution_outcome_surface_executed_result,
 };
 use crate::semantics::{
-    CompileSemanticPlanRequest, LibraryContextSnapshot, SemanticPlan, compile_semantic_plan,
+    CompileSemanticPlanRequest, LibraryAvailabilityState, LibraryContextSnapshot,
+    LibraryContextSnapshotEntry, RegistrationSourceKind, SemanticPlan, compile_semantic_plan,
 };
 use crate::session::{
     CapabilityViewSpec, ExecuteRequest, OverlayEntry, PrepareRequest, SessionPhase, SessionRecord,
@@ -65,6 +69,9 @@ pub struct RuntimeEnvironment<'a> {
     caller_table_region: Option<TableCallerRegion>,
     library_context: ConsumerLibraryContextState<'a>,
     oxfunc_bridge_metadata: RuntimeOxFuncBridgeMetadata,
+    function_registry: &'a FunctionRegistry,
+    function_registry_explicit: bool,
+    capability_overlay: Option<&'a CapabilityOverlay>,
 }
 
 impl<'a> RuntimeEnvironment<'a> {
@@ -89,6 +96,9 @@ impl<'a> RuntimeEnvironment<'a> {
             caller_table_region: None,
             library_context: ConsumerLibraryContextState::new(),
             oxfunc_bridge_metadata: RuntimeOxFuncBridgeMetadata::default(),
+            function_registry: builtin_registry(),
+            function_registry_explicit: false,
+            capability_overlay: None,
         }
     }
 
@@ -251,6 +261,17 @@ impl<'a> RuntimeEnvironment<'a> {
         self
     }
 
+    pub fn with_function_registry(mut self, function_registry: &'a FunctionRegistry) -> Self {
+        self.function_registry = function_registry;
+        self.function_registry_explicit = true;
+        self
+    }
+
+    pub fn with_capability_overlay(mut self, capability_overlay: &'a CapabilityOverlay) -> Self {
+        self.capability_overlay = Some(capability_overlay);
+        self
+    }
+
     pub fn with_semantic_kernel_metadata_version(mut self, version: impl Into<String>) -> Self {
         self.oxfunc_bridge_metadata.semantic_kernel_metadata_version = Some(version.into());
         self
@@ -275,6 +296,8 @@ impl<'a> RuntimeEnvironment<'a> {
             &self.oxfunc_bridge_metadata,
             &self.host_formula_context,
             &self.host_reference_bind_results,
+            self.runtime_registry_view_identity().as_ref(),
+            &compiled.registry_capability_denials,
         );
         if compiled
             .prepare_request
@@ -295,10 +318,18 @@ impl<'a> RuntimeEnvironment<'a> {
             &prepared_formula_identity,
         )?;
         host.set_trace_mode(request.trace_mode());
+        let runtime_library_context_snapshot = self.runtime_registry_library_context_snapshot(
+            self.library_context.pinned_view().resolve_snapshot(),
+        );
+        let runtime_library_context_view = if self.has_active_registry_view() {
+            PinnedLibraryContextView::new(None, None, runtime_library_context_snapshot.as_ref())
+        } else {
+            self.library_context.pinned_view()
+        };
         let output = host.recalc_with_library_context_view(
             request.backend(),
             request.typed_query_bundle,
-            self.library_context.pinned_view(),
+            runtime_library_context_view,
             request.verification_publication_context(),
         )?;
         Ok(RuntimeFormulaResult::from_host_output(
@@ -329,6 +360,110 @@ impl<'a> RuntimeEnvironment<'a> {
         host.table_catalog = self.table_catalog.clone();
         host.enclosing_table_ref = self.enclosing_table_ref.clone();
         host.caller_table_region = self.caller_table_region.clone();
+    }
+
+    fn has_active_registry_view(&self) -> bool {
+        self.function_registry_explicit || self.capability_overlay.is_some()
+    }
+
+    fn runtime_registry_view_identity(&self) -> Option<RuntimeFunctionRegistryViewIdentity> {
+        if !self.has_active_registry_view() {
+            return None;
+        }
+        Some(RuntimeFunctionRegistryViewIdentity {
+            registry_snapshot_identity: self.function_registry.snapshot_identity().stable_key(),
+            capability_overlay_identity: self
+                .capability_overlay
+                .map(|overlay| format!("capability-overlay:{}", runtime_hash_debug(overlay))),
+        })
+    }
+
+    fn runtime_registry_library_context_snapshot(
+        &self,
+        base_snapshot: Option<LibraryContextSnapshot>,
+    ) -> Option<LibraryContextSnapshot> {
+        if !self.has_active_registry_view() {
+            return base_snapshot;
+        }
+
+        let view_identity = self
+            .runtime_registry_view_identity()
+            .expect("active registry view should produce identity");
+        let mut entries = Vec::new();
+        let mut seen_surface_names = BTreeSet::new();
+
+        if let Some(base_snapshot) = base_snapshot {
+            for entry in base_snapshot.entries {
+                seen_surface_names.insert(entry.surface_name.to_ascii_uppercase());
+                entries.push(entry);
+            }
+        }
+
+        for entry in self.function_registry.iter() {
+            if seen_surface_names.contains(&entry.surface_name.to_ascii_uppercase()) {
+                continue;
+            }
+            entries.push(runtime_registry_snapshot_entry(
+                entry,
+                self.capability_overlay,
+            ));
+        }
+
+        Some(LibraryContextSnapshot {
+            snapshot_id: "runtime-function-registry-view".to_string(),
+            snapshot_version: runtime_hash_debug(&(&view_identity, &entries)),
+            entries,
+        })
+    }
+}
+
+fn runtime_registry_snapshot_entry(
+    entry: &FunctionEntry,
+    capability_overlay: Option<&CapabilityOverlay>,
+) -> LibraryContextSnapshotEntry {
+    let availability = capability_overlay
+        .map(|overlay| overlay.availability_for(&entry.meta.function_id))
+        .unwrap_or(FunctionAvailability::Available);
+    let runtime_capability_state = match availability {
+        FunctionAvailability::Available => Some(LibraryAvailabilityState::CatalogKnown),
+        FunctionAvailability::Unavailable { .. } => {
+            Some(LibraryAvailabilityState::HostProfileUnavailable)
+        }
+    };
+
+    LibraryContextSnapshotEntry {
+        surface_name: entry.surface_name.clone(),
+        canonical_id: Some(entry.meta.function_id.clone()),
+        surface_stable_id: entry
+            .registry_metadata
+            .surface_stable_id
+            .clone()
+            .or_else(|| Some(entry.meta.function_id.clone())),
+        name_resolution_table_ref: entry.registry_metadata.name_resolution_table_ref.clone(),
+        semantic_trait_profile_ref: entry
+            .registry_metadata
+            .semantic_trait_profile_ref
+            .clone()
+            .or_else(|| Some(entry.meta.semantic_kernel_metadata_version.clone())),
+        gating_profile_ref: entry.registry_metadata.gating_profile_ref.clone(),
+        metadata_status: entry.registry_metadata.metadata_status.clone(),
+        special_interface_kind: entry.registry_metadata.special_interface_kind.clone(),
+        admission_interface_kind: entry.registry_metadata.admission_interface_kind.clone(),
+        preparation_owner: entry.registry_metadata.preparation_owner.clone(),
+        runtime_boundary_kind: entry.registry_metadata.runtime_boundary_kind.clone(),
+        interface_contract_ref: entry.registry_metadata.interface_contract_ref.clone(),
+        registration_source_kind: runtime_registration_source_kind(&entry.source),
+        parse_bind_state: LibraryAvailabilityState::CatalogKnown,
+        semantic_plan_state: LibraryAvailabilityState::CatalogKnown,
+        runtime_capability_state,
+        post_dispatch_state: None,
+    }
+}
+
+fn runtime_registration_source_kind(source: &FunctionSource) -> RegistrationSourceKind {
+    match source {
+        FunctionSource::BuiltIn => RegistrationSourceKind::BuiltIn,
+        FunctionSource::Udf { .. } => RegistrationSourceKind::UserDefined,
     }
 }
 
@@ -1908,10 +2043,26 @@ pub struct RuntimePreparedFormulaIdentity {
     pub arg_admission_metadata_version: Option<String>,
     pub host_formula_context: Option<RuntimeHostFormulaContext>,
     pub host_reference_bind_results: Vec<RuntimeHostReferenceBindResult>,
+    pub registry_snapshot_identity: Option<String>,
+    pub capability_overlay_identity: Option<String>,
+    pub registry_capability_denials: Vec<RuntimeFunctionCapabilityDenial>,
     pub plan_template: RuntimePlanTemplateIdentity,
     pub hole_binding: RuntimeHoleBindingIdentity,
     pub formal_references: Vec<RuntimeFormalReference>,
     pub projection_status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RuntimeFunctionRegistryViewIdentity {
+    pub registry_snapshot_identity: String,
+    pub capability_overlay_identity: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RuntimeFunctionCapabilityDenial {
+    pub surface_name: String,
+    pub canonical_id: Option<String>,
+    pub runtime_capability_state: String,
 }
 
 impl RuntimePreparedFormulaIdentity {
@@ -2198,6 +2349,8 @@ impl<'a> RuntimeSessionFacade<'a> {
             &self.environment.oxfunc_bridge_metadata,
             &self.environment.host_formula_context,
             &self.environment.host_reference_bind_results,
+            self.environment.runtime_registry_view_identity().as_ref(),
+            &prepared.registry_capability_denials,
         );
         let prepared_session = self.managed_service.prepare(prepared.prepare_request)?;
         let open = self.managed_service.open_session(prepared_session);
@@ -2447,6 +2600,8 @@ fn runtime_prepared_formula_identity(
     oxfunc_bridge_metadata: &RuntimeOxFuncBridgeMetadata,
     host_formula_context: &Option<RuntimeHostFormulaContext>,
     host_reference_bind_results: &[RuntimeHostReferenceBindResult],
+    registry_view_identity: Option<&RuntimeFunctionRegistryViewIdentity>,
+    registry_capability_denials: &[RuntimeFunctionCapabilityDenial],
 ) -> RuntimePreparedFormulaIdentity {
     let formula_token = source.formula_token().0;
     let oxfunc_bridge_metadata =
@@ -2468,7 +2623,8 @@ fn runtime_prepared_formula_identity(
         &semantic_plan.helper_profile,
         &semantic_plan.capability_requirements,
     ));
-    let prepared_formula_key = runtime_hash_debug(&(
+    let prepared_formula_key = runtime_hash_debug(&format!(
+        "{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}",
         &source.formula_stable_id.0,
         source.formula_text_version.0,
         &formula_token,
@@ -2481,6 +2637,8 @@ fn runtime_prepared_formula_identity(
         &oxfunc_bridge_metadata.arg_admission_metadata_version,
         host_formula_context,
         host_reference_bind_results,
+        registry_view_identity,
+        registry_capability_denials,
     ));
 
     RuntimePreparedFormulaIdentity {
@@ -2499,6 +2657,11 @@ fn runtime_prepared_formula_identity(
             .clone(),
         host_formula_context: host_formula_context.clone(),
         host_reference_bind_results: host_reference_bind_results.to_vec(),
+        registry_snapshot_identity: registry_view_identity
+            .map(|identity| identity.registry_snapshot_identity.clone()),
+        capability_overlay_identity: registry_view_identity
+            .and_then(|identity| identity.capability_overlay_identity.clone()),
+        registry_capability_denials: registry_capability_denials.to_vec(),
         plan_template: RuntimePlanTemplateIdentity {
             shape_key: None,
             dispatch_skeleton_key,
@@ -2579,6 +2742,8 @@ fn refresh_runtime_prepared_formula_identity_for_plan(
     identity: &mut RuntimePreparedFormulaIdentity,
     semantic_plan: &SemanticPlan,
 ) {
+    identity.registry_capability_denials =
+        runtime_registry_capability_denials(&semantic_plan.availability_summaries);
     identity.library_context_snapshot_ref = semantic_plan.library_context_snapshot_ref.clone();
     identity.plan_template.dispatch_skeleton_key = runtime_hash_debug(&(
         &semantic_plan.function_bindings,
@@ -2587,7 +2752,8 @@ fn refresh_runtime_prepared_formula_identity_for_plan(
         &semantic_plan.library_context_snapshot_ref,
     ));
     identity.plan_template.plan_template_key = semantic_plan.semantic_plan_key.clone();
-    identity.prepared_formula_key = runtime_hash_debug(&(
+    identity.prepared_formula_key = runtime_hash_debug(&format!(
+        "{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}",
         &identity.formula_stable_id,
         identity.formula_text_version,
         &identity.formula_token,
@@ -2600,7 +2766,27 @@ fn refresh_runtime_prepared_formula_identity_for_plan(
         &identity.arg_admission_metadata_version,
         &identity.host_formula_context,
         &identity.host_reference_bind_results,
+        &identity.registry_snapshot_identity,
+        &identity.capability_overlay_identity,
+        &identity.registry_capability_denials,
     ));
+}
+
+fn runtime_registry_capability_denials(
+    summaries: &[crate::semantics::FunctionAvailabilitySummary],
+) -> Vec<RuntimeFunctionCapabilityDenial> {
+    summaries
+        .iter()
+        .filter(|summary| {
+            summary.runtime_capability_state
+                == Some(LibraryAvailabilityState::HostProfileUnavailable)
+        })
+        .map(|summary| RuntimeFunctionCapabilityDenial {
+            surface_name: summary.surface_name.clone(),
+            canonical_id: summary.canonical_id.clone(),
+            runtime_capability_state: "HostProfileUnavailable".to_string(),
+        })
+        .collect()
 }
 
 fn runtime_formal_references(bound_formula: &BoundFormula) -> Vec<RuntimeFormalReference> {
@@ -2735,6 +2921,7 @@ struct CompiledRuntimePrepareRequest {
     prepare_request: PrepareRequest,
     syntax_diagnostics: Vec<SyntaxDiagnostic>,
     bind_diagnostics: Vec<BindDiagnostic>,
+    registry_capability_denials: Vec<RuntimeFunctionCapabilityDenial>,
 }
 
 fn compile_runtime_prepare_request(
@@ -2780,15 +2967,17 @@ fn compile_runtime_prepare_request(
         },
     });
     let library_context_view = environment.library_context.pinned_view();
-    let library_context_snapshot = library_context_view.resolve_snapshot();
+    let base_library_context_snapshot = library_context_view.resolve_snapshot();
     if let Some(snapshot_ref) = library_context_view.snapshot_ref() {
-        if library_context_snapshot.is_none() {
+        if base_library_context_snapshot.is_none() {
             return Err(format!(
                 "requested library context snapshot {}@{} did not resolve",
                 snapshot_ref.snapshot_id, snapshot_ref.snapshot_version
             ));
         }
     }
+    let library_context_snapshot =
+        environment.runtime_registry_library_context_snapshot(base_library_context_snapshot);
     let locale_profile = request
         .typed_query_bundle()
         .locale_ctx
@@ -2811,6 +3000,8 @@ fn compile_runtime_prepare_request(
     })
     .semantic_plan;
     let bind_diagnostics = bind.bound_formula.diagnostics.clone();
+    let registry_capability_denials =
+        runtime_registry_capability_denials(&semantic_plan.availability_summaries);
 
     Ok(CompiledRuntimePrepareRequest {
         prepare_request: PrepareRequest {
@@ -2821,6 +3012,7 @@ fn compile_runtime_prepare_request(
         },
         syntax_diagnostics,
         bind_diagnostics,
+        registry_capability_denials,
     })
 }
 
@@ -2868,6 +3060,10 @@ fn runtime_managed_session_snapshot(
             oxfunc_bridge_metadata,
             host_formula_context,
             host_reference_bind_results,
+            None,
+            &runtime_registry_capability_denials(
+                &record.prepared.semantic_plan.availability_summaries,
+            ),
         ),
     }
 }

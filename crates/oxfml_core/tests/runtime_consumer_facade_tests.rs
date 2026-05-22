@@ -1,6 +1,7 @@
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 
+use oxfml_core::consumer::replay::{ReplayProjectionRequest, ReplayProjectionService};
 use oxfml_core::consumer::runtime::{
     RuntimeEnvironment, RuntimeFormalInputBinding, RuntimeFormulaRequest,
     RuntimeHostFormulaContext, RuntimeHostReferenceBindResult, RuntimeManagedSessionError,
@@ -27,6 +28,10 @@ use oxfml_core::{
     RegisteredExternalRegistrationChannel, TableColumnDescriptor, TableDescriptor,
     TypedContextQueryBundle, TypedContextQueryFamily,
 };
+use oxfunc_core::function::{
+    ArgPreparationProfile, Arity, CoercionLiftProfile, DeterminismClass, FecDependencyProfile,
+    HostInteractionClass, KernelSignatureClass, ThreadSafetyClass, VolatilityClass,
+};
 use oxfunc_core::functions::call_register_id_family::{
     RegisterIdRequest, RegisteredExternalDescriptor, RegisteredExternalOriginKind,
     RegisteredExternalProvider, RegisteredExternalProviderError, RegisteredExternalTarget,
@@ -38,6 +43,11 @@ use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, Inf
 use oxfunc_core::locale_format::{
     FormatCodeEngine, FormatFailure, FormatProfile, LocaleFormatContext, LocaleValueParser,
     ParseFailure, WorkbookDateSystem,
+};
+use oxfunc_core::registry::{
+    ArgAdmissionMetadata, CapabilityOverlay, FunctionEntry, FunctionRegistryMetadata,
+    FunctionSource, ParameterDescriptor, RegistryFunctionMeta, SemanticKernelMetadata,
+    SignatureForm, builtin_registry,
 };
 use oxfunc_core::value::{
     ArrayCellValue, ArrayShape, EvalArray, EvalValue, ReferenceKind, ReferenceLike,
@@ -760,6 +770,163 @@ fn runtime_prepared_identity_derives_oxfunc_bridge_versions_from_registry_metada
             .arg_admission_metadata_version
             .as_deref(),
         Some("arg_admission_metadata.v1;existing_arg_preparation=values_only_pre_adapter")
+    );
+}
+
+#[test]
+fn runtime_registry_view_admits_udf_without_unknown_function_freeze() {
+    let source = FormulaSourceRecord::new("runtime:registry-udf-admission", 1, "=MYFUNC(10,\"x\")");
+    let default_result = RuntimeEnvironment::new()
+        .execute(RuntimeFormulaRequest::new(
+            source.clone(),
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("default runtime should still classify unknown UDF calls as worksheet results");
+    assert!(
+        default_result
+            .semantic_plan
+            .diagnostics
+            .iter()
+            .any(|diagnostic| {
+                diagnostic.code == "unknown_function"
+                    && diagnostic.function_name.as_deref() == Some("MYFUNC")
+            })
+    );
+    assert_eq!(
+        default_result.published_worksheet_value,
+        EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Name)
+    );
+
+    let mut registry = builtin_registry().clone();
+    registry
+        .register_udf(runtime_test_udf_entry())
+        .expect("UDF registration should be accepted by OxFunc registry");
+    let registered_result = RuntimeEnvironment::new()
+        .with_function_registry(&registry)
+        .execute(RuntimeFormulaRequest::new(
+            source.clone(),
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("runtime should classify registered UDF calls deterministically");
+
+    assert!(
+        registered_result
+            .semantic_plan
+            .diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code != "unknown_function"),
+        "registered UDF calls should be registry-present rather than unknown"
+    );
+    let summary = registered_result
+        .semantic_plan
+        .availability_summaries
+        .iter()
+        .find(|summary| summary.surface_name == "MYFUNC")
+        .expect("registered UDF should be represented in semantic availability summaries");
+    assert_eq!(summary.canonical_id.as_deref(), Some("FUNC.UDF.MYFUNC"));
+    assert_eq!(
+        summary.parse_bind_state,
+        LibraryAvailabilityState::CatalogKnown
+    );
+    assert!(
+        registered_result
+            .prepared_formula_identity
+            .registry_snapshot_identity
+            .is_some()
+    );
+    assert_ne!(
+        default_result
+            .prepared_formula_identity
+            .prepared_formula_key,
+        registered_result
+            .prepared_formula_identity
+            .prepared_formula_key,
+        "registry snapshot identity must participate in prepared identity"
+    );
+
+    registry
+        .unregister_udf("FUNC.UDF.MYFUNC")
+        .expect("UDF unregister should be accepted by OxFunc registry");
+    let unregistered_result = RuntimeEnvironment::new()
+        .with_function_registry(&registry)
+        .execute(RuntimeFormulaRequest::new(
+            source,
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("runtime should return to unknown classification after unregister");
+    assert!(
+        unregistered_result
+            .semantic_plan
+            .diagnostics
+            .iter()
+            .any(|diagnostic| {
+                diagnostic.code == "unknown_function"
+                    && diagnostic.function_name.as_deref() == Some("MYFUNC")
+            })
+    );
+    assert_eq!(
+        unregistered_result.published_worksheet_value,
+        EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Name)
+    );
+}
+
+#[test]
+fn runtime_capability_overlay_blocks_registry_present_call_before_dispatch_and_replays_identity() {
+    let mut overlay = CapabilityOverlay::new();
+    overlay.deny_function_id("FUNC.SUM", "W074 capability denial probe");
+    let request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new("runtime:registry-capability-denied", 1, "=SUM(1,2)"),
+        TypedContextQueryBundle::default(),
+    );
+
+    let result = RuntimeEnvironment::new()
+        .with_capability_overlay(&overlay)
+        .execute(request)
+        .expect("capability denied registry view should classify as worksheet result");
+
+    assert_eq!(
+        result.published_worksheet_value,
+        EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Blocked)
+    );
+    let summary = result
+        .semantic_plan
+        .availability_summaries
+        .iter()
+        .find(|summary| summary.surface_name == "SUM")
+        .expect("SUM should remain registry-present under capability denial");
+    assert_eq!(summary.canonical_id.as_deref(), Some("FUNC.SUM"));
+    assert_eq!(
+        summary.runtime_capability_state,
+        Some(LibraryAvailabilityState::HostProfileUnavailable)
+    );
+    assert_eq!(
+        result
+            .prepared_formula_identity
+            .registry_capability_denials
+            .iter()
+            .map(|denial| denial.surface_name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["SUM"]
+    );
+
+    let projection =
+        ReplayProjectionService::project(ReplayProjectionRequest::runtime_result(&result));
+    assert_eq!(
+        projection.registry_pin,
+        result
+            .prepared_formula_identity
+            .registry_snapshot_identity
+            .clone()
+    );
+    assert_eq!(
+        projection
+            .prepared_formula_identity
+            .as_ref()
+            .expect("runtime projection should carry prepared identity")
+            .registry_capability_denials[0]
+            .canonical_id
+            .as_deref(),
+        Some("FUNC.SUM")
     );
 }
 
@@ -2504,5 +2671,65 @@ fn vba_udf_snapshot() -> LibraryContextSnapshot {
             runtime_capability_state: Some(LibraryAvailabilityState::CatalogKnown),
             post_dispatch_state: None,
         }],
+    }
+}
+
+fn runtime_test_udf_entry() -> FunctionEntry {
+    FunctionEntry {
+        meta: RegistryFunctionMeta {
+            function_id: "FUNC.UDF.MYFUNC".to_string(),
+            arity: Arity::exact(2),
+            determinism: DeterminismClass::Deterministic,
+            volatility: VolatilityClass::NonVolatile,
+            host_interaction: HostInteractionClass::None,
+            thread_safety: ThreadSafetyClass::SafePure,
+            arg_preparation_profile: ArgPreparationProfile::ValuesOnlyPreAdapter,
+            coercion_lift_profile: CoercionLiftProfile::Custom,
+            kernel_signature_class: KernelSignatureClass::Custom,
+            fec_dependency_profile: FecDependencyProfile::None,
+            surface_fec_dependency_profile: FecDependencyProfile::None,
+            semantic_kernel_metadata: SemanticKernelMetadata {
+                reduction_sensitive: false,
+                error_collapse_sensitive: false,
+                numerical_reduction_policy: None,
+                error_algebra: None,
+            },
+            semantic_kernel_metadata_version:
+                "semantic_kernel_metadata.v1;reduction_sensitive=false;error_collapse_sensitive=false;numerical_reduction_policy=none;error_algebra=none"
+                    .to_string(),
+            arg_admission_metadata: ArgAdmissionMetadata::ExistingArgPreparation {
+                profile: ArgPreparationProfile::ValuesOnlyPreAdapter,
+            },
+            arg_admission_metadata_version:
+                "arg_admission_metadata.v1;existing_arg_preparation=values_only_pre_adapter"
+                    .to_string(),
+            producer_capability_set_keys: Vec::new(),
+        },
+        surface_name: "MYFUNC".to_string(),
+        display_signature: SignatureForm {
+            signature_display: "MYFUNC(value, label)".to_string(),
+            parameters: vec![
+                ParameterDescriptor {
+                    name: "value".to_string(),
+                    optional: false,
+                    repeats: false,
+                    short_description: None,
+                },
+                ParameterDescriptor {
+                    name: "label".to_string(),
+                    optional: false,
+                    repeats: false,
+                    short_description: None,
+                },
+            ],
+            trailing_repeats: false,
+        },
+        registry_metadata: FunctionRegistryMetadata::default(),
+        short_description: None,
+        long_description: None,
+        source: FunctionSource::Udf {
+            provenance: Some("runtime_consumer_facade_tests".to_string()),
+            replaces_builtin: false,
+        },
     }
 }

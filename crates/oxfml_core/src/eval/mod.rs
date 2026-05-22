@@ -52,7 +52,7 @@ use crate::binding::{
 use crate::interface::{
     HostFunctionInvocation, HostFunctionProvider, ReturnedValueSurface, TypedContextQueryBundle,
 };
-use crate::semantics::SemanticPlan;
+use crate::semantics::{LibraryAvailabilityState, SemanticPlan};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PreparedStructureClass {
@@ -2156,6 +2156,10 @@ fn evaluate_ordinary_surface_call(
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
+    if runtime_capability_denied_for_function(context, function_name) {
+        return Ok(EvalValue::Error(WorksheetErrorCode::Blocked));
+    }
+
     let Some(surface_call_site) = call_site.surface_call_site.as_ref() else {
         if let Some(host_function_provider) = context.host_function_provider
             && context_allows_host_function_call(context, function_name)
@@ -2305,6 +2309,17 @@ fn evaluate_ordinary_surface_call(
 
     record_prepared_call_returned_value(trace, prepared_call_index, &returned_value);
     Ok(returned_value)
+}
+
+fn runtime_capability_denied_for_function(
+    context: &EvaluationContext<'_>,
+    function_name: &str,
+) -> bool {
+    context.plan.availability_summaries.iter().any(|summary| {
+        summary.surface_name.eq_ignore_ascii_case(function_name)
+            && summary.runtime_capability_state
+                == Some(LibraryAvailabilityState::HostProfileUnavailable)
+    })
 }
 
 fn context_allows_host_function_call(context: &EvaluationContext<'_>, function_name: &str) -> bool {
