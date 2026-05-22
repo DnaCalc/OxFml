@@ -1214,6 +1214,38 @@ fn replay_projection_carries_w074_host_reference_context() {
 }
 
 #[test]
+fn replay_projection_carries_host_namespace_version_without_explicit_host_reference() {
+    let host_context = RuntimeHostFormulaContext {
+        dialect_id: "generic-host-v1".to_string(),
+        capability_profile_id: "host-capabilities:generic-v1".to_string(),
+        resolution_rule_version: "host-resolution:v1".to_string(),
+        host_namespace_version: Some("host-ns:v2".to_string()),
+        registry_snapshot_identity: Some("registry:snapshot:v1".to_string()),
+        structure_context_version: Some("structure:v1".to_string()),
+        caller_context_identity: Some("caller:sheet1-r1c1".to_string()),
+        table_context_identity: None,
+    };
+    let runtime_result = RuntimeEnvironment::new()
+        .with_host_formula_context(host_context.clone())
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new("replay:w074-host-namespace-version", 1, "=SUM(1,2)"),
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("runtime execution should succeed");
+
+    let projection =
+        ReplayProjectionService::project(ReplayProjectionRequest::runtime_result(&runtime_result));
+
+    assert_eq!(projection.host_formula_context, Some(host_context.clone()));
+    assert!(projection.host_reference_bind_results.is_empty());
+    let identity = projection
+        .prepared_formula_identity
+        .expect("runtime projection should preserve prepared identity");
+    assert_eq!(identity.host_formula_context, Some(host_context));
+    assert!(identity.host_reference_bind_results.is_empty());
+}
+
+#[test]
 fn replay_projection_preserves_no_host_namespace_lexical_guardrail() {
     let runtime_result = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(

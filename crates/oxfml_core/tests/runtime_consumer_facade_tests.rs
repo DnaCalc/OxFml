@@ -603,6 +603,62 @@ fn runtime_carries_host_reference_context_without_treecalc_semantics() {
 }
 
 #[test]
+fn runtime_host_namespace_version_mutation_changes_identity_without_explicit_host_reference() {
+    let host_context = RuntimeHostFormulaContext {
+        dialect_id: "generic-host-v1".to_string(),
+        capability_profile_id: "host-capabilities:generic-v1".to_string(),
+        resolution_rule_version: "host-resolution:v1".to_string(),
+        host_namespace_version: Some("host-ns:v1".to_string()),
+        registry_snapshot_identity: Some("registry:snapshot:v1".to_string()),
+        structure_context_version: Some("structure:v1".to_string()),
+        caller_context_identity: Some("caller:sheet1-r1c1".to_string()),
+        table_context_identity: None,
+    };
+    let request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new("runtime:w074-host-namespace-version", 1, "=SUM(1,2)"),
+        TypedContextQueryBundle::default(),
+    );
+
+    let first = RuntimeEnvironment::new()
+        .with_host_formula_context(host_context.clone())
+        .execute(request.clone())
+        .expect("host namespace context should pass through runtime execution");
+
+    let mut changed_context = host_context.clone();
+    changed_context.host_namespace_version = Some("host-ns:v2".to_string());
+    let second = RuntimeEnvironment::new()
+        .with_host_formula_context(changed_context.clone())
+        .execute(request.clone())
+        .expect("changed host namespace context should pass through runtime execution");
+
+    assert_eq!(first.host_formula_context, Some(host_context));
+    assert_eq!(second.host_formula_context, Some(changed_context));
+    assert!(first.host_reference_bind_results.is_empty());
+    assert!(second.host_reference_bind_results.is_empty());
+    assert_ne!(
+        first.prepared_formula_identity.prepared_formula_key,
+        second.prepared_formula_identity.prepared_formula_key,
+        "host namespace version must invalidate prepared identity even before an explicit host-reference bind result exists"
+    );
+
+    let mut managed = RuntimeEnvironment::new()
+        .with_host_formula_context(second.host_formula_context.clone().unwrap())
+        .open_session();
+    let open = managed
+        .open_managed_session(&request)
+        .expect("managed open should carry host namespace identity");
+    assert_eq!(
+        open.prepared_formula_identity.host_formula_context,
+        second.host_formula_context
+    );
+    assert!(
+        open.prepared_formula_identity
+            .host_reference_bind_results
+            .is_empty()
+    );
+}
+
+#[test]
 fn runtime_table_context_mutation_changes_prepared_identity_for_structured_refs() {
     let request = RuntimeFormulaRequest::new(
         FormulaSourceRecord::new("runtime:w074-table-context", 1, "=SUM(Table1[Amount])"),

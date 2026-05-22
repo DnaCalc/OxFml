@@ -103,6 +103,12 @@ Current observed tranche:
    bypass row through OxCalc host-resolver/replay facts plus OxFml runtime and
    replay facade preservation of `resolution_layer=explicit_host_ref`, source
    token/span, opaque selector payload, and prepared identity inputs.
+   A follow-on OxFml runtime/replay slice also proves that an opt-in generic
+   host formula context with no explicit host-reference bind result still
+   carries `host_namespace_version` through prepared identity and replay
+   projection, and changing that version changes the prepared formula key.
+   This is conservative host-context invalidation evidence only; it does not
+   freeze bare host-name precedence.
 3. Focused OxFml/OxFunc probes now cover capability-overlay denial at the
    registry/editor layer and the runtime formula-call layer: the denied
    registry entry remains present but unavailable, editor completion filters
@@ -195,15 +201,20 @@ Current runtime/replay evidence:
    namespace guardrail with a returned `LAMBDA` that preserves a lexical
    capture through `LET` and invocation without producing host formula context
    or host-reference bind-result facts.
-3. Runtime table-context evidence now proves that a structured-reference
+3. A focused runtime/replay identity slice now proves that when a caller opts
+   into generic host formula context without any explicit host-reference bind
+   result, `host_namespace_version` is still replay-visible and participates in
+   prepared identity; changing it invalidates the prepared key while preserving
+   empty host-reference bind results.
+4. Runtime table-context evidence now proves that a structured-reference
    table-context mutation changing the selected column target changes the
    prepared formula identity and formal reference projection.
-4. Runtime table-context evidence now proves that stable row membership/order
+5. Runtime table-context evidence now proves that stable row membership/order
    identity changes affect `table_context_fingerprint` and prepared identity
    without changing resolved structured-reference behavior, and exact
    header/totals region refs change the resolved structured-reference identity
    for `#Headers` / `#Totals`.
-5. Public structured-reference bind records now project through `BoundFormula`,
+6. Public structured-reference bind records now project through `BoundFormula`,
    runtime prepared identity, runtime result, and formal-reference handles for
    explicit `Table1[Amount]`, omitted `[@Amount]`, `#Headers`, `#Totals`, and
    section-plus-column forms. This gives OxCalc a generic packet to consume
@@ -224,4 +235,4 @@ Current runtime/replay evidence:
   - broader formula-call name/call precedence freeze beyond the bounded registry-view admission and capability-denial runtime classification tranche,
   - table-context residuals beyond stable packet facts, structured bind-record projection, structured-syntax disambiguation, and prepared-identity mutation,
   - prepared identity/cache invalidation inputs for registry, structure, host namespace, table context, caller context, and resolution-rule changes,
-  - evidence-backed cache invalidation for registry and host namespace mutation.
+  - evidence-backed cache invalidation for registry mutation and for bare host-name/host-namespace resolution beyond the conservative opt-in host-context identity slice.

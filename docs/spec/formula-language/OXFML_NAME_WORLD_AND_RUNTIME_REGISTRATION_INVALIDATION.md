@@ -114,17 +114,23 @@ Current W074 evidence split:
    OxCalc host-resolver/replay artifacts and OxFml runtime/replay facade
    projection; this supports generic host-reference pass-through, not a bare
    host-name precedence freeze,
-2. capability-overlay denial now has an OxFml/OxFunc registry/editor probe;
+2. opt-in generic host formula context now has deterministic OxFml
+   runtime/replay identity evidence even when no explicit host-reference bind
+   result exists: `host_namespace_version` is carried through prepared identity
+   and replay projection, and changing it changes the prepared formula key.
+   This supports conservative host-context invalidation, not bare host-name
+   precedence,
+3. capability-overlay denial now has an OxFml/OxFunc registry/editor probe;
    formula-call binding and invalidation under denied registry views remain
    open,
-3. structured-reference syntax now has local prepared-identity mutation
+4. structured-reference syntax now has local prepared-identity mutation
    evidence, stable row membership/order and exact header/totals packet facts,
    public structured-reference bind records, and Excel COM 16.0 defined-name /
    table-name collision evidence showing bare `=Table1` resolves to the
    workbook defined name while `Table1[Amount]` structured syntax is rejected
    at formula authoring in that collision state; broader table/name closure
    remains open.
-4. registered-external reconciliation with OxFunc W093 now confirms the current
+5. registered-external reconciliation with OxFunc W093 now confirms the current
    W052 split: descriptor-only `REGISTER.ID` / `CALL` mutation is not
    bind-visible ordinary UDF registration, while friendly worksheet-visible
    registered-external-backed UDFs enter the ordinary registry path.
