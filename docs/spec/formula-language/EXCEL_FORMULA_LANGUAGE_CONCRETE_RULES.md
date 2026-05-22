@@ -192,9 +192,11 @@ Current W074-CALC005 status:
    completion filters it. Formula-call binding/evaluation invalidation under a
    denied registry view remains open.
 4. Table-context evidence is partial: structured-reference syntax
-   disambiguates against a defined-name collision and table-context mutation
-   changes prepared identity, but bare table-name precedence plus stable row
-   membership/order and exact header/totals packet facts remain open.
+   disambiguates against a defined-name collision, table-context mutation
+   changes prepared identity, stable row membership/order and exact
+   header/totals packet facts are public, and structured-reference bind records
+   preserve source/table/column/region/caller-context facts; bare table-name
+   precedence and broader table/name closure remain open.
 5. These rows are provisional observations, not a full name/call freeze.
 6. The freeze remains blocked on the rows still marked partial or open,
    especially formula-call registry/capability invalidation, table-context

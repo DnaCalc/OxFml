@@ -1,6 +1,7 @@
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 
+use oxfml_core::binding::StructuredSectionKind;
 use oxfml_core::consumer::replay::{ReplayProjectionRequest, ReplayProjectionService};
 use oxfml_core::consumer::runtime::{
     RuntimeEnvironment, RuntimeFormalInputBinding, RuntimeFormulaRequest,
@@ -25,8 +26,8 @@ use oxfml_core::{
     HostFunctionProviderError, InMemoryLibraryContextProvider, LibraryContextSnapshotRef,
     RegisteredExternalCatalogController, RegisteredExternalCatalogMutationRequest,
     RegisteredExternalCatalogMutationResult, RegisteredExternalHostRegistrationRequest,
-    RegisteredExternalRegistrationChannel, TableColumnDescriptor, TableDescriptor,
-    TypedContextQueryBundle, TypedContextQueryFamily,
+    RegisteredExternalRegistrationChannel, TableCallerRegion, TableColumnDescriptor,
+    TableDescriptor, TableRef, TableRegionKind, TypedContextQueryBundle, TypedContextQueryFamily,
 };
 use oxfunc_core::function::{
     ArgPreparationProfile, Arity, CoercionLiftProfile, DeterminismClass, FecDependencyProfile,
@@ -657,6 +658,161 @@ fn runtime_table_context_mutation_changes_prepared_identity_for_structured_refs(
 }
 
 #[test]
+fn runtime_projects_structured_reference_bind_packets_for_downstream_consumers() {
+    let mut explicit_values = BTreeMap::new();
+    explicit_values.insert(
+        "B2:B4".to_string(),
+        EvalValue::Array(
+            EvalArray::from_rows(vec![vec![
+                ArrayCellValue::Number(3.0),
+                ArrayCellValue::Number(4.0),
+                ArrayCellValue::Number(5.0),
+            ]])
+            .expect("array fixture should be valid"),
+        ),
+    );
+    let explicit = RuntimeEnvironment::new()
+        .with_table_context(vec![runtime_w074_table("B2:B4")], None, None)
+        .with_cell_values(explicit_values)
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new(
+                "runtime:w074-structured-packet-explicit",
+                1,
+                "=SUM(Table1[Amount])",
+            ),
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("explicit structured reference should execute");
+    assert_eq!(
+        explicit.structured_reference_bind_records,
+        explicit
+            .prepared_formula_identity
+            .structured_reference_bind_records
+    );
+    let explicit_record = &explicit.structured_reference_bind_records[0];
+    assert_eq!(explicit_record.source_token_text, "Table1[Amount]");
+    assert_eq!(
+        explicit_record.explicit_table_name.as_deref(),
+        Some("Table1")
+    );
+    assert!(!explicit_record.omitted_table_name);
+    assert_eq!(
+        explicit_record.effective_table_id.as_deref(),
+        Some("table:w074")
+    );
+    assert_eq!(
+        explicit_record.selected_sections,
+        vec![StructuredSectionKind::Data]
+    );
+    assert_eq!(explicit_record.selected_column_ids, vec!["column:amount"]);
+    assert!(explicit_record.resolved_reference.is_some());
+    assert!(explicit_record.diagnostics.is_empty());
+    assert_eq!(
+        explicit.prepared_formula_identity.formal_references[0]
+            .structured_reference_bind_record_handle
+            .as_deref(),
+        Some(explicit_record.bind_record_handle.as_str())
+    );
+
+    let mut omitted_values = BTreeMap::new();
+    omitted_values.insert("B3".to_string(), EvalValue::Number(7.0));
+    let omitted = RuntimeEnvironment::new()
+        .with_table_context(
+            vec![runtime_w074_table("B2:B4")],
+            Some(TableRef {
+                table_id: "table:w074".to_string(),
+            }),
+            Some(TableCallerRegion {
+                table_id: "table:w074".to_string(),
+                region_kind: TableRegionKind::Data,
+                data_row_offset: Some(1),
+            }),
+        )
+        .with_cell_values(omitted_values)
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new("runtime:w074-structured-packet-omitted", 1, "=[@Amount]"),
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("omitted structured reference should execute");
+    let omitted_record = &omitted.structured_reference_bind_records[0];
+    assert_eq!(omitted_record.source_token_text, "[@Amount]");
+    assert_eq!(omitted_record.explicit_table_name, None);
+    assert!(omitted_record.omitted_table_name);
+    assert_eq!(
+        omitted_record.selected_sections,
+        vec![StructuredSectionKind::ThisRow]
+    );
+    assert!(omitted_record.uses_this_row);
+    assert!(omitted_record.caller_context_dependent);
+}
+
+#[test]
+fn runtime_links_qualified_structured_reference_failure_and_following_success_packets() {
+    let mut table = runtime_w074_table("B2:B4");
+    table.sheet_scope_ref = "Sheet1".to_string();
+    let result = RuntimeEnvironment::new()
+        .with_table_context(vec![table], None, None)
+        .with_cell_values(BTreeMap::from([(
+            "B2:B4".to_string(),
+            EvalValue::Array(
+                EvalArray::from_rows(vec![vec![
+                    ArrayCellValue::Number(3.0),
+                    ArrayCellValue::Number(4.0),
+                    ArrayCellValue::Number(5.0),
+                ]])
+                .expect("array fixture should be valid"),
+            ),
+        )]))
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new(
+                "runtime:w074-structured-packet-qualified-failure",
+                1,
+                "=SUM(Sheet1!Missing[Amount],Sheet1!Table1[Amount])",
+            ),
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("qualified structured failure should still project runtime identity");
+
+    assert_eq!(result.structured_reference_bind_records.len(), 2);
+    let missing_record = &result.structured_reference_bind_records[0];
+    let valid_record = &result.structured_reference_bind_records[1];
+    assert_eq!(missing_record.source_token_text, "Sheet1!Missing[Amount]");
+    assert_eq!(
+        missing_record.explicit_table_name.as_deref(),
+        Some("Missing")
+    );
+    assert_eq!(missing_record.effective_table_id, None);
+    assert_eq!(missing_record.diagnostics.len(), 1);
+    assert_eq!(valid_record.source_token_text, "Sheet1!Table1[Amount]");
+    assert_eq!(valid_record.explicit_table_name.as_deref(), Some("Table1"));
+    assert_eq!(
+        valid_record.effective_table_id.as_deref(),
+        Some("table:w074")
+    );
+    assert!(valid_record.diagnostics.is_empty());
+
+    let formal_references = &result.prepared_formula_identity.formal_references;
+    assert_eq!(
+        formal_references[0]
+            .structured_reference_bind_record_handle
+            .as_deref(),
+        Some(missing_record.bind_record_handle.as_str())
+    );
+    assert_eq!(
+        formal_references[1]
+            .structured_reference_bind_record_handle
+            .as_deref(),
+        Some(valid_record.bind_record_handle.as_str())
+    );
+    assert_eq!(
+        formal_references[2]
+            .structured_reference_bind_record_handle
+            .as_deref(),
+        Some(missing_record.bind_record_handle.as_str())
+    );
+}
+
+#[test]
 fn runtime_stable_table_fact_mutation_changes_prepared_identity_for_structured_refs() {
     let request = RuntimeFormulaRequest::new(
         FormulaSourceRecord::new("runtime:w074-table-stable-facts", 1, "=SUM(Table1[Amount])"),
@@ -769,6 +925,18 @@ fn runtime_exact_header_and_totals_region_refs_change_structured_identity() {
         second_header.prepared_formula_identity.prepared_formula_key,
         "exact header region refs must contribute to prepared identity"
     );
+    let first_header_packet = &first_header.structured_reference_bind_records[0];
+    assert_eq!(first_header_packet.source_token_text, "Table1[#Headers]");
+    assert_eq!(
+        first_header_packet.selected_sections,
+        vec![StructuredSectionKind::Headers]
+    );
+    assert_eq!(
+        first_header_packet.selected_regions[0]
+            .region_ref
+            .as_deref(),
+        Some("A1:D1")
+    );
 
     let totals_request = RuntimeFormulaRequest::new(
         FormulaSourceRecord::new("runtime:w074-table-totals-ref", 1, "=Table1[#Totals]"),
@@ -811,6 +979,18 @@ fn runtime_exact_header_and_totals_region_refs_change_structured_identity() {
         first_totals.prepared_formula_identity.prepared_formula_key,
         second_totals.prepared_formula_identity.prepared_formula_key,
         "exact totals region refs must contribute to prepared identity"
+    );
+    let first_totals_packet = &first_totals.structured_reference_bind_records[0];
+    assert_eq!(first_totals_packet.source_token_text, "Table1[#Totals]");
+    assert_eq!(
+        first_totals_packet.selected_sections,
+        vec![StructuredSectionKind::Totals]
+    );
+    assert_eq!(
+        first_totals_packet.selected_regions[0]
+            .region_ref
+            .as_deref(),
+        Some("A5:D5")
     );
 }
 

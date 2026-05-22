@@ -12,6 +12,7 @@ use oxfml_core::interface::{
 use oxfml_core::red::project_red_view;
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
+use oxfml_core::syntax::token::TextSpan;
 use oxfml_core::test_support::host::SingleFormulaHost;
 
 #[test]
@@ -41,6 +42,44 @@ fn binds_explicit_structured_column_reference() {
     assert_eq!(area.top_left.col, 2);
     assert_eq!(area.height, 3);
     assert_eq!(area.width, 1);
+
+    let record = &bound.structured_reference_bind_records[0];
+    assert_eq!(record.source_span_utf8, TextSpan::new(1, 14));
+    assert_eq!(record.source_token_text, "Table1[Amount]");
+    assert_eq!(record.explicit_table_name.as_deref(), Some("Table1"));
+    assert!(!record.omitted_table_name);
+    assert_eq!(record.effective_table_id.as_deref(), Some("table:1"));
+    assert_eq!(record.selected_column_ids, vec!["column:amount"]);
+    assert_eq!(record.selected_sections, vec![StructuredSectionKind::Data]);
+    assert_eq!(
+        record.selected_regions[0].section_kind,
+        StructuredSectionKind::Data
+    );
+    assert_eq!(record.selected_regions[0].column_range_refs, vec!["B2:B4"]);
+    assert!(!record.uses_this_row);
+    assert!(!record.caller_context_dependent);
+    assert!(record.resolved_reference.is_some());
+    assert!(record.diagnostics.is_empty());
+}
+
+#[test]
+fn binds_sheet_qualified_structured_reference_preserving_full_source_token() {
+    let mut table = sample_table();
+    table.sheet_scope_ref = "Sheet1".to_string();
+    let mut context = base_bind_context();
+    context.sheet_id = "Sheet1".to_string();
+    context.table_catalog = vec![table];
+
+    let bound = bind_with_table_context("=Sheet1!Table1[Amount]", context);
+
+    assert!(bound.diagnostics.is_empty());
+    let record = &bound.structured_reference_bind_records[0];
+    assert_eq!(record.source_span_utf8, TextSpan::new(1, 21));
+    assert_eq!(record.source_token_text, "Sheet1!Table1[Amount]");
+    assert_eq!(record.explicit_table_name.as_deref(), Some("Table1"));
+    assert!(!record.omitted_table_name);
+    assert_eq!(record.effective_table_id.as_deref(), Some("table:1"));
+    assert_eq!(record.selected_column_ids, vec!["column:amount"]);
 }
 
 #[test]
@@ -75,6 +114,20 @@ fn binds_omitted_table_name_with_current_row_context() {
     };
     assert_eq!(cell.coord.row, 3);
     assert_eq!(cell.coord.col, 2);
+
+    let record = &bound.structured_reference_bind_records[0];
+    assert_eq!(record.source_span_utf8, TextSpan::new(1, 9));
+    assert_eq!(record.source_token_text, "[@Amount]");
+    assert_eq!(record.explicit_table_name, None);
+    assert!(record.omitted_table_name);
+    assert_eq!(record.effective_table_id.as_deref(), Some("table:1"));
+    assert_eq!(record.selected_column_ids, vec!["column:amount"]);
+    assert_eq!(
+        record.selected_sections,
+        vec![StructuredSectionKind::ThisRow]
+    );
+    assert!(record.uses_this_row);
+    assert!(record.caller_context_dependent);
 }
 
 #[test]
@@ -101,6 +154,21 @@ fn binds_section_only_headers_reference_across_all_columns() {
     assert_eq!(area.top_left.col, 1);
     assert_eq!(area.height, 1);
     assert_eq!(area.width, 3);
+
+    let record = &bound.structured_reference_bind_records[0];
+    assert_eq!(record.source_token_text, "Table1[#Headers]");
+    assert_eq!(
+        record.selected_sections,
+        vec![StructuredSectionKind::Headers]
+    );
+    assert_eq!(
+        record.selected_regions[0].section_kind,
+        StructuredSectionKind::Headers
+    );
+    assert_eq!(
+        record.selected_regions[0].region_ref.as_deref(),
+        Some("A1:C1")
+    );
 }
 
 #[test]
@@ -133,6 +201,25 @@ fn binds_headers_and_totals_from_exact_region_refs() {
     assert_eq!(totals_area.top_left.col, 8);
     assert_eq!(totals_area.height, 1);
     assert_eq!(totals_area.width, 3);
+
+    let headers_record = &headers.structured_reference_bind_records[0];
+    assert_eq!(
+        headers_record.selected_regions[0].section_kind,
+        StructuredSectionKind::Headers
+    );
+    assert_eq!(
+        headers_record.selected_regions[0].region_ref.as_deref(),
+        Some("H10:J10")
+    );
+    let totals_record = &totals.structured_reference_bind_records[0];
+    assert_eq!(
+        totals_record.selected_regions[0].section_kind,
+        StructuredSectionKind::Totals
+    );
+    assert_eq!(
+        totals_record.selected_regions[0].region_ref.as_deref(),
+        Some("H20:J20")
+    );
 }
 
 #[test]
@@ -191,6 +278,18 @@ fn binds_data_qualified_multi_column_reference() {
     assert_eq!(area.top_left.col, 2);
     assert_eq!(area.height, 3);
     assert_eq!(area.width, 2);
+
+    let record = &bound.structured_reference_bind_records[0];
+    assert_eq!(record.source_token_text, "Table1[[#Data],[Amount]:[Tax]]");
+    assert_eq!(
+        record.selected_column_ids,
+        vec!["column:amount", "column:tax"]
+    );
+    assert_eq!(record.selected_sections, vec![StructuredSectionKind::Data]);
+    assert_eq!(
+        record.selected_regions[0].column_range_refs,
+        vec!["B2:B4", "C2:C4"]
+    );
 }
 
 #[test]
@@ -207,6 +306,20 @@ fn omitted_table_name_without_context_fails_bind_honestly() {
     );
     assert_eq!(
         bound.unresolved_references[0].reason,
+        "structured reference requires enclosing table context"
+    );
+    let record = &bound.structured_reference_bind_records[0];
+    assert_eq!(record.source_token_text, "[@Amount]");
+    assert!(record.omitted_table_name);
+    assert_eq!(record.effective_table_id, None);
+    assert_eq!(record.resolved_reference, None);
+    assert_eq!(record.diagnostics.len(), 1);
+    assert_eq!(
+        record.diagnostics[0].diagnostic_code,
+        "structured_reference_bind_error"
+    );
+    assert_eq!(
+        record.diagnostics[0].message,
         "structured reference requires enclosing table context"
     );
 }

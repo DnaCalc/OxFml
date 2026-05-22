@@ -58,7 +58,9 @@ pub use oxfunc_core::functions::call_register_id_family::{
 
 pub use binding::{
     BindContext, BindDiagnostic, BindRequest, BindResult, BoundExpr, BoundFormula,
-    IncrementalBindResult, NormalizedReference, ReferenceExpr, bind_formula,
+    IncrementalBindResult, NormalizedReference, ReferenceExpr,
+    StructuredReferenceBindDiagnosticLink, StructuredReferenceBindRecord,
+    StructuredReferenceSelectedRegion, StructuredSectionKind, bind_formula,
     bind_formula_incremental,
 };
 pub use carrier::{

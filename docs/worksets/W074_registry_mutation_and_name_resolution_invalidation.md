@@ -156,8 +156,9 @@ Required packet facts:
 1. the host hook is generic and keyed by `dialect_id`, `capability_profile_id`, `resolution_rule_version`, host namespace version, registry snapshot identity, structure-context version, and caller context identity where relevant,
 2. host-reference bind results carry a handle or formal reference id, source span/token text, opaque selector payload, resolution layer, shape hint, caller-context dependency, diagnostics, and replay identity,
 3. table and structured-reference binding stays on the existing `table_catalog + enclosing_table_ref + caller_table_region` packet, with `TableDescriptor` carrying optional stable row membership/order identities and exact header/totals region refs; generic host hooks do not replace structured-reference grammar or table-context bind,
-4. prepared identity and cache keys must include the name-world and host-context version inputs that can change resolution,
-5. late UDF registration, unregister, capability-overlay denial, defined-name mutation, host namespace mutation, table context mutation, and resolution-rule changes are invalidation inputs when they can change bind or prepared-call shape.
+4. public structured-reference bind records carry `source_span_utf8`, exact `source_token_text`, stable bind-record handle, explicit-table versus omitted-table facts, resolved/effective table identity, selected columns/sections/regions, `uses_this_row` / caller-context dependence, resolved-reference descriptor, and typed diagnostic links for recognized structured-reference bind failures,
+5. prepared identity and cache keys must include the name-world and host-context version inputs that can change resolution,
+6. late UDF registration, unregister, capability-overlay denial, defined-name mutation, host namespace mutation, table context mutation, and resolution-rule changes are invalidation inputs when they can change bind or prepared-call shape.
 
 Current runtime/replay evidence:
 1. `RuntimeHostFormulaContext` and `RuntimeHostReferenceBindResult` are
@@ -175,6 +176,11 @@ Current runtime/replay evidence:
    without changing resolved structured-reference behavior, and exact
    header/totals region refs change the resolved structured-reference identity
    for `#Headers` / `#Totals`.
+5. Public structured-reference bind records now project through `BoundFormula`,
+   runtime prepared identity, runtime result, and formal-reference handles for
+   explicit `Table1[Amount]`, omitted `[@Amount]`, `#Headers`, `#Totals`, and
+   section-plus-column forms. This gives OxCalc a generic packet to consume
+   without formula-text parsing.
 
 ## Status
 
@@ -189,6 +195,6 @@ Current runtime/replay evidence:
   - Excel oracle matrix for built-in/UDF/defined-name/LAMBDA shadowing,
   - mapping of `W051` host namespace names and lambda-valued host nodes to Excel defined-name lanes,
   - broader formula-call name/call precedence freeze beyond the bounded registry-view admission and capability-denial runtime classification tranche,
-  - table-context residuals beyond stable packet facts, structured-syntax disambiguation, and prepared-identity mutation,
+  - table-context residuals beyond stable packet facts, structured bind-record projection, structured-syntax disambiguation, and prepared-identity mutation,
   - prepared identity/cache invalidation inputs for registry, structure, host namespace, table context, caller context, and resolution-rule changes,
   - evidence-backed cache invalidation for registry and host namespace mutation.

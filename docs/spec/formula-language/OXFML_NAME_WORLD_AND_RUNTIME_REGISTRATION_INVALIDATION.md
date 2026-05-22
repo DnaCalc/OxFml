@@ -106,8 +106,9 @@ Current W074 evidence split:
    formula-call binding and invalidation under denied registry views remain
    open,
 3. structured-reference syntax now has local collision and prepared-identity
-   mutation evidence; bare table-name precedence, stable row membership/order,
-   and exact header/totals packet facts remain open.
+   mutation evidence, stable row membership/order and exact header/totals
+   packet facts, and public structured-reference bind records; bare table-name
+   precedence and broader table/name closure remain open.
 
 ## Shared Invalidation Principle
 The function catalog world and the defined-name world should be treated the same way for invalidation when they are bind-visible:

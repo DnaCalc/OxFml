@@ -123,6 +123,30 @@ Once the host provides the table context packet, OxFml should own:
    - preserved reference-like prepared args where reference semantics matter,
    - eager scalar/array materialization where the normal pipeline already does that.
 
+### Generic structured-reference bind record packet
+
+OxFml now exposes a public, product-neutral structured-reference bind record
+alongside the normalized `StructuredRef`. This packet is intended for hosts and
+coordinators such as OxCalc that need dependency and invalidation facts without
+parsing formula text.
+
+Each structured-reference bind record carries:
+1. `bind_record_handle`,
+2. `source_span_utf8: TextSpan`,
+3. exact `source_token_text`,
+4. `explicit_table_name` plus `omitted_table_name`,
+5. resolved/effective table identity when bind succeeds,
+6. `selected_column_ids`,
+7. selected section qualifiers and selected region descriptors,
+8. `uses_this_row` / `caller_context_dependent`,
+9. typed resolved-reference descriptor when bind succeeds,
+10. typed diagnostic links when the structured-reference parser recognized the
+    syntax but bind failed.
+
+Runtime prepared identity and formal-reference projection preserve these
+records. `RuntimeFormalReference.structured_reference_bind_record_handle`
+links a formal reference back to the corresponding bind record where available.
+
 ## Boundary To OxFunc
 OxFunc should not receive raw table metadata as part of ordinary function semantics unless a later packet proves that necessary.
 

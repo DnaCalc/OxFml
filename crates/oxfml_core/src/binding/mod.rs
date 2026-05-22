@@ -7,7 +7,8 @@ use std::hash::{Hash, Hasher};
 
 pub use reference::{
     AddressMode, AreaRef, CellCoord, CellRef, ErrorRef, ExternalRef, NameKind, NameRef,
-    NormalizedReference, ReferenceExpr, StructuredRef, StructuredResolvedRef,
+    NormalizedReference, ReferenceExpr, StructuredRef, StructuredReferenceBindDiagnosticLink,
+    StructuredReferenceBindRecord, StructuredReferenceSelectedRegion, StructuredResolvedRef,
     StructuredSectionKind, StructuredSelectorKind, WholeColumnRef, WholeRowRef,
 };
 
@@ -111,6 +112,7 @@ pub struct BoundFormula {
     pub root: BoundExpr,
     pub root_expression_is_grouped: bool,
     pub normalized_references: Vec<NormalizedReference>,
+    pub structured_reference_bind_records: Vec<StructuredReferenceBindRecord>,
     pub dependency_seeds: Vec<DependencySeed>,
     pub unresolved_references: Vec<UnresolvedReferenceRecord>,
     pub capability_requirements: Vec<String>,
@@ -187,6 +189,7 @@ pub fn bind_formula(request: BindRequest) -> BindResult {
         formula_channel_kind: request.source.formula_channel_kind,
         diagnostics: Vec::new(),
         normalized_references: Vec::new(),
+        structured_reference_bind_records: Vec::new(),
         dependency_seeds: Vec::new(),
         unresolved_references: Vec::new(),
         capability_requirements: Vec::new(),
@@ -207,7 +210,15 @@ pub fn bind_formula(request: BindRequest) -> BindResult {
 
     let root_expression_is_grouped = expr_node.kind == SyntaxKind::GroupingExpr;
     let root = binder.bind_expr(expr_node);
-    let bind_hash = hash_debug(&(root_expression_is_grouped, &root));
+    let bind_hash = if binder.structured_reference_bind_records.is_empty() {
+        hash_debug(&(root_expression_is_grouped, &root))
+    } else {
+        hash_debug(&(
+            root_expression_is_grouped,
+            &root,
+            &binder.structured_reference_bind_records,
+        ))
+    };
 
     BindResult {
         bound_formula: BoundFormula {
@@ -219,6 +230,7 @@ pub fn bind_formula(request: BindRequest) -> BindResult {
             root,
             root_expression_is_grouped,
             normalized_references: binder.normalized_references,
+            structured_reference_bind_records: binder.structured_reference_bind_records,
             dependency_seeds: binder.dependency_seeds,
             unresolved_references: binder.unresolved_references,
             capability_requirements: binder.capability_requirements,
@@ -269,6 +281,7 @@ struct Binder {
     formula_channel_kind: FormulaChannelKind,
     diagnostics: Vec<BindDiagnostic>,
     normalized_references: Vec<NormalizedReference>,
+    structured_reference_bind_records: Vec<StructuredReferenceBindRecord>,
     dependency_seeds: Vec<DependencySeed>,
     unresolved_references: Vec<UnresolvedReferenceRecord>,
     capability_requirements: Vec<String>,
@@ -441,11 +454,13 @@ impl Binder {
         }
         if let Some(structured) = bind_structured_reference_text(
             &text,
+            &text,
             &self.context,
             node.span,
             self.formula_channel_kind,
             &mut self.diagnostics,
             &mut self.unresolved_references,
+            &mut self.structured_reference_bind_records,
         ) {
             self.push_reference_seed(&structured);
             BoundExpr::Reference(ReferenceExpr::Atom(structured))
@@ -572,12 +587,14 @@ impl Binder {
                     BoundExpr::Reference(ReferenceExpr::Atom(normalized))
                 } else if let Some(structured) = bind_structured_reference_text_with_sheet(
                     &text,
+                    &node_source_text(node),
                     &qualifier.sheet_id,
                     &self.context,
                     node.span,
                     self.formula_channel_kind,
                     &mut self.diagnostics,
                     &mut self.unresolved_references,
+                    &mut self.structured_reference_bind_records,
                 ) {
                     self.push_reference_seed(&structured);
                     BoundExpr::Reference(ReferenceExpr::Atom(structured))
@@ -1086,11 +1103,13 @@ impl Binder {
             BoundExpr::Reference(ReferenceExpr::Atom(normalized))
         } else if let Some(structured) = bind_structured_reference_text(
             text,
+            text,
             &self.context,
             TextSpan::new(0, 0),
             self.formula_channel_kind,
             &mut self.diagnostics,
             &mut self.unresolved_references,
+            &mut self.structured_reference_bind_records,
         ) {
             self.push_reference_seed(&structured);
             BoundExpr::Reference(ReferenceExpr::Atom(structured))
@@ -1259,6 +1278,21 @@ fn strip_optional_lambda_parameter_syntax(text: &str) -> Option<String> {
     }
 }
 
+fn node_source_text(node: &GreenNode) -> String {
+    let mut text = String::new();
+    append_node_source_text(node, &mut text);
+    text
+}
+
+fn append_node_source_text(node: &GreenNode, text: &mut String) {
+    for child in &node.children {
+        match child {
+            GreenChild::Node(node) => append_node_source_text(node, text),
+            GreenChild::Token(token) => text.push_str(&token.text),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct ParsedQualifier {
     raw: String,
@@ -1280,6 +1314,13 @@ struct ParsedStructuredReference {
     section_qualifiers: Vec<StructuredSectionKind>,
     column_names: Vec<String>,
     caller_row_sensitive: bool,
+}
+
+#[derive(Debug, Clone)]
+struct BuiltStructuredReference {
+    structured: StructuredRef,
+    selected_columns: Vec<TableColumnDescriptor>,
+    selected_sections: Vec<StructuredSectionKind>,
 }
 
 fn is_worksheet_error_literal(text: &str) -> bool {
@@ -1304,65 +1345,94 @@ fn is_worksheet_error_literal(text: &str) -> bool {
 
 fn bind_structured_reference_text(
     text: &str,
+    source_token_text: &str,
     context: &BindContext,
     span: TextSpan,
     formula_channel_kind: FormulaChannelKind,
     diagnostics: &mut Vec<BindDiagnostic>,
     unresolved_references: &mut Vec<UnresolvedReferenceRecord>,
+    structured_reference_bind_records: &mut Vec<StructuredReferenceBindRecord>,
 ) -> Option<NormalizedReference> {
     bind_structured_reference_text_with_sheet(
         text,
+        source_token_text,
         &context.sheet_id,
         context,
         span,
         formula_channel_kind,
         diagnostics,
         unresolved_references,
+        structured_reference_bind_records,
     )
 }
 
 fn bind_structured_reference_text_with_sheet(
     text: &str,
+    source_token_text: &str,
     effective_sheet_id: &str,
     context: &BindContext,
     span: TextSpan,
     formula_channel_kind: FormulaChannelKind,
     diagnostics: &mut Vec<BindDiagnostic>,
     unresolved_references: &mut Vec<UnresolvedReferenceRecord>,
+    structured_reference_bind_records: &mut Vec<StructuredReferenceBindRecord>,
 ) -> Option<NormalizedReference> {
     let parsed = parse_structured_reference_text(text)?;
     let table = match resolve_structured_table(&parsed, effective_sheet_id, context) {
         Ok(table) => table,
         Err(message) => {
             unresolved_references.push(UnresolvedReferenceRecord {
-                source_text: text.to_string(),
+                source_text: source_token_text.to_string(),
                 reason: message.clone(),
             });
             diagnostics.push(BindDiagnostic { message, span });
+            structured_reference_bind_records.push(structured_reference_error_bind_record(
+                &parsed,
+                source_token_text,
+                span,
+                diagnostics
+                    .last()
+                    .expect("structured reference diagnostic should have been pushed"),
+            ));
             return Some(NormalizedReference::Error(ErrorRef {
                 error_class: "#REF!".to_string(),
-                source_text: text.to_string(),
+                source_text: source_token_text.to_string(),
             }));
         }
     };
 
-    let structured = match build_structured_reference(&parsed, table, context, formula_channel_kind)
-    {
-        Ok(structured) => structured,
+    let built = match build_structured_reference(&parsed, table, context, formula_channel_kind) {
+        Ok(built) => built,
         Err(message) => {
             unresolved_references.push(UnresolvedReferenceRecord {
-                source_text: text.to_string(),
+                source_text: source_token_text.to_string(),
                 reason: message.clone(),
             });
             diagnostics.push(BindDiagnostic { message, span });
+            structured_reference_bind_records.push(structured_reference_error_bind_record(
+                &parsed,
+                source_token_text,
+                span,
+                diagnostics
+                    .last()
+                    .expect("structured reference diagnostic should have been pushed"),
+            ));
             return Some(NormalizedReference::Error(ErrorRef {
                 error_class: "#REF!".to_string(),
-                source_text: text.to_string(),
+                source_text: source_token_text.to_string(),
             }));
         }
     };
 
-    Some(NormalizedReference::Structured(structured))
+    structured_reference_bind_records.push(structured_reference_success_bind_record(
+        &parsed,
+        table,
+        &built,
+        source_token_text,
+        span,
+    ));
+
+    Some(NormalizedReference::Structured(built.structured))
 }
 
 fn parse_structured_reference_text(text: &str) -> Option<ParsedStructuredReference> {
@@ -1466,7 +1536,7 @@ fn build_structured_reference(
     table: &TableDescriptor,
     context: &BindContext,
     formula_channel_kind: FormulaChannelKind,
-) -> Result<StructuredRef, String> {
+) -> Result<BuiltStructuredReference, String> {
     if parsed
         .section_qualifiers
         .contains(&StructuredSectionKind::ThisRow)
@@ -1545,30 +1615,165 @@ fn build_structured_reference(
         formula_channel_kind,
     )?;
 
-    Ok(StructuredRef {
-        table_id: table.table_id.clone(),
-        table_name: table.table_name.clone(),
-        selector_kind: if parsed.caller_row_sensitive {
-            StructuredSelectorKind::ThisRowColumn
-        } else if parsed.column_names.is_empty() {
-            StructuredSelectorKind::Section
-        } else if parsed.section_qualifiers.is_empty() {
-            StructuredSelectorKind::Column
-        } else {
-            StructuredSelectorKind::SectionColumn
+    let selected_sections = if parsed.section_qualifiers.is_empty() && !parsed.caller_row_sensitive
+    {
+        vec![StructuredSectionKind::Data]
+    } else {
+        parsed.section_qualifiers.clone()
+    };
+
+    Ok(BuiltStructuredReference {
+        structured: StructuredRef {
+            table_id: table.table_id.clone(),
+            table_name: table.table_name.clone(),
+            selector_kind: if parsed.caller_row_sensitive {
+                StructuredSelectorKind::ThisRowColumn
+            } else if parsed.column_names.is_empty() {
+                StructuredSelectorKind::Section
+            } else if parsed.section_qualifiers.is_empty() {
+                StructuredSelectorKind::Column
+            } else {
+                StructuredSelectorKind::SectionColumn
+            },
+            section_qualifiers: selected_sections.clone(),
+            selected_column_ids,
+            caller_row_sensitive: parsed.caller_row_sensitive,
+            workbook_scope_ref: table.workbook_scope_ref.clone(),
+            sheet_scope_ref: table.sheet_scope_ref.clone(),
+            resolved_reference,
         },
-        section_qualifiers: if parsed.section_qualifiers.is_empty() && !parsed.caller_row_sensitive
-        {
-            vec![StructuredSectionKind::Data]
-        } else {
-            parsed.section_qualifiers.clone()
-        },
-        selected_column_ids,
-        caller_row_sensitive: parsed.caller_row_sensitive,
-        workbook_scope_ref: table.workbook_scope_ref.clone(),
-        sheet_scope_ref: table.sheet_scope_ref.clone(),
-        resolved_reference,
+        selected_columns,
+        selected_sections,
     })
+}
+
+fn structured_reference_success_bind_record(
+    parsed: &ParsedStructuredReference,
+    table: &TableDescriptor,
+    built: &BuiltStructuredReference,
+    source_token_text: &str,
+    source_span_utf8: TextSpan,
+) -> StructuredReferenceBindRecord {
+    let selected_regions = structured_reference_selected_regions(
+        table,
+        &built.selected_columns,
+        &built.selected_sections,
+    );
+    structured_reference_bind_record(
+        parsed,
+        source_token_text,
+        source_span_utf8,
+        Some(table),
+        built
+            .selected_columns
+            .iter()
+            .map(|column| column.column_id.clone())
+            .collect(),
+        built.selected_sections.clone(),
+        selected_regions,
+        Some(built.structured.resolved_reference.clone()),
+        Vec::new(),
+    )
+}
+
+fn structured_reference_error_bind_record(
+    parsed: &ParsedStructuredReference,
+    source_token_text: &str,
+    source_span_utf8: TextSpan,
+    diagnostic: &BindDiagnostic,
+) -> StructuredReferenceBindRecord {
+    let selected_sections = if parsed.section_qualifiers.is_empty() && !parsed.caller_row_sensitive
+    {
+        vec![StructuredSectionKind::Data]
+    } else {
+        parsed.section_qualifiers.clone()
+    };
+    structured_reference_bind_record(
+        parsed,
+        source_token_text,
+        source_span_utf8,
+        None,
+        Vec::new(),
+        selected_sections,
+        Vec::new(),
+        None,
+        vec![StructuredReferenceBindDiagnosticLink {
+            diagnostic_code: "structured_reference_bind_error".to_string(),
+            message: diagnostic.message.clone(),
+            source_span_utf8: diagnostic.span,
+        }],
+    )
+}
+
+fn structured_reference_bind_record(
+    parsed: &ParsedStructuredReference,
+    source_token_text: &str,
+    source_span_utf8: TextSpan,
+    table: Option<&TableDescriptor>,
+    selected_column_ids: Vec<String>,
+    selected_sections: Vec<StructuredSectionKind>,
+    selected_regions: Vec<StructuredReferenceSelectedRegion>,
+    resolved_reference: Option<StructuredResolvedRef>,
+    diagnostics: Vec<StructuredReferenceBindDiagnosticLink>,
+) -> StructuredReferenceBindRecord {
+    let effective_table_id = table.map(|table| table.table_id.clone());
+    let effective_table_name = table.map(|table| table.table_name.clone());
+    let mut record = StructuredReferenceBindRecord {
+        bind_record_handle: String::new(),
+        source_span_utf8,
+        source_token_text: source_token_text.to_string(),
+        explicit_table_name: parsed.table_name.clone(),
+        omitted_table_name: parsed.table_name.is_none(),
+        effective_table_id,
+        effective_table_name,
+        selected_column_ids,
+        selected_sections,
+        selected_regions,
+        uses_this_row: parsed.caller_row_sensitive,
+        caller_context_dependent: parsed.caller_row_sensitive,
+        resolved_reference,
+        diagnostics,
+    };
+    record.bind_record_handle = format!(
+        "structured-ref:{}",
+        hash_debug(&(
+            record.source_span_utf8,
+            record.source_token_text.as_str(),
+            &record.explicit_table_name,
+            record.omitted_table_name,
+            &record.effective_table_id,
+            &record.selected_column_ids,
+            &record.selected_sections,
+            &record.selected_regions,
+            &record.uses_this_row,
+            &record.resolved_reference,
+            &record.diagnostics
+        ))
+    );
+    record
+}
+
+fn structured_reference_selected_regions(
+    table: &TableDescriptor,
+    selected_columns: &[TableColumnDescriptor],
+    selected_sections: &[StructuredSectionKind],
+) -> Vec<StructuredReferenceSelectedRegion> {
+    selected_sections
+        .iter()
+        .map(|section| StructuredReferenceSelectedRegion {
+            section_kind: *section,
+            region_ref: match section {
+                StructuredSectionKind::All => Some(table.table_range_ref.clone()),
+                StructuredSectionKind::Data | StructuredSectionKind::ThisRow => None,
+                StructuredSectionKind::Headers => table.header_region_ref.clone(),
+                StructuredSectionKind::Totals => table.totals_region_ref.clone(),
+            },
+            column_range_refs: selected_columns
+                .iter()
+                .map(|column| column.column_range_ref.clone())
+                .collect(),
+        })
+        .collect()
 }
 
 fn effective_structured_section(parsed: &ParsedStructuredReference) -> StructuredSectionKind {

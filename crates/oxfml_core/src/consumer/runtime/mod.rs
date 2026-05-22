@@ -13,7 +13,8 @@ use oxfunc_core::resolver::{
 use oxfunc_core::value::{ArrayCellValue, EvalValue, ReferenceLike, WorksheetErrorCode};
 
 use crate::binding::{
-    BindContext, BindDiagnostic, BoundFormula, NameKind, NormalizedReference, bind_formula,
+    BindContext, BindDiagnostic, BoundFormula, NameKind, NormalizedReference,
+    StructuredReferenceBindRecord, bind_formula,
 };
 use crate::consumer::ConsumerLibraryContextState;
 use crate::eval::{
@@ -638,6 +639,7 @@ pub struct RuntimeFormulaResult {
     pub prepared_formula_identity: RuntimePreparedFormulaIdentity,
     pub host_formula_context: Option<RuntimeHostFormulaContext>,
     pub host_reference_bind_results: Vec<RuntimeHostReferenceBindResult>,
+    pub structured_reference_bind_records: Vec<StructuredReferenceBindRecord>,
     pub formula_drill_trace: Option<FormulaDrillTrace>,
 }
 
@@ -686,6 +688,9 @@ impl RuntimeFormulaResult {
             host_formula_context: prepared_formula_identity.host_formula_context.clone(),
             host_reference_bind_results: prepared_formula_identity
                 .host_reference_bind_results
+                .clone(),
+            structured_reference_bind_records: prepared_formula_identity
+                .structured_reference_bind_records
                 .clone(),
             prepared_formula_identity,
             formula_drill_trace,
@@ -2056,6 +2061,7 @@ pub struct RuntimePreparedFormulaIdentity {
     pub capability_overlay_identity: Option<String>,
     pub registry_capability_denials: Vec<RuntimeFunctionCapabilityDenial>,
     pub table_context_fingerprint: Option<String>,
+    pub structured_reference_bind_records: Vec<StructuredReferenceBindRecord>,
     pub plan_template: RuntimePlanTemplateIdentity,
     pub hole_binding: RuntimeHoleBindingIdentity,
     pub formal_references: Vec<RuntimeFormalReference>,
@@ -2083,6 +2089,7 @@ impl RuntimePreparedFormulaIdentity {
             plan_template: self.plan_template.clone(),
             hole_binding: self.hole_binding.clone(),
             formal_references: self.formal_references.clone(),
+            structured_reference_bind_records: self.structured_reference_bind_records.clone(),
             projection_status: "current_floor:runtime_identity_package".to_string(),
         }
     }
@@ -2095,6 +2102,7 @@ pub struct RuntimePreparedFormulaPackage {
     pub plan_template: RuntimePlanTemplateIdentity,
     pub hole_binding: RuntimeHoleBindingIdentity,
     pub formal_references: Vec<RuntimeFormalReference>,
+    pub structured_reference_bind_records: Vec<StructuredReferenceBindRecord>,
     pub projection_status: String,
 }
 
@@ -2207,6 +2215,7 @@ pub struct RuntimeFormalReference {
     pub caller_context_dependent: bool,
     pub host_mappable_identity: Option<String>,
     pub linked_hole_id: Option<String>,
+    pub structured_reference_bind_record_handle: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -2631,12 +2640,22 @@ fn runtime_prepared_formula_identity(
         &semantic_plan.library_context_snapshot_ref,
     ));
     let plan_template_key = semantic_plan.semantic_plan_key.clone();
-    let hole_binding_fingerprint = runtime_hash_debug(&(
-        &bound_formula.normalized_references,
-        &bound_formula.unresolved_references,
-        &semantic_plan.helper_profile,
-        &semantic_plan.capability_requirements,
-    ));
+    let hole_binding_fingerprint = if bound_formula.structured_reference_bind_records.is_empty() {
+        runtime_hash_debug(&(
+            &bound_formula.normalized_references,
+            &bound_formula.unresolved_references,
+            &semantic_plan.helper_profile,
+            &semantic_plan.capability_requirements,
+        ))
+    } else {
+        runtime_hash_debug(&(
+            &bound_formula.normalized_references,
+            &bound_formula.unresolved_references,
+            &bound_formula.structured_reference_bind_records,
+            &semantic_plan.helper_profile,
+            &semantic_plan.capability_requirements,
+        ))
+    };
     let prepared_formula_key = runtime_hash_debug(&format!(
         "{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}",
         &source.formula_stable_id.0,
@@ -2678,6 +2697,7 @@ fn runtime_prepared_formula_identity(
             .and_then(|identity| identity.capability_overlay_identity.clone()),
         registry_capability_denials: registry_capability_denials.to_vec(),
         table_context_fingerprint,
+        structured_reference_bind_records: bound_formula.structured_reference_bind_records.clone(),
         plan_template: RuntimePlanTemplateIdentity {
             shape_key: None,
             dispatch_skeleton_key,
@@ -2822,11 +2842,16 @@ fn runtime_registry_capability_denials(
 }
 
 fn runtime_formal_references(bound_formula: &BoundFormula) -> Vec<RuntimeFormalReference> {
-    let mut references = bound_formula
-        .normalized_references
-        .iter()
-        .enumerate()
-        .map(|(index, reference)| RuntimeFormalReference {
+    let mut structured_bind_record_index = 0usize;
+    let mut references = Vec::new();
+    for (index, reference) in bound_formula.normalized_references.iter().enumerate() {
+        let structured_reference_bind_record_handle =
+            runtime_structured_reference_record_handle_for_reference(
+                reference,
+                &bound_formula.structured_reference_bind_records,
+                &mut structured_bind_record_index,
+            );
+        references.push(RuntimeFormalReference {
             reference_handle: format!(
                 "formal-ref:{}:{index}",
                 runtime_hash_debug(&(bound_formula.bind_hash.as_str(), reference))
@@ -2836,8 +2861,9 @@ fn runtime_formal_references(bound_formula: &BoundFormula) -> Vec<RuntimeFormalR
             caller_context_dependent: runtime_reference_caller_context_dependent(reference),
             host_mappable_identity: Some(reference.to_string()),
             linked_hole_id: Some(runtime_reference_hole_id(index)),
-        })
-        .collect::<Vec<_>>();
+            structured_reference_bind_record_handle,
+        });
+    }
     references.extend(bound_formula.unresolved_references.iter().enumerate().map(
         |(index, unresolved)| RuntimeFormalReference {
             reference_handle: format!(
@@ -2853,9 +2879,59 @@ fn runtime_formal_references(bound_formula: &BoundFormula) -> Vec<RuntimeFormalR
             caller_context_dependent: false,
             host_mappable_identity: None,
             linked_hole_id: Some(runtime_unresolved_hole_id(index)),
+            structured_reference_bind_record_handle:
+                runtime_structured_reference_record_handle_for_unresolved(
+                    unresolved,
+                    &bound_formula.structured_reference_bind_records,
+                ),
         },
     ));
     references
+}
+
+fn runtime_structured_reference_record_handle_for_reference(
+    reference: &NormalizedReference,
+    records: &[StructuredReferenceBindRecord],
+    cursor: &mut usize,
+) -> Option<String> {
+    match reference {
+        NormalizedReference::Structured(_) => {
+            let handle = records
+                .get(*cursor)
+                .map(|record| record.bind_record_handle.clone());
+            *cursor += usize::from(handle.is_some());
+            handle
+        }
+        NormalizedReference::Error(error) => {
+            let record = records
+                .get(*cursor)
+                .filter(|record| record.source_token_text == error.source_text)?;
+            *cursor += 1;
+            Some(record.bind_record_handle.clone())
+        }
+        NormalizedReference::Cell(_)
+        | NormalizedReference::Area(_)
+        | NormalizedReference::WholeRow(_)
+        | NormalizedReference::WholeColumn(_)
+        | NormalizedReference::Name(_)
+        | NormalizedReference::External(_) => None,
+    }
+}
+
+fn runtime_structured_reference_record_handle_for_unresolved(
+    unresolved: &crate::binding::UnresolvedReferenceRecord,
+    records: &[StructuredReferenceBindRecord],
+) -> Option<String> {
+    records
+        .iter()
+        .find(|record| {
+            record.source_token_text == unresolved.source_text
+                && record
+                    .diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.message == unresolved.reason)
+        })
+        .map(|record| record.bind_record_handle.clone())
 }
 
 fn runtime_template_holes(bound_formula: &BoundFormula) -> Vec<RuntimeTemplateHole> {

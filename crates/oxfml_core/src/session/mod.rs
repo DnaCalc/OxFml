@@ -1066,6 +1066,7 @@ fn build_candidate_result(
                     root: crate::binding::BoundExpr::NumberLiteral("0".to_string()),
                     root_expression_is_grouped: false,
                     normalized_references: Vec::new(),
+                    structured_reference_bind_records: Vec::new(),
                     dependency_seeds: Vec::new(),
                     unresolved_references: Vec::new(),
                     capability_requirements: Vec::new(),

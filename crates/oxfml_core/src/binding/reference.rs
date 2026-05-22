@@ -1,5 +1,7 @@
 use std::fmt;
 
+use crate::syntax::token::TextSpan;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CellCoord {
     pub row: u32,
@@ -116,6 +118,38 @@ pub struct StructuredRef {
     pub workbook_scope_ref: String,
     pub sheet_scope_ref: String,
     pub resolved_reference: StructuredResolvedRef,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StructuredReferenceSelectedRegion {
+    pub section_kind: StructuredSectionKind,
+    pub region_ref: Option<String>,
+    pub column_range_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StructuredReferenceBindDiagnosticLink {
+    pub diagnostic_code: String,
+    pub message: String,
+    pub source_span_utf8: TextSpan,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StructuredReferenceBindRecord {
+    pub bind_record_handle: String,
+    pub source_span_utf8: TextSpan,
+    pub source_token_text: String,
+    pub explicit_table_name: Option<String>,
+    pub omitted_table_name: bool,
+    pub effective_table_id: Option<String>,
+    pub effective_table_name: Option<String>,
+    pub selected_column_ids: Vec<String>,
+    pub selected_sections: Vec<StructuredSectionKind>,
+    pub selected_regions: Vec<StructuredReferenceSelectedRegion>,
+    pub uses_this_row: bool,
+    pub caller_context_dependent: bool,
+    pub resolved_reference: Option<StructuredResolvedRef>,
+    pub diagnostics: Vec<StructuredReferenceBindDiagnosticLink>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

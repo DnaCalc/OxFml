@@ -135,6 +135,18 @@ Required `caller_table_region` fields:
 2. `region_kind`
 3. `data_row_offset`
 
+Required structured-reference bind record fields for downstream consumers:
+1. `bind_record_handle`
+2. `source_span_utf8`
+3. exact `source_token_text`
+4. `explicit_table_name` and `omitted_table_name`
+5. resolved/effective table identity where bind succeeds
+6. `selected_column_ids`
+7. selected section qualifiers and selected region descriptors
+8. `uses_this_row` / `caller_context_dependent`
+9. resolved-reference descriptor
+10. typed diagnostic links for recognized structured-reference bind failures
+
 Working rule:
 1. direct hosts and OxCalc-integrated hosts should present the same semantic table packet,
 2. OxCalc may wrap or correlate that packet with broader workbook/coordinator identities,
@@ -234,3 +246,7 @@ Current local evidence added in this slice:
 2. first host packet consumption through `SingleFormulaHost`
 3. section-only `#Headers` / `#Totals` and multi-column `#All` / `#Data` bind coverage
 4. regression validation against `crates/oxfml_core/tests/parse_bind_fixture_tests.rs`
+5. public structured-reference bind records on `BoundFormula`, runtime prepared
+   identity, runtime result, and formal-reference projection for explicit
+   `Table1[Amount]`, omitted `[@Amount]`, `#Headers`, `#Totals`, and
+   section-plus-column forms.
