@@ -86,6 +86,14 @@ Current oracle-matrix shape:
 4. defined-name `LAMBDA` rows must keep value reference and invocation behavior separate; a lambda-valued defined name is not assumed to be identical to a registered UDF,
 5. lexical `LET` / `LAMBDA` rows are guardrail rows only: OxFml records their precedence against external name worlds, but lexical variables, callable locals, captures, and returned lambdas remain OxFml-internal and are not exposed as host namespace entries.
 
+Current matrix artifact:
+1. `docs/spec/formula-language/W074_CALC005_NAME_CALL_PRECEDENCE_ORACLE_MATRIX.csv`
+   is the planned intake matrix for these cases,
+2. rows with `oracle_status=planned_not_observed` are not evidence and do not
+   freeze precedence,
+3. promotion requires admissible black-box Excel observations to fill the
+   winner/result/callable/identity columns.
+
 Current product-host mapping rule:
 1. TreeCalc host names map to the closest Excel defined-name lane until this matrix proves a different extension is needed,
 2. TreeCalc lambda-valued host nodes map to the closest Excel defined-name `LAMBDA` lane until evidence justifies a separate extension,

@@ -1,7 +1,7 @@
 use crate::consumer::runtime::{
-    RuntimeFormulaResult, RuntimeManagedCommitResult, RuntimeManagedExecutionResult,
-    RuntimeManagedOpenResult, RuntimeManagedSessionSnapshot, RuntimeManagedTerminationResult,
-    RuntimePreparedFormulaIdentity,
+    RuntimeFormulaResult, RuntimeHostFormulaContext, RuntimeHostReferenceBindResult,
+    RuntimeManagedCommitResult, RuntimeManagedExecutionResult, RuntimeManagedOpenResult,
+    RuntimeManagedSessionSnapshot, RuntimeManagedTerminationResult, RuntimePreparedFormulaIdentity,
 };
 use crate::host::FirstHostReplayCapturePacket;
 use crate::interface::{LibraryContextSnapshotRef, TypedContextQueryBundleSpec};
@@ -196,6 +196,8 @@ pub struct ReplayProjectionResult {
     pub producer_capability_set_keys: Vec<String>,
     pub exercised_capability_keys: Vec<String>,
     pub prepared_formula_identity: Option<RuntimePreparedFormulaIdentity>,
+    pub host_formula_context: Option<RuntimeHostFormulaContext>,
+    pub host_reference_bind_results: Vec<RuntimeHostReferenceBindResult>,
 }
 
 pub struct ReplayProjectionService;
@@ -351,6 +353,8 @@ fn project_runtime_result(
             .exercised_capability_keys
             .clone(),
         prepared_formula_identity: Some(result.prepared_formula_identity.clone()),
+        host_formula_context: result.host_formula_context.clone(),
+        host_reference_bind_results: result.host_reference_bind_results.clone(),
     }
 }
 
@@ -394,6 +398,8 @@ fn project_first_host_capture(
         producer_capability_set_keys: Vec::new(),
         exercised_capability_keys: Vec::new(),
         prepared_formula_identity: None,
+        host_formula_context: None,
+        host_reference_bind_results: Vec::new(),
     }
 }
 
@@ -438,6 +444,14 @@ fn project_runtime_managed_open(
         producer_capability_set_keys: Vec::new(),
         exercised_capability_keys: Vec::new(),
         prepared_formula_identity: Some(result.prepared_formula_identity.clone()),
+        host_formula_context: result
+            .prepared_formula_identity
+            .host_formula_context
+            .clone(),
+        host_reference_bind_results: result
+            .prepared_formula_identity
+            .host_reference_bind_results
+            .clone(),
     }
 }
 
@@ -486,6 +500,14 @@ fn project_runtime_managed_execution(
         producer_capability_set_keys: Vec::new(),
         exercised_capability_keys: Vec::new(),
         prepared_formula_identity: Some(result.prepared_formula_identity.clone()),
+        host_formula_context: result
+            .prepared_formula_identity
+            .host_formula_context
+            .clone(),
+        host_reference_bind_results: result
+            .prepared_formula_identity
+            .host_reference_bind_results
+            .clone(),
     }
 }
 
@@ -547,6 +569,14 @@ fn project_runtime_managed_session(
         producer_capability_set_keys: Vec::new(),
         exercised_capability_keys: Vec::new(),
         prepared_formula_identity: Some(result.prepared_formula_identity.clone()),
+        host_formula_context: result
+            .prepared_formula_identity
+            .host_formula_context
+            .clone(),
+        host_reference_bind_results: result
+            .prepared_formula_identity
+            .host_reference_bind_results
+            .clone(),
     }
 }
 
@@ -608,6 +638,16 @@ fn project_runtime_managed_commit(
         producer_capability_set_keys: Vec::new(),
         exercised_capability_keys: Vec::new(),
         prepared_formula_identity: Some(result.session.prepared_formula_identity.clone()),
+        host_formula_context: result
+            .session
+            .prepared_formula_identity
+            .host_formula_context
+            .clone(),
+        host_reference_bind_results: result
+            .session
+            .prepared_formula_identity
+            .host_reference_bind_results
+            .clone(),
     }
 }
 
@@ -667,6 +707,16 @@ fn project_runtime_managed_termination(
         producer_capability_set_keys: Vec::new(),
         exercised_capability_keys: Vec::new(),
         prepared_formula_identity: Some(result.session.prepared_formula_identity.clone()),
+        host_formula_context: result
+            .session
+            .prepared_formula_identity
+            .host_formula_context
+            .clone(),
+        host_reference_bind_results: result
+            .session
+            .prepared_formula_identity
+            .host_reference_bind_results
+            .clone(),
     }
 }
 
@@ -705,6 +755,8 @@ fn project_fixture_family(
         producer_capability_set_keys: Vec::new(),
         exercised_capability_keys: Vec::new(),
         prepared_formula_identity: None,
+        host_formula_context: None,
+        host_reference_bind_results: Vec::new(),
     }
 }
 
@@ -743,5 +795,7 @@ fn project_retained_witness(
         producer_capability_set_keys: Vec::new(),
         exercised_capability_keys: Vec::new(),
         prepared_formula_identity: None,
+        host_formula_context: None,
+        host_reference_bind_results: Vec::new(),
     }
 }

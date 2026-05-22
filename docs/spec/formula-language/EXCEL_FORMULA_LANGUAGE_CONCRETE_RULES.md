@@ -173,6 +173,11 @@ Matrix rows must keep these dimensions explicit:
 4. invalidation inputs: registry snapshot, structure context, defined-name scope/kind, host namespace version, caller context, table context, and resolution-rule version,
 5. replay-visible resolution layer and diagnostic class.
 
+The current planned intake surface for those observations is
+`W074_CALC005_NAME_CALL_PRECEDENCE_ORACLE_MATRIX.csv`. Rows in that file are
+not evidence until `oracle_status` records an observed result from admissible
+black-box Excel evidence.
+
 Current host mapping rule:
 1. TreeCalc host names and lambda-valued nodes map to the closest Excel defined-name lane only as a planning default,
 2. explicit host-reference syntax can intentionally select host objects that collide with function names,

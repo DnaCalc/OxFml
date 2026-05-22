@@ -2,8 +2,8 @@ use std::cell::{Cell, RefCell};
 
 use oxfml_core::consumer::runtime::{
     RuntimeEnvironment, RuntimeFormalInputBinding, RuntimeFormulaRequest,
-    RuntimeManagedSessionError, RuntimeManagedSessionPhase, RuntimeOxFuncBridgeMetadata,
-    RuntimeSessionFacade,
+    RuntimeHostFormulaContext, RuntimeHostReferenceBindResult, RuntimeManagedSessionError,
+    RuntimeManagedSessionPhase, RuntimeOxFuncBridgeMetadata, RuntimeSessionFacade,
 };
 use oxfml_core::format::{
     oxfml_en_us_format_profile, oxfml_en_us_locale_context, worksheet_error_text,
@@ -15,6 +15,7 @@ use oxfml_core::semantics::{
     LibraryAvailabilityState, LibraryContextSnapshot, LibraryContextSnapshotEntry,
     RegistrationSourceKind,
 };
+use oxfml_core::syntax::token::TextSpan;
 use oxfml_core::{
     AcceptDecision, EvaluationTraceMode, ExecutionOutcomeKind, ExecutionOutcomeStage,
     FormulaChannelKind, FormulaSourceRecord, HostFunctionInvocation, HostFunctionProvider,
@@ -446,6 +447,92 @@ fn runtime_result_exposes_prepared_formula_identity_for_direct_execution() {
             .hole_binding
             .projection_status
             .contains("canonical_holes_deferred")
+    );
+}
+
+#[test]
+fn runtime_carries_host_reference_context_without_treecalc_semantics() {
+    let host_context = RuntimeHostFormulaContext {
+        dialect_id: "generic-host-v1".to_string(),
+        capability_profile_id: "host-capabilities:generic-v1".to_string(),
+        resolution_rule_version: "host-resolution:v1".to_string(),
+        host_namespace_version: Some("host-ns:v1".to_string()),
+        registry_snapshot_identity: Some("registry:snapshot:v1".to_string()),
+        structure_context_version: Some("structure:v1".to_string()),
+        caller_context_identity: Some("caller:sheet1-r1c1".to_string()),
+        table_context_identity: Some("tables:v1".to_string()),
+    };
+    let bind_result = RuntimeHostReferenceBindResult {
+        reference_handle: "host-ref:children".to_string(),
+        formal_reference_id: Some("formal-ref:host:children".to_string()),
+        source_span: TextSpan::new(5, 9),
+        source_token_text: "@CHILDREN".to_string(),
+        opaque_selector_payload: Some("selector-payload:opaque".to_string()),
+        resolution_layer: "explicit_host_ref".to_string(),
+        shape_hint: Some("collection".to_string()),
+        caller_context_dependent: true,
+        diagnostics: Vec::new(),
+        replay_identity_contribution: "host-ref-identity:v1".to_string(),
+    };
+    let request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new("runtime:w074-host-context", 1, "=SUM(1,2)"),
+        TypedContextQueryBundle::default(),
+    );
+
+    let result = RuntimeEnvironment::new()
+        .with_host_formula_context(host_context.clone())
+        .with_host_reference_bind_results(vec![bind_result.clone()])
+        .execute(request.clone())
+        .expect("host context metadata should pass through runtime execution");
+
+    assert_eq!(result.host_formula_context, Some(host_context.clone()));
+    assert_eq!(
+        result.host_reference_bind_results,
+        vec![bind_result.clone()]
+    );
+    assert_eq!(
+        result.prepared_formula_identity.host_formula_context,
+        Some(host_context.clone())
+    );
+    assert_eq!(
+        result.prepared_formula_identity.host_reference_bind_results,
+        vec![bind_result.clone()]
+    );
+
+    let mut changed_context = host_context.clone();
+    changed_context.host_namespace_version = Some("host-ns:v2".to_string());
+    let changed_result = RuntimeEnvironment::new()
+        .with_host_formula_context(changed_context)
+        .with_host_reference_bind_results(vec![bind_result.clone()])
+        .execute(request.clone())
+        .expect("changed host context metadata should pass through runtime execution");
+    assert_ne!(
+        result.prepared_formula_identity.prepared_formula_key,
+        changed_result
+            .prepared_formula_identity
+            .prepared_formula_key,
+        "host-context identity must contribute to prepared identity"
+    );
+
+    let mut managed = RuntimeEnvironment::new()
+        .with_host_formula_context(host_context.clone())
+        .with_host_reference_bind_results(vec![bind_result.clone()])
+        .open_session();
+    let open = managed
+        .open_managed_session(&request)
+        .expect("managed open should carry host context identity");
+    assert_eq!(
+        open.prepared_formula_identity.host_formula_context,
+        Some(host_context)
+    );
+    let execution = managed
+        .execute_managed(request)
+        .expect("managed execute should carry host reference bind results");
+    assert_eq!(
+        execution
+            .prepared_formula_identity
+            .host_reference_bind_results,
+        vec![bind_result]
     );
 }
 

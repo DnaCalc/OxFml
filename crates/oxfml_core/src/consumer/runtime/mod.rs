@@ -53,6 +53,8 @@ pub struct RuntimeEnvironment<'a> {
     defined_names: BTreeMap<String, DefinedNameBinding>,
     cell_values: BTreeMap<String, EvalValue>,
     formal_input_bindings: Vec<RuntimeFormalInputBinding>,
+    host_formula_context: Option<RuntimeHostFormulaContext>,
+    host_reference_bind_results: Vec<RuntimeHostReferenceBindResult>,
     table_catalog: Vec<TableDescriptor>,
     enclosing_table_ref: Option<TableRef>,
     caller_table_region: Option<TableCallerRegion>,
@@ -74,6 +76,8 @@ impl<'a> RuntimeEnvironment<'a> {
             defined_names: BTreeMap::new(),
             cell_values: BTreeMap::new(),
             formal_input_bindings: Vec::new(),
+            host_formula_context: None,
+            host_reference_bind_results: Vec::new(),
             table_catalog: Vec::new(),
             enclosing_table_ref: None,
             caller_table_region: None,
@@ -151,6 +155,22 @@ impl<'a> RuntimeEnvironment<'a> {
         formal_input_bindings: Vec<RuntimeFormalInputBinding>,
     ) -> Self {
         self.formal_input_bindings = formal_input_bindings;
+        self
+    }
+
+    pub fn with_host_formula_context(
+        mut self,
+        host_formula_context: RuntimeHostFormulaContext,
+    ) -> Self {
+        self.host_formula_context = Some(host_formula_context);
+        self
+    }
+
+    pub fn with_host_reference_bind_results(
+        mut self,
+        host_reference_bind_results: Vec<RuntimeHostReferenceBindResult>,
+    ) -> Self {
+        self.host_reference_bind_results = host_reference_bind_results;
         self
     }
 
@@ -239,6 +259,8 @@ impl<'a> RuntimeEnvironment<'a> {
             &compiled.prepare_request.semantic_plan,
             &self.primary_locus,
             &self.oxfunc_bridge_metadata,
+            &self.host_formula_context,
+            &self.host_reference_bind_results,
         );
         if compiled
             .prepare_request
@@ -437,6 +459,8 @@ pub struct RuntimeFormulaResult {
     pub artifact_reuse: ArtifactReuseReport,
     pub first_host_replay_capture_packet: FirstHostReplayCapturePacket,
     pub prepared_formula_identity: RuntimePreparedFormulaIdentity,
+    pub host_formula_context: Option<RuntimeHostFormulaContext>,
+    pub host_reference_bind_results: Vec<RuntimeHostReferenceBindResult>,
     pub formula_drill_trace: Option<FormulaDrillTrace>,
 }
 
@@ -482,6 +506,10 @@ impl RuntimeFormulaResult {
             trace_events: host_output.trace_events,
             artifact_reuse: host_output.artifact_reuse,
             first_host_replay_capture_packet,
+            host_formula_context: prepared_formula_identity.host_formula_context.clone(),
+            host_reference_bind_results: prepared_formula_identity
+                .host_reference_bind_results
+                .clone(),
             prepared_formula_identity,
             formula_drill_trace,
         }
@@ -1845,6 +1873,8 @@ pub struct RuntimePreparedFormulaIdentity {
     pub caller_context_key: Option<String>,
     pub semantic_kernel_metadata_version: Option<String>,
     pub arg_admission_metadata_version: Option<String>,
+    pub host_formula_context: Option<RuntimeHostFormulaContext>,
+    pub host_reference_bind_results: Vec<RuntimeHostReferenceBindResult>,
     pub plan_template: RuntimePlanTemplateIdentity,
     pub hole_binding: RuntimeHoleBindingIdentity,
     pub formal_references: Vec<RuntimeFormalReference>,
@@ -1878,6 +1908,38 @@ pub struct RuntimePreparedFormulaPackage {
 pub struct RuntimeOxFuncBridgeMetadata {
     pub semantic_kernel_metadata_version: Option<String>,
     pub arg_admission_metadata_version: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeHostFormulaContext {
+    pub dialect_id: String,
+    pub capability_profile_id: String,
+    pub resolution_rule_version: String,
+    pub host_namespace_version: Option<String>,
+    pub registry_snapshot_identity: Option<String>,
+    pub structure_context_version: Option<String>,
+    pub caller_context_identity: Option<String>,
+    pub table_context_identity: Option<String>,
+}
+
+impl RuntimeHostFormulaContext {
+    pub fn cache_identity_contribution(&self) -> String {
+        runtime_hash_debug(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeHostReferenceBindResult {
+    pub reference_handle: String,
+    pub formal_reference_id: Option<String>,
+    pub source_span: TextSpan,
+    pub source_token_text: String,
+    pub opaque_selector_payload: Option<String>,
+    pub resolution_layer: String,
+    pub shape_hint: Option<String>,
+    pub caller_context_dependent: bool,
+    pub diagnostics: Vec<String>,
+    pub replay_identity_contribution: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2064,6 +2126,8 @@ impl<'a> RuntimeSessionFacade<'a> {
             &prepared.prepare_request.semantic_plan,
             &self.environment.primary_locus,
             &self.environment.oxfunc_bridge_metadata,
+            &self.environment.host_formula_context,
+            &self.environment.host_reference_bind_results,
         );
         let prepared_session = self.managed_service.prepare(prepared.prepare_request)?;
         let open = self.managed_service.open_session(prepared_session);
@@ -2240,6 +2304,8 @@ impl<'a> RuntimeSessionFacade<'a> {
         Some(runtime_managed_session_snapshot(
             record,
             &self.environment.oxfunc_bridge_metadata,
+            &self.environment.host_formula_context,
+            &self.environment.host_reference_bind_results,
         ))
     }
 
@@ -2306,6 +2372,8 @@ fn runtime_prepared_formula_identity(
     semantic_plan: &SemanticPlan,
     primary_locus: &Locus,
     oxfunc_bridge_metadata: &RuntimeOxFuncBridgeMetadata,
+    host_formula_context: &Option<RuntimeHostFormulaContext>,
+    host_reference_bind_results: &[RuntimeHostReferenceBindResult],
 ) -> RuntimePreparedFormulaIdentity {
     let formula_token = source.formula_token().0;
     let oxfunc_bridge_metadata =
@@ -2338,6 +2406,8 @@ fn runtime_prepared_formula_identity(
         &caller_context_key,
         &oxfunc_bridge_metadata.semantic_kernel_metadata_version,
         &oxfunc_bridge_metadata.arg_admission_metadata_version,
+        host_formula_context,
+        host_reference_bind_results,
     ));
 
     RuntimePreparedFormulaIdentity {
@@ -2354,6 +2424,8 @@ fn runtime_prepared_formula_identity(
         arg_admission_metadata_version: oxfunc_bridge_metadata
             .arg_admission_metadata_version
             .clone(),
+        host_formula_context: host_formula_context.clone(),
+        host_reference_bind_results: host_reference_bind_results.to_vec(),
         plan_template: RuntimePlanTemplateIdentity {
             shape_key: None,
             dispatch_skeleton_key,
@@ -2453,6 +2525,8 @@ fn refresh_runtime_prepared_formula_identity_for_plan(
         &identity.caller_context_key,
         &identity.semantic_kernel_metadata_version,
         &identity.arg_admission_metadata_version,
+        &identity.host_formula_context,
+        &identity.host_reference_bind_results,
     ));
 }
 
@@ -2692,6 +2766,8 @@ fn runtime_capability_view_spec(request: &RuntimeFormulaRequest<'_>) -> Capabili
 fn runtime_managed_session_snapshot(
     record: &SessionRecord,
     oxfunc_bridge_metadata: &RuntimeOxFuncBridgeMetadata,
+    host_formula_context: &Option<RuntimeHostFormulaContext>,
+    host_reference_bind_results: &[RuntimeHostReferenceBindResult],
 ) -> RuntimeManagedSessionSnapshot {
     let phase = runtime_managed_phase(record.phase.clone());
     let last_reject = record.last_reject.clone();
@@ -2717,6 +2793,8 @@ fn runtime_managed_session_snapshot(
             &record.prepared.semantic_plan,
             &record.prepared.primary_locus,
             oxfunc_bridge_metadata,
+            host_formula_context,
+            host_reference_bind_results,
         ),
     }
 }

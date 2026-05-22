@@ -10,7 +10,8 @@ use oxfml_core::consumer::replay::{
     ReplayProjectionService, ReplayRetainedWitnessSource,
 };
 use oxfml_core::consumer::runtime::{
-    RuntimeEnvironment, RuntimeFormulaRequest, RuntimeSessionFacade,
+    RuntimeEnvironment, RuntimeFormulaRequest, RuntimeHostFormulaContext,
+    RuntimeHostReferenceBindResult, RuntimeSessionFacade,
 };
 use oxfml_core::format::{
     oxfml_current_excel_host_locale_context, oxfml_en_us_locale_context, worksheet_error_text,
@@ -26,6 +27,7 @@ use oxfml_core::semantics::{
     RegistrationSourceKind,
 };
 use oxfml_core::source::FormulaSourceRecord;
+use oxfml_core::syntax::token::TextSpan;
 use oxfml_core::{FormulaChannelKind, TypedContextQueryBundle};
 use oxfunc_core::host_info::{
     HostInfoError, HostInfoProvider, ImageProviderResult, ImageRequest, ResolvedWebImage,
@@ -1161,6 +1163,54 @@ fn replay_projection_carries_oxfunc_bridge_versions_from_runtime_artifacts() {
             .as_deref(),
         Some("arg-admission:managed-replay:v1")
     );
+}
+
+#[test]
+fn replay_projection_carries_w074_host_reference_context() {
+    let host_context = RuntimeHostFormulaContext {
+        dialect_id: "generic-host-v1".to_string(),
+        capability_profile_id: "host-capabilities:generic-v1".to_string(),
+        resolution_rule_version: "host-resolution:v1".to_string(),
+        host_namespace_version: Some("host-ns:v1".to_string()),
+        registry_snapshot_identity: Some("registry:snapshot:v1".to_string()),
+        structure_context_version: Some("structure:v1".to_string()),
+        caller_context_identity: Some("caller:sheet1-r1c1".to_string()),
+        table_context_identity: Some("tables:v1".to_string()),
+    };
+    let bind_result = RuntimeHostReferenceBindResult {
+        reference_handle: "host-ref:children".to_string(),
+        formal_reference_id: Some("formal-ref:host:children".to_string()),
+        source_span: TextSpan::new(5, 9),
+        source_token_text: "@CHILDREN".to_string(),
+        opaque_selector_payload: Some("selector-payload:opaque".to_string()),
+        resolution_layer: "explicit_host_ref".to_string(),
+        shape_hint: Some("collection".to_string()),
+        caller_context_dependent: true,
+        diagnostics: vec!["diagnostic:host-reference-observed".to_string()],
+        replay_identity_contribution: "host-ref-identity:v1".to_string(),
+    };
+    let runtime_result = RuntimeEnvironment::new()
+        .with_host_formula_context(host_context.clone())
+        .with_host_reference_bind_results(vec![bind_result.clone()])
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new("replay:w074-host-context", 1, "=SUM(1,2)"),
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("runtime execution should succeed");
+
+    let projection =
+        ReplayProjectionService::project(ReplayProjectionRequest::runtime_result(&runtime_result));
+
+    assert_eq!(projection.host_formula_context, Some(host_context.clone()));
+    assert_eq!(
+        projection.host_reference_bind_results,
+        vec![bind_result.clone()]
+    );
+    let identity = projection
+        .prepared_formula_identity
+        .expect("runtime projection should preserve prepared identity");
+    assert_eq!(identity.host_formula_context, Some(host_context));
+    assert_eq!(identity.host_reference_bind_results, vec![bind_result]);
 }
 
 #[test]
