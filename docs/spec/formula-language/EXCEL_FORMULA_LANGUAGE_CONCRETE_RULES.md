@@ -191,16 +191,19 @@ Current W074-CALC005 status:
    layer; the denied registry entry remains present but unavailable and editor
    completion filters it. Formula-call binding/evaluation invalidation under a
    denied registry view remains open.
-4. Table-context evidence is partial: structured-reference syntax
-   disambiguates against a defined-name collision, table-context mutation
-   changes prepared identity, stable row membership/order and exact
-   header/totals packet facts are public, and structured-reference bind records
-   preserve source/table/column/region/caller-context facts; bare table-name
-   precedence and broader table/name closure remain open.
+4. Table-context evidence is partial, but the bare collision row now has Excel
+   COM 16.0 evidence: in the observed defined-name-first collision, bare
+   `=Table1` resolves to the workbook defined name while `Table1[Amount]`
+   structured syntax is rejected at formula authoring. Separately,
+   non-collision structured-reference syntax binds through table-context
+   packets, table-context mutation changes prepared identity, stable row
+   membership/order and exact header/totals packet facts are public, and
+   structured-reference bind records preserve source/table/column/region/
+   caller-context facts. Broader table/name closure remains open.
 5. These rows are provisional observations, not a full name/call freeze.
 6. The freeze remains blocked on the rows still marked partial or open,
-   especially formula-call registry/capability invalidation, table-context
-   residuals, host namespace mutation invalidation, and broader
+   especially formula-call registry/capability invalidation, remaining
+   table/name closure, host namespace mutation invalidation, and broader
    workbook/sheet/UDF/defined-name scope combinations.
 
 Current host mapping rule:

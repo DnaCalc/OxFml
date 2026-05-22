@@ -105,10 +105,13 @@ Current W074 evidence split:
 2. capability-overlay denial now has an OxFml/OxFunc registry/editor probe;
    formula-call binding and invalidation under denied registry views remain
    open,
-3. structured-reference syntax now has local collision and prepared-identity
-   mutation evidence, stable row membership/order and exact header/totals
-   packet facts, and public structured-reference bind records; bare table-name
-   precedence and broader table/name closure remain open.
+3. structured-reference syntax now has local prepared-identity mutation
+   evidence, stable row membership/order and exact header/totals packet facts,
+   public structured-reference bind records, and Excel COM 16.0 defined-name /
+   table-name collision evidence showing bare `=Table1` resolves to the
+   workbook defined name while `Table1[Amount]` structured syntax is rejected
+   at formula authoring in that collision state; broader table/name closure
+   remains open.
 
 ## Shared Invalidation Principle
 The function catalog world and the defined-name world should be treated the same way for invalidation when they are bind-visible:

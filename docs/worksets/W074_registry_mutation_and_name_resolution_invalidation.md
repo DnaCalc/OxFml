@@ -112,19 +112,26 @@ Current observed tranche:
    The same runtime tranche admits registered UDF calls as registry-present
    without implementing actual UDF invocation and returns to `#NAME?`-style
    unknown classification after unregister/default registry.
-4. Table-context evidence is partial: structured syntax disambiguates from a
-   defined-name collision; table-context mutation that changes a structured
-   column target changes prepared identity; and the public generic
-   `TableDescriptor` now carries stable row membership/order identity plus
-   exact header/totals region refs through the runtime
-   `table_context_fingerprint` prepared-identity input. Bare non-call table-name
-   precedence and broader full table/name closure remain open.
+4. Table-context evidence is partial but no longer lacks the bare table-name
+   collision row: Excel COM 16.0 probes on 2026-05-22 observed that a
+   table-created-first `Table1` rejects adding a same-named workbook defined
+   name; a defined-name-created-first `Table1 = 99` can coexist with a
+   ListObject renamed `Table1`; bare `=Table1` then resolves to the workbook
+   defined name; and `Table1[Amount]`, `SUM(Table1[Amount])`, and
+   `ROWS(Table1[Amount])` are rejected at formula authoring with `0x800A03EC`.
+   Separately, non-collision structured syntax binds through the generic
+   table-context packet, table-context mutation changes prepared identity, and
+   the public generic `TableDescriptor` carries stable row membership/order
+   identity plus exact header/totals region refs through the runtime
+   `table_context_fingerprint` prepared-identity input. Broader full table/name
+   closure remains open.
 5. The observed rows are provisional evidence for those row shapes only; they
    do not freeze the full name/call rule.
 6. Name/call freeze remains blocked until the rows still marked partial or
    open are resolved, including formula-call registry/capability-overlay
-   invalidation, table-context residuals, host namespace mutation invalidation,
-   and broader workbook/sheet/UDF/defined-name scope combinations.
+   invalidation, host namespace mutation invalidation, remaining table/name
+   closure outside this observed collision row, and broader
+   workbook/sheet/UDF/defined-name scope combinations.
 
 Current product-host mapping rule:
 1. TreeCalc host names map to the closest Excel defined-name lane until this matrix proves a different extension is needed,
