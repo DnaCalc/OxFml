@@ -99,12 +99,25 @@ Current observed tranche:
    versus defined-name, UDF versus defined-name, sheet-versus-workbook
    defined-name, defined-name `LAMBDA`, lexical-local, late-UDF-registration,
    and UDF-removal rows in the matrix.
-2. The observed rows are provisional evidence for those row shapes only; they
+2. Deterministic non-Excel evidence now covers the explicit host-reference
+   bypass row through OxCalc host-resolver/replay facts plus OxFml runtime and
+   replay facade preservation of `resolution_layer=explicit_host_ref`, source
+   token/span, opaque selector payload, and prepared identity inputs.
+3. A focused OxFml/OxFunc probe now covers capability-overlay denial at the
+   registry/editor layer: the denied registry entry remains present but
+   unavailable and completion filters it. Formula-call binding/evaluation
+   invalidation under denied registry views remains open.
+4. Table-context evidence is partial: structured syntax disambiguates from a
+   defined-name collision, and table-context mutation that changes a structured
+   column target changes prepared identity. Bare non-call table-name
+   precedence, stable row membership/order, and exact header/totals packet facts
+   remain open.
+5. The observed rows are provisional evidence for those row shapes only; they
    do not freeze the full name/call rule.
-3. Name/call freeze remains blocked until the rows still marked
-   `blocked_not_excel_observable`, `partially_observed_excel_16_com`, or
-   `planned_not_observed` are resolved, including explicit host-reference
-   bypass, capability-overlay denial, and table-context collision/invalidation.
+6. Name/call freeze remains blocked until the rows still marked partial or
+   open are resolved, including formula-call registry/capability-overlay
+   invalidation, table-context residuals, host namespace mutation invalidation,
+   and broader workbook/sheet/UDF/defined-name scope combinations.
 
 Current product-host mapping rule:
 1. TreeCalc host names map to the closest Excel defined-name lane until this matrix proves a different extension is needed,
@@ -147,6 +160,9 @@ Current runtime/replay evidence:
    namespace guardrail with a returned `LAMBDA` that preserves a lexical
    capture through `LET` and invocation without producing host formula context
    or host-reference bind-result facts.
+3. Runtime table-context evidence now proves that a structured-reference
+   table-context mutation changing the selected column target changes the
+   prepared formula identity and formal reference projection.
 
 ## Status
 
@@ -161,6 +177,7 @@ Current runtime/replay evidence:
   - cross-repo registry change-set shape,
   - Excel oracle matrix for built-in/UDF/defined-name/LAMBDA shadowing,
   - mapping of `W051` host namespace names and lambda-valued host nodes to Excel defined-name lanes,
-  - generic host hook and host-reference bind-result packet spelling,
+  - formula-call binding/evaluation against registry views and capability-overlay denial,
+  - table-context residuals beyond structured-syntax disambiguation and prepared-identity mutation,
   - prepared identity/cache invalidation inputs for registry, structure, host namespace, table context, caller context, and resolution-rule changes,
   - evidence-backed cache invalidation for registry and host namespace mutation.

@@ -20,9 +20,9 @@ use oxfunc_core::function::{
     HostInteractionClass, KernelSignatureClass, ThreadSafetyClass, VolatilityClass,
 };
 use oxfunc_core::registry::{
-    ArgAdmissionMetadata, CapabilityOverlay, FunctionEntry, FunctionRegistryMetadata,
-    FunctionSource, ParameterDescriptor, RegistryFunctionMeta, SemanticKernelMetadata,
-    SignatureForm, builtin_registry,
+    ArgAdmissionMetadata, CapabilityOverlay, FunctionAvailability, FunctionEntry,
+    FunctionRegistryMetadata, FunctionSource, ParameterDescriptor, RegistryFunctionMeta,
+    SemanticKernelMetadata, SignatureForm, builtin_registry,
 };
 
 #[test]
@@ -595,6 +595,15 @@ fn completion_proposals_filter_capability_denied_registry_entries() {
     let source = FormulaSourceRecord::new("editor-complete-capability", 1, "=R");
     let mut overlay = CapabilityOverlay::new();
     overlay.deny_function_id("FUNC.RTD", "provider unavailable");
+    let scoped_registry = builtin_registry().with_capability_overlay(&overlay);
+    let scoped_rtd = scoped_registry
+        .lookup_by_id("FUNC.RTD")
+        .expect("RTD remains present in the OxFunc registry under overlay");
+    assert!(matches!(
+        scoped_rtd.availability,
+        FunctionAvailability::Unavailable { .. }
+    ));
+
     let service = EditorEditService::new(
         EditorEnvironment::new(editor_bind_context(source.clone()))
             .with_capability_overlay(&overlay),

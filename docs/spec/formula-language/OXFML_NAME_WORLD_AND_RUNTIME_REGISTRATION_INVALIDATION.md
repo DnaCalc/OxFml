@@ -97,6 +97,18 @@ Until that evidence exists, the active rule is:
 2. preserve the candidate resolution layers and diagnostics explicitly,
 3. treat TreeCalc host names as defined-name-like only as a planning mapping, not as final product semantics.
 
+Current W074 evidence split:
+1. explicit host-reference bypass now has deterministic non-Excel evidence from
+   OxCalc host-resolver/replay artifacts and OxFml runtime/replay facade
+   projection; this supports generic host-reference pass-through, not a bare
+   host-name precedence freeze,
+2. capability-overlay denial now has an OxFml/OxFunc registry/editor probe;
+   formula-call binding and invalidation under denied registry views remain
+   open,
+3. structured-reference syntax now has local collision and prepared-identity
+   mutation evidence; bare table-name precedence, stable row membership/order,
+   and exact header/totals packet facts remain open.
+
 ## Shared Invalidation Principle
 The function catalog world and the defined-name world should be treated the same way for invalidation when they are bind-visible:
 1. a newly added visible name can change binding,

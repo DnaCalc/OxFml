@@ -183,11 +183,23 @@ Current W074-CALC005 status:
    versus defined-name, UDF versus defined-name, sheet-versus-workbook name,
    defined-name `LAMBDA`, lexical-local, late-UDF-registration, and
    UDF-removal rows.
-2. These rows are provisional observations, not a full name/call freeze.
-3. The freeze remains blocked on the rows still marked `blocked_not_excel_observable`,
-   `partially_observed_excel_16_com`, or `planned_not_observed`, especially
-   explicit host-reference bypass, capability-overlay denial, and table-context
-   collision/invalidation behavior.
+2. Deterministic non-Excel evidence now covers explicit host-reference bypass
+   through OxCalc host-resolver/replay facts and OxFml runtime/replay facade
+   preservation of `resolution_layer=explicit_host_ref`, source token/span,
+   opaque selector payload, and prepared identity inputs.
+3. Capability-overlay denial is now probed at the OxFml/OxFunc registry/editor
+   layer; the denied registry entry remains present but unavailable and editor
+   completion filters it. Formula-call binding/evaluation invalidation under a
+   denied registry view remains open.
+4. Table-context evidence is partial: structured-reference syntax
+   disambiguates against a defined-name collision and table-context mutation
+   changes prepared identity, but bare table-name precedence plus stable row
+   membership/order and exact header/totals packet facts remain open.
+5. These rows are provisional observations, not a full name/call freeze.
+6. The freeze remains blocked on the rows still marked partial or open,
+   especially formula-call registry/capability invalidation, table-context
+   residuals, host namespace mutation invalidation, and broader
+   workbook/sheet/UDF/defined-name scope combinations.
 
 Current host mapping rule:
 1. TreeCalc host names and lambda-valued nodes map to the closest Excel defined-name lane only as a planning default,

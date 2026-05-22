@@ -1,4 +1,5 @@
 use std::cell::{Cell, RefCell};
+use std::collections::BTreeMap;
 
 use oxfml_core::consumer::runtime::{
     RuntimeEnvironment, RuntimeFormalInputBinding, RuntimeFormulaRequest,
@@ -23,7 +24,8 @@ use oxfml_core::{
     HostFunctionProviderError, InMemoryLibraryContextProvider, LibraryContextSnapshotRef,
     RegisteredExternalCatalogController, RegisteredExternalCatalogMutationRequest,
     RegisteredExternalCatalogMutationResult, RegisteredExternalHostRegistrationRequest,
-    RegisteredExternalRegistrationChannel, TypedContextQueryBundle, TypedContextQueryFamily,
+    RegisteredExternalRegistrationChannel, TableColumnDescriptor, TableDescriptor,
+    TypedContextQueryBundle, TypedContextQueryFamily,
 };
 use oxfunc_core::functions::call_register_id_family::{
     RegisterIdRequest, RegisteredExternalDescriptor, RegisteredExternalOriginKind,
@@ -37,7 +39,9 @@ use oxfunc_core::locale_format::{
     FormatCodeEngine, FormatFailure, FormatProfile, LocaleFormatContext, LocaleValueParser,
     ParseFailure, WorkbookDateSystem,
 };
-use oxfunc_core::value::{ArrayCellValue, ArrayShape, EvalValue, ReferenceKind, ReferenceLike};
+use oxfunc_core::value::{
+    ArrayCellValue, ArrayShape, EvalArray, EvalValue, ReferenceKind, ReferenceLike,
+};
 use oxfunc_core::value::{CallArgValue, ExcelText};
 
 struct SequenceRandomProvider {
@@ -588,6 +592,61 @@ fn runtime_carries_host_reference_context_without_treecalc_semantics() {
 }
 
 #[test]
+fn runtime_table_context_mutation_changes_prepared_identity_for_structured_refs() {
+    let request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new("runtime:w074-table-context", 1, "=SUM(Table1[Amount])"),
+        TypedContextQueryBundle::default(),
+    );
+    let mut first_values = BTreeMap::new();
+    first_values.insert(
+        "B2:B4".to_string(),
+        EvalValue::Array(
+            EvalArray::from_rows(vec![vec![
+                ArrayCellValue::Number(3.0),
+                ArrayCellValue::Number(4.0),
+                ArrayCellValue::Number(5.0),
+            ]])
+            .expect("array fixture should be valid"),
+        ),
+    );
+    let first = RuntimeEnvironment::new()
+        .with_table_context(vec![runtime_w074_table("B2:B4")], None, None)
+        .with_cell_values(first_values)
+        .execute(request.clone())
+        .expect("first table-context execution should succeed");
+    assert_eq!(first.evaluation.oxfunc_value, EvalValue::Number(12.0));
+
+    let mut second_values = BTreeMap::new();
+    second_values.insert(
+        "D2:D4".to_string(),
+        EvalValue::Array(
+            EvalArray::from_rows(vec![vec![
+                ArrayCellValue::Number(3.0),
+                ArrayCellValue::Number(4.0),
+                ArrayCellValue::Number(5.0),
+            ]])
+            .expect("array fixture should be valid"),
+        ),
+    );
+    let second = RuntimeEnvironment::new()
+        .with_table_context(vec![runtime_w074_table("D2:D4")], None, None)
+        .with_cell_values(second_values)
+        .execute(request)
+        .expect("mutated table-context execution should succeed");
+
+    assert_ne!(
+        first.prepared_formula_identity.prepared_formula_key,
+        second.prepared_formula_identity.prepared_formula_key,
+        "table-context changes that alter structured-reference binding must change prepared identity"
+    );
+    assert_ne!(
+        first.prepared_formula_identity.formal_references,
+        second.prepared_formula_identity.formal_references,
+        "structured-reference formal references should carry the changed table column target"
+    );
+}
+
+#[test]
 fn runtime_preserves_lexical_callables_without_host_namespace() {
     let result = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
@@ -610,6 +669,24 @@ fn runtime_preserves_lexical_callables_without_host_namespace() {
             .host_reference_bind_results
             .is_empty()
     );
+}
+
+fn runtime_w074_table(amount_range_ref: &str) -> TableDescriptor {
+    TableDescriptor {
+        table_id: "table:w074".to_string(),
+        table_name: "Table1".to_string(),
+        workbook_scope_ref: "book:default".to_string(),
+        sheet_scope_ref: "sheet:default".to_string(),
+        table_range_ref: "A1:D5".to_string(),
+        header_row_present: true,
+        totals_row_present: true,
+        columns: vec![TableColumnDescriptor {
+            column_id: "column:amount".to_string(),
+            column_name: "Amount".to_string(),
+            ordinal: 1,
+            column_range_ref: amount_range_ref.to_string(),
+        }],
+    }
 }
 
 #[test]
