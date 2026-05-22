@@ -32,6 +32,27 @@ W074 must cover:
 6. OxFml-only metadata needs for any OxFunc `RegistryChangeSet`,
 7. registered-external reconciliation.
 
+## 2026-05-22 W093 Reconciliation Intake
+
+OxFml has now processed the OxFunc W093 registered-external reconciliation.
+
+Current scoped agreement:
+
+1. descriptor-only `REGISTER.ID` / `CALL` mutation remains adjacent
+   registered-external state, not ordinary UDF function registration,
+2. plain worksheet `REGISTER.ID` does not create editor completion,
+   signature-help, or bind-visible ordinary function entries,
+3. registered-external-backed ordinary UDF entries require friendly
+   worksheet-visible metadata from the host,
+4. descriptor-only change sets may preserve ordinary registry snapshot identity
+   and drive targeted reevaluation,
+5. bind-visible function registration/unregister remains the registry snapshot
+   identity path for bind/editor invalidation.
+
+This narrows the registered-external reconciliation item. Formula-call registry
+lookup migration, cache invalidation evidence, source adapters, broad UDF
+execution, and name/call precedence remain W074/W093 follow-up.
+
 ## Status Axes
 
 - execution_state: acknowledged
@@ -40,6 +61,5 @@ W074 must cover:
 - integration_completeness: partial
 - open_lanes:
   - W074 workset creation and execution,
-  - shared registry-change packet shape,
   - formula-call registry lookup migration,
   - cache invalidation evidence.

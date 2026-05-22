@@ -147,10 +147,30 @@ Current product-host mapping rule:
 
 ### B074-06: Registered-External Reconciliation
 
-- **Status**: planned
+- **Status**: current scoped intake satisfied
 - **Owner**: OxFml with OxFunc coordination
 - **Effect**: preserve the distinction between bind-visible UDF metadata and descriptor-only `REGISTER.ID` / `CALL` registered-external mutation.
 - **Evidence target**: spec or handoff note plus first non-regression test if local behavior changes.
+
+Current reconciliation intake:
+1. OxFunc W093 now agrees with the W046/W052 split: descriptor-only
+   `REGISTER.ID` / `CALL` mutation is adjacent registered-external state, not
+   ordinary UDF registration.
+2. Plain worksheet `REGISTER.ID` creation does not create an editor
+   completion entry, signature-help row, or bind-visible ordinary function
+   entry.
+3. A registered-external-backed ordinary UDF entry exists only when the host
+   supplies friendly worksheet-visible metadata: stable surface name,
+   arity/signature, callable metadata, source registration identity, and an
+   invocation target descriptor.
+4. Descriptor-only catalog mutation may produce targeted reevaluation with
+   unchanged ordinary function-registry snapshot identity by default.
+5. Bind-visible function registration/unregister remains the path that changes
+   registry snapshot identity and can invalidate bind/editor artifacts.
+
+This narrows the registered-external reconciliation item only. Source adapters,
+formula-call registry lookup, broad UDF execution, and name/call precedence
+freeze remain open W074/W093 work.
 
 ### B074-07: Generic Host Hook And Prepared Identity Inputs
 
@@ -198,7 +218,7 @@ Current runtime/replay evidence:
 - open_lanes:
   - registry snapshot identity packet,
   - cache invalidation implementation,
-  - cross-repo registry change-set shape,
+  - formula-call registry lookup migration,
   - Excel oracle matrix for built-in/UDF/defined-name/LAMBDA shadowing,
   - mapping of `W051` host namespace names and lambda-valued host nodes to Excel defined-name lanes,
   - broader formula-call name/call precedence freeze beyond the bounded registry-view admission and capability-denial runtime classification tranche,

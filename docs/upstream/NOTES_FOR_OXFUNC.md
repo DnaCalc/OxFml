@@ -583,7 +583,7 @@ Current recommended indexing consequences are:
 Current OxFml-side freeze for `W052` is:
 1. bind-visible function registration or unregister must produce a new `LibraryContextSnapshot` generation and bind invalidation,
 2. descriptor mutation used only through worksheet `CALL` / `REGISTER.ID` should default to targeted reevaluation rather than broad rebinding,
-3. the shared seam still needs OxFunc acknowledgment of that split, but OxFml is no longer treating it as undecided locally.
+3. OxFunc W093 has now acknowledged the same split for the current phase.
 
 ### 10.8 Current local exercised floor
 Current local evidence for this narrower lane exists in:
@@ -612,11 +612,20 @@ The next useful OxFunc replies for `W052` are:
 
 ### 10.10 Current remaining note-level open topics
 Current remaining `W052` note-level open topics are:
-1. exact shared field naming,
-2. the smallest final shared `RegisteredExternalDescriptor` field set,
-3. whether mutation/controller packets stay OxFml-owned wrappers or become shared OxFunc-owned runtime packet families,
-4. minimum snapshot-generation consequences of register/unregister,
-5. any later coordinator-visible consequences if OxCalc needs the same packet sharpened further.
+1. source-adapter execution detail beyond the current shared packet split,
+2. any later coordinator-visible consequences if OxCalc needs the same packet
+   sharpened further.
+
+Current W093/W052 reconciliation intake:
+1. the current shared field names and seven-field
+   `RegisteredExternalDescriptor` are sufficient for this phase,
+2. `RegisteredExternalCatalogMutation*` and
+   `RegisteredExternalCatalogController` remain OxFml-owned funnel packets over
+   OxFunc-owned catalog truth for this phase,
+3. descriptor-only mutation may use targeted reevaluation and preserve
+   ordinary function-registry snapshot identity,
+4. bind-visible friendly UDF registration/unregister is the path that changes
+   ordinary function-registry snapshot identity.
 
 ## 11. Current Read After OxFunc's March 27 Note
 

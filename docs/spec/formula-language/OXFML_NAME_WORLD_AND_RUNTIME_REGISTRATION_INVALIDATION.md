@@ -68,6 +68,18 @@ Examples:
 
 This registered-external world is name-bearing in a broad product sense, but it is not automatically bind-visible as an ordinary function-name world.
 
+Current W093/W052 reconciliation:
+1. descriptor-only `REGISTER.ID` / `CALL` mutation remains adjacent
+   registered-external state,
+2. plain worksheet `REGISTER.ID` does not create editor completion,
+   signature-help, or bind-visible ordinary function entries,
+3. a registered-external-backed ordinary UDF entry requires friendly
+   worksheet-visible metadata from the host,
+4. descriptor-only mutation can use targeted reevaluation with unchanged
+   ordinary function-registry snapshot identity,
+5. bind-visible friendly UDF registration/unregister is the path that changes
+   registry snapshot identity and can invalidate bind/editor artifacts.
+
 ## Excel Oracle Matrix Before Precedence Freeze
 `W074` must settle the Excel-visible precedence rule before OxFml promotes any generic host namespace shadowing rule.
 
@@ -112,6 +124,10 @@ Current W074 evidence split:
    workbook defined name while `Table1[Amount]` structured syntax is rejected
    at formula authoring in that collision state; broader table/name closure
    remains open.
+4. registered-external reconciliation with OxFunc W093 now confirms the current
+   W052 split: descriptor-only `REGISTER.ID` / `CALL` mutation is not
+   bind-visible ordinary UDF registration, while friendly worksheet-visible
+   registered-external-backed UDFs enter the ordinary registry path.
 
 ## Shared Invalidation Principle
 The function catalog world and the defined-name world should be treated the same way for invalidation when they are bind-visible:
@@ -211,6 +227,9 @@ If the change only affects `CALL` / `REGISTER.ID` descriptor truth, the host/OxF
 1. preserve the mutation through the registered-external packet lane,
 2. generate any required new runtime snapshot generation if the OxFunc catalog model requires it,
 3. avoid treating the change as universal bind invalidation unless a bind-visible function-name world also changed.
+4. preserve ordinary function-registry snapshot identity when the mutation is
+   descriptor-only and use targeted reevaluation for formulas that actually
+   depend on the descriptor.
 
 ## Affected-Formula Discovery
 The best current implementation strategy is to maintain explicit usage indexes rather than relying only on coarse full-workbook invalidation.
