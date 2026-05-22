@@ -38,7 +38,7 @@ Working interpretation rule:
 | FML-R-015 | Name formulas and external-name formulas are distinct formula-bearing carriers; external-name formulas are narrower than generic external references and require explicit external-book identity. | XLS-CF-FL-008 | CONF-discovered-ms-oe376-220816-823374c7-0362;CONF-discovered-ms-oe376-220816-823374c7-0363;SPEC-discovered-ms-oe376-88e93023-48443;SPEC-discovered-ms-oe376-88e93023-48448;SPEC-discovered-ms-oe376-88e93023-48451 | provisional |
 | FML-R-016 | Conditional-formatting and data-validation formulas are restricted formula-bearing sublanguages; they are similar but not safely identical, and their rule-host fields remain formula-semantic rather than display-only metadata. | XLS-CF-FL-006 | CONF-discovered-ms-oe376-220816-823374c7-1427;CONF-discovered-ms-oe376-220816-823374c7-1428;CONF-discovered-ms-oe376-220816-823374c7-1429;CONF-discovered-ms-oe376-220816-823374c7-1430;CONF-discovered-ms-oe376-220816-823374c7-1431 | provisional |
 | FML-R-018 | Ordinary arithmetic operators must preserve array payloads and apply numeric coercion/error mapping elementwise for admitted array-lifted shapes rather than collapsing arrays to a single scalar before evaluation. | XLS-CF-FL-012 | evaluator_tests.rs;replay_fixture_tests.rs;replay_retained_and_host_policy_tests.rs | provisional |
-| FML-R-019 | Bare-name and call-callee resolution across built-in functions, registered UDFs, workbook/sheet defined names, and defined-name `LAMBDA` values must be Excel-oracle-derived before product host namespaces map onto that lane. | XLS-CF-FL-008;XLS-CF-FL-012 | W074-CALC005-ORACLE-PLANNED | draft |
+| FML-R-019 | Bare-name and call-callee resolution across built-in functions, registered UDFs, workbook/sheet defined names, and defined-name `LAMBDA` values must be Excel-oracle-derived before product host namespaces map onto that lane. | XLS-CF-FL-008;XLS-CF-FL-012 | W074-CALC005-ORACLE-PARTIAL-20260522 | provisional |
 
 ## 3. Current Local Floors For Newer Rule Families
 
@@ -173,10 +173,21 @@ Matrix rows must keep these dimensions explicit:
 4. invalidation inputs: registry snapshot, structure context, defined-name scope/kind, host namespace version, caller context, table context, and resolution-rule version,
 5. replay-visible resolution layer and diagnostic class.
 
-The current planned intake surface for those observations is
+The current intake surface for those observations is
 `W074_CALC005_NAME_CALL_PRECEDENCE_ORACLE_MATRIX.csv`. Rows in that file are
 not evidence until `oracle_status` records an observed result from admissible
 black-box Excel evidence.
+
+Current W074-CALC005 status:
+1. Excel COM 16.0 black-box probes on 2026-05-22 now cover selected built-in
+   versus defined-name, UDF versus defined-name, sheet-versus-workbook name,
+   defined-name `LAMBDA`, lexical-local, late-UDF-registration, and
+   UDF-removal rows.
+2. These rows are provisional observations, not a full name/call freeze.
+3. The freeze remains blocked on the rows still marked `blocked_not_excel_observable`,
+   `partially_observed_excel_16_com`, or `planned_not_observed`, especially
+   explicit host-reference bypass, capability-overlay denial, and table-context
+   collision/invalidation behavior.
 
 Current host mapping rule:
 1. TreeCalc host names and lambda-valued nodes map to the closest Excel defined-name lane only as a planning default,

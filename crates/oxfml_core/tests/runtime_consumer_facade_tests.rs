@@ -514,13 +514,13 @@ fn runtime_carries_host_reference_context_without_treecalc_semantics() {
         table_context_identity: Some("tables:v1".to_string()),
     };
     let bind_result = RuntimeHostReferenceBindResult {
-        reference_handle: "host-ref:children".to_string(),
-        formal_reference_id: Some("formal-ref:host:children".to_string()),
-        source_span: TextSpan::new(5, 9),
-        source_token_text: "@CHILDREN".to_string(),
-        opaque_selector_payload: Some("selector-payload:opaque".to_string()),
+        reference_handle: "host-ref:opaque-collection".to_string(),
+        formal_reference_id: Some("formal-ref:host:opaque-collection".to_string()),
+        source_span: TextSpan::new(5, 15),
+        source_token_text: "HOSTREF:opaque".to_string(),
+        opaque_selector_payload: Some("opaque-selector:collection".to_string()),
         resolution_layer: "explicit_host_ref".to_string(),
-        shape_hint: Some("collection".to_string()),
+        shape_hint: Some("opaque_collection".to_string()),
         caller_context_dependent: true,
         diagnostics: Vec::new(),
         replay_identity_contribution: "host-ref-identity:v1".to_string(),
@@ -584,6 +584,31 @@ fn runtime_carries_host_reference_context_without_treecalc_semantics() {
             .prepared_formula_identity
             .host_reference_bind_results,
         vec![bind_result]
+    );
+}
+
+#[test]
+fn runtime_preserves_lexical_callables_without_host_namespace() {
+    let result = RuntimeEnvironment::new()
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new(
+                "runtime:w074-lexical-no-host",
+                1,
+                "=LET(base,100,adder,LAMBDA(n,LAMBDA(x,x+n+base)),add5,adder(5),add5(10))",
+            ),
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("lexical returned lambda should execute without host namespace");
+
+    assert_eq!(result.evaluation.oxfunc_value, EvalValue::Number(115.0));
+    assert_eq!(result.host_formula_context, None);
+    assert!(result.host_reference_bind_results.is_empty());
+    assert_eq!(result.prepared_formula_identity.host_formula_context, None);
+    assert!(
+        result
+            .prepared_formula_identity
+            .host_reference_bind_results
+            .is_empty()
     );
 }
 

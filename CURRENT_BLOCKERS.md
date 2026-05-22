@@ -1,12 +1,21 @@
 # CURRENT_BLOCKERS.md — OxFml
 
-Status: 1 active blocker.
+Status: 2 active blockers.
 
 Last reviewed: 2026-05-22 during W074 cross-repo validation follow-up.
 
 ---
 
 ## Active Blockers
+
+### BLK-FML-008: W074 name/call freeze still lacks full oracle and host-extension evidence
+
+- **Status**: active
+- **Impact**: blocks freezing the generic W074/CALC-005 name/call precedence rule for product host namespaces; does not block the current generic runtime/replay host-reference pass-through or DNA OneCalc lexical guardrail
+- **Current state**: Excel COM 16.0 black-box probes on 2026-05-22 populated selected W074 matrix rows for built-in versus defined-name, UDF versus defined-name, sheet versus workbook defined-name, defined-name `LAMBDA`, lexical locals, late UDF registration, and UDF removal. The matrix still contains blocked or unobserved rows for explicit host-reference bypass, capability-overlay denial, table-context collision/invalidation, and broader scope combinations.
+- **Exact unblock steps**: add deterministic evidence for the remaining `W074_CALC005_NAME_CALL_PRECEDENCE_ORACLE_MATRIX.csv` rows, including an OxCalc host-resolver/replay probe for explicit host-reference bypass, an OxFml/OxFunc capability-overlay denial probe, table-context collision/invalidation evidence, and any missing Excel black-box rows needed for broader workbook/sheet/UDF/defined-name combinations; only then promote the name/call rule beyond provisional.
+- **Recommendation**: wait
+- **Opened**: 2026-05-22
 
 ### BLK-FML-004: `FTC-0902` exact reduced `row(...)` witnesses currently collapse into the existing built-in-collision frontier
 

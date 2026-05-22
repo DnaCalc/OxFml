@@ -88,11 +88,23 @@ Current oracle-matrix shape:
 
 Current matrix artifact:
 1. `docs/spec/formula-language/W074_CALC005_NAME_CALL_PRECEDENCE_ORACLE_MATRIX.csv`
-   is the planned intake matrix for these cases,
+   is the intake matrix for these cases,
 2. rows with `oracle_status=planned_not_observed` are not evidence and do not
    freeze precedence,
 3. promotion requires admissible black-box Excel observations to fill the
    winner/result/callable/identity columns.
+
+Current observed tranche:
+1. Excel COM 16.0 black-box probes on 2026-05-22 now cover selected built-in
+   versus defined-name, UDF versus defined-name, sheet-versus-workbook
+   defined-name, defined-name `LAMBDA`, lexical-local, late-UDF-registration,
+   and UDF-removal rows in the matrix.
+2. The observed rows are provisional evidence for those row shapes only; they
+   do not freeze the full name/call rule.
+3. Name/call freeze remains blocked until the rows still marked
+   `blocked_not_excel_observable`, `partially_observed_excel_16_com`, or
+   `planned_not_observed` are resolved, including explicit host-reference
+   bypass, capability-overlay denial, and table-context collision/invalidation.
 
 Current product-host mapping rule:
 1. TreeCalc host names map to the closest Excel defined-name lane until this matrix proves a different extension is needed,
@@ -127,6 +139,15 @@ Required packet facts:
 4. prepared identity and cache keys must include the name-world and host-context version inputs that can change resolution,
 5. late UDF registration, unregister, capability-overlay denial, defined-name mutation, host namespace mutation, table context mutation, and resolution-rule changes are invalidation inputs when they can change bind or prepared-call shape.
 
+Current runtime/replay evidence:
+1. `RuntimeHostFormulaContext` and `RuntimeHostReferenceBindResult` are
+   product-neutral runtime facade packets; the focused tests now use generic
+   opaque host-reference labels rather than TreeCalc-shaped examples.
+2. The same runtime and replay facade tests prove the DNA OneCalc no-host
+   namespace guardrail with a returned `LAMBDA` that preserves a lexical
+   capture through `LET` and invocation without producing host formula context
+   or host-reference bind-result facts.
+
 ## Status
 
 - execution_state: in_progress
@@ -142,5 +163,4 @@ Required packet facts:
   - mapping of `W051` host namespace names and lambda-valued host nodes to Excel defined-name lanes,
   - generic host hook and host-reference bind-result packet spelling,
   - prepared identity/cache invalidation inputs for registry, structure, host namespace, table context, caller context, and resolution-rule changes,
-  - DNA OneCalc no-host-reference LET/LAMBDA lexical guardrail,
   - evidence-backed cache invalidation for registry and host namespace mutation.

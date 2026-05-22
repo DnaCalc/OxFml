@@ -1178,13 +1178,13 @@ fn replay_projection_carries_w074_host_reference_context() {
         table_context_identity: Some("tables:v1".to_string()),
     };
     let bind_result = RuntimeHostReferenceBindResult {
-        reference_handle: "host-ref:children".to_string(),
-        formal_reference_id: Some("formal-ref:host:children".to_string()),
-        source_span: TextSpan::new(5, 9),
-        source_token_text: "@CHILDREN".to_string(),
-        opaque_selector_payload: Some("selector-payload:opaque".to_string()),
+        reference_handle: "host-ref:opaque-collection".to_string(),
+        formal_reference_id: Some("formal-ref:host:opaque-collection".to_string()),
+        source_span: TextSpan::new(5, 15),
+        source_token_text: "HOSTREF:opaque".to_string(),
+        opaque_selector_payload: Some("opaque-selector:collection".to_string()),
         resolution_layer: "explicit_host_ref".to_string(),
-        shape_hint: Some("collection".to_string()),
+        shape_hint: Some("opaque_collection".to_string()),
         caller_context_dependent: true,
         diagnostics: vec!["diagnostic:host-reference-observed".to_string()],
         replay_identity_contribution: "host-ref-identity:v1".to_string(),
@@ -1211,6 +1211,35 @@ fn replay_projection_carries_w074_host_reference_context() {
         .expect("runtime projection should preserve prepared identity");
     assert_eq!(identity.host_formula_context, Some(host_context));
     assert_eq!(identity.host_reference_bind_results, vec![bind_result]);
+}
+
+#[test]
+fn replay_projection_preserves_no_host_namespace_lexical_guardrail() {
+    let runtime_result = RuntimeEnvironment::new()
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new(
+                "replay:w074-lexical-no-host",
+                1,
+                "=LET(base,100,adder,LAMBDA(n,LAMBDA(x,x+n+base)),add5,adder(5),add5(10))",
+            ),
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("lexical returned lambda should execute without host namespace");
+
+    assert_eq!(
+        runtime_result.evaluation.oxfunc_value,
+        EvalValue::Number(115.0)
+    );
+    let projection =
+        ReplayProjectionService::project(ReplayProjectionRequest::runtime_result(&runtime_result));
+
+    assert_eq!(projection.host_formula_context, None);
+    assert!(projection.host_reference_bind_results.is_empty());
+    let identity = projection
+        .prepared_formula_identity
+        .expect("runtime projection should preserve prepared identity");
+    assert_eq!(identity.host_formula_context, None);
+    assert!(identity.host_reference_bind_results.is_empty());
 }
 
 #[test]
