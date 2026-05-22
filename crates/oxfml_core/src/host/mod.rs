@@ -13,7 +13,7 @@ use crate::binding::{
 };
 use crate::eval::{
     CallableDefinedNameBinding, DefinedNameBinding, EvaluationBackend, EvaluationContext,
-    EvaluationOutput, EvaluationTraceMode, evaluate_formula,
+    EvaluationOutput, EvaluationTraceMode, SparseReferenceValuesBinding, evaluate_formula,
 };
 use crate::format::canonicalize_locale_context;
 use crate::interface::{
@@ -77,6 +77,7 @@ pub struct SingleFormulaHost {
     pub primary_locus: Locus,
     pub defined_names: BTreeMap<String, DefinedNameBinding>,
     pub cell_values: BTreeMap<String, EvalValue>,
+    pub sparse_reference_values: BTreeMap<String, SparseReferenceValuesBinding>,
     pub table_catalog: Vec<TableDescriptor>,
     pub enclosing_table_ref: Option<TableRef>,
     pub caller_table_region: Option<TableCallerRegion>,
@@ -223,6 +224,7 @@ impl SingleFormulaHost {
             },
             defined_names: BTreeMap::new(),
             cell_values: BTreeMap::new(),
+            sparse_reference_values: BTreeMap::new(),
             table_catalog: Vec::new(),
             enclosing_table_ref: None,
             caller_table_region: None,
@@ -536,6 +538,7 @@ impl SingleFormulaHost {
         evaluation_context.caller_col = self.caller_col as usize;
         evaluation_context.cell_values = self.cell_values.clone();
         evaluation_context.defined_names = self.defined_names.clone();
+        evaluation_context.sparse_reference_values = self.sparse_reference_values.clone();
         evaluation_context.apply_typed_context_query_bundle(effective_query_bundle);
         evaluation_context.set_trace_mode(self.trace_mode);
 

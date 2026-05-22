@@ -4,7 +4,10 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 use oxfunc_core::registry::builtin_registry;
-use oxfunc_core::value::{ArrayCellValue, EvalValue, WorksheetErrorCode};
+use oxfunc_core::resolver::{
+    ResolvedReferenceCell, ResolvedReferenceExtent, ResolvedReferenceValues,
+};
+use oxfunc_core::value::{ArrayCellValue, EvalValue, ReferenceLike, WorksheetErrorCode};
 
 use crate::binding::{
     BindContext, BindDiagnostic, BoundFormula, NameKind, NormalizedReference, bind_formula,
@@ -12,6 +15,7 @@ use crate::binding::{
 use crate::consumer::ConsumerLibraryContextState;
 use crate::eval::{
     DefinedNameBinding, EvaluationBackend, EvaluationOutput, EvaluationTraceMode, PreparedCall,
+    SparseReferenceValuesBinding,
 };
 use crate::host::{ArtifactReuseReport, FirstHostReplayCapturePacket};
 pub use crate::host::{HostRecalcOutput, SingleFormulaHost};
@@ -53,6 +57,7 @@ pub struct RuntimeEnvironment<'a> {
     defined_names: BTreeMap<String, DefinedNameBinding>,
     cell_values: BTreeMap<String, EvalValue>,
     formal_input_bindings: Vec<RuntimeFormalInputBinding>,
+    sparse_reference_value_bindings: Vec<RuntimeSparseReferenceValuesBinding>,
     host_formula_context: Option<RuntimeHostFormulaContext>,
     host_reference_bind_results: Vec<RuntimeHostReferenceBindResult>,
     table_catalog: Vec<TableDescriptor>,
@@ -76,6 +81,7 @@ impl<'a> RuntimeEnvironment<'a> {
             defined_names: BTreeMap::new(),
             cell_values: BTreeMap::new(),
             formal_input_bindings: Vec::new(),
+            sparse_reference_value_bindings: Vec::new(),
             host_formula_context: None,
             host_reference_bind_results: Vec::new(),
             table_catalog: Vec::new(),
@@ -155,6 +161,14 @@ impl<'a> RuntimeEnvironment<'a> {
         formal_input_bindings: Vec<RuntimeFormalInputBinding>,
     ) -> Self {
         self.formal_input_bindings = formal_input_bindings;
+        self
+    }
+
+    pub fn with_sparse_reference_value_bindings(
+        mut self,
+        sparse_reference_value_bindings: Vec<RuntimeSparseReferenceValuesBinding>,
+    ) -> Self {
+        self.sparse_reference_value_bindings = sparse_reference_value_bindings;
         self
     }
 
@@ -310,6 +324,8 @@ impl<'a> RuntimeEnvironment<'a> {
         host.primary_locus = self.primary_locus.clone();
         host.defined_names = self.defined_names.clone();
         host.cell_values = self.cell_values.clone();
+        host.sparse_reference_values =
+            sparse_reference_values_map(&self.sparse_reference_value_bindings);
         host.table_catalog = self.table_catalog.clone();
         host.enclosing_table_ref = self.enclosing_table_ref.clone();
         host.caller_table_region = self.caller_table_region.clone();
@@ -335,6 +351,23 @@ fn formal_input_binding_name(reference_descriptor: &str) -> String {
         .strip_prefix("name:")
         .unwrap_or(reference_descriptor)
         .to_string()
+}
+
+fn sparse_reference_values_map(
+    bindings: &[RuntimeSparseReferenceValuesBinding],
+) -> BTreeMap<String, SparseReferenceValuesBinding> {
+    bindings
+        .iter()
+        .map(|binding| {
+            (
+                binding.reference.target.clone(),
+                SparseReferenceValuesBinding {
+                    reference: binding.reference.clone(),
+                    values: binding.resolved_values(),
+                },
+            )
+        })
+        .collect()
 }
 
 fn apply_formal_input_bindings_to_host(
@@ -1942,6 +1975,43 @@ pub struct RuntimeHostReferenceBindResult {
     pub replay_identity_contribution: String,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct RuntimeSparseReferenceCell {
+    pub row: usize,
+    pub col: usize,
+    pub value: ArrayCellValue,
+}
+
+impl RuntimeSparseReferenceCell {
+    #[must_use]
+    pub fn new(row: usize, col: usize, value: ArrayCellValue) -> Self {
+        Self { row, col, value }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RuntimeSparseReferenceValuesBinding {
+    pub reference: ReferenceLike,
+    pub declared_rows: usize,
+    pub declared_cols: usize,
+    pub defined_cells: Vec<RuntimeSparseReferenceCell>,
+    pub reader_identity: Option<String>,
+}
+
+impl RuntimeSparseReferenceValuesBinding {
+    #[must_use]
+    pub fn resolved_values(&self) -> ResolvedReferenceValues {
+        ResolvedReferenceValues::new(
+            ResolvedReferenceExtent::new(self.declared_rows, self.declared_cols),
+            self.defined_cells
+                .iter()
+                .map(|cell| ResolvedReferenceCell::new(cell.row, cell.col, cell.value.clone()))
+                .collect(),
+            self.reader_identity.clone(),
+        )
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimePlanTemplateIdentity {
     pub shape_key: Option<String>,
@@ -2165,6 +2235,8 @@ impl<'a> RuntimeSessionFacade<'a> {
             )
         })?;
         let mut defined_names = self.environment.defined_names.clone();
+        let sparse_reference_values =
+            sparse_reference_values_map(&self.environment.sparse_reference_value_bindings);
         for binding in &self.environment.formal_input_bindings {
             if let Some(reference_handle) = &binding.reference_handle {
                 let formal_reference = snapshot_before_execute
@@ -2196,6 +2268,7 @@ impl<'a> RuntimeSessionFacade<'a> {
             caller_col: self.environment.caller_col as usize,
             cell_values: self.environment.cell_values.clone(),
             defined_names,
+            sparse_reference_values,
             typed_query_bundle: *request.typed_query_bundle(),
         })?;
         let snapshot = self.managed_session_snapshot().ok_or_else(|| {

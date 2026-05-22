@@ -34,7 +34,7 @@ use oxfunc_core::locale_format::LocaleFormatContext;
 use oxfunc_core::resolver::resolve_eval_value as resolve_oxfunc_eval_value;
 use oxfunc_core::resolver::{
     CallerContext as OxFuncCallerContext, RefResolutionError, ReferenceResolver,
-    ResolverCapabilities,
+    ResolvedReferenceValues, ResolverCapabilities,
 };
 use oxfunc_core::surface_call::{SurfaceCallRuntime, SurfaceCallScratch, SurfaceCallSite};
 use oxfunc_core::value::{
@@ -434,6 +434,12 @@ pub enum DefinedNameBinding {
     Value(EvalValue),
     Reference(ReferenceLike),
     Callable(CallableDefinedNameBinding),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SparseReferenceValuesBinding {
+    pub reference: ReferenceLike,
+    pub values: ResolvedReferenceValues,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1434,10 +1440,12 @@ fn invoke_context_free_surface_call(
 ) -> EvalValue {
     let cell_values = BTreeMap::new();
     let defined_names = BTreeMap::new();
+    let sparse_reference_values = BTreeMap::new();
     let callable_registry = RefCell::new(CallableRegistry::default());
     let resolver = LocalReferenceResolver {
         cell_values: &cell_values,
         defined_names: &defined_names,
+        sparse_reference_values: &sparse_reference_values,
         caller_row: 1,
         caller_col: 1,
         callable_registry: &callable_registry,
@@ -1482,6 +1490,7 @@ pub struct EvaluationContext<'a> {
     pub caller_col: usize,
     pub cell_values: BTreeMap<String, EvalValue>,
     pub defined_names: BTreeMap<String, DefinedNameBinding>,
+    pub sparse_reference_values: BTreeMap<String, SparseReferenceValuesBinding>,
     pub locale_ctx: Option<&'a LocaleFormatContext<'a>>,
     pub host_info: Option<&'a dyn HostInfoProvider>,
     pub rtd_provider: Option<&'a dyn RtdProvider>,
@@ -1504,6 +1513,7 @@ impl<'a> EvaluationContext<'a> {
             caller_col: 1,
             cell_values: BTreeMap::new(),
             defined_names: BTreeMap::new(),
+            sparse_reference_values: BTreeMap::new(),
             locale_ctx: None,
             host_info: None,
             rtd_provider: None,
@@ -1536,6 +1546,12 @@ impl<'a> EvaluationContext<'a> {
         self.locale_ctx = bundle.locale_ctx;
         self.now_serial = bundle.now_serial;
         self.random_provider = bundle.random_provider;
+    }
+
+    fn has_sparse_reference_values(&self, reference: &ReferenceLike) -> bool {
+        self.sparse_reference_values
+            .get(&reference.target)
+            .is_some_and(|binding| binding.reference == *reference)
     }
 
     pub fn with_trace_mode(mut self, trace_mode: EvaluationTraceMode) -> Self {
@@ -1613,6 +1629,7 @@ pub fn evaluate_formula(
     let mut resolver = LocalReferenceResolver {
         cell_values: &context.cell_values,
         defined_names: &context.defined_names,
+        sparse_reference_values: &context.sparse_reference_values,
         caller_row: context.caller_row,
         caller_col: context.caller_col,
         callable_registry: &frame.callable_registry,
@@ -1672,6 +1689,7 @@ fn typed_surface_for_top_level_host_or_provider_call(
             let resolver = LocalReferenceResolver {
                 cell_values: &context.cell_values,
                 defined_names: &context.defined_names,
+                sparse_reference_values: &context.sparse_reference_values,
                 caller_row: context.caller_row,
                 caller_col: context.caller_col,
                 callable_registry: &callable_registry,
@@ -1696,6 +1714,7 @@ fn typed_surface_for_top_level_host_or_provider_call(
             let resolver = LocalReferenceResolver {
                 cell_values: &context.cell_values,
                 defined_names: &context.defined_names,
+                sparse_reference_values: &context.sparse_reference_values,
                 caller_row: context.caller_row,
                 caller_col: context.caller_col,
                 callable_registry: &callable_registry,
@@ -1718,6 +1737,7 @@ fn typed_surface_for_top_level_host_or_provider_call(
             let resolver = LocalReferenceResolver {
                 cell_values: &context.cell_values,
                 defined_names: &context.defined_names,
+                sparse_reference_values: &context.sparse_reference_values,
                 caller_row: context.caller_row,
                 caller_col: context.caller_col,
                 callable_registry: &callable_registry,
@@ -1750,6 +1770,7 @@ fn extended_surface_for_top_level_function_call(
             let resolver = LocalReferenceResolver {
                 cell_values: &context.cell_values,
                 defined_names: &context.defined_names,
+                sparse_reference_values: &context.sparse_reference_values,
                 caller_row: context.caller_row,
                 caller_col: context.caller_col,
                 callable_registry: &callable_registry,
@@ -1797,6 +1818,7 @@ fn build_top_level_call_args(
     let mut resolver = LocalReferenceResolver {
         cell_values: &context.cell_values,
         defined_names: &context.defined_names,
+        sparse_reference_values: &context.sparse_reference_values,
         caller_row: context.caller_row,
         caller_col: context.caller_col,
         callable_registry: &callable_registry,
@@ -3139,7 +3161,7 @@ fn call_arg_for_name(
     match binding {
         DefinedNameBinding::Value(value) => Ok(CallArgValue::Eval(value.clone())),
         DefinedNameBinding::Reference(reference) => {
-            if preserve_reference {
+            if preserve_reference || context.has_sparse_reference_values(reference) {
                 Ok(CallArgValue::Reference(reference.clone()))
             } else {
                 resolver
@@ -5179,6 +5201,7 @@ fn should_emit_sheet_prefix(sheet_id: &str) -> bool {
 struct LocalReferenceResolver<'a> {
     cell_values: &'a BTreeMap<String, EvalValue>,
     defined_names: &'a BTreeMap<String, DefinedNameBinding>,
+    sparse_reference_values: &'a BTreeMap<String, SparseReferenceValuesBinding>,
     caller_row: usize,
     caller_col: usize,
     callable_registry: &'a RefCell<CallableRegistry>,
@@ -5224,6 +5247,17 @@ impl ReferenceResolver for LocalReferenceResolver<'_> {
         })
     }
 
+    fn resolve_reference_values(
+        &self,
+        reference: &ReferenceLike,
+    ) -> Result<Option<ResolvedReferenceValues>, RefResolutionError> {
+        Ok(self
+            .sparse_reference_values
+            .get(&reference.target)
+            .filter(|binding| binding.reference == *reference)
+            .map(|binding| binding.values.clone()))
+    }
+
     fn caller_context(&self) -> Option<OxFuncCallerContext> {
         Some(OxFuncCallerContext {
             prefix: None,
@@ -5261,6 +5295,7 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
             let resolver = LocalReferenceResolver {
                 cell_values: &self.context.cell_values,
                 defined_names: &self.context.defined_names,
+                sparse_reference_values: &self.context.sparse_reference_values,
                 caller_row: self.context.caller_row,
                 caller_col: self.context.caller_col,
                 callable_registry: self.callable_registry,
@@ -5326,6 +5361,7 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
         let mut resolver = LocalReferenceResolver {
             cell_values: &self.context.cell_values,
             defined_names: &self.context.defined_names,
+            sparse_reference_values: &self.context.sparse_reference_values,
             caller_row: self.context.caller_row,
             caller_col: self.context.caller_col,
             callable_registry: self.callable_registry,
@@ -5381,6 +5417,7 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
         let mut resolver = LocalReferenceResolver {
             cell_values: &self.context.cell_values,
             defined_names: &self.context.defined_names,
+            sparse_reference_values: &self.context.sparse_reference_values,
             caller_row: self.context.caller_row,
             caller_col: self.context.caller_col,
             callable_registry: self.callable_registry,
@@ -5452,6 +5489,7 @@ impl OxFmlCallableInvoker<'_, '_> {
         let resolver = LocalReferenceResolver {
             cell_values: &self.context.cell_values,
             defined_names: &self.context.defined_names,
+            sparse_reference_values: &self.context.sparse_reference_values,
             caller_row: self.context.caller_row,
             caller_col: self.context.caller_col,
             callable_registry: self.callable_registry,

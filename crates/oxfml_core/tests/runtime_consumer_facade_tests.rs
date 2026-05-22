@@ -4,6 +4,7 @@ use oxfml_core::consumer::runtime::{
     RuntimeEnvironment, RuntimeFormalInputBinding, RuntimeFormulaRequest,
     RuntimeHostFormulaContext, RuntimeHostReferenceBindResult, RuntimeManagedSessionError,
     RuntimeManagedSessionPhase, RuntimeOxFuncBridgeMetadata, RuntimeSessionFacade,
+    RuntimeSparseReferenceCell, RuntimeSparseReferenceValuesBinding,
 };
 use oxfml_core::format::{
     oxfml_en_us_format_profile, oxfml_en_us_locale_context, worksheet_error_text,
@@ -36,7 +37,7 @@ use oxfunc_core::locale_format::{
     FormatCodeEngine, FormatFailure, FormatProfile, LocaleFormatContext, LocaleValueParser,
     ParseFailure, WorkbookDateSystem,
 };
-use oxfunc_core::value::{ArrayCellValue, ArrayShape, EvalValue};
+use oxfunc_core::value::{ArrayCellValue, ArrayShape, EvalValue, ReferenceKind, ReferenceLike};
 use oxfunc_core::value::{CallArgValue, ExcelText};
 
 struct SequenceRandomProvider {
@@ -448,6 +449,56 @@ fn runtime_result_exposes_prepared_formula_identity_for_direct_execution() {
             .projection_status
             .contains("canonical_holes_deferred")
     );
+}
+
+#[test]
+fn runtime_sparse_reference_bindings_feed_first_aggregate_group() {
+    let cases = [
+        ("=SUM(InputRef)", EvalValue::Number(2.0)),
+        ("=COUNT(InputRef)", EvalValue::Number(1.0)),
+        ("=COUNTA(InputRef)", EvalValue::Number(3.0)),
+        ("=COUNTBLANK(InputRef)", EvalValue::Number(3.0)),
+    ];
+
+    for (formula, expected) in cases {
+        let reference = ReferenceLike::new(ReferenceKind::Area, "host:sparse:A1:A5");
+        let request = RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new("runtime:w051-sparse", 1, formula),
+            TypedContextQueryBundle::default(),
+        );
+
+        let result = RuntimeEnvironment::new()
+            .with_formal_input_bindings(vec![RuntimeFormalInputBinding {
+                reference_handle: None,
+                reference_descriptor: "name:InputRef".to_string(),
+                binding: oxfml_core::DefinedNameBinding::Reference(reference.clone()),
+            }])
+            .with_sparse_reference_value_bindings(vec![RuntimeSparseReferenceValuesBinding {
+                reference,
+                declared_rows: 5,
+                declared_cols: 1,
+                defined_cells: vec![
+                    RuntimeSparseReferenceCell::new(1, 1, ArrayCellValue::Number(2.0)),
+                    RuntimeSparseReferenceCell::new(
+                        2,
+                        1,
+                        ArrayCellValue::Text(ExcelText::from_utf16_code_units(Vec::new())),
+                    ),
+                    RuntimeSparseReferenceCell::new(
+                        3,
+                        1,
+                        ArrayCellValue::Text(ExcelText::from_utf16_code_units(
+                            "x".encode_utf16().collect(),
+                        )),
+                    ),
+                ],
+                reader_identity: Some("reader:w051:sparse:A1:A5".to_string()),
+            }])
+            .execute(request)
+            .expect("sparse reference aggregate should execute");
+
+        assert_eq!(result.evaluation.oxfunc_value, expected);
+    }
 }
 
 #[test]
