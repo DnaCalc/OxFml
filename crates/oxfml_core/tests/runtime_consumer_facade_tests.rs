@@ -657,6 +657,164 @@ fn runtime_table_context_mutation_changes_prepared_identity_for_structured_refs(
 }
 
 #[test]
+fn runtime_stable_table_fact_mutation_changes_prepared_identity_for_structured_refs() {
+    let request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new("runtime:w074-table-stable-facts", 1, "=SUM(Table1[Amount])"),
+        TypedContextQueryBundle::default(),
+    );
+    let mut values = BTreeMap::new();
+    values.insert(
+        "B2:B4".to_string(),
+        EvalValue::Array(
+            EvalArray::from_rows(vec![vec![
+                ArrayCellValue::Number(3.0),
+                ArrayCellValue::Number(4.0),
+                ArrayCellValue::Number(5.0),
+            ]])
+            .expect("array fixture should be valid"),
+        ),
+    );
+
+    let first = RuntimeEnvironment::new()
+        .with_table_context(
+            vec![runtime_w074_table_with_stable_facts(
+                "B2:B4",
+                "rows:v1",
+                "row-order:v1",
+                "A1:D1",
+                "A5:D5",
+            )],
+            None,
+            None,
+        )
+        .with_cell_values(values.clone())
+        .execute(request.clone())
+        .expect("first table stable-fact execution should succeed");
+    let second = RuntimeEnvironment::new()
+        .with_table_context(
+            vec![runtime_w074_table_with_stable_facts(
+                "B2:B4",
+                "rows:v2",
+                "row-order:v2",
+                "A1:D1",
+                "A5:D5",
+            )],
+            None,
+            None,
+        )
+        .with_cell_values(values)
+        .execute(request)
+        .expect("stable table fact mutation should succeed");
+
+    assert_eq!(first.evaluation.oxfunc_value, EvalValue::Number(12.0));
+    assert_eq!(second.evaluation.oxfunc_value, EvalValue::Number(12.0));
+    assert_eq!(
+        first.prepared_formula_identity.formal_references,
+        second.prepared_formula_identity.formal_references,
+        "row membership/order identities should not alter the already-resolved structured reference"
+    );
+    assert_ne!(
+        first.prepared_formula_identity.table_context_fingerprint,
+        second.prepared_formula_identity.table_context_fingerprint,
+        "stable row membership/order identities must update the public table-context fingerprint"
+    );
+    assert_ne!(
+        first.prepared_formula_identity.prepared_formula_key,
+        second.prepared_formula_identity.prepared_formula_key,
+        "stable row membership/order identities must contribute to prepared identity"
+    );
+}
+
+#[test]
+fn runtime_exact_header_and_totals_region_refs_change_structured_identity() {
+    let header_request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new("runtime:w074-table-header-ref", 1, "=Table1[#Headers]"),
+        TypedContextQueryBundle::default(),
+    );
+    let first_header = RuntimeEnvironment::new()
+        .with_table_context(
+            vec![runtime_w074_table_with_stable_facts(
+                "B2:B4",
+                "rows:v1",
+                "row-order:v1",
+                "A1:D1",
+                "A5:D5",
+            )],
+            None,
+            None,
+        )
+        .execute(header_request.clone())
+        .expect("first header ref should prepare");
+    let second_header = RuntimeEnvironment::new()
+        .with_table_context(
+            vec![runtime_w074_table_with_stable_facts(
+                "B2:B4",
+                "rows:v1",
+                "row-order:v1",
+                "A10:D10",
+                "A20:D20",
+            )],
+            None,
+            None,
+        )
+        .execute(header_request)
+        .expect("changed exact header ref should prepare");
+    assert_ne!(
+        first_header.prepared_formula_identity.formal_references,
+        second_header.prepared_formula_identity.formal_references,
+        "exact header region refs should change structured-reference identity"
+    );
+    assert_ne!(
+        first_header.prepared_formula_identity.prepared_formula_key,
+        second_header.prepared_formula_identity.prepared_formula_key,
+        "exact header region refs must contribute to prepared identity"
+    );
+
+    let totals_request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new("runtime:w074-table-totals-ref", 1, "=Table1[#Totals]"),
+        TypedContextQueryBundle::default(),
+    );
+    let first_totals = RuntimeEnvironment::new()
+        .with_table_context(
+            vec![runtime_w074_table_with_stable_facts(
+                "B2:B4",
+                "rows:v1",
+                "row-order:v1",
+                "A1:D1",
+                "A5:D5",
+            )],
+            None,
+            None,
+        )
+        .execute(totals_request.clone())
+        .expect("first totals ref should prepare");
+    let second_totals = RuntimeEnvironment::new()
+        .with_table_context(
+            vec![runtime_w074_table_with_stable_facts(
+                "B2:B4",
+                "rows:v1",
+                "row-order:v1",
+                "A10:D10",
+                "A20:D20",
+            )],
+            None,
+            None,
+        )
+        .execute(totals_request)
+        .expect("changed exact totals ref should prepare");
+    assert_ne!(
+        first_totals.prepared_formula_identity.formal_references,
+        second_totals.prepared_formula_identity.formal_references,
+        "exact totals region refs should change structured-reference identity"
+    );
+    assert_ne!(
+        first_totals.prepared_formula_identity.prepared_formula_key,
+        second_totals.prepared_formula_identity.prepared_formula_key,
+        "exact totals region refs must contribute to prepared identity"
+    );
+}
+
+#[test]
 fn runtime_preserves_lexical_callables_without_host_namespace() {
     let result = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
@@ -688,6 +846,10 @@ fn runtime_w074_table(amount_range_ref: &str) -> TableDescriptor {
         workbook_scope_ref: "book:default".to_string(),
         sheet_scope_ref: "sheet:default".to_string(),
         table_range_ref: "A1:D5".to_string(),
+        row_membership_identity: Some("table:w074:rows:v1".to_string()),
+        row_order_identity: Some("table:w074:row-order:v1".to_string()),
+        header_region_ref: Some("A1:D1".to_string()),
+        totals_region_ref: Some("A5:D5".to_string()),
         header_row_present: true,
         totals_row_present: true,
         columns: vec![TableColumnDescriptor {
@@ -697,6 +859,21 @@ fn runtime_w074_table(amount_range_ref: &str) -> TableDescriptor {
             column_range_ref: amount_range_ref.to_string(),
         }],
     }
+}
+
+fn runtime_w074_table_with_stable_facts(
+    amount_range_ref: &str,
+    row_membership_identity: &str,
+    row_order_identity: &str,
+    header_region_ref: &str,
+    totals_region_ref: &str,
+) -> TableDescriptor {
+    let mut table = runtime_w074_table(amount_range_ref);
+    table.row_membership_identity = Some(row_membership_identity.to_string());
+    table.row_order_identity = Some(row_order_identity.to_string());
+    table.header_region_ref = Some(header_region_ref.to_string());
+    table.totals_region_ref = Some(totals_region_ref.to_string());
+    table
 }
 
 #[test]

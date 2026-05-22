@@ -104,6 +104,38 @@ fn binds_section_only_headers_reference_across_all_columns() {
 }
 
 #[test]
+fn binds_headers_and_totals_from_exact_region_refs() {
+    let mut context = base_bind_context();
+    context.table_catalog = vec![sample_table_with_exact_section_refs()];
+
+    let headers = bind_with_table_context("=Table1[#Headers]", context.clone());
+    assert!(headers.diagnostics.is_empty());
+    let NormalizedReference::Structured(headers_ref) = &headers.normalized_references[0] else {
+        panic!("expected structured headers reference");
+    };
+    let StructuredResolvedRef::Area(headers_area) = &headers_ref.resolved_reference else {
+        panic!("expected exact header region area");
+    };
+    assert_eq!(headers_area.top_left.row, 10);
+    assert_eq!(headers_area.top_left.col, 8);
+    assert_eq!(headers_area.height, 1);
+    assert_eq!(headers_area.width, 3);
+
+    let totals = bind_with_table_context("=Table1[#Totals]", context);
+    assert!(totals.diagnostics.is_empty());
+    let NormalizedReference::Structured(totals_ref) = &totals.normalized_references[0] else {
+        panic!("expected structured totals reference");
+    };
+    let StructuredResolvedRef::Area(totals_area) = &totals_ref.resolved_reference else {
+        panic!("expected exact totals region area");
+    };
+    assert_eq!(totals_area.top_left.row, 20);
+    assert_eq!(totals_area.top_left.col, 8);
+    assert_eq!(totals_area.height, 1);
+    assert_eq!(totals_area.width, 3);
+}
+
+#[test]
 fn binds_all_qualified_multi_column_reference() {
     let bound = bind_with_table_context("=Table1[[#All],[Amount]:[Tax]]", base_bind_context());
 
@@ -403,6 +435,10 @@ fn sample_table() -> TableDescriptor {
         workbook_scope_ref: "book:default".to_string(),
         sheet_scope_ref: "sheet:default".to_string(),
         table_range_ref: "A1:C5".to_string(),
+        row_membership_identity: Some("table:1:rows:v1".to_string()),
+        row_order_identity: Some("table:1:row-order:v1".to_string()),
+        header_region_ref: Some("A1:C1".to_string()),
+        totals_region_ref: Some("A5:C5".to_string()),
         header_row_present: true,
         totals_row_present: true,
         columns: vec![
@@ -423,6 +459,42 @@ fn sample_table() -> TableDescriptor {
                 column_name: "Tax".to_string(),
                 ordinal: 3,
                 column_range_ref: "C2:C4".to_string(),
+            },
+        ],
+    }
+}
+
+fn sample_table_with_exact_section_refs() -> TableDescriptor {
+    TableDescriptor {
+        table_id: "table:1".to_string(),
+        table_name: "Table1".to_string(),
+        workbook_scope_ref: "book:default".to_string(),
+        sheet_scope_ref: "sheet:default".to_string(),
+        table_range_ref: "H10:J20".to_string(),
+        row_membership_identity: Some("table:1:rows:exact-section".to_string()),
+        row_order_identity: Some("table:1:row-order:exact-section".to_string()),
+        header_region_ref: Some("H10:J10".to_string()),
+        totals_region_ref: Some("H20:J20".to_string()),
+        header_row_present: true,
+        totals_row_present: true,
+        columns: vec![
+            TableColumnDescriptor {
+                column_id: "column:label".to_string(),
+                column_name: "Label".to_string(),
+                ordinal: 1,
+                column_range_ref: "H11:H19".to_string(),
+            },
+            TableColumnDescriptor {
+                column_id: "column:amount".to_string(),
+                column_name: "Amount".to_string(),
+                ordinal: 2,
+                column_range_ref: "I11:I19".to_string(),
+            },
+            TableColumnDescriptor {
+                column_id: "column:tax".to_string(),
+                column_name: "Tax".to_string(),
+                ordinal: 3,
+                column_range_ref: "J11:J19".to_string(),
             },
         ],
     }

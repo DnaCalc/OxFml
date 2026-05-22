@@ -1067,6 +1067,10 @@ fn sample_table() -> TableDescriptor {
         workbook_scope_ref: "book:editor".to_string(),
         sheet_scope_ref: "sheet:editor".to_string(),
         table_range_ref: "A1:C5".to_string(),
+        row_membership_identity: Some("table:1:rows:v1".to_string()),
+        row_order_identity: Some("table:1:row-order:v1".to_string()),
+        header_region_ref: Some("A1:C1".to_string()),
+        totals_region_ref: Some("A5:C5".to_string()),
         header_row_present: true,
         totals_row_present: true,
         columns: vec![

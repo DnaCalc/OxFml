@@ -116,9 +116,13 @@ Required `table_catalog` descriptor fields:
 3. `workbook_scope_ref`
 4. `sheet_scope_ref`
 5. `table_range_ref`
-6. `header_row_present`
-7. `totals_row_present`
-8. `columns`
+6. `row_membership_identity`
+7. `row_order_identity`
+8. `header_region_ref`
+9. `totals_region_ref`
+10. `header_row_present`
+11. `totals_row_present`
+12. `columns`
 
 Required column fields:
 1. `column_id`

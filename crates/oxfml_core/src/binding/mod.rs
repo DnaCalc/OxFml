@@ -1676,6 +1676,7 @@ fn resolve_structured_reference_target(
             resolve_structured_section_row_target(
                 table,
                 selected_columns,
+                table.header_region_ref.as_deref(),
                 0,
                 context,
                 formula_channel_kind,
@@ -1688,23 +1689,29 @@ fn resolve_structured_reference_target(
                         .to_string(),
                 );
             }
-            let table_area = parse_area_target(
-                &table.table_range_ref,
-                &table.workbook_scope_ref,
-                &table.sheet_scope_ref,
-                context,
-                formula_channel_kind,
-            )
-            .ok_or_else(|| {
-                format!(
-                    "unable to parse table_range_ref '{}' for structured reference",
-                    table.table_range_ref
+            let table_row_offset = if table.totals_region_ref.is_some() {
+                0
+            } else {
+                let table_area = parse_area_target(
+                    &table.table_range_ref,
+                    &table.workbook_scope_ref,
+                    &table.sheet_scope_ref,
+                    context,
+                    formula_channel_kind,
                 )
-            })?;
+                .ok_or_else(|| {
+                    format!(
+                        "unable to parse table_range_ref '{}' for structured reference",
+                        table.table_range_ref
+                    )
+                })?;
+                table_area.height - 1
+            };
             resolve_structured_section_row_target(
                 table,
                 selected_columns,
-                table_area.height - 1,
+                table.totals_region_ref.as_deref(),
+                table_row_offset,
                 context,
                 formula_channel_kind,
             )
@@ -1788,22 +1795,26 @@ fn resolve_structured_data_area_target(
 fn resolve_structured_section_row_target(
     table: &TableDescriptor,
     selected_columns: &[TableColumnDescriptor],
+    explicit_region_ref: Option<&str>,
     table_row_offset: u32,
     context: &BindContext,
     formula_channel_kind: FormulaChannelKind,
 ) -> Result<StructuredResolvedRef, String> {
-    let table_area = parse_area_target(
-        &table.table_range_ref,
+    let row_area_ref = explicit_region_ref.unwrap_or(&table.table_range_ref);
+    let row_area = parse_area_target(
+        row_area_ref,
         &table.workbook_scope_ref,
         &table.sheet_scope_ref,
         context,
         formula_channel_kind,
     )
     .ok_or_else(|| {
-        format!(
-            "unable to parse table_range_ref '{}' for structured reference",
-            table.table_range_ref
-        )
+        let ref_kind = if explicit_region_ref.is_some() {
+            "structured section region ref"
+        } else {
+            "table_range_ref"
+        };
+        format!("unable to parse {ref_kind} '{row_area_ref}' for structured reference")
     })?;
     let first = parse_area_target(
         &selected_columns[0].column_range_ref,
@@ -1821,7 +1832,7 @@ fn resolve_structured_section_row_target(
         formula_channel_kind,
     )
     .ok_or_else(|| "unable to parse last structured column_range_ref".to_string())?;
-    let row = table_area.top_left.row + table_row_offset;
+    let row = row_area.top_left.row + table_row_offset;
     Ok(area_or_cell_from_bounds(
         &table.workbook_scope_ref,
         &table.sheet_scope_ref,

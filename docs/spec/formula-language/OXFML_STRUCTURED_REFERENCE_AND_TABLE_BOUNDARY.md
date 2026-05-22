@@ -77,9 +77,19 @@ Suggested first descriptor fields:
 3. `workbook_scope_ref`
 4. `sheet_scope_ref`
 5. `table_range_ref`
-6. `header_row_present`
-7. `totals_row_present`
-8. `columns: [TableColumnDescriptor]`
+6. `row_membership_identity: Option<String>`
+7. `row_order_identity: Option<String>`
+8. `header_region_ref: Option<String>`
+9. `totals_region_ref: Option<String>`
+10. `header_row_present`
+11. `totals_row_present`
+12. `columns: [TableColumnDescriptor]`
+
+The row membership/order identities are stable host/coordinator facts for the
+data rows. They are prepared-identity inputs, not TreeCalc semantics. The
+header/totals region refs name the exact host-owned regions for `#Headers` and
+`#Totals` when present; if omitted, the current first-slice resolver derives
+the row from `table_range_ref`.
 
 Suggested first column descriptor fields:
 1. `column_id`

@@ -210,6 +210,14 @@ impl<'a> RuntimeEnvironment<'a> {
         self
     }
 
+    fn table_context_fingerprint(&self) -> Option<String> {
+        runtime_table_context_fingerprint(
+            &self.table_catalog,
+            &self.enclosing_table_ref,
+            &self.caller_table_region,
+        )
+    }
+
     pub fn with_library_context_provider(
         mut self,
         provider: &'a dyn LibraryContextProvider,
@@ -298,6 +306,7 @@ impl<'a> RuntimeEnvironment<'a> {
             &self.host_reference_bind_results,
             self.runtime_registry_view_identity().as_ref(),
             &compiled.registry_capability_denials,
+            self.table_context_fingerprint(),
         );
         if compiled
             .prepare_request
@@ -2046,6 +2055,7 @@ pub struct RuntimePreparedFormulaIdentity {
     pub registry_snapshot_identity: Option<String>,
     pub capability_overlay_identity: Option<String>,
     pub registry_capability_denials: Vec<RuntimeFunctionCapabilityDenial>,
+    pub table_context_fingerprint: Option<String>,
     pub plan_template: RuntimePlanTemplateIdentity,
     pub hole_binding: RuntimeHoleBindingIdentity,
     pub formal_references: Vec<RuntimeFormalReference>,
@@ -2351,6 +2361,7 @@ impl<'a> RuntimeSessionFacade<'a> {
             &self.environment.host_reference_bind_results,
             self.environment.runtime_registry_view_identity().as_ref(),
             &prepared.registry_capability_denials,
+            self.environment.table_context_fingerprint(),
         );
         let prepared_session = self.managed_service.prepare(prepared.prepare_request)?;
         let open = self.managed_service.open_session(prepared_session);
@@ -2527,11 +2538,13 @@ impl<'a> RuntimeSessionFacade<'a> {
     pub fn managed_session_snapshot(&self) -> Option<RuntimeManagedSessionSnapshot> {
         let session_id = self.managed_session_id.as_ref()?;
         let record = self.managed_service.session(session_id)?;
+        let table_context_fingerprint = self.environment.table_context_fingerprint();
         Some(runtime_managed_session_snapshot(
             record,
             &self.environment.oxfunc_bridge_metadata,
             &self.environment.host_formula_context,
             &self.environment.host_reference_bind_results,
+            table_context_fingerprint,
         ))
     }
 
@@ -2602,6 +2615,7 @@ fn runtime_prepared_formula_identity(
     host_reference_bind_results: &[RuntimeHostReferenceBindResult],
     registry_view_identity: Option<&RuntimeFunctionRegistryViewIdentity>,
     registry_capability_denials: &[RuntimeFunctionCapabilityDenial],
+    table_context_fingerprint: Option<String>,
 ) -> RuntimePreparedFormulaIdentity {
     let formula_token = source.formula_token().0;
     let oxfunc_bridge_metadata =
@@ -2624,7 +2638,7 @@ fn runtime_prepared_formula_identity(
         &semantic_plan.capability_requirements,
     ));
     let prepared_formula_key = runtime_hash_debug(&format!(
-        "{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}",
+        "{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}",
         &source.formula_stable_id.0,
         source.formula_text_version.0,
         &formula_token,
@@ -2639,6 +2653,7 @@ fn runtime_prepared_formula_identity(
         host_reference_bind_results,
         registry_view_identity,
         registry_capability_denials,
+        &table_context_fingerprint,
     ));
 
     RuntimePreparedFormulaIdentity {
@@ -2662,6 +2677,7 @@ fn runtime_prepared_formula_identity(
         capability_overlay_identity: registry_view_identity
             .and_then(|identity| identity.capability_overlay_identity.clone()),
         registry_capability_denials: registry_capability_denials.to_vec(),
+        table_context_fingerprint,
         plan_template: RuntimePlanTemplateIdentity {
             shape_key: None,
             dispatch_skeleton_key,
@@ -2738,6 +2754,21 @@ fn runtime_metadata_version_summary(
     }
 }
 
+fn runtime_table_context_fingerprint(
+    table_catalog: &[TableDescriptor],
+    enclosing_table_ref: &Option<TableRef>,
+    caller_table_region: &Option<TableCallerRegion>,
+) -> Option<String> {
+    if table_catalog.is_empty() && enclosing_table_ref.is_none() && caller_table_region.is_none() {
+        return None;
+    }
+    Some(runtime_hash_debug(&(
+        table_catalog,
+        enclosing_table_ref,
+        caller_table_region,
+    )))
+}
+
 fn refresh_runtime_prepared_formula_identity_for_plan(
     identity: &mut RuntimePreparedFormulaIdentity,
     semantic_plan: &SemanticPlan,
@@ -2753,7 +2784,7 @@ fn refresh_runtime_prepared_formula_identity_for_plan(
     ));
     identity.plan_template.plan_template_key = semantic_plan.semantic_plan_key.clone();
     identity.prepared_formula_key = runtime_hash_debug(&format!(
-        "{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}",
+        "{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}",
         &identity.formula_stable_id,
         identity.formula_text_version,
         &identity.formula_token,
@@ -2769,6 +2800,7 @@ fn refresh_runtime_prepared_formula_identity_for_plan(
         &identity.registry_snapshot_identity,
         &identity.capability_overlay_identity,
         &identity.registry_capability_denials,
+        &identity.table_context_fingerprint,
     ));
 }
 
@@ -3033,6 +3065,7 @@ fn runtime_managed_session_snapshot(
     oxfunc_bridge_metadata: &RuntimeOxFuncBridgeMetadata,
     host_formula_context: &Option<RuntimeHostFormulaContext>,
     host_reference_bind_results: &[RuntimeHostReferenceBindResult],
+    table_context_fingerprint: Option<String>,
 ) -> RuntimeManagedSessionSnapshot {
     let phase = runtime_managed_phase(record.phase.clone());
     let last_reject = record.last_reject.clone();
@@ -3064,6 +3097,7 @@ fn runtime_managed_session_snapshot(
             &runtime_registry_capability_denials(
                 &record.prepared.semantic_plan.availability_summaries,
             ),
+            table_context_fingerprint,
         ),
     }
 }
