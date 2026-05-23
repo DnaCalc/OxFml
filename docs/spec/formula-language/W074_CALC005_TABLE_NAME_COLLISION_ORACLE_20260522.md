@@ -63,6 +63,8 @@ For W074-CALC005-014:
 4. non-collision structured-reference handling remains governed by the generic
    table-context packet and structured-reference bind-record evidence.
 
-Remaining W074 blockers are broader than this row: host namespace mutation
-invalidation beyond explicit host-reference pass-through, remaining workbook /
-sheet / UDF / defined-name combinations, and broader full table/name closure.
+Follow-on table-name oracle evidence from 2026-05-23 is recorded in
+`W074_CALC005_TABLE_NAME_ORACLE_20260523.md`. Remaining W074 blockers are
+broader than the table-name rows: host namespace mutation invalidation beyond
+explicit host-reference pass-through and remaining non-table workbook / sheet /
+UDF / defined-name combinations.

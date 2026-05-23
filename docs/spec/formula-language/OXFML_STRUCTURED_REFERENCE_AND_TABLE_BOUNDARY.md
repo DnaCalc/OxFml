@@ -147,6 +147,25 @@ Runtime prepared identity and formal-reference projection preserve these
 records. `RuntimeFormalReference.structured_reference_bind_record_handle`
 links a formal reference back to the corresponding bind record where available.
 
+Current W074/W056 runtime/replay identity evidence proves the generic packet is
+prepared-identity and replay-projection relevant without hardcoding any
+TreeCalc dependency meaning:
+1. selected column range changes update formal references and the prepared key,
+2. table id and selected column id changes update structured-reference bind
+   records and the prepared key,
+3. table range and selected column ordinal changes update the conservative
+   `table_context_fingerprint` and prepared key even when the selected data
+   reference and value stay stable,
+4. row membership/order identity changes update `table_context_fingerprint`
+   and prepared identity without changing the already-resolved reference,
+5. exact header/totals region refs update selected-region descriptors,
+   resolved references, and prepared identity for `#Headers` / `#Totals`,
+6. unrelated catalog entry mutation is conservative identity input only: the
+   referenced table bind record and formal reference stay stable while the full
+   table-context fingerprint changes,
+7. omitted-table-name references preserve enclosing table identity and
+   caller-table data-row offset in the resolved reference and prepared key.
+
 ## Boundary To OxFunc
 OxFunc should not receive raw table metadata as part of ordinary function semantics unless a later packet proves that necessary.
 

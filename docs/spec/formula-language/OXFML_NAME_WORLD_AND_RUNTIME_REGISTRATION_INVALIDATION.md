@@ -125,11 +125,15 @@ Current W074 evidence split:
    open,
 4. structured-reference syntax now has local prepared-identity mutation
    evidence, stable row membership/order and exact header/totals packet facts,
-   public structured-reference bind records, and Excel COM 16.0 defined-name /
-   table-name collision evidence showing bare `=Table1` resolves to the
-   workbook defined name while `Table1[Amount]` structured syntax is rejected
-   at formula authoring in that collision state; broader table/name closure
-   remains open.
+   public structured-reference bind records, and Excel COM 16.0 table/name
+   evidence. The oracle rows now cover workbook-defined-name and
+   sheet-defined-name collisions with table names, table-only bare/call
+   classification, table/column rename formula rewrite, and a table/UDF
+   collision shape. The local runtime/replay evidence now covers table id, table
+   range, selected column id/ordinal/range, unrelated catalog entries,
+   enclosing table ref, and caller row as generic prepared-identity or
+   bind-record identity inputs. Broader full structured-reference grammar/table
+   semantics remain W036 work rather than a W074 name/call freeze prerequisite.
 5. registered-external reconciliation with OxFunc W093 now confirms the current
    W052 split: descriptor-only `REGISTER.ID` / `CALL` mutation is not
    bind-visible ordinary UDF registration, while friendly worksheet-visible

@@ -984,6 +984,298 @@ fn runtime_stable_table_fact_mutation_changes_prepared_identity_for_structured_r
 }
 
 #[test]
+fn runtime_table_descriptor_fact_mutations_change_prepared_identity() {
+    let request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new(
+            "runtime:w074-table-descriptor-facts",
+            1,
+            "=SUM(Table1[Amount])",
+        ),
+        TypedContextQueryBundle::default(),
+    );
+    let base_values = runtime_w074_range_values("B2:B4");
+    let base = RuntimeEnvironment::new()
+        .with_table_context(vec![runtime_w074_table("B2:B4")], None, None)
+        .with_cell_values(base_values.clone())
+        .execute(request.clone())
+        .expect("base table descriptor execution should succeed");
+    assert_eq!(base.evaluation.oxfunc_value, EvalValue::Number(12.0));
+
+    let mut changed_table_id = runtime_w074_table("B2:B4");
+    changed_table_id.table_id = "table:w074:renamed-id".to_string();
+    let changed_table_id_result = RuntimeEnvironment::new()
+        .with_table_context(vec![changed_table_id], None, None)
+        .with_cell_values(base_values.clone())
+        .execute(request.clone())
+        .expect("changed table id execution should succeed");
+    assert_eq!(
+        changed_table_id_result.evaluation.oxfunc_value,
+        EvalValue::Number(12.0)
+    );
+    assert_ne!(
+        base.structured_reference_bind_records,
+        changed_table_id_result.structured_reference_bind_records,
+        "table_id must be visible in the structured-reference bind packet"
+    );
+    assert_ne!(
+        base.prepared_formula_identity.prepared_formula_key,
+        changed_table_id_result
+            .prepared_formula_identity
+            .prepared_formula_key,
+        "table_id changes must invalidate prepared identity"
+    );
+
+    let mut changed_table_range = runtime_w074_table("B2:B4");
+    changed_table_range.table_range_ref = "A10:D14".to_string();
+    let changed_table_range_result = RuntimeEnvironment::new()
+        .with_table_context(vec![changed_table_range], None, None)
+        .with_cell_values(base_values.clone())
+        .execute(request.clone())
+        .expect("changed table range execution should succeed");
+    assert_eq!(
+        changed_table_range_result.evaluation.oxfunc_value,
+        EvalValue::Number(12.0)
+    );
+    assert_eq!(
+        base.prepared_formula_identity.formal_references,
+        changed_table_range_result
+            .prepared_formula_identity
+            .formal_references,
+        "data-column semantics should stay stable when only the enclosing table range changes"
+    );
+    assert_ne!(
+        base.prepared_formula_identity.table_context_fingerprint,
+        changed_table_range_result
+            .prepared_formula_identity
+            .table_context_fingerprint,
+        "table_range_ref must be represented in the table-context fingerprint"
+    );
+    assert_ne!(
+        base.prepared_formula_identity.prepared_formula_key,
+        changed_table_range_result
+            .prepared_formula_identity
+            .prepared_formula_key,
+        "table_range_ref changes must invalidate prepared identity conservatively"
+    );
+
+    let mut changed_column_id = runtime_w074_table("B2:B4");
+    changed_column_id.columns[0].column_id = "column:amount:v2".to_string();
+    let changed_column_id_result = RuntimeEnvironment::new()
+        .with_table_context(vec![changed_column_id], None, None)
+        .with_cell_values(base_values.clone())
+        .execute(request.clone())
+        .expect("changed column id execution should succeed");
+    assert_eq!(
+        changed_column_id_result.evaluation.oxfunc_value,
+        EvalValue::Number(12.0)
+    );
+    assert_ne!(
+        base.structured_reference_bind_records,
+        changed_column_id_result.structured_reference_bind_records,
+        "column_id must be visible in the structured-reference bind packet"
+    );
+    assert_ne!(
+        base.prepared_formula_identity.prepared_formula_key,
+        changed_column_id_result
+            .prepared_formula_identity
+            .prepared_formula_key,
+        "column_id changes must invalidate prepared identity"
+    );
+
+    let mut changed_column_ordinal = runtime_w074_table("B2:B4");
+    changed_column_ordinal.columns[0].ordinal = 3;
+    let changed_column_ordinal_result = RuntimeEnvironment::new()
+        .with_table_context(vec![changed_column_ordinal], None, None)
+        .with_cell_values(base_values.clone())
+        .execute(request.clone())
+        .expect("changed column ordinal execution should succeed");
+    assert_eq!(
+        changed_column_ordinal_result.evaluation.oxfunc_value,
+        EvalValue::Number(12.0)
+    );
+    assert_eq!(
+        base.structured_reference_bind_records,
+        changed_column_ordinal_result.structured_reference_bind_records,
+        "a single selected column keeps the same bind record when ordinal does not alter selection"
+    );
+    assert_ne!(
+        base.prepared_formula_identity.table_context_fingerprint,
+        changed_column_ordinal_result
+            .prepared_formula_identity
+            .table_context_fingerprint,
+        "column ordinal remains a conservative table-context identity input"
+    );
+    assert_ne!(
+        base.prepared_formula_identity.prepared_formula_key,
+        changed_column_ordinal_result
+            .prepared_formula_identity
+            .prepared_formula_key,
+        "column ordinal changes must invalidate prepared identity conservatively"
+    );
+
+    let changed_column_range_result = RuntimeEnvironment::new()
+        .with_table_context(vec![runtime_w074_table("D2:D4")], None, None)
+        .with_cell_values(runtime_w074_range_values("D2:D4"))
+        .execute(request)
+        .expect("changed column range execution should succeed");
+    assert_eq!(
+        changed_column_range_result.evaluation.oxfunc_value,
+        EvalValue::Number(12.0)
+    );
+    assert_ne!(
+        base.structured_reference_bind_records,
+        changed_column_range_result.structured_reference_bind_records,
+        "column_range_ref must be visible in selected regions and resolved references"
+    );
+    assert_ne!(
+        base.prepared_formula_identity.prepared_formula_key,
+        changed_column_range_result
+            .prepared_formula_identity
+            .prepared_formula_key,
+        "column_range_ref changes must invalidate prepared identity"
+    );
+}
+
+#[test]
+fn runtime_unrelated_table_catalog_mutation_is_identity_only_for_referenced_table() {
+    let request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new(
+            "runtime:w074-table-unrelated-catalog",
+            1,
+            "=SUM(Table1[Amount])",
+        ),
+        TypedContextQueryBundle::default(),
+    );
+    let mut unrelated = runtime_w074_table("F2:F4");
+    unrelated.table_id = "table:unrelated".to_string();
+    unrelated.table_name = "OtherTable".to_string();
+    unrelated.columns[0].column_id = "column:other:amount".to_string();
+
+    let mut mutated_unrelated = unrelated.clone();
+    mutated_unrelated.row_membership_identity = Some("table:unrelated:rows:v2".to_string());
+    mutated_unrelated.row_order_identity = Some("table:unrelated:row-order:v2".to_string());
+    mutated_unrelated.columns[0].ordinal = 7;
+    mutated_unrelated.columns[0].column_range_ref = "H2:H4".to_string();
+
+    let first = RuntimeEnvironment::new()
+        .with_table_context(vec![runtime_w074_table("B2:B4"), unrelated], None, None)
+        .with_cell_values(runtime_w074_range_values("B2:B4"))
+        .execute(request.clone())
+        .expect("first unrelated table catalog execution should succeed");
+    let second = RuntimeEnvironment::new()
+        .with_table_context(
+            vec![runtime_w074_table("B2:B4"), mutated_unrelated],
+            None,
+            None,
+        )
+        .with_cell_values(runtime_w074_range_values("B2:B4"))
+        .execute(request)
+        .expect("mutated unrelated table catalog execution should succeed");
+
+    assert_eq!(first.evaluation.oxfunc_value, EvalValue::Number(12.0));
+    assert_eq!(second.evaluation.oxfunc_value, EvalValue::Number(12.0));
+    assert_eq!(
+        first.structured_reference_bind_records, second.structured_reference_bind_records,
+        "unrelated table catalog entries must not change the referenced structured bind packet"
+    );
+    assert_eq!(
+        first.prepared_formula_identity.formal_references,
+        second.prepared_formula_identity.formal_references,
+        "unrelated table catalog entries must not change referenced formal references"
+    );
+    assert_ne!(
+        first.prepared_formula_identity.table_context_fingerprint,
+        second.prepared_formula_identity.table_context_fingerprint,
+        "full table catalog identity remains a conservative prepared-identity input"
+    );
+    assert_ne!(
+        first.prepared_formula_identity.prepared_formula_key,
+        second.prepared_formula_identity.prepared_formula_key,
+        "unrelated table catalog mutation should still invalidate conservative prepared identity"
+    );
+}
+
+#[test]
+fn runtime_omitted_structured_refs_include_enclosing_table_and_caller_row_identity() {
+    let request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new("runtime:w074-table-omitted-caller", 1, "=[@Amount]"),
+        TypedContextQueryBundle::default(),
+    );
+    let mut other_table = runtime_w074_table("D2:D4");
+    other_table.table_id = "table:w074:other".to_string();
+    other_table.table_name = "OtherTable".to_string();
+
+    let first = RuntimeEnvironment::new()
+        .with_table_context(
+            vec![runtime_w074_table("B2:B4"), other_table.clone()],
+            Some(TableRef {
+                table_id: "table:w074".to_string(),
+            }),
+            Some(TableCallerRegion {
+                table_id: "table:w074".to_string(),
+                region_kind: TableRegionKind::Data,
+                data_row_offset: Some(1),
+            }),
+        )
+        .with_cell_values(BTreeMap::from([("B3".to_string(), EvalValue::Number(7.0))]))
+        .execute(request.clone())
+        .expect("first omitted structured reference should execute");
+    let second = RuntimeEnvironment::new()
+        .with_table_context(
+            vec![runtime_w074_table("B2:B4"), other_table],
+            Some(TableRef {
+                table_id: "table:w074:other".to_string(),
+            }),
+            Some(TableCallerRegion {
+                table_id: "table:w074:other".to_string(),
+                region_kind: TableRegionKind::Data,
+                data_row_offset: Some(1),
+            }),
+        )
+        .with_cell_values(BTreeMap::from([("D3".to_string(), EvalValue::Number(7.0))]))
+        .execute(request.clone())
+        .expect("changed enclosing table should execute");
+    let third = RuntimeEnvironment::new()
+        .with_table_context(
+            vec![runtime_w074_table("B2:B4")],
+            Some(TableRef {
+                table_id: "table:w074".to_string(),
+            }),
+            Some(TableCallerRegion {
+                table_id: "table:w074".to_string(),
+                region_kind: TableRegionKind::Data,
+                data_row_offset: Some(2),
+            }),
+        )
+        .with_cell_values(BTreeMap::from([("B4".to_string(), EvalValue::Number(7.0))]))
+        .execute(request)
+        .expect("changed caller row should execute");
+
+    assert_eq!(first.evaluation.oxfunc_value, EvalValue::Number(7.0));
+    assert_eq!(second.evaluation.oxfunc_value, EvalValue::Number(7.0));
+    assert_eq!(third.evaluation.oxfunc_value, EvalValue::Number(7.0));
+    assert_ne!(
+        first.structured_reference_bind_records, second.structured_reference_bind_records,
+        "enclosing_table_ref changes must change omitted structured-reference binding"
+    );
+    assert_ne!(
+        first.prepared_formula_identity.formal_references,
+        third.prepared_formula_identity.formal_references,
+        "caller_table_region data_row_offset must change current-row formal references"
+    );
+    assert_ne!(
+        first.prepared_formula_identity.prepared_formula_key,
+        second.prepared_formula_identity.prepared_formula_key,
+        "enclosing_table_ref must participate in prepared identity"
+    );
+    assert_ne!(
+        first.prepared_formula_identity.prepared_formula_key,
+        third.prepared_formula_identity.prepared_formula_key,
+        "caller_table_region data_row_offset must participate in prepared identity"
+    );
+}
+
+#[test]
 fn runtime_exact_header_and_totals_region_refs_change_structured_identity() {
     let header_request = RuntimeFormulaRequest::new(
         FormulaSourceRecord::new("runtime:w074-table-header-ref", 1, "=Table1[#Headers]"),
@@ -1141,6 +1433,20 @@ fn runtime_w074_table(amount_range_ref: &str) -> TableDescriptor {
             column_range_ref: amount_range_ref.to_string(),
         }],
     }
+}
+
+fn runtime_w074_range_values(range_ref: &str) -> BTreeMap<String, EvalValue> {
+    BTreeMap::from([(
+        range_ref.to_string(),
+        EvalValue::Array(
+            EvalArray::from_rows(vec![vec![
+                ArrayCellValue::Number(3.0),
+                ArrayCellValue::Number(4.0),
+                ArrayCellValue::Number(5.0),
+            ]])
+            .expect("array fixture should be valid"),
+        ),
+    )])
 }
 
 fn runtime_w074_table_with_stable_facts(

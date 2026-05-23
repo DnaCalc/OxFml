@@ -1007,3 +1007,50 @@ Current status:
 3. `CALC-004` now has current OxFml evidence for `arg_admission_metadata_version`
    carriage and `IMAGE` / `_webimage` producer/exercised capability emission,
    but not generic rich-argument consumers or sparse readers.
+
+## 27. W056 Table-Context Identity And Oracle Residual Narrowing
+
+OxFml has narrowed the W074/W056 table-adjacent residuals without adding
+TreeCalc-specific semantics.
+
+Current OxFml code shape:
+1. public `TableDescriptor`, `TableRef`, and `TableCallerRegion` remain the
+   generic table-context packet for structured references,
+2. runtime prepared identity carries the conservative
+   `table_context_fingerprint`,
+3. structured-reference bind records and `RuntimeFormalReference` handles
+   preserve source token/span, explicit versus omitted table facts, effective
+   table identity, selected columns/sections/regions, caller-row dependence,
+   resolved references, and diagnostics,
+4. focused runtime tests now vary table id, table range, row membership/order
+   identity, exact header/totals refs, selected column id/ordinal/range,
+   unrelated catalog entries, enclosing table ref, and caller-row offset; each
+   relevant mutation changes either the bind-record identity or the prepared
+   identity while keeping unrelated table semantics out of OxFml,
+5. replay projection preserves the same prepared table-context fingerprint,
+   structured-reference bind records, and formal-reference handles from the
+   runtime result.
+
+Current oracle evidence:
+1. Excel COM 16.0 evidence covers workbook-defined-name/table-name collision,
+   sheet-defined-name/table-name collision, table-only bare/call
+   classification, table/column rename formula rewrite, and a table/UDF
+   collision shape.
+2. The observed table rows are table-specific evidence only. They do not freeze
+   generic host-name or TreeCalc name/call semantics.
+
+Current OxCalc implication:
+1. OxCalc can consume the current generic table-context packet for W056
+   dependency lowering without parsing formula text.
+2. OxCalc should keep table object ownership, row membership/order dependency
+   semantics, and dependency edge materialization on the coordinator side.
+3. OxFml supplies formula syntax/bind identity and prepared/replay-visible
+   packet facts; it does not supply TreeCalc reverse edges or table-object
+   lifecycle policy.
+
+Remaining non-claims:
+1. full structured-reference grammar/table semantics remain broader W036 work,
+2. broad W074 name/call precedence is still blocked on non-table oracle and
+   host-namespace evidence,
+3. pack-grade replay promotion for the table packet is not claimed by this
+   local evidence tranche.

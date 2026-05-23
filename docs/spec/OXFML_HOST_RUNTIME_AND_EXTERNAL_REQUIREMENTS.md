@@ -161,7 +161,7 @@ Structured-reference support remains separate from the generic host hook:
 1. worksheet table syntax is parsed and bound by OxFml as structured-reference syntax, not as a TreeCalc or generic host-selector language,
 2. hosts supply `table_catalog`, `enclosing_table_ref`, and `caller_table_region` as table-context inputs,
 3. table-name-versus-defined-name disambiguation remains an OxFml bind consequence over that host-owned packet truth,
-4. table-context identity must participate in prepared identity and cache invalidation when table names, column identities, enclosing table, or caller row/region can change resolution.
+4. table-context identity must participate in prepared identity and cache invalidation when table names, table ranges, row membership/order identity, column identities/ordinals/ranges, exact header/totals regions, enclosing table, or caller row/region can change resolution.
 
 Runtime transport rule:
 1. host references may materialize to values for values-only calls,

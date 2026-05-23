@@ -144,8 +144,8 @@ Behavior that remains pending evidence:
 5. reference-preserving host transport through `ReferenceLike` plus resolver,
 6. deterministic replay artifacts for selected host namespace and explicit
    host-reference collision cases,
-7. table-context mutation and structured-reference bind invalidation when the
-   table packet changes name/column/current-row meaning,
+7. pack-grade or broader table semantics beyond the local W056 table-context
+   prepared-identity evidence for table/column/current-row packet changes,
 8. DNA OneCalc no-host-reference LET/LAMBDA lexical guardrail evidence showing
    that lexical variables, callable locals, captures, and returned lambdas do
    not become host-reference or host-namespace bindings.

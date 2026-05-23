@@ -80,8 +80,8 @@ Required oracle cases before freeze:
 11. explicit host-reference syntax selecting a host object whose display name collides with a function, UDF, or defined name.
 
 Current oracle-matrix shape:
-1. each row must identify the source position as `call_callee`, `non_call_bare_name`, `let_lambda_lexical`, or `explicit_host_reference`,
-2. each row must identify all visible candidates among `builtin_function`, `registered_udf`, `workbook_defined_name`, `sheet_defined_name`, `defined_name_lambda`, `lexical_local`, and `host_namespace_name`,
+1. each row must identify the source position as `call_callee`, `non_call_bare_name`, `let_lambda_lexical`, `explicit_host_reference`, or `structured_reference` for table-specific rows that are not ordinary name/call precedence claims,
+2. each row must identify all visible candidates among `builtin_function`, `registered_udf`, `workbook_defined_name`, `sheet_defined_name`, `defined_name_lambda`, `lexical_local`, `host_namespace_name`, `table_name`, and `table_column`,
 3. each row must record the Excel-observed winner, the observable value or error, whether a callable value remains callable after resolution, and which mutation inputs would invalidate the prepared identity,
 4. defined-name `LAMBDA` rows must keep value reference and invocation behavior separate; a lambda-valued defined name is not assumed to be identical to a registered UDF,
 5. lexical `LET` / `LAMBDA` rows are guardrail rows only: OxFml records their precedence against external name worlds, but lexical variables, callable locals, captures, and returned lambdas remain OxFml-internal and are not exposed as host namespace entries.
@@ -118,26 +118,31 @@ Current observed tranche:
    The same runtime tranche admits registered UDF calls as registry-present
    without implementing actual UDF invocation and returns to `#NAME?`-style
    unknown classification after unregister/default registry.
-4. Table-context evidence is partial but no longer lacks the bare table-name
-   collision row: Excel COM 16.0 probes on 2026-05-22 observed that a
+4. Table-context evidence now covers the W056 table-adjacent residuals needed
+   by OxCalc without making TreeCalc-specific claims. Excel COM 16.0 probes on
+   2026-05-22 observed the workbook defined-name/table-name collision row:
    table-created-first `Table1` rejects adding a same-named workbook defined
    name; a defined-name-created-first `Table1 = 99` can coexist with a
    ListObject renamed `Table1`; bare `=Table1` then resolves to the workbook
    defined name; and `Table1[Amount]`, `SUM(Table1[Amount])`, and
    `ROWS(Table1[Amount])` are rejected at formula authoring with `0x800A03EC`.
-   Separately, non-collision structured syntax binds through the generic
-   table-context packet, table-context mutation changes prepared identity, and
-   the public generic `TableDescriptor` carries stable row membership/order
-   identity plus exact header/totals region refs through the runtime
-   `table_context_fingerprint` prepared-identity input. Broader full table/name
-   closure remains open.
+   Excel COM 16.0 build 20026 probes on 2026-05-23 add table-only bare/call
+   classification, sheet-defined-name/table-name collision, table/column rename
+   formula rewrite, and table/UDF collision evidence. Separately,
+   non-collision structured syntax binds through the generic table-context
+   packet, and local runtime/replay tests prove prepared-identity or bind-record
+   identity coverage for table id, table range, row membership/order identity,
+   exact header/totals refs, selected column id/ordinal/range, enclosing table,
+   caller row, and unrelated catalog mutation as conservative table-context
+   input. Broader full structured-reference grammar/table semantics remain
+   W036 work, not W074 name/call freeze evidence.
 5. The observed rows are provisional evidence for those row shapes only; they
    do not freeze the full name/call rule.
 6. Name/call freeze remains blocked until the rows still marked partial or
    open are resolved, including formula-call registry/capability-overlay
-   invalidation, host namespace mutation invalidation, remaining table/name
-   closure outside this observed collision row, and broader
-   workbook/sheet/UDF/defined-name scope combinations.
+   invalidation, host namespace mutation invalidation, broader
+   workbook/sheet/UDF/defined-name scope combinations, and full structured
+   table semantics outside the W056 table-context packet.
 
 Current product-host mapping rule:
 1. TreeCalc host names map to the closest Excel defined-name lane until this matrix proves a different extension is needed,
@@ -214,7 +219,14 @@ Current runtime/replay evidence:
    without changing resolved structured-reference behavior, and exact
    header/totals region refs change the resolved structured-reference identity
    for `#Headers` / `#Totals`.
-6. Public structured-reference bind records now project through `BoundFormula`,
+6. Runtime/replay table-context evidence now proves the remaining W056 prepared
+   identity inputs: table id, table range, selected column id, selected column
+   ordinal, selected column range, unrelated catalog entries, enclosing table
+   ref, and caller-table data-row offset either change the
+   structured-reference bind record or the conservative
+   `table_context_fingerprint`/prepared key and replay projection while
+   preserving generic `TableDescriptor` ownership.
+7. Public structured-reference bind records now project through `BoundFormula`,
    runtime prepared identity, runtime result, and formal-reference handles for
    explicit `Table1[Amount]`, omitted `[@Amount]`, `#Headers`, `#Totals`, and
    section-plus-column forms. This gives OxCalc a generic packet to consume
@@ -233,6 +245,6 @@ Current runtime/replay evidence:
   - Excel oracle matrix for built-in/UDF/defined-name/LAMBDA shadowing,
   - mapping of `W051` host namespace names and lambda-valued host nodes to Excel defined-name lanes,
   - broader formula-call name/call precedence freeze beyond the bounded registry-view admission and capability-denial runtime classification tranche,
-  - table-context residuals beyond stable packet facts, structured bind-record projection, structured-syntax disambiguation, and prepared-identity mutation,
+  - full structured-reference grammar/table semantics beyond stable packet facts, structured bind-record projection, structured-syntax disambiguation, and W056 prepared-identity mutation,
   - prepared identity/cache invalidation inputs for registry, structure, host namespace, table context, caller context, and resolution-rule changes,
   - evidence-backed cache invalidation for registry mutation and for bare host-name/host-namespace resolution beyond the conservative opt-in host-context identity slice.

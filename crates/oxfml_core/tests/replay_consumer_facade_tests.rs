@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -28,12 +29,13 @@ use oxfml_core::semantics::{
 };
 use oxfml_core::source::FormulaSourceRecord;
 use oxfml_core::syntax::token::TextSpan;
-use oxfml_core::{FormulaChannelKind, TypedContextQueryBundle};
+use oxfml_core::{
+    FormulaChannelKind, TableColumnDescriptor, TableDescriptor, TypedContextQueryBundle,
+};
 use oxfunc_core::host_info::{
     HostInfoError, HostInfoProvider, ImageProviderResult, ImageRequest, ResolvedWebImage,
 };
-use oxfunc_core::value::EvalValue;
-use oxfunc_core::value::ExcelText;
+use oxfunc_core::value::{ArrayCellValue, EvalArray, EvalValue, ExcelText};
 use serde_json::Value;
 
 #[test]
@@ -1246,6 +1248,58 @@ fn replay_projection_carries_host_namespace_version_without_explicit_host_refere
 }
 
 #[test]
+fn replay_projection_carries_w074_structured_table_identity() {
+    let runtime_result = RuntimeEnvironment::new()
+        .with_table_context(vec![replay_w074_table("B2:B4")], None, None)
+        .with_cell_values(BTreeMap::from([(
+            "B2:B4".to_string(),
+            EvalValue::Array(
+                EvalArray::from_rows(vec![vec![
+                    ArrayCellValue::Number(3.0),
+                    ArrayCellValue::Number(4.0),
+                    ArrayCellValue::Number(5.0),
+                ]])
+                .expect("array fixture should be valid"),
+            ),
+        )]))
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new(
+                "replay:w074-structured-table-identity",
+                1,
+                "=SUM(Table1[Amount])",
+            ),
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("structured table runtime execution should succeed");
+
+    let projection =
+        ReplayProjectionService::project(ReplayProjectionRequest::runtime_result(&runtime_result));
+    let identity = projection
+        .prepared_formula_identity
+        .expect("runtime projection should preserve prepared identity");
+
+    assert_eq!(
+        identity.table_context_fingerprint,
+        runtime_result
+            .prepared_formula_identity
+            .table_context_fingerprint
+    );
+    assert!(identity.table_context_fingerprint.is_some());
+    assert_eq!(
+        identity.structured_reference_bind_records,
+        runtime_result.structured_reference_bind_records
+    );
+    assert_eq!(
+        identity.formal_references,
+        runtime_result.prepared_formula_identity.formal_references
+    );
+    assert_eq!(
+        identity.structured_reference_bind_records[0].source_token_text,
+        "Table1[Amount]"
+    );
+}
+
+#[test]
 fn replay_projection_preserves_no_host_namespace_lexical_guardrail() {
     let runtime_result = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
@@ -1445,6 +1499,28 @@ fn replay_projection_service_projects_retained_witness_metadata() {
             "crates/oxfml_core/tests/fixtures/witness_distillation/session_capability_denied_reduction_manifest.json"
         )
     );
+}
+
+fn replay_w074_table(amount_range_ref: &str) -> TableDescriptor {
+    TableDescriptor {
+        table_id: "table:w074:replay".to_string(),
+        table_name: "Table1".to_string(),
+        workbook_scope_ref: "book:default".to_string(),
+        sheet_scope_ref: "sheet:default".to_string(),
+        table_range_ref: "A1:D5".to_string(),
+        row_membership_identity: Some("table:w074:replay:rows:v1".to_string()),
+        row_order_identity: Some("table:w074:replay:row-order:v1".to_string()),
+        header_region_ref: Some("A1:D1".to_string()),
+        totals_region_ref: Some("A5:D5".to_string()),
+        header_row_present: true,
+        totals_row_present: true,
+        columns: vec![TableColumnDescriptor {
+            column_id: "column:amount".to_string(),
+            column_name: "Amount".to_string(),
+            ordinal: 1,
+            column_range_ref: amount_range_ref.to_string(),
+        }],
+    }
 }
 
 fn editor_snapshot() -> LibraryContextSnapshot {
