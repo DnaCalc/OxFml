@@ -125,11 +125,13 @@ Current observed tranche:
    registry/editor layer and the runtime formula-call layer: the denied
    registry entry remains present but unavailable, editor completion filters
    it, runtime semantic availability preserves the entry identity, execution
-   blocks before ordinary built-in `SurfaceCallSite` dispatch, and replay
+   blocks the denied runtime formula-call path, and replay
    projection carries the registry snapshot plus capability-denial identity.
    The same runtime tranche admits registered UDF calls as registry-present
-   without implementing actual UDF invocation and returns to `#NAME?`-style
-   unknown classification after unregister/default registry.
+   without implementing actual UDF invocation, changes prepared identity when
+   the UDF is registered, returns to `#NAME?`-style unknown classification
+   after unregister/default registry, changes prepared identity again on that
+   transition, and preserves registry snapshot identity in replay projection.
 4. Table-context evidence now covers the W056 table-adjacent residuals needed
    by OxCalc without making TreeCalc-specific claims. Excel COM 16.0 probes on
    2026-05-22 observed the workbook defined-name/table-name collision row:
@@ -151,10 +153,9 @@ Current observed tranche:
 5. The observed rows are provisional evidence for those row shapes only; they
    do not freeze the full name/call rule.
 6. Name/call freeze remains blocked until the rows still marked partial or
-   open are resolved, including formula-call registry/capability-overlay
-   invalidation, host namespace mutation invalidation, broader
-   workbook/sheet/UDF/defined-name scope combinations, and full structured
-   table semantics outside the W056 table-context packet.
+   open are resolved, including bare host-name/host namespace mutation
+   invalidation, broader workbook/sheet/UDF/defined-name scope combinations,
+   and full structured table semantics outside the W056 table-context packet.
 
 Current product-host mapping rule:
 1. TreeCalc host names map to the closest Excel defined-name lane until this matrix proves a different extension is needed,
@@ -255,10 +256,10 @@ Current runtime/replay evidence:
 - open_lanes:
   - registry snapshot identity packet,
   - cache invalidation implementation,
-  - formula-call registry lookup migration,
+  - broader bind/editor cache migration beyond the current runtime formula-call registry/capability invalidation evidence,
   - Excel oracle matrix for built-in/UDF/defined-name/LAMBDA shadowing,
   - mapping of `W051` host namespace names and lambda-valued host nodes to Excel defined-name lanes,
-  - broader formula-call name/call precedence freeze beyond the bounded registry-view admission and capability-denial runtime classification tranche,
+  - broader formula-call name/call precedence freeze beyond the bounded registry-view admission, unregister/default-registry, and capability-denial runtime classification tranche,
   - broader W036 structured-reference/table formula semantics beyond the W056 packet coverage, table-context identity facts, and current table/name oracle rows,
   - prepared identity/cache invalidation inputs for registry, structure, host namespace, table context, caller context, and resolution-rule changes,
-  - evidence-backed cache invalidation for registry mutation and for bare host-name/host-namespace resolution beyond the conservative opt-in host-context identity slice.
+  - evidence-backed cache invalidation for bare host-name/host-namespace resolution beyond the conservative opt-in host-context identity slice.

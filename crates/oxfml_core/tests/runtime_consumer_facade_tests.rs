@@ -1608,6 +1608,17 @@ fn runtime_registry_view_admits_udf_without_unknown_function_freeze() {
             .prepared_formula_key,
         "registry snapshot identity must participate in prepared identity"
     );
+    let registered_projection = ReplayProjectionService::project(
+        ReplayProjectionRequest::runtime_result(&registered_result),
+    );
+    assert_eq!(
+        registered_projection.registry_pin,
+        registered_result
+            .prepared_formula_identity
+            .registry_snapshot_identity
+            .clone(),
+        "registered UDF runtime replay must preserve registry snapshot identity"
+    );
 
     registry
         .unregister_udf("FUNC.UDF.MYFUNC")
@@ -1633,6 +1644,26 @@ fn runtime_registry_view_admits_udf_without_unknown_function_freeze() {
         unregistered_result.published_worksheet_value,
         EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Name)
     );
+    assert_ne!(
+        registered_result
+            .prepared_formula_identity
+            .prepared_formula_key,
+        unregistered_result
+            .prepared_formula_identity
+            .prepared_formula_key,
+        "UDF unregister/default-registry transition must invalidate prepared identity"
+    );
+    let unregistered_projection = ReplayProjectionService::project(
+        ReplayProjectionRequest::runtime_result(&unregistered_result),
+    );
+    assert_eq!(
+        unregistered_projection.registry_pin,
+        unregistered_result
+            .prepared_formula_identity
+            .registry_snapshot_identity
+            .clone(),
+        "unregistered/default runtime replay must preserve registry snapshot identity"
+    );
 }
 
 #[test]
@@ -1642,6 +1673,19 @@ fn runtime_capability_overlay_blocks_registry_present_call_before_dispatch_and_r
     let request = RuntimeFormulaRequest::new(
         FormulaSourceRecord::new("runtime:registry-capability-denied", 1, "=SUM(1,2)"),
         TypedContextQueryBundle::default(),
+    );
+    let allowed_result = RuntimeEnvironment::new()
+        .execute(request.clone())
+        .expect("baseline SUM should execute without capability overlay");
+    assert_eq!(
+        allowed_result.published_worksheet_value,
+        EvalValue::Number(3.0)
+    );
+    assert!(
+        allowed_result
+            .prepared_formula_identity
+            .registry_capability_denials
+            .is_empty()
     );
 
     let result = RuntimeEnvironment::new()
@@ -1672,6 +1716,20 @@ fn runtime_capability_overlay_blocks_registry_present_call_before_dispatch_and_r
             .map(|denial| denial.surface_name.as_str())
             .collect::<Vec<_>>(),
         vec!["SUM"]
+    );
+    assert!(
+        result
+            .prepared_formula_identity
+            .capability_overlay_identity
+            .is_some(),
+        "capability overlay identity must be present in prepared identity"
+    );
+    assert_ne!(
+        allowed_result
+            .prepared_formula_identity
+            .prepared_formula_key,
+        result.prepared_formula_identity.prepared_formula_key,
+        "capability overlay denial must invalidate prepared identity"
     );
 
     let projection =
