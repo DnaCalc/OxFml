@@ -517,6 +517,52 @@ fn runtime_sparse_reference_bindings_feed_first_aggregate_group() {
 }
 
 #[test]
+fn runtime_structured_references_use_sparse_values_when_available() {
+    let cases = [
+        ("=SUM(Table1[Amount])", EvalValue::Number(2.0)),
+        ("=COUNT(Table1[Amount])", EvalValue::Number(1.0)),
+        ("=COUNTA(Table1[Amount])", EvalValue::Number(2.0)),
+        ("=COUNTBLANK(Table1[Amount])", EvalValue::Number(2.0)),
+    ];
+
+    for (formula, expected) in cases {
+        let reference = ReferenceLike::new(ReferenceKind::Area, "B2:B4");
+        let result = RuntimeEnvironment::new()
+            .with_table_context(vec![runtime_w074_table("B2:B4")], None, None)
+            .with_sparse_reference_value_bindings(vec![RuntimeSparseReferenceValuesBinding {
+                reference,
+                declared_rows: 3,
+                declared_cols: 1,
+                defined_cells: vec![
+                    RuntimeSparseReferenceCell::new(1, 1, ArrayCellValue::Number(2.0)),
+                    RuntimeSparseReferenceCell::new(
+                        2,
+                        1,
+                        ArrayCellValue::Text(ExcelText::from_utf16_code_units(Vec::new())),
+                    ),
+                ],
+                reader_identity: Some("reader:w056:table:B2:B4".to_string()),
+            }])
+            .execute(RuntimeFormulaRequest::new(
+                FormulaSourceRecord::new("runtime:w056-structured-sparse", 1, formula),
+                TypedContextQueryBundle::default(),
+            ))
+            .expect("structured sparse reference aggregate should execute");
+
+        assert_eq!(result.evaluation.oxfunc_value, expected, "{formula}");
+        assert_eq!(
+            result.structured_reference_bind_records[0]
+                .resolved_reference
+                .as_ref()
+                .map(|resolved| format!("{resolved:?}"))
+                .unwrap_or_default()
+                .contains("height: 3"),
+            true
+        );
+    }
+}
+
+#[test]
 fn runtime_carries_host_reference_context_without_treecalc_semantics() {
     let host_context = RuntimeHostFormulaContext {
         dialect_id: "generic-host-v1".to_string(),

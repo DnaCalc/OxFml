@@ -2660,10 +2660,20 @@ fn evaluate_reference_as_call_arg(
 ) -> Result<CallArgValue, EvaluationError> {
     match reference {
         CompiledReferenceExpr::Atom(NormalizedReference::Cell(cell)) => {
-            call_arg_for_reference_like(reference_like_for_cell(cell), preserve_reference, resolver)
+            call_arg_for_reference_like(
+                reference_like_for_cell(cell),
+                preserve_reference,
+                context,
+                resolver,
+            )
         }
         CompiledReferenceExpr::Atom(NormalizedReference::Area(area)) => {
-            call_arg_for_reference_like(reference_like_for_area(area), preserve_reference, resolver)
+            call_arg_for_reference_like(
+                reference_like_for_area(area),
+                preserve_reference,
+                context,
+                resolver,
+            )
         }
         CompiledReferenceExpr::Atom(NormalizedReference::WholeRow(rows)) => {
             call_arg_for_reference_like(
@@ -2672,6 +2682,7 @@ fn evaluate_reference_as_call_arg(
                     target: whole_row_target(rows),
                 },
                 preserve_reference,
+                context,
                 resolver,
             )
         }
@@ -2682,6 +2693,7 @@ fn evaluate_reference_as_call_arg(
                     target: whole_column_target(columns),
                 },
                 preserve_reference,
+                context,
                 resolver,
             )
         }
@@ -2719,6 +2731,7 @@ fn evaluate_reference_as_call_arg(
             call_arg_for_reference_like(
                 reference_like_for_structured(structured),
                 preserve_reference,
+                context,
                 resolver,
             )
         }
@@ -2885,9 +2898,10 @@ fn call_arg_from_reference_operator_value(
 fn call_arg_for_reference_like(
     reference: ReferenceLike,
     preserve_reference: bool,
+    context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
 ) -> Result<CallArgValue, EvaluationError> {
-    if preserve_reference {
+    if preserve_reference || context.has_sparse_reference_values(&reference) {
         Ok(CallArgValue::Reference(reference))
     } else {
         resolve_oxfunc_eval_value(resolver, &reference)
