@@ -1300,6 +1300,51 @@ fn replay_projection_carries_w074_structured_table_identity() {
 }
 
 #[test]
+fn replay_projection_carries_escaped_structured_column_bind_packet() {
+    let runtime_result = RuntimeEnvironment::new()
+        .with_table_context(vec![replay_w074_escaped_table()], None, None)
+        .with_cell_values(BTreeMap::from([(
+            "B2:B4".to_string(),
+            EvalValue::Array(
+                EvalArray::from_rows(vec![vec![
+                    ArrayCellValue::Number(2.0),
+                    ArrayCellValue::Number(3.0),
+                    ArrayCellValue::Number(5.0),
+                ]])
+                .expect("array fixture should be valid"),
+            ),
+        )]))
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new(
+                "replay:w074-escaped-structured-column",
+                1,
+                "=SUM(Table1[['#Data]])",
+            ),
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("escaped structured column runtime execution should succeed");
+
+    let projection =
+        ReplayProjectionService::project(ReplayProjectionRequest::runtime_result(&runtime_result));
+    let identity = projection
+        .prepared_formula_identity
+        .expect("runtime projection should preserve prepared identity");
+    let record = &identity.structured_reference_bind_records[0];
+
+    assert_eq!(
+        runtime_result.evaluation.oxfunc_value,
+        EvalValue::Number(10.0)
+    );
+    assert_eq!(record.source_token_text, "Table1[['#Data]]");
+    assert_eq!(record.selected_column_ids, vec!["column:hash-data"]);
+    assert_eq!(record.selected_regions[0].column_range_refs, vec!["B2:B4"]);
+    assert_eq!(
+        identity.structured_reference_bind_records,
+        runtime_result.structured_reference_bind_records
+    );
+}
+
+#[test]
 fn replay_projection_preserves_no_host_namespace_lexical_guardrail() {
     let runtime_result = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
@@ -1520,6 +1565,42 @@ fn replay_w074_table(amount_range_ref: &str) -> TableDescriptor {
             ordinal: 1,
             column_range_ref: amount_range_ref.to_string(),
         }],
+    }
+}
+
+fn replay_w074_escaped_table() -> TableDescriptor {
+    TableDescriptor {
+        table_id: "table:w074:escaped".to_string(),
+        table_name: "Table1".to_string(),
+        workbook_scope_ref: "book:default".to_string(),
+        sheet_scope_ref: "sheet:default".to_string(),
+        table_range_ref: "A1:C5".to_string(),
+        row_membership_identity: Some("table:w074:escaped:rows:v1".to_string()),
+        row_order_identity: Some("table:w074:escaped:row-order:v1".to_string()),
+        header_region_ref: Some("A1:C1".to_string()),
+        totals_region_ref: Some("A5:C5".to_string()),
+        header_row_present: true,
+        totals_row_present: true,
+        columns: vec![
+            TableColumnDescriptor {
+                column_id: "column:label".to_string(),
+                column_name: "Label".to_string(),
+                ordinal: 1,
+                column_range_ref: "A2:A4".to_string(),
+            },
+            TableColumnDescriptor {
+                column_id: "column:hash-data".to_string(),
+                column_name: "#Data".to_string(),
+                ordinal: 2,
+                column_range_ref: "B2:B4".to_string(),
+            },
+            TableColumnDescriptor {
+                column_id: "column:gross-margin".to_string(),
+                column_name: "Gross]Margin".to_string(),
+                ordinal: 3,
+                column_range_ref: "C2:C4".to_string(),
+            },
+        ],
     }
 }
 

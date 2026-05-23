@@ -252,6 +252,10 @@ fn consume_balanced_bracket_group(chars: &[char], index: &mut usize) {
 
     let mut depth = 0usize;
     while *index < chars.len() {
+        if chars[*index] == '\'' && is_structured_reference_escape(chars, *index) {
+            *index += 2;
+            continue;
+        }
         match chars[*index] {
             '[' => {
                 depth += 1;
@@ -268,4 +272,8 @@ fn consume_balanced_bracket_group(chars: &[char], index: &mut usize) {
         }
         *index += 1;
     }
+}
+
+fn is_structured_reference_escape(chars: &[char], index: usize) -> bool {
+    matches!(chars.get(index + 1), Some('#' | '[' | ']' | '@' | '\''))
 }

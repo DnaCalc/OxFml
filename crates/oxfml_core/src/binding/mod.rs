@@ -1464,7 +1464,10 @@ fn parse_structured_reference_text(text: &str) -> Option<ParsedStructuredReferen
 
     if inner.starts_with('[') {
         for segment in split_top_level_segments(inner, ',') {
-            if let Some(qualifier) = parse_section_qualifier(strip_structured_brackets(segment)?) {
+            let raw_stripped = strip_structured_brackets_raw(segment)?;
+            if !contains_structured_reference_escape(raw_stripped)
+                && let Some(qualifier) = parse_section_qualifier(raw_stripped)
+            {
                 if qualifier == StructuredSectionKind::ThisRow {
                     caller_row_sensitive = true;
                 }
@@ -1481,14 +1484,14 @@ fn parse_structured_reference_text(text: &str) -> Option<ParsedStructuredReferen
     } else if let Some(rest) = inner.strip_prefix('@') {
         caller_row_sensitive = true;
         section_qualifiers.push(StructuredSectionKind::ThisRow);
-        column_names.push(rest.to_string());
+        column_names.push(unescape_structured_reference_text(rest));
     } else if let Some(qualifier) = parse_section_qualifier(inner) {
         if qualifier == StructuredSectionKind::ThisRow {
             caller_row_sensitive = true;
         }
         section_qualifiers.push(qualifier);
     } else {
-        column_names.push(inner.to_string());
+        column_names.push(unescape_structured_reference_text(inner));
     }
 
     Some(ParsedStructuredReference {
@@ -2097,19 +2100,28 @@ fn find_table_column<'a>(
 fn parse_structured_column_segment(segment: &str) -> Option<Vec<String>> {
     if let Some((left, right)) = split_top_level_once(segment, ':') {
         return Some(vec![
-            strip_structured_brackets(left)?.to_string(),
-            strip_structured_brackets(right)?.to_string(),
+            strip_structured_brackets(left)?,
+            strip_structured_brackets(right)?,
         ]);
     }
 
-    Some(vec![strip_structured_brackets(segment)?.to_string()])
+    Some(vec![strip_structured_brackets(segment)?])
 }
 
 fn split_top_level_segments(text: &str, delimiter: char) -> Vec<&str> {
     let mut result = Vec::new();
     let mut depth = 0usize;
     let mut start = 0usize;
+    let mut skip_escaped = false;
     for (index, ch) in text.char_indices() {
+        if skip_escaped {
+            skip_escaped = false;
+            continue;
+        }
+        if ch == '\'' && is_structured_reference_escape_at(text, index) {
+            skip_escaped = true;
+            continue;
+        }
         match ch {
             '[' => depth += 1,
             ']' => depth = depth.saturating_sub(1),
@@ -2126,7 +2138,16 @@ fn split_top_level_segments(text: &str, delimiter: char) -> Vec<&str> {
 
 fn split_top_level_once(text: &str, delimiter: char) -> Option<(&str, &str)> {
     let mut depth = 0usize;
+    let mut skip_escaped = false;
     for (index, ch) in text.char_indices() {
+        if skip_escaped {
+            skip_escaped = false;
+            continue;
+        }
+        if ch == '\'' && is_structured_reference_escape_at(text, index) {
+            skip_escaped = true;
+            continue;
+        }
         match ch {
             '[' => depth += 1,
             ']' => depth = depth.saturating_sub(1),
@@ -2140,7 +2161,11 @@ fn split_top_level_once(text: &str, delimiter: char) -> Option<(&str, &str)> {
     None
 }
 
-fn strip_structured_brackets(text: &str) -> Option<&str> {
+fn strip_structured_brackets(text: &str) -> Option<String> {
+    strip_structured_brackets_raw(text).map(unescape_structured_reference_text)
+}
+
+fn strip_structured_brackets_raw(text: &str) -> Option<&str> {
     if text.starts_with('[') && text.ends_with(']') && text.len() >= 2 {
         Some(&text[1..text.len() - 1])
     } else if !text.is_empty() {
@@ -2152,7 +2177,16 @@ fn strip_structured_brackets(text: &str) -> Option<&str> {
 
 fn matching_outer_bracket_end(text: &str) -> Option<usize> {
     let mut depth = 0usize;
+    let mut skip_escaped = false;
     for (index, ch) in text.char_indices() {
+        if skip_escaped {
+            skip_escaped = false;
+            continue;
+        }
+        if ch == '\'' && is_structured_reference_escape_at(text, index) {
+            skip_escaped = true;
+            continue;
+        }
         match ch {
             '[' => depth += 1,
             ']' => {
@@ -2165,6 +2199,35 @@ fn matching_outer_bracket_end(text: &str) -> Option<usize> {
         }
     }
     None
+}
+
+fn unescape_structured_reference_text(text: &str) -> String {
+    let mut output = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '\'' && matches!(chars.peek(), Some('#' | '[' | ']' | '@' | '\'')) {
+            output.push(
+                chars
+                    .next()
+                    .expect("peek confirmed escaped structured-reference character"),
+            );
+        } else {
+            output.push(ch);
+        }
+    }
+    output
+}
+
+fn is_structured_reference_escape_at(text: &str, index: usize) -> bool {
+    text[index..]
+        .chars()
+        .nth(1)
+        .is_some_and(|ch| matches!(ch, '#' | '[' | ']' | '@' | '\''))
+}
+
+fn contains_structured_reference_escape(text: &str) -> bool {
+    text.char_indices()
+        .any(|(index, ch)| ch == '\'' && is_structured_reference_escape_at(text, index))
 }
 
 fn parse_section_qualifier(text: &str) -> Option<StructuredSectionKind> {

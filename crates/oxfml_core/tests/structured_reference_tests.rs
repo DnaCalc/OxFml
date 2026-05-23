@@ -293,6 +293,100 @@ fn binds_data_qualified_multi_column_reference() {
 }
 
 #[test]
+fn binds_escaped_structured_column_names_without_section_confusion() {
+    let mut context = base_bind_context();
+    context.table_catalog = vec![sample_table_with_escaped_columns()];
+
+    let single_column = bind_with_table_context("=Table1[['#Data]]", context.clone());
+
+    assert!(single_column.diagnostics.is_empty());
+    let NormalizedReference::Structured(single_column_ref) =
+        &single_column.normalized_references[0]
+    else {
+        panic!("expected escaped single-column structured reference");
+    };
+    assert_eq!(
+        single_column_ref.selector_kind,
+        StructuredSelectorKind::Column
+    );
+    assert_eq!(
+        single_column_ref.section_qualifiers,
+        vec![StructuredSectionKind::Data]
+    );
+    assert_eq!(
+        single_column_ref.selected_column_ids,
+        vec!["column:hash-data"]
+    );
+
+    let section_column = bind_with_table_context("=Table1[[#Data],['#Data]]", context.clone());
+
+    assert!(section_column.diagnostics.is_empty());
+    let NormalizedReference::Structured(section_column_ref) =
+        &section_column.normalized_references[0]
+    else {
+        panic!("expected escaped section-column structured reference");
+    };
+    assert_eq!(
+        section_column_ref.selector_kind,
+        StructuredSelectorKind::SectionColumn
+    );
+    assert_eq!(
+        section_column_ref.section_qualifiers,
+        vec![StructuredSectionKind::Data]
+    );
+    assert_eq!(
+        section_column_ref.selected_column_ids,
+        vec!["column:hash-data"]
+    );
+    let section_column_record = &section_column.structured_reference_bind_records[0];
+    assert_eq!(
+        section_column_record.source_token_text,
+        "Table1[[#Data],['#Data]]"
+    );
+
+    let bound = bind_with_table_context("=Table1[[#Data],['#Data]:[Gross']Margin]]", context);
+
+    assert!(bound.diagnostics.is_empty());
+    let NormalizedReference::Structured(structured) = &bound.normalized_references[0] else {
+        panic!("expected escaped structured reference");
+    };
+    assert_eq!(
+        structured.selector_kind,
+        StructuredSelectorKind::SectionColumn
+    );
+    assert_eq!(
+        structured.section_qualifiers,
+        vec![StructuredSectionKind::Data]
+    );
+    assert_eq!(
+        structured.selected_column_ids,
+        vec!["column:hash-data", "column:gross-margin"]
+    );
+    let StructuredResolvedRef::Area(area) = &structured.resolved_reference else {
+        panic!("expected escaped multi-column data area");
+    };
+    assert_eq!(area.top_left.row, 2);
+    assert_eq!(area.top_left.col, 2);
+    assert_eq!(area.height, 3);
+    assert_eq!(area.width, 2);
+
+    let record = &bound.structured_reference_bind_records[0];
+    assert_eq!(
+        record.source_token_text,
+        "Table1[[#Data],['#Data]:[Gross']Margin]]"
+    );
+    assert_eq!(
+        record.selected_column_ids,
+        vec!["column:hash-data", "column:gross-margin"]
+    );
+    assert_eq!(record.selected_sections, vec![StructuredSectionKind::Data]);
+    assert_eq!(
+        record.selected_regions[0].column_range_refs,
+        vec!["B2:B4", "C2:C4"]
+    );
+}
+
+#[test]
 fn omitted_table_name_without_context_fails_bind_honestly() {
     let bound = bind_with_table_context("=[@Amount]", base_bind_context());
 
@@ -445,6 +539,34 @@ fn host_evaluates_sum_over_data_qualified_multi_column_structured_reference() {
 
     assert_eq!(output.evaluation.result.payload_summary, "Number(18)");
     assert_eq!(output.evaluation.oxfunc_value, EvalValue::Number(18.0));
+}
+
+#[test]
+fn host_evaluates_sum_over_escaped_structured_column_reference() {
+    let mut host = SingleFormulaHost::new("host:structured-escaped", "=SUM(Table1['#Data])");
+    host.set_table_catalog(vec![sample_table_with_escaped_columns()]);
+    host.set_cell_value(
+        "B2:B4",
+        EvalValue::Array(
+            EvalArray::from_rows(vec![vec![
+                ArrayCellValue::Number(3.0),
+                ArrayCellValue::Number(4.0),
+                ArrayCellValue::Number(5.0),
+            ]])
+            .expect("array fixture should be valid"),
+        ),
+    );
+
+    let output = host
+        .recalc_with_interfaces(
+            EvaluationBackend::OxFuncBacked,
+            TypedContextQueryBundle::default(),
+            None,
+        )
+        .expect("escaped structured column host recalculation should succeed");
+
+    assert_eq!(output.evaluation.result.payload_summary, "Number(12)");
+    assert_eq!(output.evaluation.oxfunc_value, EvalValue::Number(12.0));
 }
 
 #[test]
@@ -608,6 +730,42 @@ fn sample_table_with_exact_section_refs() -> TableDescriptor {
                 column_name: "Tax".to_string(),
                 ordinal: 3,
                 column_range_ref: "J11:J19".to_string(),
+            },
+        ],
+    }
+}
+
+fn sample_table_with_escaped_columns() -> TableDescriptor {
+    TableDescriptor {
+        table_id: "table:escaped".to_string(),
+        table_name: "Table1".to_string(),
+        workbook_scope_ref: "book:default".to_string(),
+        sheet_scope_ref: "sheet:default".to_string(),
+        table_range_ref: "A1:C5".to_string(),
+        row_membership_identity: Some("table:escaped:rows:v1".to_string()),
+        row_order_identity: Some("table:escaped:row-order:v1".to_string()),
+        header_region_ref: Some("A1:C1".to_string()),
+        totals_region_ref: Some("A5:C5".to_string()),
+        header_row_present: true,
+        totals_row_present: true,
+        columns: vec![
+            TableColumnDescriptor {
+                column_id: "column:label".to_string(),
+                column_name: "Label".to_string(),
+                ordinal: 1,
+                column_range_ref: "A2:A4".to_string(),
+            },
+            TableColumnDescriptor {
+                column_id: "column:hash-data".to_string(),
+                column_name: "#Data".to_string(),
+                ordinal: 2,
+                column_range_ref: "B2:B4".to_string(),
+            },
+            TableColumnDescriptor {
+                column_id: "column:gross-margin".to_string(),
+                column_name: "Gross]Margin".to_string(),
+                ordinal: 3,
+                column_range_ref: "C2:C4".to_string(),
             },
         ],
     }

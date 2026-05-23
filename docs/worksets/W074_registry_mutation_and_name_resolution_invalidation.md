@@ -229,8 +229,10 @@ Current runtime/replay evidence:
 7. Public structured-reference bind records now project through `BoundFormula`,
    runtime prepared identity, runtime result, and formal-reference handles for
    explicit `Table1[Amount]`, omitted `[@Amount]`, `#Headers`, `#Totals`, and
-   section-plus-column forms. This gives OxCalc a generic packet to consume
-   without formula-text parsing.
+   section-plus-column forms. Escaped column names such as `['#Data]` and
+   `[Gross']Margin]` bind against host-supplied `TableDescriptor` column names
+   without being confused with section selectors. This gives OxCalc a generic
+   packet to consume without formula-text parsing.
 
 ## Status
 
@@ -245,6 +247,6 @@ Current runtime/replay evidence:
   - Excel oracle matrix for built-in/UDF/defined-name/LAMBDA shadowing,
   - mapping of `W051` host namespace names and lambda-valued host nodes to Excel defined-name lanes,
   - broader formula-call name/call precedence freeze beyond the bounded registry-view admission and capability-denial runtime classification tranche,
-  - full structured-reference grammar/table semantics beyond stable packet facts, structured bind-record projection, structured-syntax disambiguation, and W056 prepared-identity mutation,
+  - broader W036 structured-reference/table formula semantics beyond the W056 packet coverage, table-context identity facts, and current table/name oracle rows,
   - prepared identity/cache invalidation inputs for registry, structure, host namespace, table context, caller context, and resolution-rule changes,
   - evidence-backed cache invalidation for registry mutation and for bare host-name/host-namespace resolution beyond the conservative opt-in host-context identity slice.
