@@ -129,6 +129,7 @@ pub struct BindContext {
     pub formula_token: FormulaToken,
     pub structure_context_version: StructureContextVersion,
     pub names: BTreeMap<String, NameKind>,
+    pub name_caller_context_dependencies: BTreeMap<String, bool>,
     pub table_catalog: Vec<TableDescriptor>,
     pub enclosing_table_ref: Option<TableRef>,
     pub caller_table_region: Option<TableCallerRegion>,
@@ -144,6 +145,7 @@ impl Default for BindContext {
             formula_token: FormulaToken("fixture".to_string()),
             structure_context_version: StructureContextVersion("struct:v1".to_string()),
             names: BTreeMap::new(),
+            name_caller_context_dependencies: BTreeMap::new(),
             table_catalog: Vec::new(),
             enclosing_table_ref: None,
             caller_table_region: None,
@@ -179,6 +181,7 @@ pub fn bind_formula(request: BindRequest) -> BindResult {
         request.context.formula_token.0.clone(),
         request.context.structure_context_version.0.clone(),
         request.context.names.clone(),
+        request.context.name_caller_context_dependencies.clone(),
         request.context.table_catalog.clone(),
         request.context.enclosing_table_ref.clone(),
         request.context.caller_table_region.clone(),
@@ -252,6 +255,7 @@ pub fn bind_formula_incremental(
         request.context.formula_token.0.clone(),
         request.context.structure_context_version.0.clone(),
         request.context.names.clone(),
+        request.context.name_caller_context_dependencies.clone(),
         request.context.table_catalog.clone(),
         request.context.enclosing_table_ref.clone(),
         request.context.caller_table_region.clone(),
@@ -484,12 +488,13 @@ impl Binder {
             self.push_reference_seed(&normalized);
             BoundExpr::Reference(ReferenceExpr::Atom(normalized))
         } else if let Some(kind) = self.context.names.get(&text).cloned() {
+            let caller_context_dependent = self.name_caller_context_dependent(&text);
             let normalized = NormalizedReference::Name(NameRef {
                 name: text,
                 workbook_id: self.context.workbook_id.clone(),
                 sheet_id: self.context.sheet_id.clone(),
                 kind,
-                caller_context_dependent: false,
+                caller_context_dependent,
             });
             self.push_reference_seed(&normalized);
             BoundExpr::Reference(ReferenceExpr::Atom(normalized))
@@ -1090,6 +1095,14 @@ impl Binder {
             .any(|name| name.eq_ignore_ascii_case(text))
     }
 
+    fn name_caller_context_dependent(&self, text: &str) -> bool {
+        self.context
+            .name_caller_context_dependencies
+            .iter()
+            .find_map(|(name, dependent)| name.eq_ignore_ascii_case(text).then_some(*dependent))
+            .unwrap_or(false)
+    }
+
     fn bind_identifier_expr_from_name(&mut self, text: &str) -> BoundExpr {
         if self.is_helper_local_name(text) {
             let normalized = NormalizedReference::Name(NameRef {
@@ -1123,12 +1136,13 @@ impl Binder {
             self.push_reference_seed(&normalized);
             BoundExpr::Reference(ReferenceExpr::Atom(normalized))
         } else if let Some(kind) = self.context.names.get(text).cloned() {
+            let caller_context_dependent = self.name_caller_context_dependent(text);
             let normalized = NormalizedReference::Name(NameRef {
                 name: text.to_string(),
                 workbook_id: self.context.workbook_id.clone(),
                 sheet_id: self.context.sheet_id.clone(),
                 kind,
-                caller_context_dependent: false,
+                caller_context_dependent,
             });
             self.push_reference_seed(&normalized);
             BoundExpr::Reference(ReferenceExpr::Atom(normalized))

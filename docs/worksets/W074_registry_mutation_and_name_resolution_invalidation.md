@@ -84,12 +84,15 @@ tranches:
 1. `fml-ds0.6.2` owns formula-call registry/capability invalidation evidence
    beyond the current registry-view admission slice.
 2. `fml-ds0.6.3` owns the bare host-name / host-namespace mutation lane and
-   must either evidence a product-neutral host-name bind-result path or record a
-   typed exclusion that keeps bare TreeCalc host names out of W056.
+   now has local runtime/replay evidence for the product-neutral
+   `RuntimeHostNameBinding` path. Bare host names map into the existing
+   defined-name / defined-name-`LAMBDA` evaluator lane and emit a separate
+   replay-visible host-name bind result rather than masquerading as explicit
+   host-reference syntax.
 3. `fml-ds0.6.4` owns non-table Excel oracle expansion for broader
    workbook/sheet/UDF/defined-name/LAMBDA collisions.
 4. `fml-ds0.6.5` is the final freeze audit and OxCalc handoff, blocked on the
-   three evidence beads above.
+   remaining oracle bead above.
 
 Current oracle-matrix shape:
 1. each row must identify the source position as `call_callee`, `non_call_bare_name`, `let_lambda_lexical`, `explicit_host_reference`, or `structured_reference` for table-specific rows that are not ordinary name/call precedence claims,
@@ -119,8 +122,17 @@ Current observed tranche:
    host formula context with no explicit host-reference bind result still
    carries `host_namespace_version` through prepared identity and replay
    projection, and changing that version changes the prepared formula key.
-   This is conservative host-context invalidation evidence only; it does not
-   freeze bare host-name precedence.
+   A second local runtime/replay slice now admits bare host-name packets through
+   `RuntimeHostNameBinding`: the host supplies canonical name, source
+   token/span, resolution layer, binding kind, shape hint, caller-context
+   dependency, diagnostics, and replay identity, while OxFml maps the binding
+   through its existing defined-name / defined-name-`LAMBDA` evaluator lane.
+   Prepared identity includes the host-name bind result and host context, replay
+   carries the host-name bind result separately from explicit
+   host-reference-bind results, and caller-context-dependent host names mark
+   the prepared formal reference as caller sensitive.
+   This narrows the W056 host-name packet gap, but it still does not freeze
+   built-in/UDF/defined-name shadowing precedence.
 3. Focused OxFml/OxFunc probes now cover capability-overlay denial at the
    registry/editor layer and the runtime formula-call layer: the denied
    registry entry remains present but unavailable, editor completion filters
@@ -153,14 +165,15 @@ Current observed tranche:
 5. The observed rows are provisional evidence for those row shapes only; they
    do not freeze the full name/call rule.
 6. Name/call freeze remains blocked until the rows still marked partial or
-   open are resolved, including bare host-name/host namespace mutation
-   invalidation, broader workbook/sheet/UDF/defined-name scope combinations,
-   and full structured table semantics outside the W056 table-context packet.
+   open are resolved, including broader workbook/sheet/UDF/defined-name scope
+   combinations and full structured table semantics outside the W056
+   table-context packet.
 
 Current product-host mapping rule:
-1. TreeCalc host names map to the closest Excel defined-name lane until this matrix proves a different extension is needed,
-2. TreeCalc lambda-valued host nodes map to the closest Excel defined-name `LAMBDA` lane until evidence justifies a separate extension,
-3. explicit host-reference syntax may bypass ordinary name/call ambiguity only through the generic host hook and must still emit replay-visible resolution-layer facts.
+1. TreeCalc host names may be supplied as product-neutral host-name bind packets and map to the closest Excel defined-name lane until this matrix proves a different extension is needed,
+2. TreeCalc lambda-valued host nodes may be supplied as callable host-name bind packets and map to the closest Excel defined-name `LAMBDA` lane until evidence justifies a separate extension,
+3. explicit host-reference syntax may bypass ordinary name/call ambiguity only through the generic host hook and must still emit replay-visible resolution-layer facts,
+4. broad shadowing among built-ins, UDFs, workbook/sheet defined names, defined-name `LAMBDA` values, lexical locals, and host names remains provisional until the non-table oracle expansion and freeze audit close.
 
 ### B074-05: Unregister And Capability-Denial Invalidation
 
@@ -215,7 +228,11 @@ Current runtime/replay evidence:
 1. `RuntimeHostFormulaContext` and `RuntimeHostReferenceBindResult` are
    product-neutral runtime facade packets; the focused tests now use generic
    opaque host-reference labels rather than TreeCalc-shaped examples.
-2. The same runtime and replay facade tests prove the DNA OneCalc no-host
+2. `RuntimeHostNameBinding` and `RuntimeHostNameBindResult` are the
+   product-neutral bare host-name counterpart for W056: host names are mapped
+   through defined-name-style bindings while replay and prepared identity keep
+   the host-name bind packet separate from explicit host references.
+3. The same runtime and replay facade tests prove the DNA OneCalc no-host
    namespace guardrail with a returned `LAMBDA` that preserves a lexical
    capture through `LET` and invocation without producing host formula context
    or host-reference bind-result facts.
@@ -258,8 +275,7 @@ Current runtime/replay evidence:
   - cache invalidation implementation,
   - broader bind/editor cache migration beyond the current runtime formula-call registry/capability invalidation evidence,
   - Excel oracle matrix for built-in/UDF/defined-name/LAMBDA shadowing,
-  - mapping of `W051` host namespace names and lambda-valued host nodes to Excel defined-name lanes,
+  - final freeze audit for the `W051` host-name and lambda-valued-node defined-name-lane mapping,
   - broader formula-call name/call precedence freeze beyond the bounded registry-view admission, unregister/default-registry, and capability-denial runtime classification tranche,
   - broader W036 structured-reference/table formula semantics beyond the W056 packet coverage, table-context identity facts, and current table/name oracle rows,
-  - prepared identity/cache invalidation inputs for registry, structure, host namespace, table context, caller context, and resolution-rule changes,
-  - evidence-backed cache invalidation for bare host-name/host-namespace resolution beyond the conservative opt-in host-context identity slice.
+  - prepared identity/cache invalidation inputs for registry, structure, host namespace, table context, caller context, and resolution-rule changes.

@@ -64,6 +64,7 @@ pub struct RuntimeEnvironment<'a> {
     formal_input_bindings: Vec<RuntimeFormalInputBinding>,
     sparse_reference_value_bindings: Vec<RuntimeSparseReferenceValuesBinding>,
     host_formula_context: Option<RuntimeHostFormulaContext>,
+    host_name_bindings: Vec<RuntimeHostNameBinding>,
     host_reference_bind_results: Vec<RuntimeHostReferenceBindResult>,
     table_catalog: Vec<TableDescriptor>,
     enclosing_table_ref: Option<TableRef>,
@@ -91,6 +92,7 @@ impl<'a> RuntimeEnvironment<'a> {
             formal_input_bindings: Vec::new(),
             sparse_reference_value_bindings: Vec::new(),
             host_formula_context: None,
+            host_name_bindings: Vec::new(),
             host_reference_bind_results: Vec::new(),
             table_catalog: Vec::new(),
             enclosing_table_ref: None,
@@ -188,6 +190,14 @@ impl<'a> RuntimeEnvironment<'a> {
         host_formula_context: RuntimeHostFormulaContext,
     ) -> Self {
         self.host_formula_context = Some(host_formula_context);
+        self
+    }
+
+    pub fn with_host_name_bindings(
+        mut self,
+        host_name_bindings: Vec<RuntimeHostNameBinding>,
+    ) -> Self {
+        self.host_name_bindings = host_name_bindings;
         self
     }
 
@@ -304,6 +314,7 @@ impl<'a> RuntimeEnvironment<'a> {
             &self.primary_locus,
             &self.oxfunc_bridge_metadata,
             &self.host_formula_context,
+            &self.host_name_bind_results(),
             &self.host_reference_bind_results,
             self.runtime_registry_view_identity().as_ref(),
             &compiled.registry_capability_denials,
@@ -364,6 +375,8 @@ impl<'a> RuntimeEnvironment<'a> {
         host.caller_col = self.caller_col;
         host.primary_locus = self.primary_locus.clone();
         host.defined_names = self.defined_names.clone();
+        host.defined_names
+            .extend(host_name_defined_names(&self.host_name_bindings));
         host.cell_values = self.cell_values.clone();
         host.sparse_reference_values =
             sparse_reference_values_map(&self.sparse_reference_value_bindings);
@@ -386,6 +399,13 @@ impl<'a> RuntimeEnvironment<'a> {
                 .capability_overlay
                 .map(|overlay| format!("capability-overlay:{}", runtime_hash_debug(overlay))),
         })
+    }
+
+    fn host_name_bind_results(&self) -> Vec<RuntimeHostNameBindResult> {
+        self.host_name_bindings
+            .iter()
+            .map(|binding| binding.bind_result.clone())
+            .collect()
     }
 
     fn runtime_registry_library_context_snapshot(
@@ -486,6 +506,34 @@ fn formal_input_defined_names(
             (
                 formal_input_binding_name(&binding.reference_descriptor),
                 binding.binding.clone(),
+            )
+        })
+        .collect()
+}
+
+fn host_name_defined_names(
+    host_name_bindings: &[RuntimeHostNameBinding],
+) -> BTreeMap<String, DefinedNameBinding> {
+    host_name_bindings
+        .iter()
+        .map(|binding| {
+            (
+                binding.bind_result.canonical_name.clone(),
+                binding.binding.clone(),
+            )
+        })
+        .collect()
+}
+
+fn host_name_caller_context_dependencies(
+    host_name_bindings: &[RuntimeHostNameBinding],
+) -> BTreeMap<String, bool> {
+    host_name_bindings
+        .iter()
+        .map(|binding| {
+            (
+                binding.bind_result.canonical_name.clone(),
+                binding.bind_result.caller_context_dependent,
             )
         })
         .collect()
@@ -638,6 +686,7 @@ pub struct RuntimeFormulaResult {
     pub first_host_replay_capture_packet: FirstHostReplayCapturePacket,
     pub prepared_formula_identity: RuntimePreparedFormulaIdentity,
     pub host_formula_context: Option<RuntimeHostFormulaContext>,
+    pub host_name_bind_results: Vec<RuntimeHostNameBindResult>,
     pub host_reference_bind_results: Vec<RuntimeHostReferenceBindResult>,
     pub structured_reference_bind_records: Vec<StructuredReferenceBindRecord>,
     pub formula_drill_trace: Option<FormulaDrillTrace>,
@@ -686,6 +735,7 @@ impl RuntimeFormulaResult {
             artifact_reuse: host_output.artifact_reuse,
             first_host_replay_capture_packet,
             host_formula_context: prepared_formula_identity.host_formula_context.clone(),
+            host_name_bind_results: prepared_formula_identity.host_name_bind_results.clone(),
             host_reference_bind_results: prepared_formula_identity
                 .host_reference_bind_results
                 .clone(),
@@ -2056,6 +2106,7 @@ pub struct RuntimePreparedFormulaIdentity {
     pub semantic_kernel_metadata_version: Option<String>,
     pub arg_admission_metadata_version: Option<String>,
     pub host_formula_context: Option<RuntimeHostFormulaContext>,
+    pub host_name_bind_results: Vec<RuntimeHostNameBindResult>,
     pub host_reference_bind_results: Vec<RuntimeHostReferenceBindResult>,
     pub registry_snapshot_identity: Option<String>,
     pub capability_overlay_identity: Option<String>,
@@ -2128,6 +2179,26 @@ impl RuntimeHostFormulaContext {
     pub fn cache_identity_contribution(&self) -> String {
         runtime_hash_debug(self)
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeHostNameBindResult {
+    pub host_name_handle: String,
+    pub canonical_name: String,
+    pub source_span: TextSpan,
+    pub source_token_text: String,
+    pub resolution_layer: String,
+    pub binding_kind: String,
+    pub shape_hint: Option<String>,
+    pub caller_context_dependent: bool,
+    pub diagnostics: Vec<String>,
+    pub replay_identity_contribution: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RuntimeHostNameBinding {
+    pub bind_result: RuntimeHostNameBindResult,
+    pub binding: DefinedNameBinding,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2367,6 +2438,7 @@ impl<'a> RuntimeSessionFacade<'a> {
             &self.environment.primary_locus,
             &self.environment.oxfunc_bridge_metadata,
             &self.environment.host_formula_context,
+            &self.environment.host_name_bind_results(),
             &self.environment.host_reference_bind_results,
             self.environment.runtime_registry_view_identity().as_ref(),
             &prepared.registry_capability_denials,
@@ -2408,6 +2480,9 @@ impl<'a> RuntimeSessionFacade<'a> {
             )
         })?;
         let mut defined_names = self.environment.defined_names.clone();
+        defined_names.extend(host_name_defined_names(
+            &self.environment.host_name_bindings,
+        ));
         let sparse_reference_values =
             sparse_reference_values_map(&self.environment.sparse_reference_value_bindings);
         for binding in &self.environment.formal_input_bindings {
@@ -2552,6 +2627,7 @@ impl<'a> RuntimeSessionFacade<'a> {
             record,
             &self.environment.oxfunc_bridge_metadata,
             &self.environment.host_formula_context,
+            &self.environment.host_name_bind_results(),
             &self.environment.host_reference_bind_results,
             table_context_fingerprint,
         ))
@@ -2621,6 +2697,7 @@ fn runtime_prepared_formula_identity(
     primary_locus: &Locus,
     oxfunc_bridge_metadata: &RuntimeOxFuncBridgeMetadata,
     host_formula_context: &Option<RuntimeHostFormulaContext>,
+    host_name_bind_results: &[RuntimeHostNameBindResult],
     host_reference_bind_results: &[RuntimeHostReferenceBindResult],
     registry_view_identity: Option<&RuntimeFunctionRegistryViewIdentity>,
     registry_capability_denials: &[RuntimeFunctionCapabilityDenial],
@@ -2657,7 +2734,7 @@ fn runtime_prepared_formula_identity(
         ))
     };
     let prepared_formula_key = runtime_hash_debug(&format!(
-        "{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}",
+        "{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}",
         &source.formula_stable_id.0,
         source.formula_text_version.0,
         &formula_token,
@@ -2669,6 +2746,7 @@ fn runtime_prepared_formula_identity(
         &oxfunc_bridge_metadata.semantic_kernel_metadata_version,
         &oxfunc_bridge_metadata.arg_admission_metadata_version,
         host_formula_context,
+        host_name_bind_results,
         host_reference_bind_results,
         registry_view_identity,
         registry_capability_denials,
@@ -2690,6 +2768,7 @@ fn runtime_prepared_formula_identity(
             .arg_admission_metadata_version
             .clone(),
         host_formula_context: host_formula_context.clone(),
+        host_name_bind_results: host_name_bind_results.to_vec(),
         host_reference_bind_results: host_reference_bind_results.to_vec(),
         registry_snapshot_identity: registry_view_identity
             .map(|identity| identity.registry_snapshot_identity.clone()),
@@ -2804,7 +2883,7 @@ fn refresh_runtime_prepared_formula_identity_for_plan(
     ));
     identity.plan_template.plan_template_key = semantic_plan.semantic_plan_key.clone();
     identity.prepared_formula_key = runtime_hash_debug(&format!(
-        "{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}",
+        "{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}",
         &identity.formula_stable_id,
         identity.formula_text_version,
         &identity.formula_token,
@@ -2816,6 +2895,7 @@ fn refresh_runtime_prepared_formula_identity_for_plan(
         &identity.semantic_kernel_metadata_version,
         &identity.arg_admission_metadata_version,
         &identity.host_formula_context,
+        &identity.host_name_bind_results,
         &identity.host_reference_bind_results,
         &identity.registry_snapshot_identity,
         &identity.capability_overlay_identity,
@@ -3043,9 +3123,12 @@ fn compile_runtime_prepare_request(
     let syntax_diagnostics = parse.green_tree.diagnostics.clone();
     let red_projection = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
     let mut bind_names = environment.defined_names.clone();
+    bind_names.extend(host_name_defined_names(&environment.host_name_bindings));
     bind_names.extend(formal_input_defined_names(
         &environment.formal_input_bindings,
     ));
+    let name_caller_context_dependencies =
+        host_name_caller_context_dependencies(&environment.host_name_bindings);
     let bind = bind_formula(crate::binding::BindRequest {
         source: source.clone(),
         green_tree: parse.green_tree,
@@ -3068,6 +3151,7 @@ fn compile_runtime_prepare_request(
                     )
                 })
                 .collect(),
+            name_caller_context_dependencies,
             table_catalog: environment.table_catalog.clone(),
             enclosing_table_ref: environment.enclosing_table_ref.clone(),
             caller_table_region: environment.caller_table_region.clone(),
@@ -3140,6 +3224,7 @@ fn runtime_managed_session_snapshot(
     record: &SessionRecord,
     oxfunc_bridge_metadata: &RuntimeOxFuncBridgeMetadata,
     host_formula_context: &Option<RuntimeHostFormulaContext>,
+    host_name_bind_results: &[RuntimeHostNameBindResult],
     host_reference_bind_results: &[RuntimeHostReferenceBindResult],
     table_context_fingerprint: Option<String>,
 ) -> RuntimeManagedSessionSnapshot {
@@ -3168,6 +3253,7 @@ fn runtime_managed_session_snapshot(
             &record.prepared.primary_locus,
             oxfunc_bridge_metadata,
             host_formula_context,
+            host_name_bind_results,
             host_reference_bind_results,
             None,
             &runtime_registry_capability_denials(

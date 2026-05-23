@@ -118,11 +118,19 @@ Current W074 evidence split:
    runtime/replay identity evidence even when no explicit host-reference bind
    result exists: `host_namespace_version` is carried through prepared identity
    and replay projection, and changing it changes the prepared formula key.
-   This supports conservative host-context invalidation, not bare host-name
-   precedence,
-3. capability-overlay denial now has an OxFml/OxFunc registry/editor probe;
-   formula-call binding and invalidation under denied registry views remain
-   open,
+   A focused bare host-name slice now also admits product-neutral
+   `RuntimeHostNameBinding` packets through the same defined-name /
+   defined-name-`LAMBDA` evaluator lane that hosts already use for defined
+   names. The replay-visible bind result preserves host name handle, canonical
+   name, source span/token, resolution layer, binding kind, shape hint,
+   caller-context dependency, diagnostics, and replay identity contribution;
+   prepared identity includes those facts separately from explicit
+   host-reference bind results. This supports the W056 TreeCalc
+   defined-name-lane mapping, not a broader Excel precedence freeze,
+3. capability-overlay denial now has OxFml/OxFunc registry/editor and runtime
+   formula-call probes: denied entries remain registry-present but unavailable,
+   runtime formula-call execution is blocked, and prepared identity/replay carry
+   the capability overlay and denial facts,
 4. structured-reference syntax now has local prepared-identity mutation
    evidence, stable row membership/order and exact header/totals packet facts,
    public structured-reference bind records, and Excel COM 16.0 table/name
@@ -223,8 +231,9 @@ If the change creates, removes, renames, or reclassifies a visible defined name,
 ### Host namespace changes
 If a host namespace change creates, removes, renames, or reclassifies a visible host name/reference in a formula channel that admits host-context names, the host/coordinator should:
 1. change the host namespace version or structure-context version used by the `HostFormulaContext`,
-2. treat formulas pinned to the old host context as stale for bind where affected,
-3. preserve whether the change was caused by function registry mutation, workbook/defined-name mutation, or host namespace/model mutation in replay-visible invalidation facts.
+2. supply updated host-name bind packets when bare host names are admitted through the defined-name lane,
+3. treat formulas pinned to the old host context or old host-name bind result as stale for bind where affected,
+4. preserve whether the change was caused by function registry mutation, workbook/defined-name mutation, or host namespace/model mutation in replay-visible invalidation facts.
 
 ### Structured-reference context changes
 If a table-context change creates, removes, renames, or reclassifies table or column meaning visible to structured-reference binding, the host/coordinator should:

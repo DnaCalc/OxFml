@@ -1,7 +1,8 @@
 use crate::consumer::runtime::{
-    RuntimeFormulaResult, RuntimeHostFormulaContext, RuntimeHostReferenceBindResult,
-    RuntimeManagedCommitResult, RuntimeManagedExecutionResult, RuntimeManagedOpenResult,
-    RuntimeManagedSessionSnapshot, RuntimeManagedTerminationResult, RuntimePreparedFormulaIdentity,
+    RuntimeFormulaResult, RuntimeHostFormulaContext, RuntimeHostNameBindResult,
+    RuntimeHostReferenceBindResult, RuntimeManagedCommitResult, RuntimeManagedExecutionResult,
+    RuntimeManagedOpenResult, RuntimeManagedSessionSnapshot, RuntimeManagedTerminationResult,
+    RuntimePreparedFormulaIdentity,
 };
 use crate::host::FirstHostReplayCapturePacket;
 use crate::interface::{LibraryContextSnapshotRef, TypedContextQueryBundleSpec};
@@ -197,6 +198,7 @@ pub struct ReplayProjectionResult {
     pub exercised_capability_keys: Vec<String>,
     pub prepared_formula_identity: Option<RuntimePreparedFormulaIdentity>,
     pub host_formula_context: Option<RuntimeHostFormulaContext>,
+    pub host_name_bind_results: Vec<RuntimeHostNameBindResult>,
     pub host_reference_bind_results: Vec<RuntimeHostReferenceBindResult>,
 }
 
@@ -357,6 +359,7 @@ fn project_runtime_result(
             .clone(),
         prepared_formula_identity: Some(result.prepared_formula_identity.clone()),
         host_formula_context: result.host_formula_context.clone(),
+        host_name_bind_results: result.host_name_bind_results.clone(),
         host_reference_bind_results: result.host_reference_bind_results.clone(),
     }
 }
@@ -402,6 +405,7 @@ fn project_first_host_capture(
         exercised_capability_keys: Vec::new(),
         prepared_formula_identity: None,
         host_formula_context: None,
+        host_name_bind_results: Vec::new(),
         host_reference_bind_results: Vec::new(),
     }
 }
@@ -453,6 +457,10 @@ fn project_runtime_managed_open(
         host_formula_context: result
             .prepared_formula_identity
             .host_formula_context
+            .clone(),
+        host_name_bind_results: result
+            .prepared_formula_identity
+            .host_name_bind_results
             .clone(),
         host_reference_bind_results: result
             .prepared_formula_identity
@@ -512,6 +520,10 @@ fn project_runtime_managed_execution(
         host_formula_context: result
             .prepared_formula_identity
             .host_formula_context
+            .clone(),
+        host_name_bind_results: result
+            .prepared_formula_identity
+            .host_name_bind_results
             .clone(),
         host_reference_bind_results: result
             .prepared_formula_identity
@@ -584,6 +596,10 @@ fn project_runtime_managed_session(
         host_formula_context: result
             .prepared_formula_identity
             .host_formula_context
+            .clone(),
+        host_name_bind_results: result
+            .prepared_formula_identity
+            .host_name_bind_results
             .clone(),
         host_reference_bind_results: result
             .prepared_formula_identity
@@ -659,6 +675,11 @@ fn project_runtime_managed_commit(
             .prepared_formula_identity
             .host_formula_context
             .clone(),
+        host_name_bind_results: result
+            .session
+            .prepared_formula_identity
+            .host_name_bind_results
+            .clone(),
         host_reference_bind_results: result
             .session
             .prepared_formula_identity
@@ -728,6 +749,11 @@ fn project_runtime_managed_termination(
             .prepared_formula_identity
             .host_formula_context
             .clone(),
+        host_name_bind_results: result
+            .session
+            .prepared_formula_identity
+            .host_name_bind_results
+            .clone(),
         host_reference_bind_results: result
             .session
             .prepared_formula_identity
@@ -772,6 +798,7 @@ fn project_fixture_family(
         exercised_capability_keys: Vec::new(),
         prepared_formula_identity: None,
         host_formula_context: None,
+        host_name_bind_results: Vec::new(),
         host_reference_bind_results: Vec::new(),
     }
 }
@@ -812,6 +839,7 @@ fn project_retained_witness(
         exercised_capability_keys: Vec::new(),
         prepared_formula_identity: None,
         host_formula_context: None,
+        host_name_bind_results: Vec::new(),
         host_reference_bind_results: Vec::new(),
     }
 }

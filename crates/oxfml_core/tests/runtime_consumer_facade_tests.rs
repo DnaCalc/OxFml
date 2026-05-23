@@ -1,13 +1,16 @@
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 
-use oxfml_core::binding::StructuredSectionKind;
+use oxfml_core::binding::{
+    BinaryOp, BoundExpr, NameKind, NameRef, ReferenceExpr, StructuredSectionKind,
+};
 use oxfml_core::consumer::replay::{ReplayProjectionRequest, ReplayProjectionService};
 use oxfml_core::consumer::runtime::{
     RuntimeEnvironment, RuntimeFormalInputBinding, RuntimeFormulaRequest,
-    RuntimeHostFormulaContext, RuntimeHostReferenceBindResult, RuntimeManagedSessionError,
-    RuntimeManagedSessionPhase, RuntimeOxFuncBridgeMetadata, RuntimeSessionFacade,
-    RuntimeSparseReferenceCell, RuntimeSparseReferenceValuesBinding,
+    RuntimeHostFormulaContext, RuntimeHostNameBindResult, RuntimeHostNameBinding,
+    RuntimeHostReferenceBindResult, RuntimeManagedSessionError, RuntimeManagedSessionPhase,
+    RuntimeOxFuncBridgeMetadata, RuntimeSessionFacade, RuntimeSparseReferenceCell,
+    RuntimeSparseReferenceValuesBinding,
 };
 use oxfml_core::format::{
     oxfml_en_us_format_profile, oxfml_en_us_locale_context, worksheet_error_text,
@@ -21,9 +24,11 @@ use oxfml_core::semantics::{
 };
 use oxfml_core::syntax::token::TextSpan;
 use oxfml_core::{
-    AcceptDecision, EvaluationTraceMode, ExecutionOutcomeKind, ExecutionOutcomeStage,
-    FormulaChannelKind, FormulaSourceRecord, HostFunctionInvocation, HostFunctionProvider,
-    HostFunctionProviderError, InMemoryLibraryContextProvider, LibraryContextSnapshotRef,
+    AcceptDecision, CallableCaptureMode, CallableDefinedNameBinding, CallableInvocationModel,
+    CallableOriginKind, CallableValueCarrier, CallableValueProfile, DefinedNameBinding,
+    EvaluationTraceMode, ExecutionOutcomeKind, ExecutionOutcomeStage, FormulaChannelKind,
+    FormulaSourceRecord, HostFunctionInvocation, HostFunctionProvider, HostFunctionProviderError,
+    InMemoryLibraryContextProvider, LibraryContextSnapshotRef, NormalizedReference,
     RegisteredExternalCatalogController, RegisteredExternalCatalogMutationRequest,
     RegisteredExternalCatalogMutationResult, RegisteredExternalHostRegistrationRequest,
     RegisteredExternalRegistrationChannel, TableCallerRegion, TableColumnDescriptor,
@@ -701,6 +706,200 @@ fn runtime_host_namespace_version_mutation_changes_identity_without_explicit_hos
         open.prepared_formula_identity
             .host_reference_bind_results
             .is_empty()
+    );
+}
+
+#[test]
+fn runtime_bare_host_name_binding_maps_to_defined_name_lane_and_replay_identity() {
+    let host_context = RuntimeHostFormulaContext {
+        dialect_id: "generic-host-v1".to_string(),
+        capability_profile_id: "host-capabilities:generic-v1".to_string(),
+        resolution_rule_version: "host-resolution:v1".to_string(),
+        host_namespace_version: Some("host-ns:v1".to_string()),
+        registry_snapshot_identity: Some("registry:snapshot:v1".to_string()),
+        structure_context_version: Some("structure:v1".to_string()),
+        caller_context_identity: Some("caller:node-a".to_string()),
+        table_context_identity: None,
+    };
+    let bind_result = RuntimeHostNameBindResult {
+        host_name_handle: "host-name:margin".to_string(),
+        canonical_name: "HostMargin".to_string(),
+        source_span: TextSpan::new(1, 10),
+        source_token_text: "HostMargin".to_string(),
+        resolution_layer: "defined_name_lane".to_string(),
+        binding_kind: "value_like".to_string(),
+        shape_hint: Some("scalar".to_string()),
+        caller_context_dependent: true,
+        diagnostics: vec!["host-name resolved through generic defined-name lane".to_string()],
+        replay_identity_contribution: "host-name:margin:v1".to_string(),
+    };
+    let binding = RuntimeHostNameBinding {
+        bind_result: bind_result.clone(),
+        binding: DefinedNameBinding::Value(EvalValue::Number(41.0)),
+    };
+    let request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new("runtime:w074-bare-host-name", 1, "=HostMargin+1"),
+        TypedContextQueryBundle::default(),
+    );
+
+    let first = RuntimeEnvironment::new()
+        .with_host_formula_context(host_context.clone())
+        .with_host_name_bindings(vec![binding.clone()])
+        .execute(request.clone())
+        .expect("bare host name should use the generic defined-name lane");
+
+    assert_eq!(first.published_worksheet_value, EvalValue::Number(42.0));
+    assert_eq!(first.host_formula_context, Some(host_context.clone()));
+    assert_eq!(first.host_name_bind_results, vec![bind_result.clone()]);
+    assert!(
+        first
+            .prepared_formula_identity
+            .formal_references
+            .iter()
+            .any(|reference| reference.reference_family == "relative_or_caller_sensitive"),
+        "caller-context-dependent host names must be visible in prepared reference identity"
+    );
+    let projection =
+        ReplayProjectionService::project(ReplayProjectionRequest::runtime_result(&first));
+    assert_eq!(projection.host_name_bind_results, vec![bind_result.clone()]);
+    assert_eq!(
+        projection
+            .prepared_formula_identity
+            .as_ref()
+            .expect("runtime projection should carry prepared identity")
+            .host_name_bind_results,
+        vec![bind_result.clone()]
+    );
+
+    let mut changed_context = host_context.clone();
+    changed_context.host_namespace_version = Some("host-ns:v2".to_string());
+    let second = RuntimeEnvironment::new()
+        .with_host_formula_context(changed_context)
+        .with_host_name_bindings(vec![binding.clone()])
+        .execute(request.clone())
+        .expect("host namespace mutation should still execute");
+    assert_ne!(
+        first.prepared_formula_identity.prepared_formula_key,
+        second.prepared_formula_identity.prepared_formula_key,
+        "host namespace version must invalidate bare host-name prepared identity"
+    );
+
+    let mut changed_binding = binding;
+    changed_binding.bind_result.replay_identity_contribution = "host-name:margin:v2".to_string();
+    let third = RuntimeEnvironment::new()
+        .with_host_formula_context(host_context)
+        .with_host_name_bindings(vec![changed_binding])
+        .execute(request)
+        .expect("host name identity mutation should still execute");
+    assert_ne!(
+        first.prepared_formula_identity.prepared_formula_key,
+        third.prepared_formula_identity.prepared_formula_key,
+        "host-name bind-result identity must invalidate prepared identity"
+    );
+}
+
+#[test]
+fn managed_runtime_executes_bare_host_name_binding_with_same_prepared_identity() {
+    let host_context = RuntimeHostFormulaContext {
+        dialect_id: "generic-host-v1".to_string(),
+        capability_profile_id: "host-capabilities:generic-v1".to_string(),
+        resolution_rule_version: "host-resolution:v1".to_string(),
+        host_namespace_version: Some("host-ns:v1".to_string()),
+        registry_snapshot_identity: Some("registry:snapshot:v1".to_string()),
+        structure_context_version: Some("structure:v1".to_string()),
+        caller_context_identity: Some("caller:node-a".to_string()),
+        table_context_identity: None,
+    };
+    let bind_result = RuntimeHostNameBindResult {
+        host_name_handle: "host-name:managed-margin".to_string(),
+        canonical_name: "HostMargin".to_string(),
+        source_span: TextSpan::new(1, 10),
+        source_token_text: "HostMargin".to_string(),
+        resolution_layer: "defined_name_lane".to_string(),
+        binding_kind: "value_like".to_string(),
+        shape_hint: Some("scalar".to_string()),
+        caller_context_dependent: true,
+        diagnostics: Vec::new(),
+        replay_identity_contribution: "host-name:managed-margin:v1".to_string(),
+    };
+    let request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new("runtime:w074-managed-bare-host-name", 1, "=HostMargin+1"),
+        TypedContextQueryBundle::default(),
+    );
+    let mut managed = RuntimeEnvironment::new()
+        .with_host_formula_context(host_context)
+        .with_host_name_bindings(vec![RuntimeHostNameBinding {
+            bind_result: bind_result.clone(),
+            binding: DefinedNameBinding::Value(EvalValue::Number(41.0)),
+        }])
+        .open_session();
+
+    let open = managed
+        .open_managed_session(&request)
+        .expect("managed open should prepare host-name binding");
+    assert_eq!(
+        open.prepared_formula_identity.host_name_bind_results,
+        vec![bind_result.clone()]
+    );
+
+    let execution = managed
+        .execute_managed(request)
+        .expect("managed execution should use the host-name defined-name binding");
+
+    assert_eq!(
+        execution.candidate_result.value_delta.published_payload,
+        oxfml_core::ValuePayload::Number("42".to_string())
+    );
+    assert_eq!(
+        execution.prepared_formula_identity.host_name_bind_results,
+        vec![bind_result]
+    );
+}
+
+#[test]
+fn runtime_bare_host_callable_uses_defined_name_lambda_lane() {
+    let bind_result = RuntimeHostNameBindResult {
+        host_name_handle: "host-name:lambda".to_string(),
+        canonical_name: "HostLambda".to_string(),
+        source_span: TextSpan::new(1, 10),
+        source_token_text: "HostLambda".to_string(),
+        resolution_layer: "defined_name_lambda_lane".to_string(),
+        binding_kind: "defined_name_lambda".to_string(),
+        shape_hint: Some("callable".to_string()),
+        caller_context_dependent: false,
+        diagnostics: Vec::new(),
+        replay_identity_contribution: "host-name:lambda:v1".to_string(),
+    };
+    let binding = RuntimeHostNameBinding {
+        bind_result: bind_result.clone(),
+        binding: DefinedNameBinding::Callable(runtime_test_callable_binding()),
+    };
+    let request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new("runtime:w074-bare-host-callable", 1, "=HostLambda(2)"),
+        TypedContextQueryBundle::default(),
+    )
+    .with_trace_mode(EvaluationTraceMode::PreparedCalls);
+
+    let result = RuntimeEnvironment::new()
+        .with_host_name_bindings(vec![binding])
+        .execute(request)
+        .expect("callable host name should invoke through defined-name lambda lane");
+
+    assert_eq!(result.published_worksheet_value, EvalValue::Number(3.0));
+    assert_eq!(result.host_name_bind_results, vec![bind_result.clone()]);
+    assert_eq!(
+        result
+            .evaluation
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec!["SPECIAL.LAMBDA_INVOKE", "FUNC.OP_ADD"]
+    );
+    assert!(
+        result.host_reference_bind_results.is_empty(),
+        "bare host-name lane must not masquerade as explicit host-reference syntax"
     );
 }
 
@@ -3495,6 +3694,44 @@ fn vba_udf_snapshot() -> LibraryContextSnapshot {
             post_dispatch_state: None,
         }],
     }
+}
+
+fn runtime_test_callable_binding() -> CallableDefinedNameBinding {
+    CallableDefinedNameBinding {
+        summary: "arity=1;params=x;captures=-;body=Binary".to_string(),
+        carrier: CallableValueCarrier {
+            origin_kind: CallableOriginKind::DefinedNameCallable,
+            invocation_model: CallableInvocationModel::TypedInvocationOnly,
+            capture_mode: CallableCaptureMode::NoCapture,
+            arity: 1,
+        },
+        profile: CallableValueProfile {
+            arity: 1,
+            required_arity: 1,
+            parameter_names: vec!["x".to_string()],
+            optional_parameter_names: Vec::new(),
+            capture_names: Vec::new(),
+            body_kind: "Binary".to_string(),
+        },
+        params: vec!["x".to_string()],
+        optional_parameter_names: Vec::new(),
+        body: BoundExpr::Binary {
+            op: BinaryOp::Add,
+            left: Box::new(runtime_name_ref_expr("x", NameKind::HelperLocal)),
+            right: Box::new(BoundExpr::NumberLiteral("1".to_string())),
+        },
+        closure: BTreeMap::new(),
+    }
+}
+
+fn runtime_name_ref_expr(name: &str, kind: NameKind) -> BoundExpr {
+    BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Name(NameRef {
+        name: name.to_string(),
+        workbook_id: "book:default".to_string(),
+        sheet_id: "sheet:default".to_string(),
+        kind,
+        caller_context_dependent: false,
+    })))
 }
 
 fn runtime_test_udf_entry() -> FunctionEntry {

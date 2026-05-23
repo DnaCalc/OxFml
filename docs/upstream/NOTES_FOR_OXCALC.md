@@ -1038,6 +1038,13 @@ Current oracle evidence:
    collision shape.
 2. The observed table rows are table-specific evidence only. They do not freeze
    generic host-name or TreeCalc name/call semantics.
+3. A local non-Excel W074 runtime/replay slice now admits product-neutral
+   bare host names through `RuntimeHostNameBinding`, mapped to the existing
+   defined-name / defined-name-`LAMBDA` evaluator lane. The packet carries
+   host-name handle, canonical name, source span/token, resolution layer,
+   binding kind, shape hint, caller-context dependency, diagnostics, and replay
+   identity, and replay keeps it separate from explicit host-reference bind
+   results.
 
 Current OxCalc implication:
 1. OxCalc can consume the current generic table-context packet for W056
@@ -1047,10 +1054,13 @@ Current OxCalc implication:
 3. OxFml supplies formula syntax/bind identity and prepared/replay-visible
    packet facts; it does not supply TreeCalc reverse edges or table-object
    lifecycle policy.
+4. For W056 bare TreeCalc host names and lambda-valued host nodes, OxCalc may
+   map into the defined-name / defined-name-`LAMBDA` lane with host-name bind
+   packets when no broader precedence collision is being frozen.
 
 Remaining non-claims:
 1. full structured-reference grammar/table semantics remain broader W036 work,
 2. broad W074 name/call precedence is still blocked on non-table oracle and
-   host-namespace evidence,
+   the final freeze audit,
 3. pack-grade replay promotion for the table packet is not claimed by this
    local evidence tranche.
