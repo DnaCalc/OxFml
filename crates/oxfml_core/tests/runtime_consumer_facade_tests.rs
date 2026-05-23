@@ -2,8 +2,8 @@ use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 
 use oxfml_core::binding::{
-    BinaryOp, BoundExpr, NameKind, NameRef, ReferenceExpr, StructuredResolvedRef,
-    StructuredSectionKind,
+    BinaryOp, BoundExpr, NameKind, NameRef, ReferenceExpr, StructuredReferenceSourceTokenKind,
+    StructuredResolvedRef, StructuredSectionKind,
 };
 use oxfml_core::consumer::replay::{ReplayProjectionRequest, ReplayProjectionService};
 use oxfml_core::consumer::runtime::{
@@ -994,6 +994,10 @@ fn runtime_projects_structured_reference_bind_packets_for_downstream_consumers()
     let explicit_record = &explicit.structured_reference_bind_records[0];
     assert_eq!(explicit_record.source_token_text, "Table1[Amount]");
     assert_eq!(
+        explicit_record.source_token_kind,
+        StructuredReferenceSourceTokenKind::StructuredReference
+    );
+    assert_eq!(
         explicit_record.explicit_table_name.as_deref(),
         Some("Table1")
     );
@@ -1038,6 +1042,10 @@ fn runtime_projects_structured_reference_bind_packets_for_downstream_consumers()
         .expect("omitted structured reference should execute");
     let omitted_record = &omitted.structured_reference_bind_records[0];
     assert_eq!(omitted_record.source_token_text, "[@Amount]");
+    assert_eq!(
+        omitted_record.source_token_kind,
+        StructuredReferenceSourceTokenKind::StructuredReference
+    );
     assert_eq!(omitted_record.explicit_table_name, None);
     assert!(omitted_record.omitted_table_name);
     assert_eq!(
@@ -1080,12 +1088,20 @@ fn runtime_links_qualified_structured_reference_failure_and_following_success_pa
     let valid_record = &result.structured_reference_bind_records[1];
     assert_eq!(missing_record.source_token_text, "Sheet1!Missing[Amount]");
     assert_eq!(
+        missing_record.source_token_kind,
+        StructuredReferenceSourceTokenKind::StructuredReference
+    );
+    assert_eq!(
         missing_record.explicit_table_name.as_deref(),
         Some("Missing")
     );
     assert_eq!(missing_record.effective_table_id, None);
     assert_eq!(missing_record.diagnostics.len(), 1);
     assert_eq!(valid_record.source_token_text, "Sheet1!Table1[Amount]");
+    assert_eq!(
+        valid_record.source_token_kind,
+        StructuredReferenceSourceTokenKind::StructuredReference
+    );
     assert_eq!(valid_record.explicit_table_name.as_deref(), Some("Table1"));
     assert_eq!(
         valid_record.effective_table_id.as_deref(),

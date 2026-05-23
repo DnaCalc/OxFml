@@ -147,11 +147,17 @@ pub struct StructuredReferenceBindDiagnosticLink {
     pub source_span_utf8: TextSpan,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StructuredReferenceSourceTokenKind {
+    StructuredReference,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StructuredReferenceBindRecord {
     pub bind_record_handle: String,
     pub source_span_utf8: TextSpan,
     pub source_token_text: String,
+    pub source_token_kind: StructuredReferenceSourceTokenKind,
     pub explicit_table_name: Option<String>,
     pub omitted_table_name: bool,
     pub effective_table_id: Option<String>,

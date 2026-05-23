@@ -3,7 +3,8 @@ use oxfunc_core::value::{ArrayCellValue, EvalArray, EvalValue, ExcelText};
 use oxfml_core::EvaluationBackend;
 use oxfml_core::binding::{
     BindContext, BindRequest, BoundExpr, NameKind, NormalizedReference, ReferenceExpr,
-    StructuredResolvedRef, StructuredSectionKind, StructuredSelectorKind, bind_formula,
+    StructuredReferenceSourceTokenKind, StructuredResolvedRef, StructuredSectionKind,
+    StructuredSelectorKind, bind_formula,
 };
 use oxfml_core::interface::{
     TableCallerRegion, TableColumnDescriptor, TableDescriptor, TableRef, TableRegionKind,
@@ -46,6 +47,10 @@ fn binds_explicit_structured_column_reference() {
     let record = &bound.structured_reference_bind_records[0];
     assert_eq!(record.source_span_utf8, TextSpan::new(1, 14));
     assert_eq!(record.source_token_text, "Table1[Amount]");
+    assert_eq!(
+        record.source_token_kind,
+        StructuredReferenceSourceTokenKind::StructuredReference
+    );
     assert_eq!(record.explicit_table_name.as_deref(), Some("Table1"));
     assert!(!record.omitted_table_name);
     assert_eq!(record.effective_table_id.as_deref(), Some("table:1"));
@@ -118,6 +123,10 @@ fn binds_omitted_table_name_with_current_row_context() {
     let record = &bound.structured_reference_bind_records[0];
     assert_eq!(record.source_span_utf8, TextSpan::new(1, 9));
     assert_eq!(record.source_token_text, "[@Amount]");
+    assert_eq!(
+        record.source_token_kind,
+        StructuredReferenceSourceTokenKind::StructuredReference
+    );
     assert_eq!(record.explicit_table_name, None);
     assert!(record.omitted_table_name);
     assert_eq!(record.effective_table_id.as_deref(), Some("table:1"));
@@ -330,6 +339,10 @@ fn binds_zero_row_data_column_reference_without_data_a1_area() {
     let record = &bound.structured_reference_bind_records[0];
     assert_eq!(record.source_span_utf8, TextSpan::new(1, 14));
     assert_eq!(record.source_token_text, "Table1[Amount]");
+    assert_eq!(
+        record.source_token_kind,
+        StructuredReferenceSourceTokenKind::StructuredReference
+    );
     assert_eq!(record.effective_table_id.as_deref(), Some("table:zero"));
     assert_eq!(record.selected_column_ids, vec!["column:amount"]);
     assert_eq!(record.selected_sections, vec![StructuredSectionKind::Data]);
@@ -403,6 +416,10 @@ fn zero_row_current_row_reference_reports_typed_packet_diagnostic() {
     assert!(bound.diagnostics[0].message.contains("no table data row"));
     let record = &bound.structured_reference_bind_records[0];
     assert_eq!(record.source_token_text, "[@Amount]");
+    assert_eq!(
+        record.source_token_kind,
+        StructuredReferenceSourceTokenKind::StructuredReference
+    );
     assert!(record.omitted_table_name);
     assert_eq!(record.effective_table_id.as_deref(), Some("table:zero"));
     assert_eq!(record.selected_column_ids, vec!["column:amount"]);

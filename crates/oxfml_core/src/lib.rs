@@ -60,8 +60,8 @@ pub use binding::{
     BindContext, BindDiagnostic, BindRequest, BindResult, BoundExpr, BoundFormula,
     IncrementalBindResult, NormalizedReference, ReferenceExpr,
     StructuredReferenceBindDiagnosticLink, StructuredReferenceBindRecord,
-    StructuredReferenceSelectedRegion, StructuredSectionKind, bind_formula,
-    bind_formula_incremental,
+    StructuredReferenceSelectedRegion, StructuredReferenceSourceTokenKind, StructuredSectionKind,
+    bind_formula, bind_formula_incremental,
 };
 pub use carrier::{
     CarrierRestrictionCode, CarrierValidationDisposition, ConditionalFormattingCarrierSpec,

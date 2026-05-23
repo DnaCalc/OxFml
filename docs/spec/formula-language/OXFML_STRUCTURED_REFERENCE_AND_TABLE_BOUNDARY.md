@@ -145,13 +145,14 @@ Each structured-reference bind record carries:
 1. `bind_record_handle`,
 2. `source_span_utf8: TextSpan`,
 3. exact `source_token_text`,
-4. `explicit_table_name` plus `omitted_table_name`,
-5. resolved/effective table identity when bind succeeds,
-6. `selected_column_ids`,
-7. selected section qualifiers and selected region descriptors,
-8. `uses_this_row` / `caller_context_dependent`,
-9. typed resolved-reference descriptor when bind succeeds,
-10. typed diagnostic links when the structured-reference parser recognized the
+4. typed `source_token_kind`,
+5. `explicit_table_name` plus `omitted_table_name`,
+6. resolved/effective table identity when bind succeeds,
+7. `selected_column_ids`,
+8. selected section qualifiers and selected region descriptors,
+9. `uses_this_row` / `caller_context_dependent`,
+10. typed resolved-reference descriptor when bind succeeds,
+11. typed diagnostic links when the structured-reference parser recognized the
     syntax but bind failed.
 
 For empty data bodies, selected `#Data` and data-column bind records use an

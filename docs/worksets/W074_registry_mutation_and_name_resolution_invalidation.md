@@ -220,7 +220,7 @@ Required packet facts:
 1. the host hook is generic and keyed by `dialect_id`, `capability_profile_id`, `resolution_rule_version`, host namespace version, registry snapshot identity, structure-context version, and caller context identity where relevant,
 2. host-reference bind results carry a handle or formal reference id, source span/token text, opaque selector payload, resolution layer, shape hint, caller-context dependency, diagnostics, and replay identity,
 3. table and structured-reference binding stays on the existing `table_catalog + enclosing_table_ref + caller_table_region` packet, with `TableDescriptor` carrying optional stable row membership/order identities and exact header/totals region refs; generic host hooks do not replace structured-reference grammar or table-context bind,
-4. public structured-reference bind records carry `source_span_utf8`, exact `source_token_text`, stable bind-record handle, explicit-table versus omitted-table facts, resolved/effective table identity, selected columns/sections/regions, `uses_this_row` / caller-context dependence, resolved-reference descriptor, and typed diagnostic links for recognized structured-reference bind failures,
+4. public structured-reference bind records carry `source_span_utf8`, exact `source_token_text`, typed `source_token_kind`, stable bind-record handle, explicit-table versus omitted-table facts, resolved/effective table identity, selected columns/sections/regions, `uses_this_row` / caller-context dependence, resolved-reference descriptor, and typed diagnostic links for recognized structured-reference bind failures,
 5. prepared identity and cache keys must include the name-world and host-context version inputs that can change resolution,
 6. late UDF registration, unregister, capability-overlay denial, defined-name mutation, host namespace mutation, table context mutation, and resolution-rule changes are invalidation inputs when they can change bind or prepared-call shape.
 
@@ -259,10 +259,13 @@ Current runtime/replay evidence:
 7. Public structured-reference bind records now project through `BoundFormula`,
    runtime prepared identity, runtime result, and formal-reference handles for
    explicit `Table1[Amount]`, omitted `[@Amount]`, `#Headers`, `#Totals`, and
-   section-plus-column forms. Escaped column names such as `['#Data]` and
-   `[Gross']Margin]` bind against host-supplied `TableDescriptor` column names
-   without being confused with section selectors. This gives OxCalc a generic
-   packet to consume without formula-text parsing.
+   section-plus-column forms. The packet now includes typed
+   `source_token_kind = StructuredReference`, so hosts can preserve token
+   classification without reparsing formula text. Escaped column names such as
+   `['#Data]` and `[Gross']Margin]` bind against host-supplied
+   `TableDescriptor` column names without being confused with section
+   selectors. This gives OxCalc a generic packet to consume without formula-text
+   parsing.
 8. The zero-row structured-table packet slice now admits empty data bodies
    without requiring a parseable non-empty data-column A1 area. Generic
    structured-reference records preserve source span/token, effective table

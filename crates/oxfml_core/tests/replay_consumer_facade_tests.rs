@@ -2,7 +2,9 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
-use oxfml_core::binding::{BindContext, StructuredResolvedRef, StructuredSectionKind};
+use oxfml_core::binding::{
+    BindContext, StructuredReferenceSourceTokenKind, StructuredResolvedRef, StructuredSectionKind,
+};
 use oxfml_core::consumer::editor::{
     EditorAnalysisStage, EditorEditService, EditorEnvironment, EditorPlanOptions,
 };
@@ -1297,6 +1299,10 @@ fn replay_projection_carries_w074_structured_table_identity() {
         identity.structured_reference_bind_records[0].source_token_text,
         "Table1[Amount]"
     );
+    assert_eq!(
+        identity.structured_reference_bind_records[0].source_token_kind,
+        StructuredReferenceSourceTokenKind::StructuredReference
+    );
 }
 
 #[test]
@@ -1336,6 +1342,10 @@ fn replay_projection_carries_escaped_structured_column_bind_packet() {
         EvalValue::Number(10.0)
     );
     assert_eq!(record.source_token_text, "Table1[['#Data]]");
+    assert_eq!(
+        record.source_token_kind,
+        StructuredReferenceSourceTokenKind::StructuredReference
+    );
     assert_eq!(record.selected_column_ids, vec!["column:hash-data"]);
     assert_eq!(record.selected_regions[0].column_range_refs, vec!["B2:B4"]);
     assert_eq!(
@@ -1374,6 +1384,10 @@ fn replay_projection_carries_zero_row_structured_table_packet() {
         runtime_result.structured_reference_bind_records
     );
     assert_eq!(record.source_token_text, "Table1[#Data]");
+    assert_eq!(
+        record.source_token_kind,
+        StructuredReferenceSourceTokenKind::StructuredReference
+    );
     assert_eq!(
         record.effective_table_id.as_deref(),
         Some("table:w074:zero-replay")

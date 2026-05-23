@@ -9,8 +9,8 @@ pub use reference::{
     AddressMode, AreaRef, CellCoord, CellRef, ErrorRef, ExternalRef, NameKind, NameRef,
     NormalizedReference, ReferenceExpr, StructuredEmptyAreaRef, StructuredRef,
     StructuredReferenceBindDiagnosticLink, StructuredReferenceBindRecord,
-    StructuredReferenceSelectedRegion, StructuredResolvedRef, StructuredSectionKind,
-    StructuredSelectorKind, WholeColumnRef, WholeRowRef,
+    StructuredReferenceSelectedRegion, StructuredReferenceSourceTokenKind, StructuredResolvedRef,
+    StructuredSectionKind, StructuredSelectorKind, WholeColumnRef, WholeRowRef,
 };
 
 use crate::interface::{
@@ -1733,6 +1733,7 @@ fn structured_reference_bind_record(
         bind_record_handle: String::new(),
         source_span_utf8,
         source_token_text: source_token_text.to_string(),
+        source_token_kind: StructuredReferenceSourceTokenKind::StructuredReference,
         explicit_table_name: parsed.table_name.clone(),
         omitted_table_name: parsed.table_name.is_none(),
         effective_table_id,

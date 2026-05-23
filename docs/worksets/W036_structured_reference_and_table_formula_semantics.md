@@ -139,13 +139,14 @@ Required structured-reference bind record fields for downstream consumers:
 1. `bind_record_handle`
 2. `source_span_utf8`
 3. exact `source_token_text`
-4. `explicit_table_name` and `omitted_table_name`
-5. resolved/effective table identity where bind succeeds
-6. `selected_column_ids`
-7. selected section qualifiers and selected region descriptors
-8. `uses_this_row` / `caller_context_dependent`
-9. resolved-reference descriptor
-10. typed diagnostic links for recognized structured-reference bind failures
+4. typed `source_token_kind`
+5. `explicit_table_name` and `omitted_table_name`
+6. resolved/effective table identity where bind succeeds
+7. `selected_column_ids`
+8. selected section qualifiers and selected region descriptors
+9. `uses_this_row` / `caller_context_dependent`
+10. resolved-reference descriptor
+11. typed diagnostic links for recognized structured-reference bind failures
 
 Working rule:
 1. direct hosts and OxCalc-integrated hosts should present the same semantic table packet,
