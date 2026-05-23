@@ -79,6 +79,18 @@ Required oracle cases before freeze:
 10. defined-name add/remove/reclassification changing non-call and call classification,
 11. explicit host-reference syntax selecting a host object whose display name collides with a function, UDF, or defined name.
 
+Residual execution beads after the 2026-05-23 table and reference-carrier
+tranches:
+1. `fml-ds0.6.2` owns formula-call registry/capability invalidation evidence
+   beyond the current registry-view admission slice.
+2. `fml-ds0.6.3` owns the bare host-name / host-namespace mutation lane and
+   must either evidence a product-neutral host-name bind-result path or record a
+   typed exclusion that keeps bare TreeCalc host names out of W056.
+3. `fml-ds0.6.4` owns non-table Excel oracle expansion for broader
+   workbook/sheet/UDF/defined-name/LAMBDA collisions.
+4. `fml-ds0.6.5` is the final freeze audit and OxCalc handoff, blocked on the
+   three evidence beads above.
+
 Current oracle-matrix shape:
 1. each row must identify the source position as `call_callee`, `non_call_bare_name`, `let_lambda_lexical`, `explicit_host_reference`, or `structured_reference` for table-specific rows that are not ordinary name/call precedence claims,
 2. each row must identify all visible candidates among `builtin_function`, `registered_udf`, `workbook_defined_name`, `sheet_defined_name`, `defined_name_lambda`, `lexical_local`, `host_namespace_name`, `table_name`, and `table_column`,
