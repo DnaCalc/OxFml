@@ -97,6 +97,17 @@ Suggested first column descriptor fields:
 3. `ordinal`
 4. `column_range_ref`
 
+Zero-row data-body rule:
+1. `column_range_ref` may be empty when the host-owned table currently has no
+   data-body rows for that column.
+2. An empty `column_range_ref` is not a parseable A1 area and must not force
+   dense/eager materialization.
+3. `TableDescriptor.row_membership_identity` and `row_order_identity` remain
+   the stable data-body identity inputs for empty and non-empty bodies.
+4. `header_region_ref`, `totals_region_ref`, `table_range_ref`, column
+   identity, and ordinal are sufficient for `#Headers`, `#Totals`, and `#All`
+   packet projection when the data body is empty.
+
 Suggested first caller-region fields:
 1. `table_id`
 2. `region_kind`
@@ -143,6 +154,13 @@ Each structured-reference bind record carries:
 10. typed diagnostic links when the structured-reference parser recognized the
     syntax but bind failed.
 
+For empty data bodies, selected `#Data` and data-column bind records use an
+explicit empty resolved-reference descriptor rather than inventing an A1 data
+area. Their selected-region descriptor marks the data region empty, preserves
+the selected column ids, and carries no data-column range refs. Current-row
+forms such as `[@Amount]` remain caller-context-dependent but produce a typed
+bind diagnostic when no data row exists for the supplied caller table region.
+
 Runtime prepared identity and formal-reference projection preserve these
 records. `RuntimeFormalReference.structured_reference_bind_record_handle`
 links a formal reference back to the corresponding bind record where available.
@@ -165,6 +183,11 @@ TreeCalc dependency meaning:
    table-context fingerprint changes,
 7. omitted-table-name references preserve enclosing table identity and
    caller-table data-row offset in the resolved reference and prepared key.
+8. zero-row data-body references preserve source span/token, effective table
+   identity, selected columns/sections, empty selected-region markers,
+   prepared identity, and replay projection without requiring a parseable
+   non-empty data-column A1 area; zero-row current-row forms preserve the same
+   packet identity plus typed diagnostics.
 
 ## Boundary To OxFunc
 OxFunc should not receive raw table metadata as part of ordinary function semantics unless a later packet proves that necessary.
@@ -212,6 +235,10 @@ The first local floor should preserve these rules:
 5. malformed qualifier/bracket structure remains a syntax/bind failure, not a generic unknown-name lane.
 6. `#This Row` must fail bind honestly when combined with `#Headers`, `#Total Row`, `#Data`, or `#All`,
 7. qualifier combinations involving data/header/totals/all sections must preserve section meaning rather than collapsing immediately to one generic table-range alias.
+8. empty table data bodies are representable in the generic packet model:
+   `#Data` and data-column selections may resolve to an explicit empty
+   structured data reference, while current-row forms against an empty data
+   body fail bind with a typed diagnostic.
 
 ## First Evaluator Rules
 The first local evaluator floor should cover:

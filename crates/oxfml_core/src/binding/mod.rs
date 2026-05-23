@@ -7,9 +7,10 @@ use std::hash::{Hash, Hasher};
 
 pub use reference::{
     AddressMode, AreaRef, CellCoord, CellRef, ErrorRef, ExternalRef, NameKind, NameRef,
-    NormalizedReference, ReferenceExpr, StructuredRef, StructuredReferenceBindDiagnosticLink,
-    StructuredReferenceBindRecord, StructuredReferenceSelectedRegion, StructuredResolvedRef,
-    StructuredSectionKind, StructuredSelectorKind, WholeColumnRef, WholeRowRef,
+    NormalizedReference, ReferenceExpr, StructuredEmptyAreaRef, StructuredRef,
+    StructuredReferenceBindDiagnosticLink, StructuredReferenceBindRecord,
+    StructuredReferenceSelectedRegion, StructuredResolvedRef, StructuredSectionKind,
+    StructuredSelectorKind, WholeColumnRef, WholeRowRef,
 };
 
 use crate::interface::{
@@ -1404,6 +1405,7 @@ fn bind_structured_reference_text_with_sheet(
                 &parsed,
                 source_token_text,
                 span,
+                None,
                 diagnostics
                     .last()
                     .expect("structured reference diagnostic should have been pushed"),
@@ -1427,6 +1429,7 @@ fn bind_structured_reference_text_with_sheet(
                 &parsed,
                 source_token_text,
                 span,
+                Some(table),
                 diagnostics
                     .last()
                     .expect("structured reference diagnostic should have been pushed"),
@@ -1591,29 +1594,7 @@ fn build_structured_reference(
         );
     }
 
-    let selected_columns = if parsed.column_names.is_empty() {
-        table.columns.clone()
-    } else {
-        let first_column = find_table_column(table, &parsed.column_names[0])?;
-        let last_column = find_table_column(
-            table,
-            parsed
-                .column_names
-                .last()
-                .expect("column_names should be non-empty"),
-        )?;
-        let (start_ordinal, end_ordinal) = if first_column.ordinal <= last_column.ordinal {
-            (first_column.ordinal, last_column.ordinal)
-        } else {
-            (last_column.ordinal, first_column.ordinal)
-        };
-        table
-            .columns
-            .iter()
-            .filter(|column| column.ordinal >= start_ordinal && column.ordinal <= end_ordinal)
-            .cloned()
-            .collect::<Vec<_>>()
-    };
+    let selected_columns = select_structured_reference_columns(parsed, table)?;
     if selected_columns.is_empty() {
         return Err("structured reference did not resolve any table columns".to_string());
     }
@@ -1697,6 +1678,7 @@ fn structured_reference_error_bind_record(
     parsed: &ParsedStructuredReference,
     source_token_text: &str,
     source_span_utf8: TextSpan,
+    table: Option<&TableDescriptor>,
     diagnostic: &BindDiagnostic,
 ) -> StructuredReferenceBindRecord {
     let selected_sections = if parsed.section_qualifiers.is_empty() && !parsed.caller_row_sensitive
@@ -1705,14 +1687,26 @@ fn structured_reference_error_bind_record(
     } else {
         parsed.section_qualifiers.clone()
     };
+    let selected_columns = table
+        .and_then(|table| select_structured_reference_columns(parsed, table).ok())
+        .unwrap_or_default();
+    let selected_column_ids = selected_columns
+        .iter()
+        .map(|column| column.column_id.clone())
+        .collect::<Vec<_>>();
+    let selected_regions = table
+        .map(|table| {
+            structured_reference_selected_regions(table, &selected_columns, &selected_sections)
+        })
+        .unwrap_or_default();
     structured_reference_bind_record(
         parsed,
         source_token_text,
         source_span_utf8,
-        None,
-        Vec::new(),
+        table,
+        selected_column_ids,
         selected_sections,
-        Vec::new(),
+        selected_regions,
         None,
         vec![StructuredReferenceBindDiagnosticLink {
             diagnostic_code: "structured_reference_bind_error".to_string(),
@@ -1775,6 +1769,14 @@ fn structured_reference_selected_regions(
     selected_columns: &[TableColumnDescriptor],
     selected_sections: &[StructuredSectionKind],
 ) -> Vec<StructuredReferenceSelectedRegion> {
+    let data_column_range_refs = selected_columns
+        .iter()
+        .filter_map(|column| {
+            let range_ref = column.column_range_ref.trim();
+            (!range_ref.is_empty()).then(|| column.column_range_ref.clone())
+        })
+        .collect::<Vec<_>>();
+    let data_region_is_empty = selected_columns_have_empty_data_body(selected_columns);
     selected_sections
         .iter()
         .map(|section| StructuredReferenceSelectedRegion {
@@ -1785,12 +1787,53 @@ fn structured_reference_selected_regions(
                 StructuredSectionKind::Headers => table.header_region_ref.clone(),
                 StructuredSectionKind::Totals => table.totals_region_ref.clone(),
             },
-            column_range_refs: selected_columns
-                .iter()
-                .map(|column| column.column_range_ref.clone())
-                .collect(),
+            column_range_refs: match section {
+                StructuredSectionKind::Data | StructuredSectionKind::ThisRow => {
+                    data_column_range_refs.clone()
+                }
+                _ => selected_columns
+                    .iter()
+                    .filter_map(|column| {
+                        let range_ref = column.column_range_ref.trim();
+                        (!range_ref.is_empty()).then(|| column.column_range_ref.clone())
+                    })
+                    .collect(),
+            },
+            is_empty: matches!(
+                section,
+                StructuredSectionKind::Data | StructuredSectionKind::ThisRow
+            ) && data_region_is_empty,
         })
         .collect()
+}
+
+fn select_structured_reference_columns(
+    parsed: &ParsedStructuredReference,
+    table: &TableDescriptor,
+) -> Result<Vec<TableColumnDescriptor>, String> {
+    if parsed.column_names.is_empty() {
+        return Ok(table.columns.clone());
+    }
+
+    let first_column = find_table_column(table, &parsed.column_names[0])?;
+    let last_column = find_table_column(
+        table,
+        parsed
+            .column_names
+            .last()
+            .expect("column_names should be non-empty"),
+    )?;
+    let (start_ordinal, end_ordinal) = if first_column.ordinal <= last_column.ordinal {
+        (first_column.ordinal, last_column.ordinal)
+    } else {
+        (last_column.ordinal, first_column.ordinal)
+    };
+    Ok(table
+        .columns
+        .iter()
+        .filter(|column| column.ordinal >= start_ordinal && column.ordinal <= end_ordinal)
+        .cloned()
+        .collect::<Vec<_>>())
 }
 
 fn effective_structured_section(parsed: &ParsedStructuredReference) -> StructuredSectionKind {
@@ -1863,29 +1906,15 @@ fn resolve_structured_reference_target(
                     table.table_range_ref
                 )
             })?;
-            let first = parse_area_target(
-                &selected_columns[0].column_range_ref,
-                &table.workbook_scope_ref,
-                &table.sheet_scope_ref,
-                context,
-                formula_channel_kind,
-            )
-            .ok_or_else(|| "unable to parse first structured column_range_ref".to_string())?;
-            let last = parse_area_target(
-                &selected_columns[selected_columns.len() - 1].column_range_ref,
-                &table.workbook_scope_ref,
-                &table.sheet_scope_ref,
-                context,
-                formula_channel_kind,
-            )
-            .ok_or_else(|| "unable to parse last structured column_range_ref".to_string())?;
+            let (left_col, right_col) =
+                structured_column_bounds(table, selected_columns, context, formula_channel_kind)?;
             Ok(area_or_cell_from_bounds(
                 &table.workbook_scope_ref,
                 &table.sheet_scope_ref,
                 table_area.top_left.row,
-                first.top_left.col.min(last.top_left.col),
+                left_col,
                 table_area.top_left.row + table_area.height - 1,
-                first.top_left.col.max(last.top_left.col),
+                right_col,
             ))
         }
         StructuredSectionKind::Headers => {
@@ -1952,6 +1981,12 @@ fn resolve_structured_data_row_target(
     context: &BindContext,
     formula_channel_kind: FormulaChannelKind,
 ) -> Result<StructuredResolvedRef, String> {
+    if selected_columns_have_empty_data_body(selected_columns) {
+        return Err(
+            "current-row structured reference has no table data row in the selected data body"
+                .to_string(),
+        );
+    }
     let first = parse_area_target(
         &selected_columns[0].column_range_ref,
         &table.workbook_scope_ref,
@@ -1988,6 +2023,13 @@ fn resolve_structured_data_area_target(
     context: &BindContext,
     formula_channel_kind: FormulaChannelKind,
 ) -> Result<StructuredResolvedRef, String> {
+    if selected_columns_have_empty_data_body(selected_columns) {
+        return Ok(StructuredResolvedRef::EmptyArea(structured_empty_area_ref(
+            table,
+            selected_columns,
+            StructuredSectionKind::Data,
+        )));
+    }
     let first = parse_area_target(
         &selected_columns[0].column_range_ref,
         &table.workbook_scope_ref,
@@ -2038,31 +2080,103 @@ fn resolve_structured_section_row_target(
         };
         format!("unable to parse {ref_kind} '{row_area_ref}' for structured reference")
     })?;
-    let first = parse_area_target(
-        &selected_columns[0].column_range_ref,
-        &table.workbook_scope_ref,
-        &table.sheet_scope_ref,
-        context,
-        formula_channel_kind,
-    )
-    .ok_or_else(|| "unable to parse first structured column_range_ref".to_string())?;
-    let last = parse_area_target(
-        &selected_columns[selected_columns.len() - 1].column_range_ref,
-        &table.workbook_scope_ref,
-        &table.sheet_scope_ref,
-        context,
-        formula_channel_kind,
-    )
-    .ok_or_else(|| "unable to parse last structured column_range_ref".to_string())?;
+    let (left_col, right_col) =
+        structured_column_bounds(table, selected_columns, context, formula_channel_kind)?;
     let row = row_area.top_left.row + table_row_offset;
     Ok(area_or_cell_from_bounds(
         &table.workbook_scope_ref,
         &table.sheet_scope_ref,
         row,
-        first.top_left.col.min(last.top_left.col),
+        left_col,
         row,
-        first.top_left.col.max(last.top_left.col),
+        right_col,
     ))
+}
+
+fn selected_columns_have_empty_data_body(selected_columns: &[TableColumnDescriptor]) -> bool {
+    !selected_columns.is_empty()
+        && selected_columns
+            .iter()
+            .all(|column| column.column_range_ref.trim().is_empty())
+}
+
+fn structured_empty_area_ref(
+    table: &TableDescriptor,
+    selected_columns: &[TableColumnDescriptor],
+    section_kind: StructuredSectionKind,
+) -> StructuredEmptyAreaRef {
+    StructuredEmptyAreaRef {
+        workbook_id: table.workbook_scope_ref.clone(),
+        sheet_id: table.sheet_scope_ref.clone(),
+        section_kind,
+        selected_column_ids: selected_columns
+            .iter()
+            .map(|column| column.column_id.clone())
+            .collect(),
+        column_count: selected_columns.len() as u32,
+        row_membership_identity: table.row_membership_identity.clone(),
+        row_order_identity: table.row_order_identity.clone(),
+    }
+}
+
+fn structured_column_bounds(
+    table: &TableDescriptor,
+    selected_columns: &[TableColumnDescriptor],
+    context: &BindContext,
+    formula_channel_kind: FormulaChannelKind,
+) -> Result<(u32, u32), String> {
+    let first_column = selected_columns
+        .first()
+        .ok_or_else(|| "structured reference did not resolve any table columns".to_string())?;
+    let last_column = selected_columns
+        .last()
+        .expect("first selected column confirms last selected column");
+
+    let first_range = first_column.column_range_ref.trim();
+    let last_range = last_column.column_range_ref.trim();
+    if selected_columns_have_empty_data_body(selected_columns) {
+        let table_area = parse_area_target(
+            &table.table_range_ref,
+            &table.workbook_scope_ref,
+            &table.sheet_scope_ref,
+            context,
+            formula_channel_kind,
+        )
+        .ok_or_else(|| {
+            format!(
+                "unable to parse table_range_ref '{}' for structured reference",
+                table.table_range_ref
+            )
+        })?;
+        let left_col = table_area.top_left.col + first_column.ordinal.saturating_sub(1);
+        let right_col = table_area.top_left.col + last_column.ordinal.saturating_sub(1);
+        return Ok((left_col.min(right_col), left_col.max(right_col)));
+    }
+
+    if !first_range.is_empty() && !last_range.is_empty() {
+        let first = parse_area_target(
+            first_range,
+            &table.workbook_scope_ref,
+            &table.sheet_scope_ref,
+            context,
+            formula_channel_kind,
+        )
+        .ok_or_else(|| "unable to parse first structured column_range_ref".to_string())?;
+        let last = parse_area_target(
+            last_range,
+            &table.workbook_scope_ref,
+            &table.sheet_scope_ref,
+            context,
+            formula_channel_kind,
+        )
+        .ok_or_else(|| "unable to parse last structured column_range_ref".to_string())?;
+        return Ok((
+            first.top_left.col.min(last.top_left.col),
+            first.top_left.col.max(last.top_left.col),
+        ));
+    }
+
+    Err("structured reference has partial data-column range refs; zero-row packets must leave every selected data column range empty".to_string())
 }
 
 fn area_or_cell_from_bounds(

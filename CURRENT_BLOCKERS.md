@@ -1,12 +1,21 @@
 # CURRENT_BLOCKERS.md — OxFml
 
-Status: 2 active blockers.
+Status: 3 active blockers.
 
-Last reviewed: 2026-05-23 during W074/CALC-005 residual blocker decomposition.
+Last reviewed: 2026-05-23 during fml-ds0.15 zero-row structured-table packet validation.
 
 ---
 
 ## Active Blockers
+
+### BLK-FML-009: OxFunc sibling compile failure blocks fml-ds0.15 OxFml validation
+
+- **Status**: active
+- **Impact**: blocks focused and full OxFml validation for `fml-ds0.15` / W074-W056 zero-row structured-table packet support because `cargo test -p oxfml_core ...` fails while compiling sibling `oxfunc_core`
+- **Current state**: OxFml zero-row packet implementation and focused tests were drafted, and `cargo fmt` completed. Focused `cargo test -p oxfml_core --test structured_reference_tests`, `cargo test -p oxfml_core --test runtime_consumer_facade_tests zero_row`, and `cargo test -p oxfml_core --test replay_consumer_facade_tests zero_row` all stopped before OxFml test execution due to sibling OxFunc compile errors in `surface_dispatch_by_index_generated.rs`, `columns_fn.rs`, `rows_fn.rs`, and `resolver.rs`.
+- **Exact unblock steps**: repair or revert the sibling OxFunc compile regression in an OxFunc-scoped run, then rerun the three focused OxFml commands plus the required broader `cargo test -p oxfml_core` validation before closing `fml-ds0.15`.
+- **Recommendation**: wait
+- **Opened**: 2026-05-23
 
 ### BLK-FML-008: W074 name/call freeze still lacks full oracle and host-extension evidence
 

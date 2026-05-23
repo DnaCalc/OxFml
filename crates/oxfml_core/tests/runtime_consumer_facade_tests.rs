@@ -2,7 +2,8 @@ use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 
 use oxfml_core::binding::{
-    BinaryOp, BoundExpr, NameKind, NameRef, ReferenceExpr, StructuredSectionKind,
+    BinaryOp, BoundExpr, NameKind, NameRef, ReferenceExpr, StructuredResolvedRef,
+    StructuredSectionKind,
 };
 use oxfml_core::consumer::replay::{ReplayProjectionRequest, ReplayProjectionService};
 use oxfml_core::consumer::runtime::{
@@ -1588,6 +1589,101 @@ fn runtime_exact_header_and_totals_region_refs_change_structured_identity() {
 }
 
 #[test]
+fn runtime_carries_zero_row_structured_data_packet_without_data_a1_area() {
+    let result = RuntimeEnvironment::new()
+        .with_table_context(vec![runtime_w074_zero_row_table()], None, None)
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new(
+                "runtime:w074-zero-row-data-packet",
+                1,
+                "=IF(FALSE,Table1[Amount],0)",
+            ),
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("lazy zero-row structured reference should execute");
+
+    assert_eq!(result.evaluation.oxfunc_value, EvalValue::Number(0.0));
+    assert!(result.bind_diagnostics.is_empty());
+    assert!(
+        result
+            .prepared_formula_identity
+            .table_context_fingerprint
+            .is_some()
+    );
+    assert_eq!(
+        result.structured_reference_bind_records,
+        result
+            .prepared_formula_identity
+            .structured_reference_bind_records
+    );
+    let record = &result.structured_reference_bind_records[0];
+    assert_eq!(record.source_token_text, "Table1[Amount]");
+    assert_eq!(
+        record.effective_table_id.as_deref(),
+        Some("table:w074:zero")
+    );
+    assert_eq!(record.selected_column_ids, vec!["column:amount"]);
+    assert_eq!(record.selected_sections, vec![StructuredSectionKind::Data]);
+    assert!(record.selected_regions[0].is_empty);
+    assert!(record.selected_regions[0].column_range_refs.is_empty());
+    let Some(StructuredResolvedRef::EmptyArea(empty)) = &record.resolved_reference else {
+        panic!("expected empty structured data body reference");
+    };
+    assert_eq!(empty.section_kind, StructuredSectionKind::Data);
+    assert_eq!(empty.selected_column_ids, vec!["column:amount"]);
+    assert_eq!(empty.column_count, 1);
+}
+
+#[test]
+fn runtime_reports_zero_row_this_row_diagnostic_with_packet_identity() {
+    let result = RuntimeEnvironment::new()
+        .with_table_context(
+            vec![runtime_w074_zero_row_table()],
+            Some(TableRef {
+                table_id: "table:w074:zero".to_string(),
+            }),
+            Some(TableCallerRegion {
+                table_id: "table:w074:zero".to_string(),
+                region_kind: TableRegionKind::Data,
+                data_row_offset: Some(0),
+            }),
+        )
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new(
+                "runtime:w074-zero-row-this-row-diagnostic",
+                1,
+                "=IF(FALSE,[@Amount],0)",
+            ),
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("lazy zero-row current-row diagnostic should execute");
+
+    assert_eq!(result.evaluation.oxfunc_value, EvalValue::Number(0.0));
+    assert_eq!(result.bind_diagnostics.len(), 1);
+    assert!(
+        result.bind_diagnostics[0]
+            .message
+            .contains("no table data row")
+    );
+    let record = &result.structured_reference_bind_records[0];
+    assert_eq!(record.source_token_text, "[@Amount]");
+    assert_eq!(
+        record.effective_table_id.as_deref(),
+        Some("table:w074:zero")
+    );
+    assert_eq!(record.selected_column_ids, vec!["column:amount"]);
+    assert_eq!(
+        record.selected_sections,
+        vec![StructuredSectionKind::ThisRow]
+    );
+    assert!(record.uses_this_row);
+    assert!(record.caller_context_dependent);
+    assert_eq!(record.diagnostics.len(), 1);
+    assert!(record.selected_regions[0].is_empty);
+    assert_eq!(record.resolved_reference, None);
+}
+
+#[test]
 fn runtime_preserves_lexical_callables_without_host_namespace() {
     let result = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
@@ -1630,6 +1726,28 @@ fn runtime_w074_table(amount_range_ref: &str) -> TableDescriptor {
             column_name: "Amount".to_string(),
             ordinal: 1,
             column_range_ref: amount_range_ref.to_string(),
+        }],
+    }
+}
+
+fn runtime_w074_zero_row_table() -> TableDescriptor {
+    TableDescriptor {
+        table_id: "table:w074:zero".to_string(),
+        table_name: "Table1".to_string(),
+        workbook_scope_ref: "book:default".to_string(),
+        sheet_scope_ref: "sheet:default".to_string(),
+        table_range_ref: "A1:D2".to_string(),
+        row_membership_identity: Some("table:w074:zero:rows:empty".to_string()),
+        row_order_identity: Some("table:w074:zero:row-order:empty".to_string()),
+        header_region_ref: Some("A1:D1".to_string()),
+        totals_region_ref: Some("A2:D2".to_string()),
+        header_row_present: true,
+        totals_row_present: true,
+        columns: vec![TableColumnDescriptor {
+            column_id: "column:amount".to_string(),
+            column_name: "Amount".to_string(),
+            ordinal: 2,
+            column_range_ref: String::new(),
         }],
     }
 }

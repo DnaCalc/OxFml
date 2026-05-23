@@ -263,6 +263,14 @@ Current runtime/replay evidence:
    `[Gross']Margin]` bind against host-supplied `TableDescriptor` column names
    without being confused with section selectors. This gives OxCalc a generic
    packet to consume without formula-text parsing.
+8. The zero-row structured-table packet slice now admits empty data bodies
+   without requiring a parseable non-empty data-column A1 area. Generic
+   structured-reference records preserve source span/token, effective table
+   identity, selected columns/sections, empty selected-region markers, prepared
+   identity, runtime bind diagnostics for current-row access with no data row,
+   and replay projection. `#Headers`, `#Totals`, and `#All` continue to resolve
+   from table/header/totals refs plus column ordinal facts, not from a fabricated
+   data body.
 
 ## Status
 

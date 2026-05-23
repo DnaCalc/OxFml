@@ -47,7 +47,7 @@ use stacker::maybe_grow;
 
 use crate::binding::{
     AreaRef, BinaryOp, BoundExpr, BoundFormula, CellRef, ErrorRef, NameKind, NameRef,
-    NormalizedReference, ReferenceExpr, StructuredResolvedRef,
+    NormalizedReference, ReferenceExpr, StructuredResolvedRef, StructuredSectionKind,
 };
 use crate::interface::{
     HostFunctionInvocation, HostFunctionProvider, ReturnedValueSurface, TypedContextQueryBundle,
@@ -4770,7 +4770,9 @@ fn prepared_source_class(expr: &CompiledExpr) -> PreparedSourceClass {
             CompiledReferenceExpr::Atom(NormalizedReference::Structured(structured)) => {
                 match structured.resolved_reference {
                     StructuredResolvedRef::Cell(_) => PreparedSourceClass::CellReference,
-                    StructuredResolvedRef::Area(_) => PreparedSourceClass::AreaReference,
+                    StructuredResolvedRef::Area(_) | StructuredResolvedRef::EmptyArea(_) => {
+                        PreparedSourceClass::AreaReference
+                    }
                 }
             }
             CompiledReferenceExpr::Atom(NormalizedReference::External(_)) => {
@@ -5202,6 +5204,22 @@ fn reference_like_for_structured(structured: &crate::binding::StructuredRef) -> 
     match &structured.resolved_reference {
         StructuredResolvedRef::Cell(cell) => reference_like_for_cell(cell),
         StructuredResolvedRef::Area(area) => reference_like_for_area(area),
+        StructuredResolvedRef::EmptyArea(empty) => ReferenceLike {
+            kind: ReferenceKind::Structured,
+            target: format!(
+                "empty-structured:{}:{}:{}:{}",
+                empty.sheet_id,
+                match empty.section_kind {
+                    StructuredSectionKind::All => "All",
+                    StructuredSectionKind::Data => "Data",
+                    StructuredSectionKind::Headers => "Headers",
+                    StructuredSectionKind::Totals => "Totals",
+                    StructuredSectionKind::ThisRow => "ThisRow",
+                },
+                empty.selected_column_ids.join("|"),
+                empty.column_count
+            ),
+        },
     }
 }
 

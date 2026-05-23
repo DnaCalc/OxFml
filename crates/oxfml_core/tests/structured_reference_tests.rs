@@ -293,6 +293,132 @@ fn binds_data_qualified_multi_column_reference() {
 }
 
 #[test]
+fn binds_zero_row_data_column_reference_without_data_a1_area() {
+    let mut context = base_bind_context();
+    context.table_catalog = vec![sample_zero_row_table()];
+
+    let bound = bind_with_table_context("=Table1[Amount]", context);
+
+    assert!(bound.diagnostics.is_empty());
+    let NormalizedReference::Structured(structured) = &bound.normalized_references[0] else {
+        panic!("expected structured reference");
+    };
+    assert_eq!(structured.table_id, "table:zero");
+    assert_eq!(structured.selected_column_ids, vec!["column:amount"]);
+    assert_eq!(
+        structured.section_qualifiers,
+        vec![StructuredSectionKind::Data]
+    );
+    let StructuredResolvedRef::EmptyArea(empty) = &structured.resolved_reference else {
+        panic!(
+            "expected empty data body reference, got {:?}",
+            structured.resolved_reference
+        );
+    };
+    assert_eq!(empty.section_kind, StructuredSectionKind::Data);
+    assert_eq!(empty.selected_column_ids, vec!["column:amount"]);
+    assert_eq!(empty.column_count, 1);
+    assert_eq!(
+        empty.row_membership_identity.as_deref(),
+        Some("table:zero:rows:empty")
+    );
+    assert_eq!(
+        empty.row_order_identity.as_deref(),
+        Some("table:zero:row-order:empty")
+    );
+
+    let record = &bound.structured_reference_bind_records[0];
+    assert_eq!(record.source_span_utf8, TextSpan::new(1, 14));
+    assert_eq!(record.source_token_text, "Table1[Amount]");
+    assert_eq!(record.effective_table_id.as_deref(), Some("table:zero"));
+    assert_eq!(record.selected_column_ids, vec!["column:amount"]);
+    assert_eq!(record.selected_sections, vec![StructuredSectionKind::Data]);
+    assert!(record.selected_regions[0].is_empty);
+    assert!(record.selected_regions[0].column_range_refs.is_empty());
+    assert!(record.diagnostics.is_empty());
+}
+
+#[test]
+fn binds_zero_row_headers_totals_and_all_without_data_column_a1_area() {
+    let mut context = base_bind_context();
+    context.table_catalog = vec![sample_zero_row_table()];
+
+    let headers = bind_with_table_context("=Table1[#Headers]", context.clone());
+    assert!(headers.diagnostics.is_empty());
+    let NormalizedReference::Structured(headers_ref) = &headers.normalized_references[0] else {
+        panic!("expected structured headers reference");
+    };
+    let StructuredResolvedRef::Area(headers_area) = &headers_ref.resolved_reference else {
+        panic!("expected header area");
+    };
+    assert_eq!(headers_area.top_left.row, 1);
+    assert_eq!(headers_area.top_left.col, 1);
+    assert_eq!(headers_area.height, 1);
+    assert_eq!(headers_area.width, 3);
+    assert!(!headers.structured_reference_bind_records[0].selected_regions[0].is_empty);
+
+    let totals = bind_with_table_context("=Table1[#Totals]", context.clone());
+    assert!(totals.diagnostics.is_empty());
+    let NormalizedReference::Structured(totals_ref) = &totals.normalized_references[0] else {
+        panic!("expected structured totals reference");
+    };
+    let StructuredResolvedRef::Area(totals_area) = &totals_ref.resolved_reference else {
+        panic!("expected totals area");
+    };
+    assert_eq!(totals_area.top_left.row, 2);
+    assert_eq!(totals_area.top_left.col, 1);
+    assert_eq!(totals_area.height, 1);
+    assert_eq!(totals_area.width, 3);
+
+    let all_amount = bind_with_table_context("=Table1[[#All],[Amount]]", context);
+    assert!(all_amount.diagnostics.is_empty());
+    let NormalizedReference::Structured(all_ref) = &all_amount.normalized_references[0] else {
+        panic!("expected all-section structured reference");
+    };
+    let StructuredResolvedRef::Area(all_area) = &all_ref.resolved_reference else {
+        panic!("expected all-section area");
+    };
+    assert_eq!(all_area.top_left.row, 1);
+    assert_eq!(all_area.top_left.col, 2);
+    assert_eq!(all_area.height, 2);
+    assert_eq!(all_area.width, 1);
+}
+
+#[test]
+fn zero_row_current_row_reference_reports_typed_packet_diagnostic() {
+    let mut context = base_bind_context();
+    context.table_catalog = vec![sample_zero_row_table()];
+    context.enclosing_table_ref = Some(TableRef {
+        table_id: "table:zero".to_string(),
+    });
+    context.caller_table_region = Some(TableCallerRegion {
+        table_id: "table:zero".to_string(),
+        region_kind: TableRegionKind::Data,
+        data_row_offset: Some(0),
+    });
+
+    let bound = bind_with_table_context("=[@Amount]", context);
+
+    assert_eq!(bound.diagnostics.len(), 1);
+    assert!(bound.diagnostics[0].message.contains("no table data row"));
+    let record = &bound.structured_reference_bind_records[0];
+    assert_eq!(record.source_token_text, "[@Amount]");
+    assert!(record.omitted_table_name);
+    assert_eq!(record.effective_table_id.as_deref(), Some("table:zero"));
+    assert_eq!(record.selected_column_ids, vec!["column:amount"]);
+    assert_eq!(
+        record.selected_sections,
+        vec![StructuredSectionKind::ThisRow]
+    );
+    assert!(record.uses_this_row);
+    assert!(record.caller_context_dependent);
+    assert_eq!(record.diagnostics.len(), 1);
+    assert!(record.selected_regions[0].is_empty);
+    assert!(record.selected_regions[0].column_range_refs.is_empty());
+    assert_eq!(record.resolved_reference, None);
+}
+
+#[test]
 fn binds_escaped_structured_column_names_without_section_confusion() {
     let mut context = base_bind_context();
     context.table_catalog = vec![sample_table_with_escaped_columns()];
@@ -694,6 +820,42 @@ fn sample_table() -> TableDescriptor {
                 column_name: "Tax".to_string(),
                 ordinal: 3,
                 column_range_ref: "C2:C4".to_string(),
+            },
+        ],
+    }
+}
+
+fn sample_zero_row_table() -> TableDescriptor {
+    TableDescriptor {
+        table_id: "table:zero".to_string(),
+        table_name: "Table1".to_string(),
+        workbook_scope_ref: "book:default".to_string(),
+        sheet_scope_ref: "sheet:default".to_string(),
+        table_range_ref: "A1:C2".to_string(),
+        row_membership_identity: Some("table:zero:rows:empty".to_string()),
+        row_order_identity: Some("table:zero:row-order:empty".to_string()),
+        header_region_ref: Some("A1:C1".to_string()),
+        totals_region_ref: Some("A2:C2".to_string()),
+        header_row_present: true,
+        totals_row_present: true,
+        columns: vec![
+            TableColumnDescriptor {
+                column_id: "column:label".to_string(),
+                column_name: "Label".to_string(),
+                ordinal: 1,
+                column_range_ref: String::new(),
+            },
+            TableColumnDescriptor {
+                column_id: "column:amount".to_string(),
+                column_name: "Amount".to_string(),
+                ordinal: 2,
+                column_range_ref: String::new(),
+            },
+            TableColumnDescriptor {
+                column_id: "column:tax".to_string(),
+                column_name: "Tax".to_string(),
+                ordinal: 3,
+                column_range_ref: String::new(),
             },
         ],
     }

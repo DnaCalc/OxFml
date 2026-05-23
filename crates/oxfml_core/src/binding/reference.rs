@@ -105,6 +105,18 @@ pub enum StructuredSelectorKind {
 pub enum StructuredResolvedRef {
     Cell(CellRef),
     Area(AreaRef),
+    EmptyArea(StructuredEmptyAreaRef),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StructuredEmptyAreaRef {
+    pub workbook_id: String,
+    pub sheet_id: String,
+    pub section_kind: StructuredSectionKind,
+    pub selected_column_ids: Vec<String>,
+    pub column_count: u32,
+    pub row_membership_identity: Option<String>,
+    pub row_order_identity: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -125,6 +137,7 @@ pub struct StructuredReferenceSelectedRegion {
     pub section_kind: StructuredSectionKind,
     pub region_ref: Option<String>,
     pub column_range_refs: Vec<String>,
+    pub is_empty: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

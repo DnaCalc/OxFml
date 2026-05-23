@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
-use oxfml_core::binding::BindContext;
+use oxfml_core::binding::{BindContext, StructuredResolvedRef, StructuredSectionKind};
 use oxfml_core::consumer::editor::{
     EditorAnalysisStage, EditorEditService, EditorEnvironment, EditorPlanOptions,
 };
@@ -1345,6 +1345,52 @@ fn replay_projection_carries_escaped_structured_column_bind_packet() {
 }
 
 #[test]
+fn replay_projection_carries_zero_row_structured_table_packet() {
+    let runtime_result = RuntimeEnvironment::new()
+        .with_table_context(vec![replay_w074_zero_row_table()], None, None)
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new(
+                "replay:w074-zero-row-structured-table",
+                1,
+                "=IF(FALSE,Table1[#Data],0)",
+            ),
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("zero-row structured table runtime execution should succeed");
+
+    let projection =
+        ReplayProjectionService::project(ReplayProjectionRequest::runtime_result(&runtime_result));
+    let identity = projection
+        .prepared_formula_identity
+        .expect("runtime projection should preserve prepared identity");
+    let record = &identity.structured_reference_bind_records[0];
+
+    assert_eq!(
+        runtime_result.evaluation.oxfunc_value,
+        EvalValue::Number(0.0)
+    );
+    assert_eq!(
+        identity.structured_reference_bind_records,
+        runtime_result.structured_reference_bind_records
+    );
+    assert_eq!(record.source_token_text, "Table1[#Data]");
+    assert_eq!(
+        record.effective_table_id.as_deref(),
+        Some("table:w074:zero-replay")
+    );
+    assert_eq!(record.selected_column_ids, vec!["column:amount"]);
+    assert_eq!(record.selected_sections, vec![StructuredSectionKind::Data]);
+    assert!(record.selected_regions[0].is_empty);
+    assert!(record.selected_regions[0].column_range_refs.is_empty());
+    let Some(StructuredResolvedRef::EmptyArea(empty)) = &record.resolved_reference else {
+        panic!("expected replay-projected empty structured data body reference");
+    };
+    assert_eq!(empty.section_kind, StructuredSectionKind::Data);
+    assert_eq!(empty.column_count, 1);
+    assert!(identity.table_context_fingerprint.is_some());
+}
+
+#[test]
 fn replay_projection_preserves_no_host_namespace_lexical_guardrail() {
     let runtime_result = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
@@ -1564,6 +1610,28 @@ fn replay_w074_table(amount_range_ref: &str) -> TableDescriptor {
             column_name: "Amount".to_string(),
             ordinal: 1,
             column_range_ref: amount_range_ref.to_string(),
+        }],
+    }
+}
+
+fn replay_w074_zero_row_table() -> TableDescriptor {
+    TableDescriptor {
+        table_id: "table:w074:zero-replay".to_string(),
+        table_name: "Table1".to_string(),
+        workbook_scope_ref: "book:default".to_string(),
+        sheet_scope_ref: "sheet:default".to_string(),
+        table_range_ref: "A1:D2".to_string(),
+        row_membership_identity: Some("table:w074:zero-replay:rows:empty".to_string()),
+        row_order_identity: Some("table:w074:zero-replay:row-order:empty".to_string()),
+        header_region_ref: Some("A1:D1".to_string()),
+        totals_region_ref: Some("A2:D2".to_string()),
+        header_row_present: true,
+        totals_row_present: true,
+        columns: vec![TableColumnDescriptor {
+            column_id: "column:amount".to_string(),
+            column_name: "Amount".to_string(),
+            ordinal: 2,
+            column_range_ref: String::new(),
         }],
     }
 }
