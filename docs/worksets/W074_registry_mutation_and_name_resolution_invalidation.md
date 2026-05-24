@@ -114,6 +114,14 @@ Current observed tranche:
    versus defined-name, UDF versus defined-name, sheet-versus-workbook
    defined-name, defined-name `LAMBDA`, lexical-local, late-UDF-registration,
    and UDF-removal rows in the matrix.
+   Excel COM 16.0 build 20026 probes on 2026-05-24 add the broader non-table
+   rows needed by `fml-ds0.6.4`: UDF-only call versus bare-name behavior,
+   UDF versus workbook defined-name `LAMBDA`, UDF versus sheet-scoped scalar
+   name across same-sheet and other-sheet formulas, workbook-versus-sheet
+   defined-name `LAMBDA`, sheet scalar versus workbook `LAMBDA`, built-in
+   versus defined-name `LAMBDA`, defined-name scalar-to-`LAMBDA`-to-delete
+   mutation, and lexical scalar/callable locals against external UDF and
+   defined-name `LAMBDA` candidates.
 2. Deterministic non-Excel evidence now covers the explicit host-reference
    bypass row through OxCalc host-resolver/replay facts plus OxFml runtime and
    replay facade preservation of `resolution_layer=explicit_host_ref`, source
@@ -164,10 +172,10 @@ Current observed tranche:
    W036 work, not W074 name/call freeze evidence.
 5. The observed rows are provisional evidence for those row shapes only; they
    do not freeze the full name/call rule.
-6. Name/call freeze remains blocked until the rows still marked partial or
-   open are resolved, including broader workbook/sheet/UDF/defined-name scope
-   combinations and full structured table semantics outside the W056
-   table-context packet.
+6. Name/call freeze remains blocked on the final `fml-ds0.6.5` audit and
+   OxCalc handoff. The final audit must distill the observed workbook/sheet,
+   UDF, defined-name, defined-name-`LAMBDA`, lexical-local, explicit-host, and
+   structured-reference rows into a product rule or a precise residual blocker.
 
 Current product-host mapping rule:
 1. TreeCalc host names may be supplied as product-neutral host-name bind packets and map to the closest Excel defined-name lane until this matrix proves a different extension is needed,
@@ -285,8 +293,8 @@ Current runtime/replay evidence:
   - registry snapshot identity packet,
   - cache invalidation implementation,
   - broader bind/editor cache migration beyond the current runtime formula-call registry/capability invalidation evidence,
-  - Excel oracle matrix for built-in/UDF/defined-name/LAMBDA shadowing,
-  - final freeze audit for the `W051` host-name and lambda-valued-node defined-name-lane mapping,
+  - final W074 freeze audit for built-in/UDF/defined-name/LAMBDA shadowing,
+  - final freeze audit for the `W051` host-name and lambda-valued-node defined-name-lane mapping plus OxCalc handoff,
   - broader formula-call name/call precedence freeze beyond the bounded registry-view admission, unregister/default-registry, and capability-denial runtime classification tranche,
   - broader W036 structured-reference/table formula semantics beyond the W056 packet coverage, table-context identity facts, and current table/name oracle rows,
   - prepared identity/cache invalidation inputs for registry, structure, host namespace, table context, caller context, and resolution-rule changes.
