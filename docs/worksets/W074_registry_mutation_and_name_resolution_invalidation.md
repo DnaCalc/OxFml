@@ -91,8 +91,9 @@ tranches:
    host-reference syntax.
 3. `fml-ds0.6.4` owns non-table Excel oracle expansion for broader
    workbook/sheet/UDF/defined-name/LAMBDA collisions.
-4. `fml-ds0.6.5` is the final freeze audit and OxCalc handoff, blocked on the
-   remaining oracle bead above.
+4. `fml-ds0.6.5` is the final freeze audit and OxCalc handoff. It now records
+   the W051/W056 host-name mapping rule and leaves broader bind/editor cache
+   migration as a separate W074 lane.
 
 Current oracle-matrix shape:
 1. each row must identify the source position as `call_callee`, `non_call_bare_name`, `let_lambda_lexical`, `explicit_host_reference`, or `structured_reference` for table-specific rows that are not ordinary name/call precedence claims,
@@ -122,6 +123,10 @@ Current observed tranche:
    versus defined-name `LAMBDA`, defined-name scalar-to-`LAMBDA`-to-delete
    mutation, and lexical scalar/callable locals against external UDF and
    defined-name `LAMBDA` candidates.
+   The final freeze audit added one supplemental Excel COM 16.0 build 20026
+   row for callable lexical locals named `SUM`, confirming that built-in
+   functions keep the call-callee frontier even when a same-named lexical
+   callable is visible.
 2. Deterministic non-Excel evidence now covers the explicit host-reference
    bypass row through OxCalc host-resolver/replay facts plus OxFml runtime and
    replay facade preservation of `resolution_layer=explicit_host_ref`, source
@@ -172,16 +177,23 @@ Current observed tranche:
    W036 work, not W074 name/call freeze evidence.
 5. The observed rows are provisional evidence for those row shapes only; they
    do not freeze the full name/call rule.
-6. Name/call freeze remains blocked on the final `fml-ds0.6.5` audit and
-   OxCalc handoff. The final audit must distill the observed workbook/sheet,
-   UDF, defined-name, defined-name-`LAMBDA`, lexical-local, explicit-host, and
-   structured-reference rows into a product rule or a precise residual blocker.
+6. The final `fml-ds0.6.5` audit distills the observed workbook/sheet, UDF,
+   defined-name, defined-name-`LAMBDA`, lexical-local, explicit-host, and
+   structured-reference rows into the W051/W056 host-name mapping rule recorded
+   in `docs/handoffs/HANDOFF_CALC_005_W074_NAME_CALL_FREEZE.md`.
 
 Current product-host mapping rule:
 1. TreeCalc host names may be supplied as product-neutral host-name bind packets and map to the closest Excel defined-name lane until this matrix proves a different extension is needed,
 2. TreeCalc lambda-valued host nodes may be supplied as callable host-name bind packets and map to the closest Excel defined-name `LAMBDA` lane until evidence justifies a separate extension,
 3. explicit host-reference syntax may bypass ordinary name/call ambiguity only through the generic host hook and must still emit replay-visible resolution-layer facts,
-4. broad shadowing among built-ins, UDFs, workbook/sheet defined names, defined-name `LAMBDA` values, lexical locals, and host names remains provisional until the non-table oracle expansion and freeze audit close.
+4. built-in functions keep the call-callee frontier; TreeCalc host names and
+   lambda-valued host nodes do not override built-in function calls in ordinary
+   call-callee position unless a future explicit extension is evidenced and
+   versioned,
+5. visible host names supplied through the defined-name lane can shadow
+   registered UDFs in the observed non-built-in collision shape,
+6. lexical `LET`/`LAMBDA` locals remain OxFml-internal guardrails, not host
+   namespace entries.
 
 ### B074-05: Unregister And Capability-Denial Invalidation
 
@@ -293,8 +305,7 @@ Current runtime/replay evidence:
   - registry snapshot identity packet,
   - cache invalidation implementation,
   - broader bind/editor cache migration beyond the current runtime formula-call registry/capability invalidation evidence,
-  - final W074 freeze audit for built-in/UDF/defined-name/LAMBDA shadowing,
-  - final freeze audit for the `W051` host-name and lambda-valued-node defined-name-lane mapping plus OxCalc handoff,
-  - broader formula-call name/call precedence freeze beyond the bounded registry-view admission, unregister/default-registry, and capability-denial runtime classification tranche,
+  - OxCalc acknowledgement and W056 exercised consumption of the current `W051`
+    host-name and lambda-valued-node defined-name-lane mapping,
   - broader W036 structured-reference/table formula semantics beyond the W056 packet coverage, table-context identity facts, and current table/name oracle rows,
   - prepared identity/cache invalidation inputs for registry, structure, host namespace, table context, caller context, and resolution-rule changes.

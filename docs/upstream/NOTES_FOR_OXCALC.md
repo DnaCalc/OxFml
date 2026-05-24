@@ -1060,7 +1060,46 @@ Current OxCalc implication:
 
 Remaining non-claims:
 1. full structured-reference grammar/table semantics remain broader W036 work,
-2. broad W074 name/call precedence is still blocked on non-table oracle and
-   the final freeze audit,
+2. at the time of this table-context tranche, broad W074 name/call precedence
+   was still blocked on non-table oracle and the final freeze audit; Section 28
+   records the later W051/W056 host-name mapping freeze, while broader future
+   name-world extensions remain separate,
 3. pack-grade replay promotion for the table packet is not claimed by this
    local evidence tranche.
+
+## 28. W074 Name/Call Freeze For W051/W056 Host Names
+
+OxFml has completed the W074/CALC-005 name/call freeze audit for the current
+W051/W056 TreeCalc host-name mapping rule.
+
+Current OxFml handoff:
+1. `docs/handoffs/HANDOFF_CALC_005_W074_NAME_CALL_FREEZE.md`
+
+Current OxFml rule for OxCalc:
+1. explicit host references bypass ordinary name/call ambiguity through the
+   generic host hook and must emit replay-visible resolution-layer facts,
+2. built-in functions keep the call-callee frontier even when workbook/sheet
+   defined names, defined-name `LAMBDA` values, or lexical locals share the
+   display name,
+3. registered UDFs are callable in call position but are not bare value names,
+4. visible defined names, including lambda-valued defined names, shadow
+   same-named registered UDFs in the observed non-built-in collisions,
+5. sheet/workspace/caller context affects visible name scope and therefore
+   participates in prepared identity,
+6. lexical `LET`/`LAMBDA` locals remain OxFml-internal and are not host
+   namespace entries,
+7. defined-name kind and presence changes are invalidation inputs,
+8. table-name and structured-reference behavior stays on the table-context lane.
+
+OxCalc consumption implication:
+1. TreeCalc host value names should map to the Excel defined-name lane.
+2. TreeCalc lambda-valued host nodes should map to the Excel defined-name
+   `LAMBDA` lane.
+3. TreeCalc host names must not override built-in function calls in ordinary
+   call-callee position unless a later product extension is explicitly
+   evidenced and versioned.
+4. If OxCalc needs to select a colliding host object unambiguously, use explicit
+   host-reference syntax rather than asking OxFml to special-case TreeCalc
+   names.
+5. OxCalc remains owner of TreeCalc selector parsing, table catalogs, reference
+   carriers, dependency facts, and invalidation.

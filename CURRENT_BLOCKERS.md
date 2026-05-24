@@ -1,21 +1,12 @@
 # CURRENT_BLOCKERS.md — OxFml
 
-Status: 2 active blockers.
+Status: 1 active blocker.
 
 Last reviewed: 2026-05-24 after non-table W074 oracle expansion and OxFml validation.
 
 ---
 
 ## Active Blockers
-
-### BLK-FML-008: W074 name/call freeze still lacks full oracle and host-extension evidence
-
-- **Status**: active
-- **Impact**: blocks freezing the generic W074/CALC-005 name/call precedence rule for product host namespaces; does not block the current generic runtime/replay host-reference pass-through or DNA OneCalc lexical guardrail
-- **Current state**: Excel COM 16.0 black-box probes on 2026-05-22 populated selected W074 matrix rows for built-in versus defined-name, UDF versus defined-name, sheet versus workbook defined-name, defined-name `LAMBDA`, lexical locals, late UDF registration, UDF removal, and defined-name/table-name collisions. Excel COM 16.0 build 20026 probes on 2026-05-24 add broader non-table rows for UDF-only call versus bare-name behavior, UDF versus workbook defined-name `LAMBDA`, UDF versus sheet-scoped scalar name across same-sheet and other-sheet formulas, workbook-versus-sheet defined-name `LAMBDA`, sheet scalar versus workbook `LAMBDA`, built-in versus defined-name `LAMBDA`, defined-name scalar-to-`LAMBDA`-to-delete mutation, and lexical scalar/callable locals against external UDF and defined-name `LAMBDA` candidates. The explicit host-reference row now has deterministic non-Excel OxCalc/OxFml runtime/replay evidence for `resolution_layer=explicit_host_ref`, source token/span, opaque selector, and prepared identity inputs. A narrow OxFml runtime/replay slice also proves that opt-in generic host formula context carries `host_namespace_version` through prepared identity and replay projection, and changing it changes the prepared key even when there are no explicit host-reference bind results. Bare host-name runtime evidence now admits a product-neutral `RuntimeHostNameBinding` packet mapped to the existing defined-name / defined-name-`LAMBDA` evaluator lane, keeps it separate from explicit host references, preserves source token/span and replay diagnostics, and includes host-name bind results plus host namespace/caller context in prepared identity and replay. This supports TreeCalc's defined-name-lane mapping but still does not freeze broader built-in/UDF/defined-name shadowing precedence. Capability-overlay denial now has focused OxFml/OxFunc registry/editor evidence plus runtime formula-call evidence: denied entries remain registry-present, runtime formula-call path blocks the denied call, capability overlay identity and denials change prepared identity, and replay projection carries registry snapshot/capability-denial identity. Runtime UDF registry-view admission now distinguishes registered UDF calls from unknown functions without implementing UDF invocation, changes prepared identity with registration, returns to `#NAME?`-style unknown classification after unregister/default registry, changes prepared identity on that transition, and preserves registry snapshot identity in replay projection. Registered-external reconciliation now has current W093/W052 agreement: descriptor-only `REGISTER.ID` / `CALL` mutation stays adjacent registered-external state and does not create bind-visible ordinary UDF entries without friendly worksheet-visible metadata. Table-context evidence now covers the W056 table-adjacent residuals: 2026-05-22 probes observed the workbook defined-name/table-name collision row, and 2026-05-23 Excel COM 16.0 build 20026 probes add table-only bare/call classification, sheet-defined-name/table-name collision, table/column rename formula rewrite, and table/UDF collision evidence. Local OxFml runtime/replay tests prove the generic table-context prepared identity inputs for table id, table range, row membership/order, exact header/totals refs, selected column id/ordinal/range, enclosing table, caller row, and unrelated catalog mutation without TreeCalc semantics.
-- **Exact unblock steps**: execute the remaining residual W074 bead under `fml-ds0.6`: `fml-ds0.6.5` as the final freeze audit and OxCalc handoff. Only after that bead distills the observed rows into a rule or exact typed residual blocker may the name/call rule move beyond provisional. Broader full structured-reference grammar/table semantics remain W036 work rather than this blocker.
-- **Recommendation**: wait
-- **Opened**: 2026-05-22
 
 ### BLK-FML-004: `FTC-0902` exact reduced `row(...)` witnesses currently collapse into the existing built-in-collision frontier
 
@@ -28,6 +19,16 @@ Last reviewed: 2026-05-24 after non-table W074 oracle expansion and OxFml valida
 ---
 
 ## Resolved Blockers
+
+### BLK-FML-008: W074 name/call freeze for W051/W056 host names
+
+- **Status**: resolved for the W051/W056 host-name mapping rule
+- **Impact**: no longer blocks OxCalc from mapping TreeCalc host names to the defined-name lane and lambda-valued host nodes to the defined-name-`LAMBDA` lane; OxCalc still needs to consume the handoff and exercise the path under W056
+- **Current state**: Excel COM 16.0 black-box probes now cover the required current W074/CALC-005 row set for W051/W056 host-name mapping, including built-in versus defined-name, UDF versus defined-name, sheet versus workbook defined-name, defined-name `LAMBDA`, lexical locals, late UDF registration, UDF removal, defined-name mutation, table-name rows, and the 2026-05-24 non-table expansion plus callable lexical `SUM` frontier. Runtime/replay evidence covers explicit host references, host namespace version identity, product-neutral bare host-name packets mapped through the defined-name / defined-name-`LAMBDA` evaluator lane, registry/capability runtime formula-call identity, and DnaOneCalc no-host lexical guardrails. Final handoff is recorded in `docs/handoffs/HANDOFF_CALC_005_W074_NAME_CALL_FREEZE.md`.
+- **Exact unblock steps**: completed for W051/W056 name/call mapping. Remaining W074 work moves to ordinary open lanes: broader bind/editor cache migration, future product-specific name-world extensions if admitted, and W036 structured-reference grammar/table semantics beyond the W056 packet slice.
+- **Recommendation**: resolved
+- **Opened**: 2026-05-22
+- **Resolved**: 2026-05-24
 
 ### BLK-FML-009: OxFunc sibling compile failure blocks fml-ds0.15 OxFml validation
 

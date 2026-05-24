@@ -48,6 +48,9 @@ display text, and `Value2`.
    `LAMBDA` candidates for the tested identifier. A lexical scalar local
    returned `9` in non-call position and `#VALUE!` in call position; a lexical
    callable local returned `3` in call position.
+9. A lexical callable local or `LAMBDA` parameter named `SUM` did not override
+   the built-in in call position. `SUM(2)` returned `2` through the built-in,
+   while bare references to the lexical callable returned `#CALC!`.
 
 Observed output:
 
@@ -312,6 +315,42 @@ Observed output:
       "stored": "=LET(LexScalar,LAMBDA(x,x+2),LexScalar(1))",
       "text": "3",
       "value": 3.0
+    },
+    {
+      "scenario": "lexical_callable_named_sum_vs_builtin",
+      "address": "A1",
+      "formula": "=LET(SUM,LAMBDA(x,x+10),SUM(2))",
+      "set": "accepted",
+      "stored": "=LET(SUM,LAMBDA(x,x+10),SUM(2))",
+      "text": "2",
+      "value": 2.0
+    },
+    {
+      "scenario": "lexical_callable_named_sum_bare",
+      "address": "A2",
+      "formula": "=LET(SUM,LAMBDA(x,x+10),SUM)",
+      "set": "accepted",
+      "stored": "=LET(SUM,LAMBDA(x,x+10),SUM)",
+      "text": "#CALC!",
+      "value": -2146826238
+    },
+    {
+      "scenario": "lambda_param_callable_named_sum_vs_builtin",
+      "address": "A3",
+      "formula": "=LAMBDA(SUM,SUM(2))(LAMBDA(x,x+10))",
+      "set": "accepted",
+      "stored": "=LAMBDA(SUM,SUM(2))(LAMBDA(x,x+10))",
+      "text": "2",
+      "value": 2.0
+    },
+    {
+      "scenario": "lambda_param_callable_named_sum_bare",
+      "address": "A4",
+      "formula": "=LAMBDA(SUM,SUM)(LAMBDA(x,x+10))",
+      "set": "accepted",
+      "stored": "=LAMBDA(SUM,SUM)(LAMBDA(x,x+10))",
+      "text": "#CALC!",
+      "value": -2146826238
     }
   ]
 }
@@ -335,7 +374,9 @@ For the final W074 freeze audit:
 7. lexical locals remain OxFml-owned and are not host namespace entries; a
    lexical callable local can win call position against external candidates,
    while a lexical scalar local in call position produces the observed scalar
-   non-callable error.
+   non-callable error;
+8. built-in function names keep their call-callee frontier even when a lexical
+   callable local with the same display name is visible.
 
 TreeCalc host names and lambda-valued host nodes may continue to map to the
 closest defined-name and defined-name-`LAMBDA` lanes, but product admission
