@@ -2173,12 +2173,652 @@ pub struct RuntimeHostFormulaContext {
     pub structure_context_version: Option<String>,
     pub caller_context_identity: Option<String>,
     pub table_context_identity: Option<String>,
+    pub host_reference_syntax_rules: Vec<RuntimeHostReferenceSyntaxRule>,
 }
 
 impl RuntimeHostFormulaContext {
     pub fn cache_identity_contribution(&self) -> String {
         runtime_hash_debug(self)
     }
+
+    #[must_use]
+    pub fn declared_host_reference_syntax_matches(
+        &self,
+        source: &FormulaSourceRecord,
+    ) -> Vec<RuntimeHostReferenceSyntaxMatch> {
+        self.host_reference_syntax_rules
+            .iter()
+            .flat_map(|rule| declared_host_reference_syntax_matches(source, self, rule))
+            .collect()
+    }
+
+    #[must_use]
+    pub fn project_declared_host_reference_syntax(
+        &self,
+        source: &FormulaSourceRecord,
+    ) -> RuntimeHostReferenceSyntaxProjection {
+        self.project_host_reference_syntax_matches(
+            source,
+            self.declared_host_reference_syntax_matches(source),
+        )
+    }
+
+    #[must_use]
+    pub fn project_host_reference_syntax_matches(
+        &self,
+        source: &FormulaSourceRecord,
+        matches: impl IntoIterator<Item = RuntimeHostReferenceSyntaxMatch>,
+    ) -> RuntimeHostReferenceSyntaxProjection {
+        let mut matches = matches.into_iter().collect::<Vec<_>>();
+        matches.sort_by_key(|syntax_match| syntax_match.source_span.start);
+
+        let mut projected_text = String::with_capacity(source.entered_formula_text.len());
+        let mut accepted_matches = Vec::new();
+        let mut diagnostics = Vec::new();
+        let mut cursor = 0usize;
+        for syntax_match in matches {
+            let start = syntax_match.source_span.start;
+            let end = syntax_match.source_span.end();
+            if start < cursor {
+                diagnostics.push(format!(
+                    "overlapping_host_reference_syntax_match:{}:{}-{end}",
+                    syntax_match.source_token_text, start
+                ));
+                continue;
+            }
+            projected_text.push_str(&source.entered_formula_text[cursor..start]);
+            projected_text.push_str(&syntax_match.formal_token_text());
+            cursor = end;
+            accepted_matches.push(syntax_match);
+        }
+        if accepted_matches.is_empty() {
+            return RuntimeHostReferenceSyntaxProjection {
+                source: source.clone(),
+                matches: accepted_matches,
+                diagnostics,
+            };
+        }
+        projected_text.push_str(&source.entered_formula_text[cursor..]);
+        let mut projected_source = source.clone();
+        projected_source.stored_formula_text = Some(source.entered_formula_text.clone());
+        projected_source.entered_formula_text = projected_text;
+        RuntimeHostReferenceSyntaxProjection {
+            source: projected_source,
+            matches: accepted_matches,
+            diagnostics,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeHostReferenceSyntaxProjection {
+    pub source: FormulaSourceRecord,
+    pub matches: Vec<RuntimeHostReferenceSyntaxMatch>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeHostReferenceSyntaxRule {
+    pub rule_id: String,
+    pub rule_family: String,
+    pub pattern_text: String,
+    pub token_kind: String,
+    pub resolution_layer: String,
+    pub shape_hint: Option<String>,
+    pub caller_context_dependent: bool,
+    pub opaque_selector_payload: Option<String>,
+}
+
+impl RuntimeHostReferenceSyntaxRule {
+    #[must_use]
+    pub fn literal(
+        rule_id: impl Into<String>,
+        rule_family: impl Into<String>,
+        pattern_text: impl Into<String>,
+    ) -> Self {
+        Self {
+            rule_id: rule_id.into(),
+            rule_family: rule_family.into(),
+            pattern_text: pattern_text.into(),
+            token_kind: "literal".to_string(),
+            resolution_layer: "explicit_host_ref".to_string(),
+            shape_hint: None,
+            caller_context_dependent: false,
+            opaque_selector_payload: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeHostReferenceSyntaxMatch {
+    pub syntax_match_handle: String,
+    pub rule_id: String,
+    pub rule_family: String,
+    pub source_span: TextSpan,
+    pub source_token_text: String,
+    pub token_kind: String,
+    pub opaque_selector_payload: Option<String>,
+    pub resolution_layer: String,
+    pub shape_hint: Option<String>,
+    pub caller_context_dependent: bool,
+    pub diagnostics: Vec<String>,
+}
+
+impl RuntimeHostReferenceSyntaxMatch {
+    #[must_use]
+    pub fn formal_token_text(&self) -> String {
+        format!(
+            "HOST_REF_{}_{}",
+            self.source_span.start, self.source_span.len
+        )
+    }
+
+    #[must_use]
+    pub fn unresolved_bind_result(&self) -> RuntimeHostReferenceBindResult {
+        RuntimeHostReferenceBindResult {
+            reference_handle: self.syntax_match_handle.clone(),
+            formal_reference_id: Some(self.formal_token_text()),
+            source_span: self.source_span,
+            source_token_text: self.source_token_text.clone(),
+            opaque_selector_payload: self.opaque_selector_payload.clone(),
+            resolution_layer: self.resolution_layer.clone(),
+            shape_hint: self.shape_hint.clone(),
+            caller_context_dependent: self.caller_context_dependent,
+            diagnostics: self.diagnostics.clone(),
+            replay_identity_contribution: format!(
+                "host-reference-syntax-match:{}:{}:{}:{}",
+                self.rule_id, self.rule_family, self.source_span.start, self.source_span.len
+            ),
+        }
+    }
+}
+
+fn declared_host_reference_syntax_matches(
+    source: &FormulaSourceRecord,
+    context: &RuntimeHostFormulaContext,
+    rule: &RuntimeHostReferenceSyntaxRule,
+) -> Vec<RuntimeHostReferenceSyntaxMatch> {
+    let text = source.entered_formula_text.as_str();
+    if rule.pattern_text.is_empty() {
+        return Vec::new();
+    }
+
+    let mut matches = Vec::new();
+    let mut index = 0usize;
+    let mut in_string = false;
+    while index < text.len() {
+        let Some(current) = text[index..].chars().next() else {
+            break;
+        };
+
+        if in_string {
+            if current == '"' {
+                let next = index + current.len_utf8();
+                if text[next..].starts_with('"') {
+                    index = next + 1;
+                } else {
+                    in_string = false;
+                    index = next;
+                }
+            } else {
+                index += current.len_utf8();
+            }
+            continue;
+        }
+        if current == '"' {
+            in_string = true;
+            index += current.len_utf8();
+            continue;
+        }
+
+        if text[index..].starts_with(rule.pattern_text.as_str()) {
+            if rule.pattern_text == "{"
+                && let Some(syntax_match) =
+                    declared_host_reference_literal_array_syntax_match(text, index, context, rule)
+            {
+                index = syntax_match.source_span.end();
+                matches.push(syntax_match);
+                continue;
+            }
+            if rule.pattern_text == "^"
+                && let Some(syntax_match) =
+                    declared_host_reference_repeated_prefix_syntax_match(text, index, context, rule)
+            {
+                index = syntax_match.source_span.end();
+                matches.push(syntax_match);
+                continue;
+            }
+            if rule.pattern_text == "["
+                && let Some(syntax_match) =
+                    declared_host_reference_bracket_path_syntax_match(text, index, context, rule)
+            {
+                index = syntax_match.source_span.end();
+                matches.push(syntax_match);
+                continue;
+            }
+            let selector_end = index + rule.pattern_text.len();
+            if host_reference_literal_pattern_is_prefix_of_longer_token(
+                text,
+                selector_end,
+                &rule.pattern_text,
+            ) {
+                index += current.len_utf8();
+                continue;
+            }
+            let qualified_base = qualified_host_reference_base(text, index, &rule.pattern_text);
+            let qualified_tail = qualified_host_reference_tail(text, selector_end);
+            let end = qualified_tail
+                .as_ref()
+                .map_or(selector_end, |tail| tail.source_end);
+            let unqualified_match =
+                host_syntax_boundary_before(text, index) && host_syntax_boundary_after(text, end);
+            let qualified_match = qualified_base.is_some() && host_syntax_boundary_after(text, end);
+            if !unqualified_match && !qualified_match {
+                index += current.len_utf8();
+                continue;
+            }
+
+            let span_start = qualified_base
+                .as_ref()
+                .map_or(index, |base| base.source_start);
+            let span = TextSpan::new(span_start, end - span_start);
+            let source_token_text = text[span.start..span.end()].to_string();
+            let opaque_selector_payload = if qualified_base.is_some() || qualified_tail.is_some() {
+                Some(host_reference_selector_payload_with_qualifiers(
+                    rule.opaque_selector_payload.as_deref(),
+                    qualified_base.as_ref().map(|base| base.token_text.as_str()),
+                    qualified_tail.as_ref().map(|tail| tail.token_text.as_str()),
+                ))
+            } else {
+                rule.opaque_selector_payload.clone()
+            };
+            matches.push(RuntimeHostReferenceSyntaxMatch {
+                syntax_match_handle: format!(
+                    "host-reference-syntax:{}:{}:{}:{}",
+                    context.dialect_id, rule.rule_id, span.start, span.len
+                ),
+                rule_id: rule.rule_id.clone(),
+                rule_family: rule.rule_family.clone(),
+                source_span: span,
+                source_token_text,
+                token_kind: rule.token_kind.clone(),
+                opaque_selector_payload,
+                resolution_layer: rule.resolution_layer.clone(),
+                shape_hint: rule.shape_hint.clone(),
+                caller_context_dependent: rule.caller_context_dependent,
+                diagnostics: Vec::new(),
+            });
+            index += rule.pattern_text.len();
+            continue;
+        }
+
+        index += current.len_utf8();
+    }
+    matches
+}
+
+fn declared_host_reference_bracket_path_syntax_match(
+    text: &str,
+    start: usize,
+    context: &RuntimeHostFormulaContext,
+    rule: &RuntimeHostReferenceSyntaxRule,
+) -> Option<RuntimeHostReferenceSyntaxMatch> {
+    let qualified_base = if start > 0 && text[..start].ends_with('.') {
+        qualified_host_reference_base_before_dot(text, start - 1)
+    } else {
+        None
+    };
+    if qualified_base.is_none() && !host_syntax_boundary_before(text, start) {
+        return None;
+    }
+    let end = host_reference_path_token_end(text, start)?;
+    if !host_syntax_boundary_after(text, end) {
+        return None;
+    }
+    let span_start = qualified_base
+        .as_ref()
+        .map_or(start, |base| base.source_start);
+    let span = TextSpan::new(span_start, end - span_start);
+    let source_token_text = text[span.start..span.end()].to_string();
+    let mut opaque_selector_payload = rule
+        .opaque_selector_payload
+        .clone()
+        .unwrap_or_else(|| "selector-family:escaped-path".to_string());
+    opaque_selector_payload.push_str(";path_token_text=");
+    opaque_selector_payload.push_str(&source_token_text);
+
+    Some(RuntimeHostReferenceSyntaxMatch {
+        syntax_match_handle: format!(
+            "host-reference-syntax:{}:{}:{}:{}",
+            context.dialect_id, rule.rule_id, span.start, span.len
+        ),
+        rule_id: rule.rule_id.clone(),
+        rule_family: rule.rule_family.clone(),
+        source_span: span,
+        source_token_text,
+        token_kind: rule.token_kind.clone(),
+        opaque_selector_payload: Some(opaque_selector_payload),
+        resolution_layer: rule.resolution_layer.clone(),
+        shape_hint: rule.shape_hint.clone(),
+        caller_context_dependent: rule.caller_context_dependent,
+        diagnostics: Vec::new(),
+    })
+}
+
+fn host_reference_path_token_end(text: &str, bracket_start: usize) -> Option<usize> {
+    let mut end = host_reference_bracketed_segment_end(text, bracket_start)?;
+    loop {
+        let after = text.get(end..)?;
+        if !after.starts_with('.') {
+            break;
+        }
+        let segment_start = end + 1;
+        let first = text[segment_start..].chars().next()?;
+        if first == '[' {
+            end = host_reference_bracketed_segment_end(text, segment_start)?;
+        } else if host_reference_base_leading_char(first) {
+            end = segment_start;
+            for (offset, ch) in text[segment_start..].char_indices() {
+                if host_reference_base_char(ch) {
+                    end = segment_start + offset + ch.len_utf8();
+                } else {
+                    break;
+                }
+            }
+        } else {
+            break;
+        }
+    }
+    Some(end)
+}
+
+fn host_reference_bracketed_segment_end(text: &str, start: usize) -> Option<usize> {
+    if !text.get(start..)?.starts_with('[') {
+        return None;
+    }
+    let mut cursor = start + 1;
+    let mut saw_content = false;
+    while cursor < text.len() {
+        let current = text[cursor..].chars().next()?;
+        if current == '\'' {
+            cursor += current.len_utf8();
+            let escaped = text[cursor..].chars().next()?;
+            saw_content = true;
+            cursor += escaped.len_utf8();
+            continue;
+        }
+        if current == ']' {
+            return saw_content.then_some(cursor + 1);
+        }
+        saw_content = true;
+        cursor += current.len_utf8();
+    }
+    None
+}
+
+fn declared_host_reference_repeated_prefix_syntax_match(
+    text: &str,
+    start: usize,
+    context: &RuntimeHostFormulaContext,
+    rule: &RuntimeHostReferenceSyntaxRule,
+) -> Option<RuntimeHostReferenceSyntaxMatch> {
+    if !host_syntax_boundary_before(text, start) {
+        return None;
+    }
+    let mut selector_end = start;
+    while text[selector_end..].starts_with(rule.pattern_text.as_str()) {
+        selector_end += rule.pattern_text.len();
+    }
+    let repeat_count = (selector_end - start) / rule.pattern_text.len();
+    if repeat_count == 0 {
+        return None;
+    }
+    let qualified_tail = qualified_host_reference_tail(text, selector_end);
+    let end = qualified_tail
+        .as_ref()
+        .map_or(selector_end, |tail| tail.source_end);
+    if !host_syntax_boundary_after(text, end) {
+        return None;
+    }
+    let span = TextSpan::new(start, end - start);
+    let source_token_text = text[span.start..span.end()].to_string();
+    let mut opaque_selector_payload = rule
+        .opaque_selector_payload
+        .clone()
+        .unwrap_or_else(|| "selector-family:repeated-prefix".to_string());
+    opaque_selector_payload.push_str(";repeat_count=");
+    opaque_selector_payload.push_str(&repeat_count.to_string());
+    if let Some(tail) = qualified_tail.as_ref() {
+        opaque_selector_payload.push_str(";tail_token_text=");
+        opaque_selector_payload.push_str(&tail.token_text);
+    }
+
+    Some(RuntimeHostReferenceSyntaxMatch {
+        syntax_match_handle: format!(
+            "host-reference-syntax:{}:{}:{}:{}",
+            context.dialect_id, rule.rule_id, span.start, span.len
+        ),
+        rule_id: rule.rule_id.clone(),
+        rule_family: rule.rule_family.clone(),
+        source_span: span,
+        source_token_text,
+        token_kind: rule.token_kind.clone(),
+        opaque_selector_payload: Some(opaque_selector_payload),
+        resolution_layer: rule.resolution_layer.clone(),
+        shape_hint: rule.shape_hint.clone(),
+        caller_context_dependent: rule.caller_context_dependent,
+        diagnostics: Vec::new(),
+    })
+}
+
+fn declared_host_reference_literal_array_syntax_match(
+    text: &str,
+    start: usize,
+    context: &RuntimeHostFormulaContext,
+    rule: &RuntimeHostReferenceSyntaxRule,
+) -> Option<RuntimeHostReferenceSyntaxMatch> {
+    let end = host_reference_literal_array_end(text, start)?;
+    if !host_syntax_boundary_before(text, start) || !host_syntax_boundary_after(text, end) {
+        return None;
+    }
+    let source_token_text = text[start..end].to_string();
+    let element_token_texts = host_reference_literal_array_element_token_texts(&source_token_text)?;
+    let span = TextSpan::new(start, end - start);
+    let mut opaque_selector_payload = rule
+        .opaque_selector_payload
+        .clone()
+        .unwrap_or_else(|| "selector-family:reference-literal-array".to_string());
+    opaque_selector_payload.push_str(";element_token_texts=");
+    opaque_selector_payload.push_str(&element_token_texts.join("|"));
+    Some(RuntimeHostReferenceSyntaxMatch {
+        syntax_match_handle: format!(
+            "host-reference-syntax:{}:{}:{}:{}",
+            context.dialect_id, rule.rule_id, span.start, span.len
+        ),
+        rule_id: rule.rule_id.clone(),
+        rule_family: rule.rule_family.clone(),
+        source_span: span,
+        source_token_text,
+        token_kind: rule.token_kind.clone(),
+        opaque_selector_payload: Some(opaque_selector_payload),
+        resolution_layer: rule.resolution_layer.clone(),
+        shape_hint: rule.shape_hint.clone(),
+        caller_context_dependent: rule.caller_context_dependent,
+        diagnostics: Vec::new(),
+    })
+}
+
+fn host_reference_literal_array_end(text: &str, start: usize) -> Option<usize> {
+    let mut cursor = start + 1;
+    while cursor < text.len() {
+        let current = text[cursor..].chars().next()?;
+        match current {
+            '}' => return Some(cursor + 1),
+            '"' => {
+                cursor += 1;
+                while cursor < text.len() {
+                    let string_current = text[cursor..].chars().next()?;
+                    cursor += string_current.len_utf8();
+                    if string_current == '"' {
+                        if text[cursor..].starts_with('"') {
+                            cursor += 1;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            }
+            _ => cursor += current.len_utf8(),
+        }
+    }
+    None
+}
+
+fn host_reference_literal_array_element_token_texts(
+    source_token_text: &str,
+) -> Option<Vec<String>> {
+    let inner = source_token_text.strip_prefix('{')?.strip_suffix('}')?;
+    let elements = inner
+        .split(',')
+        .map(str::trim)
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    (!elements.is_empty() && elements.iter().all(|element| !element.is_empty())).then_some(elements)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct QualifiedHostReferenceBase {
+    source_start: usize,
+    token_text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct QualifiedHostReferenceTail {
+    source_end: usize,
+    token_text: String,
+}
+
+fn host_reference_literal_pattern_is_prefix_of_longer_token(
+    text: &str,
+    selector_end: usize,
+    pattern_text: &str,
+) -> bool {
+    pattern_text.ends_with('*') && text[selector_end..].starts_with('*')
+}
+
+fn qualified_host_reference_base(
+    text: &str,
+    pattern_start: usize,
+    pattern_text: &str,
+) -> Option<QualifiedHostReferenceBase> {
+    if pattern_text.starts_with('.') {
+        return qualified_host_reference_base_before_dot(text, pattern_start);
+    }
+    if pattern_start == 0 || !text[..pattern_start].ends_with('.') {
+        return None;
+    }
+    qualified_host_reference_base_before_dot(text, pattern_start - 1)
+}
+
+fn qualified_host_reference_base_before_dot(
+    text: &str,
+    dot_index: usize,
+) -> Option<QualifiedHostReferenceBase> {
+    if dot_index == 0 || !text.is_char_boundary(dot_index) {
+        return None;
+    }
+    let mut start = dot_index;
+    for (index, ch) in text[..dot_index].char_indices().rev() {
+        if host_reference_base_char(ch) {
+            start = index;
+        } else {
+            break;
+        }
+    }
+    if start == dot_index
+        || !text[start..dot_index]
+            .chars()
+            .next()
+            .is_some_and(host_reference_base_leading_char)
+    {
+        return None;
+    }
+    Some(QualifiedHostReferenceBase {
+        source_start: start,
+        token_text: text[start..dot_index].to_string(),
+    })
+}
+
+fn qualified_host_reference_tail(
+    text: &str,
+    selector_end: usize,
+) -> Option<QualifiedHostReferenceTail> {
+    let after_selector = text.get(selector_end..)?;
+    if !after_selector.starts_with('.') {
+        return None;
+    }
+    let tail_start = selector_end + 1;
+    let first = text[tail_start..].chars().next()?;
+    if !host_reference_base_leading_char(first) {
+        return None;
+    }
+    let mut end = tail_start;
+    for (offset, ch) in text[tail_start..].char_indices() {
+        if host_reference_base_char(ch) {
+            end = tail_start + offset + ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+    Some(QualifiedHostReferenceTail {
+        source_end: end,
+        token_text: text[tail_start..end].to_string(),
+    })
+}
+
+fn host_reference_base_char(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || matches!(ch, '_' | '$' | '.')
+}
+
+fn host_reference_base_leading_char(ch: char) -> bool {
+    ch.is_ascii_alphabetic() || matches!(ch, '_' | '$')
+}
+
+fn host_reference_selector_payload_with_qualifiers(
+    payload: Option<&str>,
+    base_token_text: Option<&str>,
+    tail_token_text: Option<&str>,
+) -> String {
+    let mut enriched = payload.unwrap_or("selector-family:unknown").to_string();
+    if let Some(base_token_text) = base_token_text {
+        enriched.push_str(";base_token_text=");
+        enriched.push_str(base_token_text);
+    }
+    if let Some(tail_token_text) = tail_token_text {
+        enriched.push_str(";tail_token_text=");
+        enriched.push_str(tail_token_text);
+    }
+    enriched
+}
+
+fn host_syntax_boundary_before(text: &str, start: usize) -> bool {
+    previous_non_whitespace_char(text, start).is_none_or(|ch| !host_syntax_identifier_char(ch))
+}
+
+fn host_syntax_boundary_after(text: &str, end: usize) -> bool {
+    next_non_whitespace_char(text, end).is_none_or(|ch| !host_syntax_identifier_char(ch))
+}
+
+fn previous_non_whitespace_char(text: &str, end: usize) -> Option<char> {
+    text[..end].chars().rev().find(|ch| !ch.is_whitespace())
+}
+
+fn next_non_whitespace_char(text: &str, start: usize) -> Option<char> {
+    text[start..].chars().find(|ch| !ch.is_whitespace())
+}
+
+fn host_syntax_identifier_char(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || matches!(ch, '_' | '$')
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1180,6 +1180,7 @@ fn replay_projection_carries_w074_host_reference_context() {
         structure_context_version: Some("structure:v1".to_string()),
         caller_context_identity: Some("caller:sheet1-r1c1".to_string()),
         table_context_identity: Some("tables:v1".to_string()),
+        host_reference_syntax_rules: Vec::new(),
     };
     let bind_result = RuntimeHostReferenceBindResult {
         reference_handle: "host-ref:opaque-collection".to_string(),
@@ -1228,6 +1229,7 @@ fn replay_projection_carries_host_namespace_version_without_explicit_host_refere
         structure_context_version: Some("structure:v1".to_string()),
         caller_context_identity: Some("caller:sheet1-r1c1".to_string()),
         table_context_identity: None,
+        host_reference_syntax_rules: Vec::new(),
     };
     let runtime_result = RuntimeEnvironment::new()
         .with_host_formula_context(host_context.clone())

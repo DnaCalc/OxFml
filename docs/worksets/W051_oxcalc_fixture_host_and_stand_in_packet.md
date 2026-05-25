@@ -68,13 +68,48 @@ OxFunc remains owner of built-in and UDF function semantics and the canonical fu
 The planned context shape is semantic rather than TreeCalc-specific:
 
 1. `dialect_id` and `capability_profile_id`
-2. host reference parser and/or bind hook for host reference syntax in operand and explicit-host-reference positions
+2. declarative host syntax rules and a bind hook for host reference syntax in operand and explicit-host-reference positions
 3. host namespace resolver for host names, paths, selectors, defined names, and host-sensitive references
 4. OxFunc-backed function registry view for built-ins, registered UDFs, and capability overlays
 5. caller context for relative references, caller-sensitive names, and lexical walk-up
 6. version identity for prepared formula cache keys and replay, including host namespace version, structure context version, registry snapshot identity, caller context identity where relevant, and resolution rule version
 
 OxFml owns calls, argument lists, operators, literals, arrays, `LET`, `LAMBDA`, lexical scopes, source spans, bind diagnostics, and prepared identity around that host hook.
+
+### CALC-005 Boundary Correction
+
+OxCalc-side formula-text recognition is a boundary defect. OxFml must parse the
+formula and invoke a generic host hook; OxCalc must not rewrite authored formula
+text into neutral tokens before parse/bind.
+
+The host syntax hook is generic. It is not a TreeCalc parser mode. The hook can
+be driven by declarative rules supplied by the host context, for example:
+
+| Rule family | Pattern shape | OxFml responsibility | Host responsibility |
+|---|---|---|---|
+| explicit collection selector | `@CHILDREN`, `.*`, `<host-path>.@CHILDREN`, `<host-path>.*` | preserve token/span and emit an explicit host-reference packet | resolve base and collection membership |
+| ordered selector | `@PRECEDING`, `@FOLLOWING`, `@ANCESTORS`, plus qualified `<host-path>.<selector>` forms | preserve selector/base/tail spans and emit a selector-family packet | resolve base, traversal order, bounds, and dependency facts |
+| recursive selector | `**`, `**.<tail>`, `<host-path>.**`, `<host-path>.**.<tail>` | parse as host selector syntax only when declared by the host dialect | resolve recursive traversal and tail path |
+| caller-relative path | `^`, `^.<tail>`, repeated `^`, `[]`, `[].<tail>` | distinguish declared host path syntax from ordinary operators using parser context | resolve caller-sensitive anchors and diagnostics |
+| workspace-qualified path | `[workspace]<path>`, `!<path>`, bracket-escaped segments | emit host path token/span payloads, not TreeCalc semantics | resolve aliases, availability, canonical path, and invalidation |
+| reference literal array | `{<host-ref>(,<host-ref>)*}` when the host dialect marks the literal as reference-only | retain element spans and reject ordinary scalar-array ambiguity through typed diagnostics | lower reference-only members or reject mixed scalar/reference arrays |
+| node table structured reference | `<host-path>[...]`, `[...]` with enclosing table context | use the existing structured-reference grammar and produce generic table bind records plus any host-path payload | map node tables to generic descriptors and sparse readers |
+
+The host hook output must preserve:
+
+1. `source_span_utf8`,
+2. exact source token text,
+3. token kind or rule family,
+4. handle/formal reference id,
+5. opaque selector/path payload,
+6. resolution layer,
+7. shape hint,
+8. caller-context dependency and optional caller-context identity,
+9. typed diagnostics,
+10. prepared identity inputs for host namespace, structure context, caller context, registry snapshot, capability overlay, table context, and resolution-rule version.
+
+OxFml must not inspect TreeCalc topology, selectors, child/member sets, row ids,
+column ids, or invalidation semantics. Those are OxCalc resolver outputs.
 
 ### Planned Host Reference Bind Output
 
