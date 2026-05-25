@@ -419,7 +419,7 @@
         <div class="card">
           <h3>Consumes</h3>
           <ul>
-            <li>OxFunc function/operator catalog, semantic metadata, surface call sites, and callable invocation APIs.</li>
+            <li>OxFunc function/operator catalog, semantic metadata, function-call targets, and callable invocation APIs.</li>
             <li>Host/coordinator workbook facts: cells, tables, names, snapshots, caller anchors, host query providers.</li>
             <li>Runtime context: locale profile, date system, time/random seeds, RTD and registered external providers.</li>
           </ul>
@@ -756,7 +756,7 @@ commit_candidate(...)</pre>
         </div>
       </div>
       <div class="callout" style="margin-top:18px">
-        W075 moved the evaluator toward compiled execution: resolved call sites, parsed literals, compiled OxFml special nodes, helper slots, frame-owned scratch, value-only trace discipline, and strict context-free precompute.
+        W075 moved the evaluator toward compiled execution: resolved function-call targets, parsed literals, compiled OxFml special nodes, helper slots, frame-owned scratch, value-only trace discipline, and strict context-free precompute.
       </div>
     </section>
 
@@ -770,8 +770,8 @@ commit_candidate(...)</pre>
           <pre>enum CompiledExpr {
   NumberLiteral { source: String, value: Option&lt;f64&gt; },
   PrecomputedValue { value: EvalValue, source: Box&lt;CompiledExpr&gt; },
-  Binary { op, call_site, left, right },
-  SurfaceCall { function_name, call_site, args },
+  Binary { op, call_target, left, right },
+  ResolvedFunctionCall { function_name, call_target, args },
   Let { args, slot_only },
   LambdaLiteral { args },
   If { args },
@@ -781,13 +781,13 @@ commit_candidate(...)</pre>
         </div>
         <div class="card">
           <h3>Call site caching</h3>
-          <pre>struct CompiledFunctionCallSite {
+          <pre>struct CompiledFunctionCallTarget {
   special_form: CompiledFunctionSpecialForm,
-  surface_call_site: Option&lt;SurfaceCallSite&gt;,
-  special_operator_call_site: Option&lt;SurfaceCallSite&gt;,
+  function_call_target: Option&lt;FunctionCallTarget&gt;,
+  special_operator_call_target: Option&lt;FunctionCallTarget&gt;,
   callable_argument_ordinals: Vec&lt;usize&gt;,
 }</pre>
-          <p>Callable argument ordinals and OxFunc surface call sites are resolved once during plan construction rather than rediscovered in hot loops.</p>
+          <p>Callable argument ordinals and OxFunc function-call targets are resolved once during plan construction rather than rediscovered in hot loops.</p>
         </div>
       </div>
       <div class="diagram" style="margin-top:18px">
@@ -799,7 +799,7 @@ commit_candidate(...)</pre>
           <text x="305" y="60" text-anchor="middle" class="svg-title">CompileHelperScope</text>
           <text x="305" y="78" text-anchor="middle" class="svg-small">slot assignment</text>
           <rect x="440" y="35" width="150" height="56" rx="8" fill="#fff2d9" stroke="#e2be78"></rect>
-          <text x="515" y="60" text-anchor="middle" class="svg-title">SurfaceCallSite</text>
+          <text x="515" y="60" text-anchor="middle" class="svg-title">FunctionCallTarget</text>
           <text x="515" y="78" text-anchor="middle" class="svg-small">OxFunc handle</text>
           <rect x="650" y="35" width="150" height="56" rx="8" fill="#ecebfa" stroke="#c2bce9"></rect>
           <text x="725" y="60" text-anchor="middle" class="svg-title">CompiledExpr</text>
@@ -848,14 +848,14 @@ commit_candidate(...)</pre>
         <div class="node violet"><b>body</b><span>direct HelperLocalSlot read</span></div>
       </div>
       <div class="callout warn" style="margin-top:18px">
-        Important invariant: OxFml may compile helper storage and control forms, but ordinary functions/operators still dispatch through OxFunc call sites. There is no `INDEX` or arithmetic special case in OxFml.
+        Important invariant: OxFml may compile helper storage and control forms, but ordinary functions/operators still dispatch through OxFunc function targets. There is no `INDEX` or arithmetic special case in OxFml.
       </div>
     </section>
 
     <section class="page" id="p13">
       <div class="page-id">Page 13 / 20</div>
       <div class="kicker">OxFunc call boundary</div>
-      <h2>Prepared arguments, surface calls, and callable batching</h2>
+      <h2>Prepared arguments, function-call target invocations, and callable batching</h2>
       <div class="grid-2">
         <div class="card">
           <h3>Prepared argument trace</h3>
@@ -871,12 +871,12 @@ commit_candidate(...)</pre>
         </div>
         <div class="card">
           <h3>Ordinary call hot path</h3>
-          <pre>let mut scratch = context.take_surface_call_scratch(args.len());
+          <pre>let mut scratch = context.take_function_call_scratch(args.len());
 for arg in args {
   let call_arg = evaluate_expr_as_call_arg(...);
   scratch.push_arg(call_arg);
 }
-surface_call_site.invoke_scratch(&amp;scratch, &amp;mut runtime)</pre>
+function_call_target.invoke_scratch(&amp;scratch, &amp;mut runtime)</pre>
         </div>
       </div>
       <div class="diagram" style="margin-top:18px">
@@ -900,10 +900,10 @@ surface_call_site.invoke_scratch(&amp;scratch, &amp;mut runtime)</pre>
           <pre>enum CompiledReferenceExpr {
   Atom(NormalizedReference),
   HelperLocalSlot { name: NameRef, slot: usize },
-  Spill { call_site, anchor },
-  Range { call_site, start, end },
-  Union { call_site, left, right },
-  Intersection { call_site, left, right },
+  Spill { call_target, anchor },
+  Range { call_target, start, end },
+  Union { call_target, left, right },
+  Intersection { call_target, left, right },
 }</pre>
         </div>
         <div class="card">
@@ -1085,9 +1085,9 @@ surface_call_site.invoke_scratch(&amp;scratch, &amp;mut runtime)</pre>
         <div class="card">
           <h3>Promoted improvements</h3>
           <ul>
-            <li>Resolved `SurfaceCallSite` handles in compiled plan nodes.</li>
+            <li>Resolved `FunctionCallTarget` handles in compiled plan nodes.</li>
             <li>Parsed number/string literal payloads during compile.</li>
-            <li>Explicit `LET`, `LAMBDA`, `IF`, `IFERROR`, ordinary `SurfaceCall` nodes.</li>
+            <li>Explicit `LET`, `LAMBDA`, `IF`, `IFERROR`, ordinary `ResolvedFunctionCall` nodes.</li>
             <li>Helper slots and slot-only lambda-free `LET` execution.</li>
             <li>Narrowed closure capture and shared lambda body/parameter storage.</li>
             <li>Frame-owned scratch stack and callable recursion/stack guard state.</li>
@@ -1130,7 +1130,7 @@ surface_call_site.invoke_scratch(&amp;scratch, &amp;mut runtime)</pre>
           <h3>Cross-repo seam work</h3>
           <ul>
             <li>Prefer OxFunc metadata/cooperation for semantic optimizations.</li>
-            <li>Keep function/operator behavior out of OxFml except via call sites and metadata.</li>
+            <li>Keep function/operator behavior out of OxFml except via function targets and metadata.</li>
             <li>Promote shared seam changes with handoff packets and replay evidence.</li>
           </ul>
         </div>

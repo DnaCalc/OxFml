@@ -365,7 +365,7 @@ Minimum branch dispositions:
 5. `ErrorWhileEvaluatingBranch`.
 
 Argument names and roles:
-1. OxFunc registry or resolved call-site metadata is the preferred source for
+1. OxFunc registry or resolved `FunctionCallTarget` metadata is the preferred source for
    function argument labels such as `logical_test`, `value_if_true`,
    `value_if_false`, `number1`, and `number2`,
 2. OxFml owns the placement of those labels on expression-tree nodes,

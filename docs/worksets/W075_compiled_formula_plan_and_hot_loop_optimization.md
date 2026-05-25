@@ -7,17 +7,17 @@ Process OxFunc `HO-FN-016`, DNA OneCalc performance pressure, and the first Mand
 The long-term target is not a set of one-off fast paths. The target is a generic compiled formula execution substrate:
 
 1. OxFml owns formula structure, lexical scope, LET/LAMBDA binding, reference binding, evaluation order, trace policy, and graph planning.
-2. OxFunc owns every function and operator semantic through resolved `SurfaceCallSite` invocation.
+2. OxFunc owns every function and operator semantic through resolved `FunctionCallTarget` invocation.
 3. OxFml must not hard-code special behavior for functions such as `INDEX`, `HSTACK`, arithmetic operators, helper functions, or future catalog entries.
-4. Repeated evaluation should execute through a compiled `EvaluationFrame` with lexical slots, reusable call buffers, reusable call-site scratch, and trace-mode-aware emission.
+4. Repeated evaluation should execute through a compiled `EvaluationFrame` with lexical slots, reusable call buffers, reusable function-call scratch, and trace-mode-aware emission.
 
 ## Position and Dependencies
 
 - **Depends on**: `W065`, `W068`, `W070`, OxFunc `W095`, OxFunc `W096`
-- **Responds to**: `../OxFunc/docs/handoffs/HO-FN-016_compiled_surface_call_site_and_index_dispatch.md`
-- **Acknowledgement**: `docs/handoffs/HO-FN-016_COMPILED_SURFACE_CALL_SITE_AND_INDEX_DISPATCH_ACK.md`
+- **Responds to**: `../OxFunc/docs/handoffs/HO-FN-016_function_call_target_and_index_dispatch.md`
+- **Acknowledgement**: `docs/handoffs/HO-FN-016_FUNCTION_CALL_TARGET_AND_INDEX_DISPATCH_ACK.md`
 - **Blocks**: downstream large-model and lambda-heavy performance replay once deterministic metrics are available
-- **Cross-repo**: OxFunc owns `SurfaceCallSite`, `SurfaceCallRuntime`, `SurfaceCallScratch`, callable batching, function metadata, dispatch-table behavior, and function/operator semantics; OxFml owns compiled formula-plan consumption, lexical execution, trace-mode behavior, and formula graph planning.
+- **Cross-repo**: OxFunc owns `FunctionCallTarget`, `FunctionExecutionContextBundle`, `FunctionCallScratch`, callable batching, function metadata, dispatch-table behavior, and function/operator semantics; OxFml owns compiled formula-plan consumption, lexical execution, trace-mode behavior, and formula graph planning.
 
 ## Baseline Observations
 
@@ -38,8 +38,8 @@ Introduce a compiled execution frame that carries per-evaluation mutable state:
 
 1. lexical slot storage for LET and LAMBDA locals,
 2. reusable argument buffers for compiled call nodes,
-3. reusable `SurfaceCallScratch` where a call node is invoked repeatedly,
-4. reusable `SurfaceCallRuntime` provider wiring where ownership and borrow rules allow it,
+3. reusable `FunctionCallScratch` where a call node is invoked repeatedly,
+4. reusable `FunctionExecutionContextBundle` provider wiring where ownership and borrow rules allow it,
 5. trace-mode state and prepared-call emitters,
 6. callable recursion budget state and coalesced stack-guard depth,
 7. optional node-local scratch addresses allocated by the compiled plan.
@@ -54,11 +54,11 @@ Lower OxFml-owned language structure into plan nodes:
 2. lexical slot load/store,
 3. reference materialization and reference-preserving argument preparation,
 4. OxFml-owned special forms: `LET`, `LAMBDA`, lambda invocation, `IF` laziness, `IFERROR` laziness where applicable,
-5. ordinary `SurfaceCallSite` calls for functions and operators,
+5. ordinary `FunctionCallTarget` calls for functions and operators,
 6. helper-family callable slots and callable invocation,
 7. trace emitter nodes or trace templates for prepared-call mode.
 
-Every function/operator call remains a call through OxFunc `SurfaceCallSite`; OxFml plan nodes only describe formula-language control flow and data movement.
+Every function/operator call remains a call through OxFunc `FunctionCallTarget`; OxFml plan nodes only describe formula-language control flow and data movement.
 
 ### Trace Policy
 
@@ -66,7 +66,7 @@ Every function/operator call remains a call through OxFunc `SurfaceCallSite`; Ox
 
 ### Hoisting Policy
 
-Hoisting is intentionally delayed until the frame and node model are stable. When added, hoisting must use `SurfaceCallSite` metadata plus explicit runtime-context policy. Pure/invariant facts must not be inferred from OxFml-maintained function-name tables.
+Hoisting is intentionally delayed until the frame and node model are stable. When added, hoisting must use `FunctionCallTarget` metadata plus explicit execution-context policy. Pure/invariant facts must not be inferred from OxFml-maintained function-name tables.
 
 ## Scope
 
@@ -77,8 +77,8 @@ Hoisting is intentionally delayed until the frame and node model are stable. Whe
 3. Introduce `EvaluationFrame` as the single substrate for lexical slots, reusable scratch, reusable argument buffers, and trace-mode state.
 4. Replace repeated lambda/LET local name lookup with compiled lexical slots.
 5. Lower OxFml-owned control-flow constructs to generic compiled nodes.
-6. Reuse call argument buffers and `SurfaceCallScratch` for repeated compiled call-site invocation.
-7. Preserve OxFunc ownership by invoking functions/operators through `SurfaceCallSite`.
+6. Reuse call argument buffers and `FunctionCallScratch` for repeated compiled function-target invocation.
+7. Preserve OxFunc ownership by invoking functions/operators through `FunctionCallTarget`.
 8. Keep trace-off and trace-on behavior explicit and tested.
 9. Use OxFunc metadata for later purity/hoisting gates.
 10. File narrow OxFunc follow-ups for missing metadata rather than adding a mirror registry in OxFml.
@@ -103,7 +103,7 @@ Hoisting is intentionally delayed until the frame and node model are stable. Whe
 3. `EvaluationFrame` carrying lexical slots, scratch, argument buffers, trace mode, and stack-guard state.
 4. Slot-frame execution for lambda parameters and LET locals.
 5. Generic compiled nodes for OxFml-owned formula-language control flow.
-6. `SurfaceCallSite` call nodes with reusable argument/scratch handling.
+6. `FunctionCallTarget` call nodes with reusable argument/scratch handling.
 7. Trace-on and trace-off parity tests for optimized paths.
 8. Metadata-driven hoisting design and first safe hoist/no-hoist evidence.
 9. Workset closure packet with before/after timing table and remaining open lanes if any.
@@ -113,8 +113,8 @@ Hoisting is intentionally delayed until the frame and node model are stable. Whe
 ### Entry Gate
 
 - OxFunc `HO-FN-016` surface is locally consumable from OxFml.
-- Current OxFml evaluation suite passes against the resolved call-site surface.
-- Initial `SurfaceCallSite` and `SurfaceCallScratch` consumption exists in OxFml.
+- Current OxFml evaluation suite passes against the resolved function-call target surface.
+- Initial `FunctionCallTarget` and `FunctionCallScratch` consumption exists in OxFml.
 - Stack-guard fixed-cost issue has local exploratory evidence.
 
 ### Mid-Gate A: Measurement And Safety
@@ -134,14 +134,14 @@ Hoisting is intentionally delayed until the frame and node model are stable. Whe
 
 - Lambda parameters and LET locals are slot-addressed.
 - OxFml-owned control-flow nodes execute through the frame.
-- Function/operator calls still route through `SurfaceCallSite`.
+- Function/operator calls still route through `FunctionCallTarget`.
 - Trace-on and trace-off tests pass.
 
 ### Exit Gate
 
 - No hot path calls OxFunc by surface string after binding when call identity is known.
 - Lambda helper hot loops use slot-frame execution for local parameters and LET-bound values.
-- Reusable argument buffers and scratch are applied where repeated call-site invocation occurs and do not change argument preparation or call ordering.
+- Reusable argument buffers and scratch are applied where repeated function-target invocation occurs and do not change argument preparation or call ordering.
 - Value-only hot loops avoid prepared-call allocation.
 - Prepared-call trace mode remains equivalent for optimized paths.
 - Deterministic performance evidence exists with before/after figures.
@@ -214,7 +214,7 @@ Hoisting is intentionally delayed until the frame and node model are stable. Whe
   - lexical slot storage,
   - helper/local binding compatibility bridge during migration,
   - node-local reusable argument buffers,
-  - node-local `SurfaceCallScratch`,
+  - node-local `FunctionCallScratch`,
   - trace-mode state,
   - callable recursion and stack guard state,
   - reference resolver access.
@@ -267,7 +267,7 @@ Hoisting is intentionally delayed until the frame and node model are stable. Whe
   - Helper-batch argument assignment updates slotted lambda parameters through the slot frame and leaves the compatibility name map as a fallback/capture index.
   - Interim gate result at that point: semantics and controls were acceptable for a first slot-frame floor, but Mandelbrot remained in a noisy local band rather than showing a decisive improvement; B075-04 still needed tighter capture/slot-frame evidence.
   - A follow-up slot-only `LET` evaluator path now skips helper-map child layer creation and binding insertion for compiled `LET` blocks whose binding names are all slotted and whose subtree contains no `LAMBDA` literal requiring closure capture through helper-map entries.
-  - The slot-only `LET` path stores and reads through the existing helper slot frame only; all function/operator calls inside the block continue through OxFunc `SurfaceCallSite`.
+  - The slot-only `LET` path stores and reads through the existing helper slot frame only; all function/operator calls inside the block continue through OxFunc `FunctionCallTarget`.
   - Gate result: correctness held and the Mandelbrot timing fixture improved materially, so this slice is retained as the current B075-04 floor. Later slices added the remaining current-scope capture and direct-invocation evidence needed for W075 closure.
   - Direct `LAMBDA` invocation now binds slotted parameters through `insert_helper_slot_binding(...)` rather than name-only helper entries, so captured slotted parameters stay available to nested helper lambdas through slot reads instead of map fallback.
   - Gate result: evaluator, shadowing, replay, and W075-specific tests held; Mandelbrot improved modestly while simpler controls stayed in the local noise band, so this is retained as a structural slot-frame correction.
@@ -296,10 +296,10 @@ Hoisting is intentionally delayed until the frame and node model are stable. Whe
   - `IfLazy`,
   - `IfErrorLazy`,
   - `ReferenceArg`,
-  - `SurfaceCall`.
+  - `ResolvedFunctionCall`.
 - **Execution details**:
   - keep OxFml-owned laziness in OxFml nodes,
-  - keep OxFunc-owned function/operator semantics behind `SurfaceCallSite`,
+  - keep OxFunc-owned function/operator semantics behind `FunctionCallTarget`,
   - preserve prepared-call trace evidence through node emitters/templates.
 - **Evidence target**:
   - lazy `IF` / `IFERROR` tests,
@@ -309,27 +309,27 @@ Hoisting is intentionally delayed until the frame and node model are stable. Whe
 - **Risks**:
   - lowering `IF` and `IFERROR` must preserve current Excel-visible laziness boundaries.
 - **Current execution note**:
-  - Compiled function-call sites now cache callable-argument ordinals at compile time for the call's arity.
+  - Compiled function-call targets now cache callable-argument ordinals at compile time for the call's arity.
   - This removes per-dispatch callable-ordinal vector construction without changing function/operator ownership or call ordering.
   - Numeric and string literals now parse/decode during compiled-plan construction rather than on every node evaluation.
   - `LET`, `LAMBDA`, `IF`, and `IFERROR` now lower into explicit compiled OxFml nodes instead of re-entering the ordinary function-call dispatch path.
-  - Known ordinary function/operator calls with resolved OxFunc call sites now lower into an explicit `SurfaceCall` node, while `FunctionCall` remains the compatibility path for special forms and unresolved or fallback calls.
+  - Known ordinary function/operator calls with resolved OxFunc function targets now lower into an explicit `ResolvedFunctionCall` node, while `FunctionCall` remains the compatibility path for special forms and unresolved or fallback calls.
   - The lowered nodes still reuse the existing evaluator behavior and trace publication helpers. Wider invocation/reference lowering is future optimizer scope rather than a W075 closure requirement.
   - Compiled `LET` nodes now carry conservative slot-only eligibility so lambda-free slotted `LET` blocks can execute through slot storage without helper-map mutation.
 
-### B075-06: SurfaceCall Argument And Scratch Reuse
+### B075-06: ResolvedFunctionCall Argument And Scratch Reuse
 
 - **Status**: complete
 - **Owner**: OxFml with OxFunc seam consumption
-- **Purpose**: broaden current call-site/scratch reuse from built-in callable batching to general repeated compiled call nodes.
+- **Purpose**: broaden current function-target/scratch reuse from built-in callable batching to general repeated compiled call nodes.
 - **Files likely touched**:
-  - compiled call-site node execution,
-  - `SurfaceCallScratch` integration,
+  - compiled function-target node execution,
+  - `FunctionCallScratch` integration,
   - call argument preparation helpers.
 - **Execution details**:
   - allocate argument buffers by compiled node id or frame scratch index,
   - clear and refill buffers without reallocating,
-  - use `SurfaceCallScratch` where OxFunc exposes a scratch path,
+  - use `FunctionCallScratch` where OxFunc exposes a scratch path,
   - do not cache semantic results,
   - preserve argument evaluation order.
 - **Evidence target**:
@@ -338,11 +338,11 @@ Hoisting is intentionally delayed until the frame and node model are stable. Whe
 - **Risks**:
   - references and callable carrier encoding must retain current ownership and lifetime behavior.
 - **Current execution note**:
-  - Ordinary compiled `SurfaceCall` evaluation now takes a reusable frame-state `SurfaceCallScratch` from `EvaluationContext` instead of allocating a fresh surface-call scratch for every call.
-  - Compiled function-call sites now reuse precomputed callable argument ordinals instead of recomputing them per dispatch.
+  - Ordinary compiled `ResolvedFunctionCall` evaluation now takes a reusable frame-state `FunctionCallScratch` from `EvaluationContext` instead of allocating a fresh function-call scratch for every call.
+  - Compiled function-call targets now reuse precomputed callable argument ordinals instead of recomputing them per dispatch.
   - Local callable `invoke_many(...)` now decodes prepared arguments once while assigning helper slots and deriving lambda-argument recursion cost.
-  - Built-in callable batching continues to use OxFunc `SurfaceCallScratch` for `invoke_many(...)`.
-  - The ordinary `SurfaceCallScratch` pool now retains a stack of reusable scratch buffers instead of a single buffer, so nested repeated calls learn their scratch depth once and avoid repeated inner scratch allocation.
+  - Built-in callable batching continues to use OxFunc `FunctionCallScratch` for `invoke_many(...)`.
+  - The ordinary `FunctionCallScratch` pool now retains a stack of reusable scratch buffers instead of a single buffer, so nested repeated calls learn their scratch depth once and avoid repeated inner scratch allocation.
   - The current pool is frame-wide rather than node-indexed; node-local scratch indexes remain an open lane if profiling shows a benefit beyond the stack pool.
 
 ### B075-07: Trace Template And Value-Only Discipline
@@ -376,7 +376,7 @@ Hoisting is intentionally delayed until the frame and node model are stable. Whe
 
 - **Status**: complete
 - **Owner**: OxFml with OxFunc coordination
-- **Purpose**: use `SurfaceCallSite` metadata and runtime-context policy to hoist safe invariant subexpressions after the frame and node model exist.
+- **Purpose**: use `FunctionCallTarget` metadata and execution-context policy to hoist safe invariant subexpressions after the frame and node model exist.
 - **Files likely touched**:
   - compiled plan construction,
   - frame initialization,
@@ -391,7 +391,7 @@ Hoisting is intentionally delayed until the frame and node model are stable. Whe
 - **Risks**:
   - premature hoisting can change Excel-visible volatility or host/provider behavior.
 - **Current execution note**:
-  - A first strict context-free precompute slice now wraps only literal/helper-free `Binary`, `Unary`, and ordinary `SurfaceCall` subtrees whose OxFunc `SurfaceCallSite` reports `is_context_free_pure()`.
+  - A first strict context-free precompute slice now wraps only literal/helper-free `Binary`, `Unary`, and ordinary `ResolvedFunctionCall` subtrees whose OxFunc `FunctionCallTarget` reports `is_context_free_pure()`.
   - Precomputed nodes retain their original source subtree and evaluate that source when `EvaluationTraceMode::PreparedCalls` is active, preserving replay-facing prepared-call evidence.
   - Runtime-context-sensitive calls remain dynamic; focused W075 tests cover prepared trace preservation for nested pure calls and `NOW()` with changing runtime seeds.
   - A captured-helper invariant cache experiment was tried for lambda bodies and rejected at the gate: focused semantics passed, but the W075 timing fixture regressed and variance increased, so it was backed out and not promoted.
@@ -455,7 +455,7 @@ Latest local command:
 | stateful `REDUCE` with `INDEX`/`HSTACK` over 6000 items | min 12.346 ms / avg 12.462 ms / max 12.548 ms |
 | full `100 x 60 x 30` Mandelbrot text formula | min 1427.692 ms / avg 1453.733 ms / max 1483.027 ms |
 
-The latest numbers include stack-guard coalescing, frame-owned mutable execution state, pooled ordinary `SurfaceCallScratch` with a frame-level scratch stack for nested calls, compiled callable-argument ordinal reuse, single-pass prepared-argument decoding inside local callable batching, the persistent layered `HelperBindingFrame` boundary, the first frame-owned helper slot array, narrowed captured-slot closure construction, slotted direct `LAMBDA` invocation parameters, shared ownership for stored lambda bodies and parameter arrays, parsed numeric/string literal payloads, explicit compiled `LET` / `LAMBDA` / `IF` / `IFERROR` nodes, explicit ordinary `SurfaceCall` nodes for resolved OxFunc call sites, the value-only trace allocation fix for ordinary calls, the first strict context-free precompute slice, and conservative slot-only execution for lambda-free slotted `LET` blocks.
+The latest numbers include stack-guard coalescing, frame-owned mutable execution state, pooled ordinary `FunctionCallScratch` with a frame-level scratch stack for nested calls, compiled callable-argument ordinal reuse, single-pass prepared-argument decoding inside local callable batching, the persistent layered `HelperBindingFrame` boundary, the first frame-owned helper slot array, narrowed captured-slot closure construction, slotted direct `LAMBDA` invocation parameters, shared ownership for stored lambda bodies and parameter arrays, parsed numeric/string literal payloads, explicit compiled `LET` / `LAMBDA` / `IF` / `IFERROR` nodes, explicit ordinary `ResolvedFunctionCall` nodes for resolved OxFunc function targets, the value-only trace allocation fix for ordinary calls, the first strict context-free precompute slice, and conservative slot-only execution for lambda-free slotted `LET` blocks.
 
 Gate assessment after the persistent `HelperBindingFrame` slice:
 
@@ -485,7 +485,7 @@ Gate assessment after adding explicit `IF` / `IFERROR` nodes:
 - path_forward_clear: yes - continue later with invocation/reference node lowering and trace templates; do not add function-specific fast paths
 - decision: retain this slice as the current W075 floor; later slices provide the current-scope closure evidence for B075-04 and B075-05
 
-Gate assessment after ordinary `SurfaceCall` node, pooled scratch, and value-only trace allocation slices:
+Gate assessment after ordinary `ResolvedFunctionCall` node, pooled scratch, and value-only trace allocation slices:
 
 - progress_as_expected: yes for structural routing and correctness; perf remains in the same local Mandelbrot band, with stateful `REDUCE` slightly better and scalar `REDUCE` noisier on this run
 - implementation_doc_sync: yes - B075-05, B075-06, B075-07, and the latest timing table now describe the promoted floor
@@ -513,7 +513,7 @@ Gate assessment after conservative slot-only `LET` execution:
 - path_forward_clear: yes - continue with broader generic plan execution and trace/template work; do not add function-specific handling in OxFml
 - decision: retain this slice as the current W075 floor; later slices address the remaining current-scope capture and node-execution evidence
 
-Gate assessment after frame-level `SurfaceCallScratch` stack pooling:
+Gate assessment after frame-level `FunctionCallScratch` stack pooling:
 
 - progress_as_expected: yes - evaluator, replay, and W075-specific tests passed; local Mandelbrot timing improved from the slot-only `LET` `1729.372 ms` average to `1678.701 ms`, and the stateful `REDUCE` control improved from `13.031 ms` average to `12.406 ms`
 - implementation_doc_sync: yes - B075-06 and the timing table now describe the retained scratch-stack pool
@@ -586,7 +586,7 @@ Pass. W075 scope items are represented by exercised implementation and evidence:
 - callable stack guards are coalesced while recursive safety tests pass,
 - `EvaluationFrame` owns the current mutable execution substrate for trace, callable registry, root helper state, scratch stack, recursion budget, and stack-guard state,
 - lambda parameters, direct invocation parameters, helper-batch parameters, helper-local reads, captured slots, and lambda-free `LET` locals use compiled slots where the current lexical model can do so safely,
-- OxFml-owned control flow lowers to compiled nodes and ordinary function/operator calls stay behind OxFunc `SurfaceCallSite`,
+- OxFml-owned control flow lowers to compiled nodes and ordinary function/operator calls stay behind OxFunc `FunctionCallTarget`,
 - value-only and prepared-call trace behavior are explicitly tested,
 - strict context-free precompute uses OxFunc metadata and preserves runtime-sensitive calls.
 

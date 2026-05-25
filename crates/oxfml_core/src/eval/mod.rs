@@ -4,6 +4,9 @@ use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 
 use oxfunc_core::function::ArgPreparationProfile;
+use oxfunc_core::function_call::{
+    FunctionCallScratch, FunctionCallTarget, FunctionExecutionContextBundle,
+};
 use oxfunc_core::functions::adapters::{PreparedArgValue, prepare_arg_values_only};
 use oxfunc_core::functions::call_register_id_family::{
     RegisterIdRequest, RegisteredExternalCallRequest, RegisteredExternalProvider,
@@ -36,7 +39,6 @@ use oxfunc_core::resolver::{
     CallerContext as OxFuncCallerContext, RefResolutionError, ReferenceResolver,
     ReferenceTextResolver, ResolvedReferenceValues, ResolverCapabilities,
 };
-use oxfunc_core::surface_call::{SurfaceCallRuntime, SurfaceCallScratch, SurfaceCallSite};
 use oxfunc_core::value::{
     ArrayCellValue, CallArgValue, CallableArityShape as OxCallableArityShape,
     CallableCaptureMode as OxCallableCaptureMode, CallableOriginKind as OxCallableOriginKind,
@@ -263,23 +265,23 @@ enum CompiledExpr {
     },
     Binary {
         op: BinaryOp,
-        call_site: SurfaceCallSite,
+        call_target: FunctionCallTarget,
         left: Box<CompiledExpr>,
         right: Box<CompiledExpr>,
     },
     Unary {
         op: crate::binding::UnaryOp,
-        call_site: SurfaceCallSite,
+        call_target: FunctionCallTarget,
         expr: Box<CompiledExpr>,
     },
     FunctionCall {
         function_name: String,
-        call_site: CompiledFunctionCallSite,
+        call_target: CompiledFunctionCallTarget,
         args: Vec<CompiledExpr>,
     },
-    SurfaceCall {
+    ResolvedFunctionCall {
         function_name: String,
-        call_site: CompiledFunctionCallSite,
+        call_target: CompiledFunctionCallTarget,
         args: Vec<CompiledExpr>,
     },
     Let {
@@ -302,7 +304,7 @@ enum CompiledExpr {
     },
     Reference(CompiledReferenceExpr),
     ImplicitIntersection {
-        call_site: SurfaceCallSite,
+        call_target: FunctionCallTarget,
         expr: Box<CompiledExpr>,
     },
 }
@@ -315,48 +317,48 @@ enum CompiledReferenceExpr {
         slot: usize,
     },
     Spill {
-        call_site: SurfaceCallSite,
+        call_target: FunctionCallTarget,
         anchor: Box<CompiledReferenceExpr>,
     },
     Range {
-        call_site: SurfaceCallSite,
+        call_target: FunctionCallTarget,
         start: Box<CompiledReferenceExpr>,
         end: Box<CompiledReferenceExpr>,
     },
     Union {
-        call_site: SurfaceCallSite,
+        call_target: FunctionCallTarget,
         left: Box<CompiledReferenceExpr>,
         right: Box<CompiledReferenceExpr>,
     },
     Intersection {
-        call_site: SurfaceCallSite,
+        call_target: FunctionCallTarget,
         left: Box<CompiledReferenceExpr>,
         right: Box<CompiledReferenceExpr>,
     },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct CompiledFunctionCallSite {
+struct CompiledFunctionCallTarget {
     special_form: CompiledFunctionSpecialForm,
-    surface_call_site: Option<SurfaceCallSite>,
-    special_operator_call_site: Option<SurfaceCallSite>,
+    function_call_target: Option<FunctionCallTarget>,
+    special_operator_call_target: Option<FunctionCallTarget>,
     callable_argument_ordinals: Vec<usize>,
 }
 
-impl CompiledFunctionCallSite {
+impl CompiledFunctionCallTarget {
     fn from_surface_name(surface_name: &str, argc: usize) -> Self {
         let special_form = CompiledFunctionSpecialForm::from_surface_name(surface_name);
-        let surface_call_site = SurfaceCallSite::from_surface_name(surface_name).ok();
-        let callable_argument_ordinals = surface_call_site
+        let function_call_target = FunctionCallTarget::from_surface_name(surface_name).ok();
+        let callable_argument_ordinals = function_call_target
             .as_ref()
-            .map(|call_site| call_site.callable_argument_ordinals_for_arity(argc))
+            .map(|call_target| call_target.callable_argument_ordinals_for_arity(argc))
             .unwrap_or_default();
         Self {
             special_form,
-            surface_call_site,
-            special_operator_call_site: match special_form {
+            function_call_target,
+            special_operator_call_target: match special_form {
                 CompiledFunctionSpecialForm::LegacySingle => Some(
-                    surface_call_site_from_function_id(FUNC_ID_OP_IMPLICIT_INTERSECTION),
+                    function_call_target_from_function_id(FUNC_ID_OP_IMPLICIT_INTERSECTION),
                 ),
                 _ => None,
             },
@@ -365,9 +367,9 @@ impl CompiledFunctionCallSite {
     }
 
     fn function_id(&self) -> Option<&'static str> {
-        self.surface_call_site
+        self.function_call_target
             .as_ref()
-            .map(SurfaceCallSite::function_id)
+            .map(FunctionCallTarget::function_id)
     }
 
     fn has_special_form(&self, special_form: CompiledFunctionSpecialForm) -> bool {
@@ -400,20 +402,20 @@ impl CompiledFunctionSpecialForm {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct CompiledBuiltinCallable {
-    call_site: SurfaceCallSite,
+    call_target: FunctionCallTarget,
 }
 
 impl CompiledBuiltinCallable {
     fn from_surface_name(surface_name: &str) -> Option<Self> {
         Some(Self {
-            call_site: SurfaceCallSite::from_surface_name(surface_name).ok()?,
+            call_target: FunctionCallTarget::from_surface_name(surface_name).ok()?,
         })
     }
 }
 
-fn surface_call_site_from_function_id(function_id: &'static str) -> SurfaceCallSite {
-    SurfaceCallSite::from_function_id(function_id)
-        .expect("OxFunc built-in function id must resolve to a surface call site")
+fn function_call_target_from_function_id(function_id: &'static str) -> FunctionCallTarget {
+    FunctionCallTarget::from_function_id(function_id)
+        .expect("OxFunc built-in function id must resolve to a function-call target")
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -717,7 +719,7 @@ fn compiled_expr_max_helper_slot(expr: &CompiledExpr) -> Option<usize> {
             .filter_map(compiled_expr_max_helper_slot)
             .max(),
         CompiledExpr::FunctionCall { args, .. }
-        | CompiledExpr::SurfaceCall { args, .. }
+        | CompiledExpr::ResolvedFunctionCall { args, .. }
         | CompiledExpr::Let { args, .. }
         | CompiledExpr::LambdaLiteral { args }
         | CompiledExpr::If { args }
@@ -803,7 +805,7 @@ impl Drop for CallableStackGuard<'_> {
 
 #[derive(Debug)]
 struct EvaluationFrameState {
-    surface_call_scratch: RefCell<Vec<SurfaceCallScratch>>,
+    function_call_scratch: RefCell<Vec<FunctionCallScratch>>,
     callable_recursion_state: RefCell<CallableRecursionState>,
     callable_stack_guard_depth: Cell<usize>,
 }
@@ -811,7 +813,7 @@ struct EvaluationFrameState {
 impl Default for EvaluationFrameState {
     fn default() -> Self {
         Self {
-            surface_call_scratch: RefCell::new(Vec::new()),
+            function_call_scratch: RefCell::new(Vec::new()),
             callable_recursion_state: RefCell::new(CallableRecursionState {
                 current_cost_units: 0,
                 max_cost_units: LOCAL_CALLABLE_RECURSION_BUDGET_UNITS,
@@ -845,26 +847,26 @@ impl EvaluationFrame {
     }
 }
 
-struct PooledSurfaceCallScratch<'a> {
-    pool: &'a RefCell<Vec<SurfaceCallScratch>>,
-    scratch: SurfaceCallScratch,
+struct PooledFunctionCallScratch<'a> {
+    pool: &'a RefCell<Vec<FunctionCallScratch>>,
+    scratch: FunctionCallScratch,
 }
 
-impl Deref for PooledSurfaceCallScratch<'_> {
-    type Target = SurfaceCallScratch;
+impl Deref for PooledFunctionCallScratch<'_> {
+    type Target = FunctionCallScratch;
 
     fn deref(&self) -> &Self::Target {
         &self.scratch
     }
 }
 
-impl DerefMut for PooledSurfaceCallScratch<'_> {
+impl DerefMut for PooledFunctionCallScratch<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.scratch
     }
 }
 
-impl Drop for PooledSurfaceCallScratch<'_> {
+impl Drop for PooledFunctionCallScratch<'_> {
     fn drop(&mut self) {
         let mut reusable = std::mem::take(&mut self.scratch);
         reusable.clear();
@@ -876,7 +878,7 @@ impl Drop for PooledSurfaceCallScratch<'_> {
 struct CallableRegistry {
     next_id: usize,
     bindings: BTreeMap<String, RegisteredCallableBinding>,
-    builtin_call_sites: BTreeMap<String, SurfaceCallSite>,
+    builtin_call_targets: BTreeMap<String, FunctionCallTarget>,
 }
 
 impl CallableRegistry {
@@ -914,12 +916,12 @@ impl CallableRegistry {
             .map(|binding| binding.value.clone())
     }
 
-    fn register_builtin_call_site(&mut self, call_site: SurfaceCallSite) -> OxLambdaValue {
-        let token = format!("oxfml.builtin::{}", call_site.function_id());
-        self.builtin_call_sites
+    fn register_builtin_call_target(&mut self, call_target: FunctionCallTarget) -> OxLambdaValue {
+        let token = format!("oxfml.builtin::{}", call_target.function_id());
+        self.builtin_call_targets
             .entry(token.clone())
-            .or_insert_with(|| call_site.clone());
-        let meta = call_site.function_meta();
+            .or_insert_with(|| call_target.clone());
+        let meta = call_target.function_meta();
         OxLambdaValue::new(
             token,
             OxCallableOriginKind::BuiltInCallable,
@@ -929,8 +931,8 @@ impl CallableRegistry {
         )
     }
 
-    fn builtin_call_site(&self, token: &str) -> Option<SurfaceCallSite> {
-        self.builtin_call_sites.get(token).cloned()
+    fn builtin_call_target(&self, token: &str) -> Option<FunctionCallTarget> {
+        self.builtin_call_targets.get(token).cloned()
     }
 }
 
@@ -999,7 +1001,7 @@ fn compile_expr_for_evaluation(expr: &BoundExpr, scope: &mut CompileHelperScope)
             let (_, function_id) = binary_operator_identity(*op);
             CompiledExpr::Binary {
                 op: *op,
-                call_site: surface_call_site_from_function_id(function_id),
+                call_target: function_call_target_from_function_id(function_id),
                 left: Box::new(compile_expr_for_evaluation(left, scope)),
                 right: Box::new(compile_expr_for_evaluation(right, scope)),
             }
@@ -1008,7 +1010,7 @@ fn compile_expr_for_evaluation(expr: &BoundExpr, scope: &mut CompileHelperScope)
             let (_, function_id) = unary_operator_identity(*op);
             CompiledExpr::Unary {
                 op: *op,
-                call_site: surface_call_site_from_function_id(function_id),
+                call_target: function_call_target_from_function_id(function_id),
                 expr: Box::new(compile_expr_for_evaluation(expr, scope)),
             }
         }
@@ -1016,14 +1018,15 @@ fn compile_expr_for_evaluation(expr: &BoundExpr, scope: &mut CompileHelperScope)
             function_name,
             args,
         } => {
-            let call_site = CompiledFunctionCallSite::from_surface_name(function_name, args.len());
-            if call_site.has_special_form(CompiledFunctionSpecialForm::Let) {
+            let call_target =
+                CompiledFunctionCallTarget::from_surface_name(function_name, args.len());
+            if call_target.has_special_form(CompiledFunctionSpecialForm::Let) {
                 return compile_let_call_for_evaluation(args, scope);
             }
-            if call_site.has_special_form(CompiledFunctionSpecialForm::Lambda) {
+            if call_target.has_special_form(CompiledFunctionSpecialForm::Lambda) {
                 return compile_lambda_call_for_evaluation(args, scope);
             }
-            if call_site.has_special_form(CompiledFunctionSpecialForm::If) {
+            if call_target.has_special_form(CompiledFunctionSpecialForm::If) {
                 return CompiledExpr::If {
                     args: args
                         .iter()
@@ -1031,7 +1034,7 @@ fn compile_expr_for_evaluation(expr: &BoundExpr, scope: &mut CompileHelperScope)
                         .collect(),
                 };
             }
-            if call_site.has_special_form(CompiledFunctionSpecialForm::IfError) {
+            if call_target.has_special_form(CompiledFunctionSpecialForm::IfError) {
                 return CompiledExpr::IfError {
                     args: args
                         .iter()
@@ -1043,25 +1046,25 @@ fn compile_expr_for_evaluation(expr: &BoundExpr, scope: &mut CompileHelperScope)
                 .iter()
                 .enumerate()
                 .map(|(ordinal, arg)| {
-                    if call_site.callable_argument_ordinals.contains(&ordinal) {
+                    if call_target.callable_argument_ordinals.contains(&ordinal) {
                         compile_callable_slot_expr_for_evaluation(arg, scope)
                     } else {
                         compile_expr_for_evaluation(arg, scope)
                     }
                 })
                 .collect();
-            if call_site.has_special_form(CompiledFunctionSpecialForm::None)
-                && call_site.surface_call_site.is_some()
+            if call_target.has_special_form(CompiledFunctionSpecialForm::None)
+                && call_target.function_call_target.is_some()
             {
-                return CompiledExpr::SurfaceCall {
+                return CompiledExpr::ResolvedFunctionCall {
                     function_name: function_name.clone(),
-                    call_site,
+                    call_target,
                     args,
                 };
             }
             CompiledExpr::FunctionCall {
                 function_name: function_name.clone(),
-                call_site,
+                call_target,
                 args,
             }
         }
@@ -1076,7 +1079,7 @@ fn compile_expr_for_evaluation(expr: &BoundExpr, scope: &mut CompileHelperScope)
             CompiledExpr::Reference(compile_reference_for_evaluation(reference, scope))
         }
         BoundExpr::ImplicitIntersection(inner) => CompiledExpr::ImplicitIntersection {
-            call_site: surface_call_site_from_function_id(FUNC_ID_OP_IMPLICIT_INTERSECTION),
+            call_target: function_call_target_from_function_id(FUNC_ID_OP_IMPLICIT_INTERSECTION),
             expr: Box::new(compile_expr_for_evaluation(inner, scope)),
         },
     }
@@ -1156,7 +1159,7 @@ fn compiled_expr_contains_lambda_literal(expr: &CompiledExpr) -> bool {
             compiled_expr_contains_lambda_literal(expr)
         }
         CompiledExpr::FunctionCall { args, .. }
-        | CompiledExpr::SurfaceCall { args, .. }
+        | CompiledExpr::ResolvedFunctionCall { args, .. }
         | CompiledExpr::Let { args, .. }
         | CompiledExpr::If { args }
         | CompiledExpr::IfError { args } => args.iter().any(compiled_expr_contains_lambda_literal),
@@ -1225,21 +1228,21 @@ fn compile_reference_for_evaluation(
         }
         ReferenceExpr::Atom(atom) => CompiledReferenceExpr::Atom(atom.clone()),
         ReferenceExpr::Spill { anchor } => CompiledReferenceExpr::Spill {
-            call_site: surface_call_site_from_function_id(FUNC_ID_OP_SPILL_REF),
+            call_target: function_call_target_from_function_id(FUNC_ID_OP_SPILL_REF),
             anchor: Box::new(compile_reference_for_evaluation(anchor, scope)),
         },
         ReferenceExpr::Range { start, end } => CompiledReferenceExpr::Range {
-            call_site: surface_call_site_from_function_id(FUNC_ID_OP_RANGE_REF),
+            call_target: function_call_target_from_function_id(FUNC_ID_OP_RANGE_REF),
             start: Box::new(compile_reference_for_evaluation(start, scope)),
             end: Box::new(compile_reference_for_evaluation(end, scope)),
         },
         ReferenceExpr::Union { left, right } => CompiledReferenceExpr::Union {
-            call_site: surface_call_site_from_function_id(FUNC_ID_OP_UNION_REF),
+            call_target: function_call_target_from_function_id(FUNC_ID_OP_UNION_REF),
             left: Box::new(compile_reference_for_evaluation(left, scope)),
             right: Box::new(compile_reference_for_evaluation(right, scope)),
         },
         ReferenceExpr::Intersection { left, right } => CompiledReferenceExpr::Intersection {
-            call_site: surface_call_site_from_function_id(FUNC_ID_OP_INTERSECTION_REF),
+            call_target: function_call_target_from_function_id(FUNC_ID_OP_INTERSECTION_REF),
             left: Box::new(compile_reference_for_evaluation(left, scope)),
             right: Box::new(compile_reference_for_evaluation(right, scope)),
         },
@@ -1255,40 +1258,40 @@ fn precompute_context_free_expr(expr: CompiledExpr) -> CompiledExpr {
         ),
         CompiledExpr::Binary {
             op,
-            call_site,
+            call_target,
             left,
             right,
         } => CompiledExpr::Binary {
             op,
-            call_site,
+            call_target,
             left: Box::new(precompute_context_free_expr(*left)),
             right: Box::new(precompute_context_free_expr(*right)),
         },
         CompiledExpr::Unary {
             op,
-            call_site,
+            call_target,
             expr,
         } => CompiledExpr::Unary {
             op,
-            call_site,
+            call_target,
             expr: Box::new(precompute_context_free_expr(*expr)),
         },
         CompiledExpr::FunctionCall {
             function_name,
-            call_site,
+            call_target,
             args,
         } => CompiledExpr::FunctionCall {
             function_name,
-            call_site,
+            call_target,
             args: args.into_iter().map(precompute_context_free_expr).collect(),
         },
-        CompiledExpr::SurfaceCall {
+        CompiledExpr::ResolvedFunctionCall {
             function_name,
-            call_site,
+            call_target,
             args,
-        } => CompiledExpr::SurfaceCall {
+        } => CompiledExpr::ResolvedFunctionCall {
             function_name,
-            call_site,
+            call_target,
             args: args.into_iter().map(precompute_context_free_expr).collect(),
         },
         CompiledExpr::Let { args, slot_only } => CompiledExpr::Let {
@@ -1305,9 +1308,9 @@ fn precompute_context_free_expr(expr: CompiledExpr) -> CompiledExpr {
             callee: Box::new(precompute_context_free_expr(*callee)),
             args: args.into_iter().map(precompute_context_free_expr).collect(),
         },
-        CompiledExpr::ImplicitIntersection { call_site, expr } => {
+        CompiledExpr::ImplicitIntersection { call_target, expr } => {
             CompiledExpr::ImplicitIntersection {
-                call_site,
+                call_target,
                 expr: Box::new(precompute_context_free_expr(*expr)),
             }
         }
@@ -1331,25 +1334,25 @@ fn precompute_context_free_expr(expr: CompiledExpr) -> CompiledExpr {
 fn expr_can_be_precomputed(expr: &CompiledExpr) -> bool {
     match expr {
         CompiledExpr::Binary {
-            call_site,
+            call_target,
             left,
             right,
             ..
         } => {
-            call_site.is_context_free_pure()
+            call_target.is_context_free_pure()
                 && expr_is_context_free_value(left)
                 && expr_is_context_free_value(right)
         }
         CompiledExpr::Unary {
-            call_site, expr, ..
-        } => call_site.is_context_free_pure() && expr_is_context_free_value(expr),
-        CompiledExpr::SurfaceCall {
-            call_site, args, ..
+            call_target, expr, ..
+        } => call_target.is_context_free_pure() && expr_is_context_free_value(expr),
+        CompiledExpr::ResolvedFunctionCall {
+            call_target, args, ..
         } => {
-            call_site
-                .surface_call_site
+            call_target
+                .function_call_target
                 .as_ref()
-                .is_some_and(SurfaceCallSite::is_context_free_pure)
+                .is_some_and(FunctionCallTarget::is_context_free_pure)
                 && args.iter().all(expr_is_context_free_value)
         }
         _ => false,
@@ -1372,28 +1375,28 @@ fn context_free_eval_value_for_expr(expr: &CompiledExpr) -> Option<EvalValue> {
         CompiledExpr::LogicalLiteral(value) => Some(EvalValue::Logical(*value)),
         CompiledExpr::PrecomputedValue { value, .. } => Some(value.clone()),
         CompiledExpr::Binary {
-            call_site,
+            call_target,
             left,
             right,
             ..
-        } if call_site.is_context_free_pure() => {
+        } if call_target.is_context_free_pure() => {
             let args = [
                 context_free_call_arg_for_expr(left)?,
                 context_free_call_arg_for_expr(right)?,
             ];
-            Some(invoke_context_free_surface_call(call_site, &args))
+            Some(invoke_context_free_function_call(call_target, &args))
         }
         CompiledExpr::Unary {
-            call_site, expr, ..
-        } if call_site.is_context_free_pure() => {
+            call_target, expr, ..
+        } if call_target.is_context_free_pure() => {
             let args = [context_free_call_arg_for_expr(expr)?];
-            Some(invoke_context_free_surface_call(call_site, &args))
+            Some(invoke_context_free_function_call(call_target, &args))
         }
-        CompiledExpr::SurfaceCall {
-            call_site, args, ..
+        CompiledExpr::ResolvedFunctionCall {
+            call_target, args, ..
         } => {
-            let surface_call_site = call_site.surface_call_site.as_ref()?;
-            if !surface_call_site.is_context_free_pure() {
+            let function_call_target = call_target.function_call_target.as_ref()?;
+            if !function_call_target.is_context_free_pure() {
                 return None;
             }
             let mut call_args = args
@@ -1411,15 +1414,15 @@ fn context_free_eval_value_for_expr(expr: &CompiledExpr) -> Option<EvalValue> {
                 }
                 call_args.pop();
             }
-            if surface_call_site.function_meta().function_id == FUNC_ID_HSTACK
+            if function_call_target.function_meta().function_id == FUNC_ID_HSTACK
                 && args.iter().zip(call_args.iter()).any(|(arg, call_arg)| {
                     hstack_arg_should_collapse(arg, call_arg, &HelperBindingFrame::default())
                 })
             {
                 return Some(EvalValue::Error(WorksheetErrorCode::Calc));
             }
-            Some(invoke_context_free_surface_call(
-                surface_call_site,
+            Some(invoke_context_free_function_call(
+                function_call_target,
                 &call_args,
             ))
         }
@@ -1434,8 +1437,8 @@ fn context_free_call_arg_for_expr(expr: &CompiledExpr) -> Option<CallArgValue> {
     }
 }
 
-fn invoke_context_free_surface_call(
-    call_site: &SurfaceCallSite,
+fn invoke_context_free_function_call(
+    call_target: &FunctionCallTarget,
     args: &[CallArgValue],
 ) -> EvalValue {
     let cell_values = BTreeMap::new();
@@ -1450,8 +1453,8 @@ fn invoke_context_free_surface_call(
         caller_col: 1,
         callable_registry: &callable_registry,
     };
-    let mut runtime = SurfaceCallRuntime::new(&resolver);
-    match call_site.invoke(args, &mut runtime) {
+    let mut fec = FunctionExecutionContextBundle::new(&resolver);
+    match call_target.invoke(args, &mut fec) {
         Ok(value) => value,
         Err(code) => EvalValue::Error(code),
     }
@@ -1585,13 +1588,13 @@ impl<'a> EvaluationContext<'a> {
         }
     }
 
-    fn take_surface_call_scratch(&self, capacity: usize) -> PooledSurfaceCallScratch<'_> {
+    fn take_function_call_scratch(&self, capacity: usize) -> PooledFunctionCallScratch<'_> {
         let mut scratch = self
             .frame_state
-            .surface_call_scratch
+            .function_call_scratch
             .borrow_mut()
             .pop()
-            .unwrap_or_else(|| SurfaceCallScratch::with_capacity(capacity));
+            .unwrap_or_else(|| FunctionCallScratch::with_capacity(capacity));
         scratch.clear();
         let current_capacity = scratch.capacity();
         if current_capacity < capacity {
@@ -1599,8 +1602,8 @@ impl<'a> EvaluationContext<'a> {
                 .call_args_mut()
                 .reserve(capacity.saturating_sub(current_capacity));
         }
-        PooledSurfaceCallScratch {
-            pool: &self.frame_state.surface_call_scratch,
+        PooledFunctionCallScratch {
+            pool: &self.frame_state.function_call_scratch,
             scratch,
         }
     }
@@ -1683,11 +1686,11 @@ fn typed_surface_for_top_level_host_or_provider_call(
 ) -> Option<ReturnedValueSurface> {
     match root {
         CompiledExpr::FunctionCall {
-            call_site, args, ..
+            call_target, args, ..
         }
-        | CompiledExpr::SurfaceCall {
-            call_site, args, ..
-        } if call_site.function_id() == Some(FUNC_ID_RTD) && context.rtd_provider.is_some() => {
+        | CompiledExpr::ResolvedFunctionCall {
+            call_target, args, ..
+        } if call_target.function_id() == Some(FUNC_ID_RTD) && context.rtd_provider.is_some() => {
             let call_args = build_top_level_call_args(args, context, true).ok()?;
             let callable_registry = RefCell::new(CallableRegistry::default());
             let resolver = LocalReferenceResolver {
@@ -1708,11 +1711,11 @@ fn typed_surface_for_top_level_host_or_provider_call(
             }
         }
         CompiledExpr::FunctionCall {
-            call_site, args, ..
+            call_target, args, ..
         }
-        | CompiledExpr::SurfaceCall {
-            call_site, args, ..
-        } if call_site.function_id() == Some(FUNC_ID_INFO) && context.host_info.is_some() => {
+        | CompiledExpr::ResolvedFunctionCall {
+            call_target, args, ..
+        } if call_target.function_id() == Some(FUNC_ID_INFO) && context.host_info.is_some() => {
             let call_args = build_top_level_call_args(args, context, true).ok()?;
             let callable_registry = RefCell::new(CallableRegistry::default());
             let resolver = LocalReferenceResolver {
@@ -1731,11 +1734,11 @@ fn typed_surface_for_top_level_host_or_provider_call(
             }
         }
         CompiledExpr::FunctionCall {
-            call_site, args, ..
+            call_target, args, ..
         }
-        | CompiledExpr::SurfaceCall {
-            call_site, args, ..
-        } if call_site.function_id() == Some(FUNC_ID_CELL) && context.host_info.is_some() => {
+        | CompiledExpr::ResolvedFunctionCall {
+            call_target, args, ..
+        } if call_target.function_id() == Some(FUNC_ID_CELL) && context.host_info.is_some() => {
             let call_args = build_top_level_call_args(args, context, true).ok()?;
             let callable_registry = RefCell::new(CallableRegistry::default());
             let resolver = LocalReferenceResolver {
@@ -1763,12 +1766,12 @@ fn extended_surface_for_top_level_function_call(
 ) -> Option<ReturnedValueSurface> {
     match root {
         CompiledExpr::FunctionCall {
-            call_site, args, ..
+            call_target, args, ..
         }
-        | CompiledExpr::SurfaceCall {
-            call_site, args, ..
+        | CompiledExpr::ResolvedFunctionCall {
+            call_target, args, ..
         } => {
-            let function_id = call_site.function_id()?;
+            let function_id = call_target.function_id()?;
             let call_args = build_top_level_call_args(args, context, true).ok()?;
             let callable_registry = RefCell::new(CallableRegistry::default());
             let resolver = LocalReferenceResolver {
@@ -1859,7 +1862,7 @@ fn evaluate_root_expr_value(
     if !context.bind_formula.root_expression_is_grouped {
         if let CompiledExpr::Binary {
             op,
-            call_site,
+            call_target,
             left,
             right,
         } = expr
@@ -1867,7 +1870,7 @@ fn evaluate_root_expr_value(
             if matches!(op, BinaryOp::Add | BinaryOp::Subtract) {
                 let evaluation = evaluate_binary_operator_call_evaluation(
                     *op,
-                    call_site,
+                    call_target,
                     left,
                     right,
                     context,
@@ -1943,12 +1946,12 @@ fn evaluate_expr_value(
         }),
         CompiledExpr::Binary {
             op,
-            call_site,
+            call_target,
             left,
             right,
         } => evaluate_binary_operator_call(
             *op,
-            call_site,
+            call_target,
             left,
             right,
             context,
@@ -1959,11 +1962,11 @@ fn evaluate_expr_value(
         ),
         CompiledExpr::Unary {
             op,
-            call_site,
+            call_target,
             expr,
         } => evaluate_unary_operator_call(
             *op,
-            call_site,
+            call_target,
             expr,
             context,
             resolver,
@@ -1973,11 +1976,11 @@ fn evaluate_expr_value(
         ),
         CompiledExpr::FunctionCall {
             function_name,
-            call_site,
+            call_target,
             args,
         } => evaluate_function_call(
             function_name,
-            call_site,
+            call_target,
             args,
             context,
             resolver,
@@ -1985,13 +1988,13 @@ fn evaluate_expr_value(
             callable_registry,
             trace,
         ),
-        CompiledExpr::SurfaceCall {
+        CompiledExpr::ResolvedFunctionCall {
             function_name,
-            call_site,
+            call_target,
             args,
-        } => evaluate_ordinary_surface_call(
+        } => evaluate_ordinary_function_call(
             function_name,
-            call_site,
+            call_target,
             args,
             context,
             resolver,
@@ -2028,7 +2031,7 @@ fn evaluate_expr_value(
             trace,
         ),
         CompiledExpr::BuiltinCallable(callable) => Ok(EvalValue::Lambda(
-            built_in_callable_lambda_from_call_site(&callable.call_site, callable_registry),
+            built_in_callable_lambda_from_call_target(&callable.call_target, callable_registry),
         )),
         CompiledExpr::Invocation { callee, args } => evaluate_invocation(
             callee,
@@ -2052,7 +2055,7 @@ fn evaluate_expr_value(
             )?;
             materialize_call_arg(arg, resolver)
         }
-        CompiledExpr::ImplicitIntersection { call_site, expr } => {
+        CompiledExpr::ImplicitIntersection { call_target, expr } => {
             let arg = evaluate_expr_as_call_arg(
                 expr,
                 context,
@@ -2064,8 +2067,8 @@ fn evaluate_expr_value(
                 trace,
             )?;
             let args = [arg];
-            Ok(evaluate_surface_call_site_value(
-                call_site,
+            Ok(evaluate_function_call_target_value(
+                call_target,
                 &args,
                 context,
                 resolver,
@@ -2077,7 +2080,7 @@ fn evaluate_expr_value(
 
 fn evaluate_function_call(
     function_name: &str,
-    call_site: &CompiledFunctionCallSite,
+    call_target: &CompiledFunctionCallTarget,
     args: &[CompiledExpr],
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
@@ -2085,7 +2088,7 @@ fn evaluate_function_call(
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
 ) -> Result<EvalValue, EvaluationError> {
-    match call_site.special_form {
+    match call_target.special_form {
         CompiledFunctionSpecialForm::Let => {
             return evaluate_let_call(
                 args,
@@ -2121,12 +2124,13 @@ fn evaluate_function_call(
             );
         }
         CompiledFunctionSpecialForm::LegacySingle => {
-            let Some(special_operator_call_site) = call_site.special_operator_call_site.as_ref()
+            let Some(special_operator_call_target) =
+                call_target.special_operator_call_target.as_ref()
             else {
                 return Ok(EvalValue::Error(WorksheetErrorCode::Name));
             };
             return evaluate_legacy_single_call(
-                special_operator_call_site,
+                special_operator_call_target,
                 args,
                 context,
                 resolver,
@@ -2138,9 +2142,9 @@ fn evaluate_function_call(
         CompiledFunctionSpecialForm::None => {}
     }
 
-    evaluate_ordinary_surface_call(
+    evaluate_ordinary_function_call(
         function_name,
-        call_site,
+        call_target,
         args,
         context,
         resolver,
@@ -2150,9 +2154,9 @@ fn evaluate_function_call(
     )
 }
 
-fn evaluate_ordinary_surface_call(
+fn evaluate_ordinary_function_call(
     function_name: &str,
-    call_site: &CompiledFunctionCallSite,
+    call_target: &CompiledFunctionCallTarget,
     args: &[CompiledExpr],
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
@@ -2164,7 +2168,7 @@ fn evaluate_ordinary_surface_call(
         return Ok(EvalValue::Error(WorksheetErrorCode::Blocked));
     }
 
-    let Some(surface_call_site) = call_site.surface_call_site.as_ref() else {
+    let Some(function_call_target) = call_target.function_call_target.as_ref() else {
         if let Some(host_function_provider) = context.host_function_provider
             && context_allows_host_function_call(context, function_name)
         {
@@ -2181,7 +2185,7 @@ fn evaluate_ordinary_surface_call(
         }
         return Ok(EvalValue::Error(WorksheetErrorCode::Name));
     };
-    let meta = surface_call_site.function_meta();
+    let meta = function_call_target.function_meta();
 
     if context.backend == EvaluationBackend::LocalBootstrap {
         return Err(EvaluationError {
@@ -2197,11 +2201,11 @@ fn evaluate_ordinary_surface_call(
     } else {
         Vec::new()
     };
-    let mut scratch = context.take_surface_call_scratch(args.len());
+    let mut scratch = context.take_function_call_scratch(args.len());
     for (ordinal, arg) in args.iter().enumerate() {
         let preserve_reference =
             meta.arg_preparation_profile == ArgPreparationProfile::RefsVisibleInAdapter;
-        let callable_slot = call_site.callable_argument_ordinals.contains(&ordinal);
+        let callable_slot = call_target.callable_argument_ordinals.contains(&ordinal);
         let call_arg = evaluate_expr_as_call_arg(
             arg,
             context,
@@ -2287,8 +2291,8 @@ fn evaluate_ordinary_surface_call(
     let returned_value = if collapse_hstack_empty_carrier {
         EvalValue::Error(WorksheetErrorCode::Calc)
     } else {
-        match evaluate_surface_call_site_scratch(
-            surface_call_site,
+        match evaluate_function_call_target_scratch(
+            function_call_target,
             &scratch,
             context,
             resolver,
@@ -2441,8 +2445,8 @@ fn allow_host_query_worksheet_error_fallback(
     }
 }
 
-fn evaluate_surface_call_site(
-    call_site: &SurfaceCallSite,
+fn evaluate_function_call_target(
+    call_target: &FunctionCallTarget,
     args: &[CallArgValue],
     context: &EvaluationContext<'_>,
     resolver: &LocalReferenceResolver<'_>,
@@ -2452,21 +2456,21 @@ fn evaluate_surface_call_site(
         context,
         callable_registry,
     };
-    let mut runtime = SurfaceCallRuntime::new(resolver);
-    runtime.now_serial = context.now_serial;
-    runtime.random_provider = context.random_provider;
-    runtime.locale_ctx = context.locale_ctx;
-    runtime.host_info = context.host_info;
-    runtime.callable_invoker = Some(&callable_invoker);
-    runtime.rtd_provider = context.rtd_provider;
-    runtime.registered_external_provider = context.registered_external_provider;
-    runtime.reference_text_resolver = context.reference_text_resolver;
-    call_site.invoke(args, &mut runtime)
+    let mut fec = FunctionExecutionContextBundle::new(resolver);
+    fec.now_serial = context.now_serial;
+    fec.random_provider = context.random_provider;
+    fec.locale_ctx = context.locale_ctx;
+    fec.host_info = context.host_info;
+    fec.callable_invoker = Some(&callable_invoker);
+    fec.rtd_provider = context.rtd_provider;
+    fec.registered_external_provider = context.registered_external_provider;
+    fec.reference_text_resolver = context.reference_text_resolver;
+    call_target.invoke(args, &mut fec)
 }
 
-fn evaluate_surface_call_site_scratch(
-    call_site: &SurfaceCallSite,
-    scratch: &SurfaceCallScratch,
+fn evaluate_function_call_target_scratch(
+    call_target: &FunctionCallTarget,
+    scratch: &FunctionCallScratch,
     context: &EvaluationContext<'_>,
     resolver: &LocalReferenceResolver<'_>,
     callable_registry: &RefCell<CallableRegistry>,
@@ -2475,26 +2479,26 @@ fn evaluate_surface_call_site_scratch(
         context,
         callable_registry,
     };
-    let mut runtime = SurfaceCallRuntime::new(resolver);
-    runtime.now_serial = context.now_serial;
-    runtime.random_provider = context.random_provider;
-    runtime.locale_ctx = context.locale_ctx;
-    runtime.host_info = context.host_info;
-    runtime.callable_invoker = Some(&callable_invoker);
-    runtime.rtd_provider = context.rtd_provider;
-    runtime.registered_external_provider = context.registered_external_provider;
-    runtime.reference_text_resolver = context.reference_text_resolver;
-    call_site.invoke_scratch(scratch, &mut runtime)
+    let mut fec = FunctionExecutionContextBundle::new(resolver);
+    fec.now_serial = context.now_serial;
+    fec.random_provider = context.random_provider;
+    fec.locale_ctx = context.locale_ctx;
+    fec.host_info = context.host_info;
+    fec.callable_invoker = Some(&callable_invoker);
+    fec.rtd_provider = context.rtd_provider;
+    fec.registered_external_provider = context.registered_external_provider;
+    fec.reference_text_resolver = context.reference_text_resolver;
+    call_target.invoke_scratch(scratch, &mut fec)
 }
 
-fn evaluate_surface_call_site_value(
-    call_site: &SurfaceCallSite,
+fn evaluate_function_call_target_value(
+    call_target: &FunctionCallTarget,
     args: &[CallArgValue],
     context: &EvaluationContext<'_>,
     resolver: &LocalReferenceResolver<'_>,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> EvalValue {
-    match evaluate_surface_call_site(call_site, args, context, resolver, callable_registry) {
+    match evaluate_function_call_target(call_target, args, context, resolver, callable_registry) {
         Ok(value) => value,
         Err(code) => EvalValue::Error(code),
     }
@@ -2600,7 +2604,7 @@ fn evaluate_expr_as_call_arg(
             callable_slot,
             trace,
         ),
-        CompiledExpr::ImplicitIntersection { call_site, expr } => {
+        CompiledExpr::ImplicitIntersection { call_target, expr } => {
             let arg = evaluate_expr_as_call_arg(
                 expr,
                 context,
@@ -2612,8 +2616,8 @@ fn evaluate_expr_as_call_arg(
                 trace,
             )?;
             let args = [arg];
-            Ok(CallArgValue::Eval(evaluate_surface_call_site_value(
-                call_site,
+            Ok(CallArgValue::Eval(evaluate_function_call_target_value(
+                call_target,
                 &args,
                 context,
                 resolver,
@@ -2638,17 +2642,20 @@ fn built_in_callable_arg_for_expr(
 ) -> Result<Option<CallArgValue>, EvaluationError> {
     match expr {
         CompiledExpr::BuiltinCallable(callable) => {
-            built_in_callable_arg_for_call_site(&callable.call_site, callable_registry).map(Some)
+            built_in_callable_arg_for_call_target(&callable.call_target, callable_registry)
+                .map(Some)
         }
         CompiledExpr::FunctionCall {
-            call_site, args, ..
+            call_target, args, ..
         }
-        | CompiledExpr::SurfaceCall {
-            call_site, args, ..
-        } if args.is_empty() => call_site
-            .surface_call_site
+        | CompiledExpr::ResolvedFunctionCall {
+            call_target, args, ..
+        } if args.is_empty() => call_target
+            .function_call_target
             .as_ref()
-            .map(|call_site| built_in_callable_arg_for_call_site(call_site, callable_registry))
+            .map(|call_target| {
+                built_in_callable_arg_for_call_target(call_target, callable_registry)
+            })
             .transpose(),
         _ => Ok(None),
     }
@@ -2771,9 +2778,12 @@ fn evaluate_reference_as_call_arg(
         CompiledReferenceExpr::Atom(NormalizedReference::Error(error)) => Ok(CallArgValue::Eval(
             EvalValue::Error(error_code_for_error_ref(error)),
         )),
-        CompiledReferenceExpr::Spill { call_site, anchor } => evaluate_reference_operator_call(
+        CompiledReferenceExpr::Spill {
+            call_target,
+            anchor,
+        } => evaluate_reference_operator_call(
             "OP_SPILL_REF",
-            call_site,
+            call_target,
             vec![anchor.as_ref()],
             context,
             resolver,
@@ -2783,12 +2793,12 @@ fn evaluate_reference_as_call_arg(
             trace,
         ),
         CompiledReferenceExpr::Range {
-            call_site,
+            call_target,
             start,
             end,
         } => evaluate_reference_operator_call(
             "OP_RANGE_REF",
-            call_site,
+            call_target,
             vec![start.as_ref(), end.as_ref()],
             context,
             resolver,
@@ -2798,12 +2808,12 @@ fn evaluate_reference_as_call_arg(
             trace,
         ),
         CompiledReferenceExpr::Union {
-            call_site,
+            call_target,
             left,
             right,
         } => evaluate_reference_operator_call(
             "OP_UNION_REF",
-            call_site,
+            call_target,
             vec![left.as_ref(), right.as_ref()],
             context,
             resolver,
@@ -2813,12 +2823,12 @@ fn evaluate_reference_as_call_arg(
             trace,
         ),
         CompiledReferenceExpr::Intersection {
-            call_site,
+            call_target,
             left,
             right,
         } => evaluate_reference_operator_call(
             "OP_INTERSECTION_REF",
-            call_site,
+            call_target,
             vec![left.as_ref(), right.as_ref()],
             context,
             resolver,
@@ -2832,7 +2842,7 @@ fn evaluate_reference_as_call_arg(
 
 fn evaluate_reference_operator_call(
     function_name: &'static str,
-    call_site: &SurfaceCallSite,
+    call_target: &FunctionCallTarget,
     operands: Vec<&CompiledReferenceExpr>,
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
@@ -2841,7 +2851,7 @@ fn evaluate_reference_operator_call(
     preserve_reference: bool,
     trace: &mut EvaluationTrace,
 ) -> Result<CallArgValue, EvaluationError> {
-    let function_id = call_site.function_id();
+    let function_id = call_target.function_id();
     let mut args = Vec::with_capacity(operands.len());
     let records_prepared_calls = context.records_prepared_calls();
     let mut prepared_arguments = if records_prepared_calls {
@@ -2876,7 +2886,8 @@ fn evaluate_reference_operator_call(
         context,
     );
 
-    let result = evaluate_surface_call_site(call_site, &args, context, resolver, callable_registry);
+    let result =
+        evaluate_function_call_target(call_target, &args, context, resolver, callable_registry);
     let value = match result {
         Ok(value) => value,
         Err(code) => EvalValue::Error(code),
@@ -2954,7 +2965,7 @@ fn evaluate_array_literal(
 
 fn evaluate_binary_operator_call(
     op: BinaryOp,
-    call_site: &SurfaceCallSite,
+    call_target: &FunctionCallTarget,
     left: &CompiledExpr,
     right: &CompiledExpr,
     context: &EvaluationContext<'_>,
@@ -2965,7 +2976,7 @@ fn evaluate_binary_operator_call(
 ) -> Result<EvalValue, EvaluationError> {
     evaluate_binary_operator_call_evaluation(
         op,
-        call_site,
+        call_target,
         left,
         right,
         context,
@@ -3037,7 +3048,7 @@ fn excel_root_add_subtract_reaches_zero(op: BinaryOp, lhs: f64, rhs: f64, result
 
 fn evaluate_binary_operator_call_evaluation(
     op: BinaryOp,
-    call_site: &SurfaceCallSite,
+    call_target: &FunctionCallTarget,
     left: &CompiledExpr,
     right: &CompiledExpr,
     context: &EvaluationContext<'_>,
@@ -3085,7 +3096,8 @@ fn evaluate_binary_operator_call_evaluation(
     );
 
     let args = [lhs.clone(), rhs.clone()];
-    let result = evaluate_surface_call_site(call_site, &args, context, resolver, callable_registry);
+    let result =
+        evaluate_function_call_target(call_target, &args, context, resolver, callable_registry);
     let value = match result {
         Ok(value) => value,
         Err(code) => EvalValue::Error(code),
@@ -3096,7 +3108,7 @@ fn evaluate_binary_operator_call_evaluation(
 
 fn evaluate_unary_operator_call(
     op: crate::binding::UnaryOp,
-    call_site: &SurfaceCallSite,
+    call_target: &FunctionCallTarget,
     expr: &CompiledExpr,
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
@@ -3130,7 +3142,8 @@ fn evaluate_unary_operator_call(
     );
 
     let args = [arg];
-    let result = evaluate_surface_call_site(call_site, &args, context, resolver, callable_registry);
+    let result =
+        evaluate_function_call_target(call_target, &args, context, resolver, callable_registry);
     let value = match result {
         Ok(value) => value,
         Err(code) => EvalValue::Error(code),
@@ -3265,22 +3278,22 @@ fn call_arg_for_helper_binding(
     }
 }
 
-fn built_in_callable_arg_for_call_site(
-    call_site: &SurfaceCallSite,
+fn built_in_callable_arg_for_call_target(
+    call_target: &FunctionCallTarget,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> Result<CallArgValue, EvaluationError> {
     Ok(CallArgValue::Eval(EvalValue::Lambda(
-        built_in_callable_lambda_from_call_site(call_site, callable_registry),
+        built_in_callable_lambda_from_call_target(call_target, callable_registry),
     )))
 }
 
-fn built_in_callable_lambda_from_call_site(
-    call_site: &SurfaceCallSite,
+fn built_in_callable_lambda_from_call_target(
+    call_target: &FunctionCallTarget,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> OxLambdaValue {
     callable_registry
         .borrow_mut()
-        .register_builtin_call_site(call_site.clone())
+        .register_builtin_call_target(call_target.clone())
 }
 
 fn evaluate_let_call(
@@ -3886,7 +3899,7 @@ fn evaluate_lambda_call(
 }
 
 fn evaluate_legacy_single_call(
-    call_site: &SurfaceCallSite,
+    call_target: &FunctionCallTarget,
     args: &[CompiledExpr],
     context: &EvaluationContext<'_>,
     resolver: &mut LocalReferenceResolver<'_>,
@@ -3923,8 +3936,13 @@ fn evaluate_legacy_single_call(
         context,
     );
     let args = [prepared];
-    let value =
-        evaluate_surface_call_site_value(call_site, &args, context, resolver, callable_registry);
+    let value = evaluate_function_call_target_value(
+        call_target,
+        &args,
+        context,
+        resolver,
+        callable_registry,
+    );
     record_prepared_call_returned_value(trace, prepared_call_index, &value);
     Ok(value)
 }
@@ -4163,16 +4181,16 @@ fn helper_binding_from_expr(
 fn expr_is_hstack_empty_carrier(expr: &CompiledExpr, helper_bindings: &HelperBindingFrame) -> bool {
     match expr {
         CompiledExpr::FunctionCall {
-            call_site, args, ..
+            call_target, args, ..
         }
-        | CompiledExpr::SurfaceCall {
-            call_site, args, ..
-        } if call_site.function_id() == Some(FUNC_ID_TAKE) => {
+        | CompiledExpr::ResolvedFunctionCall {
+            call_target, args, ..
+        } if call_target.function_id() == Some(FUNC_ID_TAKE) => {
             take_call_has_zero_column_extent(args)
         }
         CompiledExpr::FunctionCall {
-            call_site, args, ..
-        } if call_site.has_special_form(CompiledFunctionSpecialForm::If) => args
+            call_target, args, ..
+        } if call_target.has_special_form(CompiledFunctionSpecialForm::If) => args
             .iter()
             .skip(1)
             .any(|arg| expr_is_hstack_empty_carrier(arg, helper_bindings)),
@@ -4417,7 +4435,7 @@ fn lambda_body_kind(body: &CompiledExpr) -> &'static str {
         CompiledExpr::Binary { .. } => "Binary",
         CompiledExpr::Unary { .. } => "Unary",
         CompiledExpr::FunctionCall { .. } => "FunctionCall",
-        CompiledExpr::SurfaceCall { .. } => "SurfaceCall",
+        CompiledExpr::ResolvedFunctionCall { .. } => "ResolvedFunctionCall",
         CompiledExpr::Let { .. } => "Let",
         CompiledExpr::LambdaLiteral { .. } => "LambdaLiteral",
         CompiledExpr::If { .. } => "If",
@@ -4505,7 +4523,7 @@ fn helper_free_names_in_expr(
             helper_free_names_in_lambda(args, bound_names, helper_bindings)
         }
         CompiledExpr::FunctionCall { args, .. }
-        | CompiledExpr::SurfaceCall { args, .. }
+        | CompiledExpr::ResolvedFunctionCall { args, .. }
         | CompiledExpr::If { args }
         | CompiledExpr::IfError { args } => {
             let mut names = BTreeSet::new();
@@ -4745,7 +4763,7 @@ fn prepared_source_class(expr: &CompiledExpr) -> PreparedSourceClass {
         CompiledExpr::HelperParameterName { .. }
         | CompiledExpr::HelperOptionalParameterName { .. } => PreparedSourceClass::HelperParameter,
         CompiledExpr::FunctionCall { .. }
-        | CompiledExpr::SurfaceCall { .. }
+        | CompiledExpr::ResolvedFunctionCall { .. }
         | CompiledExpr::Let { .. }
         | CompiledExpr::LambdaLiteral { .. }
         | CompiledExpr::If { .. }
@@ -5332,10 +5350,10 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
         args: &[PreparedArgValue],
     ) -> Result<PreparedArgValue, CallableInvocationError> {
         if callable.origin_kind == OxCallableOriginKind::BuiltInCallable {
-            let call_site = self
+            let call_target = self
                 .callable_registry
                 .borrow()
-                .builtin_call_site(&callable.callable_token)
+                .builtin_call_target(&callable.callable_token)
                 .ok_or_else(|| {
                     CallableInvocationError::UnsupportedCallableToken(
                         callable.callable_token.clone(),
@@ -5353,17 +5371,17 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
                 caller_col: self.context.caller_col,
                 callable_registry: self.callable_registry,
             };
-            let mut runtime = SurfaceCallRuntime::new(&resolver);
-            runtime.now_serial = self.context.now_serial;
-            runtime.random_provider = self.context.random_provider;
-            runtime.locale_ctx = self.context.locale_ctx;
-            runtime.host_info = self.context.host_info;
-            runtime.callable_invoker = Some(self);
-            runtime.rtd_provider = self.context.rtd_provider;
-            runtime.registered_external_provider = self.context.registered_external_provider;
-            runtime.reference_text_resolver = self.context.reference_text_resolver;
-            let value = call_site
-                .invoke(&call_args, &mut runtime)
+            let mut fec = FunctionExecutionContextBundle::new(&resolver);
+            fec.now_serial = self.context.now_serial;
+            fec.random_provider = self.context.random_provider;
+            fec.locale_ctx = self.context.locale_ctx;
+            fec.host_info = self.context.host_info;
+            fec.callable_invoker = Some(self);
+            fec.rtd_provider = self.context.rtd_provider;
+            fec.registered_external_provider = self.context.registered_external_provider;
+            fec.reference_text_resolver = self.context.reference_text_resolver;
+            let value = call_target
+                .invoke(&call_args, &mut fec)
                 .map_err(|_| CallableInvocationError::Worksheet(WorksheetErrorCode::Value))?;
             return Ok(prepared_arg_from_eval_value(value));
         }
@@ -5533,10 +5551,10 @@ impl OxFmlCallableInvoker<'_, '_> {
         callable: &OxLambdaValue,
         batch: &mut dyn CallableInvocationBatch,
     ) -> Result<(), CallableInvocationError> {
-        let call_site = self
+        let call_target = self
             .callable_registry
             .borrow()
-            .builtin_call_site(&callable.callable_token)
+            .builtin_call_target(&callable.callable_token)
             .ok_or_else(|| {
                 CallableInvocationError::UnsupportedCallableToken(callable.callable_token.clone())
             })?;
@@ -5548,17 +5566,17 @@ impl OxFmlCallableInvoker<'_, '_> {
             caller_col: self.context.caller_col,
             callable_registry: self.callable_registry,
         };
-        let mut runtime = SurfaceCallRuntime::new(&resolver);
-        runtime.now_serial = self.context.now_serial;
-        runtime.random_provider = self.context.random_provider;
-        runtime.locale_ctx = self.context.locale_ctx;
-        runtime.host_info = self.context.host_info;
-        runtime.callable_invoker = Some(self);
-        runtime.rtd_provider = self.context.rtd_provider;
-        runtime.registered_external_provider = self.context.registered_external_provider;
-        runtime.reference_text_resolver = self.context.reference_text_resolver;
+        let mut fec = FunctionExecutionContextBundle::new(&resolver);
+        fec.now_serial = self.context.now_serial;
+        fec.random_provider = self.context.random_provider;
+        fec.locale_ctx = self.context.locale_ctx;
+        fec.host_info = self.context.host_info;
+        fec.callable_invoker = Some(self);
+        fec.rtd_provider = self.context.rtd_provider;
+        fec.registered_external_provider = self.context.registered_external_provider;
+        fec.reference_text_resolver = self.context.reference_text_resolver;
 
-        let mut scratch = call_site.new_scratch();
+        let mut scratch = call_target.new_scratch();
         let mut args = Vec::new();
         while {
             args.clear();
@@ -5573,8 +5591,8 @@ impl OxFmlCallableInvoker<'_, '_> {
                 });
             }
             build_scratch_from_prepared_args(&mut scratch, &args, self.callable_registry);
-            let value = call_site
-                .invoke_scratch(&scratch, &mut runtime)
+            let value = call_target
+                .invoke_scratch(&scratch, &mut fec)
                 .map_err(|_| CallableInvocationError::Worksheet(WorksheetErrorCode::Value))?;
             batch.accept_result(prepared_arg_from_eval_value(value))?;
         }
@@ -5583,7 +5601,7 @@ impl OxFmlCallableInvoker<'_, '_> {
 }
 
 fn build_scratch_from_prepared_args(
-    scratch: &mut SurfaceCallScratch,
+    scratch: &mut FunctionCallScratch,
     args: &[PreparedArgValue],
     callable_registry: &RefCell<CallableRegistry>,
 ) {
