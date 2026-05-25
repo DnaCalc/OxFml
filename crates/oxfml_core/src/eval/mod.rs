@@ -1650,6 +1650,7 @@ pub fn evaluate_formula(
         &frame.callable_registry,
         &mut frame.trace,
     )?;
+    let value = dereference_final_output_value(value, &mut resolver)?;
     let output_value = sanitize_final_output_value(value, &frame.callable_registry);
 
     Ok(EvaluationOutput {
@@ -1678,6 +1679,18 @@ fn returned_value_surface_for_output(
     }
 
     ReturnedValueSurface::from_extended_value(&ExtendedValue::Core(value.clone()))
+}
+
+fn dereference_final_output_value(
+    value: EvalValue,
+    resolver: &mut LocalReferenceResolver<'_>,
+) -> Result<EvalValue, EvaluationError> {
+    match value {
+        EvalValue::Reference(reference) => {
+            resolve_oxfunc_eval_value(resolver, &reference).map_err(map_resolution_error)
+        }
+        other => Ok(other),
+    }
 }
 
 fn typed_surface_for_top_level_host_or_provider_call(

@@ -560,9 +560,9 @@
           ]
         }
       ],
-      "result_class": "Reference",
-      "result_structure_class": "ReferenceVisible",
-      "payload_summary": "Reference(A1)",
+      "result_class": "Scalar",
+      "result_structure_class": "DirectScalar",
+      "payload_summary": "Number(7)",
       "blankness_class": "NonBlank",
       "format_hint": null,
       "publication_hint": null,

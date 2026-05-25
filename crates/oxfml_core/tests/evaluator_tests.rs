@@ -1189,14 +1189,18 @@ fn evaluator_threads_indirect_reference_text_resolution_to_oxfunc_fec() {
         target: "A2".to_string(),
     });
 
-    let output = evaluate_with_reference_text_resolver("=INDIRECT(\"Tree.Node\")", &resolver);
+    let mut cells = BTreeMap::new();
+    cells.insert("A2".to_string(), EvalValue::Number(11.0));
+    let output =
+        evaluate_with_reference_text_resolver("=INDIRECT(\"Tree.Node\")", &resolver, cells);
 
+    assert_eq!(output.oxfunc_value, EvalValue::Number(11.0));
     assert_eq!(
-        output.oxfunc_value,
-        EvalValue::Reference(ReferenceLike {
+        output.trace.prepared_calls[0].returned_value,
+        Some(EvalValue::Reference(ReferenceLike {
             kind: ReferenceKind::A1,
             target: "A2".to_string(),
-        })
+        }))
     );
     let requests = resolver.requests.borrow();
     assert_eq!(requests.len(), 1);
@@ -2355,6 +2359,7 @@ impl ReferenceTextResolver for RecordingReferenceTextResolver {
 fn evaluate_with_reference_text_resolver(
     formula: &str,
     reference_text_resolver: &dyn ReferenceTextResolver,
+    cell_values: BTreeMap<String, EvalValue>,
 ) -> oxfml_core::EvaluationOutput {
     let compiled = common::compile_formula(
         "eval-fixture",
@@ -2365,6 +2370,7 @@ fn evaluate_with_reference_text_resolver(
     );
 
     let mut context = EvaluationContext::new(&compiled.bound_formula, &compiled.semantic_plan);
+    context.cell_values.extend(cell_values);
     let locale = oxfml_en_us_locale_context();
     context.apply_typed_context_query_bundle(
         TypedContextQueryBundle::new(
