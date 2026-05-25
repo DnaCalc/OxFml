@@ -9,6 +9,7 @@ use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult};
 use oxfunc_core::host_info::{HostInfoError, HostInfoProvider};
 use oxfunc_core::locale_format::LocaleFormatContext;
 use oxfunc_core::registry::builtin_registry;
+use oxfunc_core::resolver::ReferenceTextResolver;
 use oxfunc_core::value::{EvalValue, ExtendedValue, PresentationHint, WorksheetErrorCode};
 
 use crate::semantics::{LibraryContextSnapshot, LibraryContextSnapshotEntry};
@@ -31,6 +32,7 @@ pub enum TypedContextQueryFamily {
     NowSerial,
     RandomProvider,
     LocaleFormatContext,
+    ReferenceTextResolver,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,6 +92,7 @@ pub struct TypedContextQueryBundle<'a> {
     pub locale_ctx: Option<&'a LocaleFormatContext<'a>>,
     pub now_serial: Option<f64>,
     pub random_provider: Option<&'a dyn RandomProvider>,
+    pub reference_text_resolver: Option<&'a dyn ReferenceTextResolver>,
 }
 
 impl std::fmt::Debug for TypedContextQueryBundle<'_> {
@@ -108,6 +111,10 @@ impl std::fmt::Debug for TypedContextQueryBundle<'_> {
             .field("locale_ctx_enabled", &self.locale_ctx.is_some())
             .field("now_serial_enabled", &self.now_serial.is_some())
             .field("random_provider_enabled", &self.random_provider.is_some())
+            .field(
+                "reference_text_resolver_enabled",
+                &self.reference_text_resolver.is_some(),
+            )
             .finish()
     }
 }
@@ -122,6 +129,7 @@ impl<'a> Default for TypedContextQueryBundle<'a> {
             locale_ctx: None,
             now_serial: None,
             random_provider: None,
+            reference_text_resolver: None,
         }
     }
 }
@@ -142,6 +150,7 @@ impl<'a> TypedContextQueryBundle<'a> {
             locale_ctx,
             now_serial,
             random_provider,
+            reference_text_resolver: None,
         }
     }
 
@@ -158,6 +167,14 @@ impl<'a> TypedContextQueryBundle<'a> {
         host_function_provider: Option<&'a dyn HostFunctionProvider>,
     ) -> Self {
         self.host_function_provider = host_function_provider;
+        self
+    }
+
+    pub fn with_reference_text_resolver(
+        mut self,
+        reference_text_resolver: Option<&'a dyn ReferenceTextResolver>,
+    ) -> Self {
+        self.reference_text_resolver = reference_text_resolver;
         self
     }
 
@@ -193,6 +210,9 @@ impl<'a> TypedContextQueryBundle<'a> {
         }
         if self.locale_ctx.is_some() {
             families.insert(TypedContextQueryFamily::LocaleFormatContext);
+        }
+        if self.reference_text_resolver.is_some() {
+            families.insert(TypedContextQueryFamily::ReferenceTextResolver);
         }
 
         TypedContextQueryBundleSpec {

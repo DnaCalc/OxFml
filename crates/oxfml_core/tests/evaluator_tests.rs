@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
@@ -11,6 +12,10 @@ use oxfunc_core::host_info::{
     ImageSizingMode, InfoQuery, ResolvedWebImage,
 };
 use oxfunc_core::locale_format::LocaleFormatContext;
+use oxfunc_core::resolver::{
+    ReferenceTextResolutionError, ReferenceTextResolutionMode, ReferenceTextResolutionRequest,
+    ReferenceTextResolver,
+};
 use oxfunc_core::value::{
     ArrayCellValue, CellStyleHint, EvalValue, ExcelText, NumberFormatHint, PresentationHint,
     ReferenceKind, ReferenceLike, WorksheetErrorCode,
@@ -1174,6 +1179,35 @@ fn evaluator_runs_indirect_offset_and_iferror() {
 }
 
 #[test]
+fn evaluator_threads_indirect_reference_text_resolution_to_oxfunc_fec() {
+    let resolver = RecordingReferenceTextResolver::new(ReferenceLike {
+        kind: ReferenceKind::A1,
+        target: "A2".to_string(),
+    });
+
+    let output = evaluate_with_reference_text_resolver("=INDIRECT(\"Tree.Node\")", &resolver);
+
+    assert_eq!(
+        output.oxfunc_value,
+        EvalValue::Reference(ReferenceLike {
+            kind: ReferenceKind::A1,
+            target: "A2".to_string(),
+        })
+    );
+    let requests = resolver.requests.borrow();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].text, "Tree.Node");
+    assert_eq!(requests[0].mode, ReferenceTextResolutionMode::Indirect);
+    assert_eq!(requests[0].a1_style, Some(true));
+    let caller = requests[0]
+        .caller_context
+        .as_ref()
+        .expect("caller context should be supplied");
+    assert_eq!(caller.row, 1);
+    assert_eq!(caller.col, 1);
+}
+
+#[test]
 fn evaluator_maps_unknown_function_call_to_name_error() {
     let output = evaluate(
         "=NOSUCH(1)",
@@ -2288,6 +2322,59 @@ fn evaluate(
 ) -> oxfml_core::EvaluationOutput {
     evaluate_with_rtd_provider(formula, defined_names, host_info, None, locale_ctx)
         .expect("evaluation should succeed")
+}
+
+struct RecordingReferenceTextResolver {
+    reference: ReferenceLike,
+    requests: RefCell<Vec<ReferenceTextResolutionRequest>>,
+}
+
+impl RecordingReferenceTextResolver {
+    fn new(reference: ReferenceLike) -> Self {
+        Self {
+            reference,
+            requests: RefCell::new(Vec::new()),
+        }
+    }
+}
+
+impl ReferenceTextResolver for RecordingReferenceTextResolver {
+    fn resolve_reference_text(
+        &self,
+        request: &ReferenceTextResolutionRequest,
+    ) -> Result<ReferenceLike, ReferenceTextResolutionError> {
+        self.requests.borrow_mut().push(request.clone());
+        Ok(self.reference.clone())
+    }
+}
+
+fn evaluate_with_reference_text_resolver(
+    formula: &str,
+    reference_text_resolver: &dyn ReferenceTextResolver,
+) -> oxfml_core::EvaluationOutput {
+    let compiled = common::compile_formula(
+        "eval-fixture",
+        formula,
+        BTreeMap::new(),
+        "eval-struct-v1",
+        "oxfunc:test",
+    );
+
+    let mut context = EvaluationContext::new(&compiled.bound_formula, &compiled.semantic_plan);
+    let locale = oxfml_en_us_locale_context();
+    context.apply_typed_context_query_bundle(
+        TypedContextQueryBundle::new(
+            None,
+            None,
+            Some(&locale),
+            Some(46000.0),
+            Some(&oxfml_core::test_support::random::FIXED_RANDOM_PROVIDER_025),
+        )
+        .with_reference_text_resolver(Some(reference_text_resolver)),
+    );
+    context.set_trace_mode(EvaluationTraceMode::PreparedCalls);
+
+    evaluate_formula(context).expect("evaluation should succeed")
 }
 
 fn evaluate_with_cells(

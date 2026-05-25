@@ -1005,6 +1005,7 @@ fn effective_query_bundle<'a>(
         locale_ctx: query_bundle.locale_ctx,
         now_serial: query_bundle.now_serial.or(host.now_serial),
         random_provider: query_bundle.random_provider,
+        reference_text_resolver: query_bundle.reference_text_resolver,
     }
 }
 

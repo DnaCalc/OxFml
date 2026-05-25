@@ -34,7 +34,7 @@ use oxfunc_core::locale_format::LocaleFormatContext;
 use oxfunc_core::resolver::resolve_eval_value as resolve_oxfunc_eval_value;
 use oxfunc_core::resolver::{
     CallerContext as OxFuncCallerContext, RefResolutionError, ReferenceResolver,
-    ResolvedReferenceValues, ResolverCapabilities,
+    ReferenceTextResolver, ResolvedReferenceValues, ResolverCapabilities,
 };
 use oxfunc_core::surface_call::{SurfaceCallRuntime, SurfaceCallScratch, SurfaceCallSite};
 use oxfunc_core::value::{
@@ -1498,6 +1498,7 @@ pub struct EvaluationContext<'a> {
     pub host_function_provider: Option<&'a dyn HostFunctionProvider>,
     pub now_serial: Option<f64>,
     pub random_provider: Option<&'a dyn RandomProvider>,
+    pub reference_text_resolver: Option<&'a dyn ReferenceTextResolver>,
     pub trace_mode: EvaluationTraceMode,
     frame_state: Rc<EvaluationFrameState>,
 }
@@ -1521,6 +1522,7 @@ impl<'a> EvaluationContext<'a> {
             host_function_provider: None,
             now_serial: None,
             random_provider: None,
+            reference_text_resolver: None,
             trace_mode: EvaluationTraceMode::default(),
             frame_state: Rc::new(EvaluationFrameState::default()),
         }
@@ -1536,6 +1538,7 @@ impl<'a> EvaluationContext<'a> {
         )
         .with_registered_external_provider(self.registered_external_provider)
         .with_host_function_provider(self.host_function_provider)
+        .with_reference_text_resolver(self.reference_text_resolver)
     }
 
     pub fn apply_typed_context_query_bundle(&mut self, bundle: TypedContextQueryBundle<'a>) {
@@ -1546,6 +1549,7 @@ impl<'a> EvaluationContext<'a> {
         self.locale_ctx = bundle.locale_ctx;
         self.now_serial = bundle.now_serial;
         self.random_provider = bundle.random_provider;
+        self.reference_text_resolver = bundle.reference_text_resolver;
     }
 
     fn has_sparse_reference_values(&self, reference: &ReferenceLike) -> bool {
@@ -2456,6 +2460,7 @@ fn evaluate_surface_call_site(
     runtime.callable_invoker = Some(&callable_invoker);
     runtime.rtd_provider = context.rtd_provider;
     runtime.registered_external_provider = context.registered_external_provider;
+    runtime.reference_text_resolver = context.reference_text_resolver;
     call_site.invoke(args, &mut runtime)
 }
 
@@ -2478,6 +2483,7 @@ fn evaluate_surface_call_site_scratch(
     runtime.callable_invoker = Some(&callable_invoker);
     runtime.rtd_provider = context.rtd_provider;
     runtime.registered_external_provider = context.registered_external_provider;
+    runtime.reference_text_resolver = context.reference_text_resolver;
     call_site.invoke_scratch(scratch, &mut runtime)
 }
 
@@ -5355,6 +5361,7 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
             runtime.callable_invoker = Some(self);
             runtime.rtd_provider = self.context.rtd_provider;
             runtime.registered_external_provider = self.context.registered_external_provider;
+            runtime.reference_text_resolver = self.context.reference_text_resolver;
             let value = call_site
                 .invoke(&call_args, &mut runtime)
                 .map_err(|_| CallableInvocationError::Worksheet(WorksheetErrorCode::Value))?;
@@ -5549,6 +5556,7 @@ impl OxFmlCallableInvoker<'_, '_> {
         runtime.callable_invoker = Some(self);
         runtime.rtd_provider = self.context.rtd_provider;
         runtime.registered_external_provider = self.context.registered_external_provider;
+        runtime.reference_text_resolver = self.context.reference_text_resolver;
 
         let mut scratch = call_site.new_scratch();
         let mut args = Vec::new();
