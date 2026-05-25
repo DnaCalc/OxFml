@@ -496,7 +496,7 @@
     }
   },
   {
-    "case_id": "prepared_013_indirect_reference_result",
+    "case_id": "prepared_013_indirect_no_resolver_ref_error",
     "formula": "=INDIRECT(\"A1\")",
     "defined_names": {},
     "host_query_profile": null,
@@ -515,9 +515,9 @@
           ]
         }
       ],
-      "result_class": "Reference",
-      "result_structure_class": "ReferenceVisible",
-      "payload_summary": "Reference(A1)",
+      "result_class": "Error",
+      "result_structure_class": "DirectScalar",
+      "payload_summary": "Error(Ref)",
       "blankness_class": "NonBlank",
       "format_hint": null,
       "publication_hint": null,

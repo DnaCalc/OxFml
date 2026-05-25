@@ -1153,6 +1153,10 @@ fn evaluator_runs_indirect_offset_and_iferror() {
         indirect_output.trace.prepared_calls[0].function_id,
         "FUNC.INDIRECT"
     );
+    assert_eq!(
+        indirect_output.oxfunc_value,
+        EvalValue::Error(WorksheetErrorCode::Ref)
+    );
 
     let offset_output = evaluate(
         "=OFFSET(A1,0,0)",
