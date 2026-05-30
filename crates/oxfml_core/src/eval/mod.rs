@@ -3603,11 +3603,12 @@ fn call_arg_for_name(
                     .map_err(map_resolution_error)
             }
         }
-        DefinedNameBinding::Callable(binding) => Ok(CallArgValue::Eval(EvalValue::Lambda(
-            callable_registry
-                .borrow_mut()
-                .register(lambda_binding_from_defined_name_binding(binding)),
-        ))),
+        DefinedNameBinding::Callable(binding) => {
+            let lambda = lambda_binding_from_defined_name_binding(binding, callable_registry);
+            Ok(CallArgValue::Eval(EvalValue::Lambda(
+                callable_registry.borrow_mut().register(lambda),
+            )))
+        }
     }
 }
 
@@ -4346,7 +4347,11 @@ fn evaluate_invocation(
     }
     let lambda = match lambda_binding_for_callee(callee, helper_bindings, callable_registry) {
         Some(binding) => binding,
-        None => match lambda_binding_for_defined_name_callee(callee, &context.defined_names) {
+        None => match lambda_binding_for_defined_name_callee(
+            callee,
+            &context.defined_names,
+            callable_registry,
+        ) {
             Some(binding) => binding,
             None => lambda_binding_for_evaluated_callee(
                 callee,
@@ -4715,13 +4720,14 @@ fn lambda_binding_for_callee(
 fn lambda_binding_for_defined_name_callee(
     callee: &CompiledExpr,
     defined_names: &BTreeMap<String, DefinedNameBinding>,
+    callable_registry: &RefCell<CallableRegistry>,
 ) -> Option<LambdaBinding> {
     match callee {
         CompiledExpr::Reference(CompiledReferenceExpr::Atom(NormalizedReference::Name(name))) => {
             match defined_names.get(&name.name) {
-                Some(DefinedNameBinding::Callable(binding)) => {
-                    Some(lambda_binding_from_defined_name_binding(binding))
-                }
+                Some(DefinedNameBinding::Callable(binding)) => Some(
+                    lambda_binding_from_defined_name_binding(binding, callable_registry),
+                ),
                 _ => None,
             }
         }
@@ -4729,7 +4735,10 @@ fn lambda_binding_for_defined_name_callee(
     }
 }
 
-fn lambda_binding_from_defined_name_binding(binding: &CallableDefinedNameBinding) -> LambdaBinding {
+fn lambda_binding_from_defined_name_binding(
+    binding: &CallableDefinedNameBinding,
+    callable_registry: &RefCell<CallableRegistry>,
+) -> LambdaBinding {
     LambdaBinding {
         origin_kind: CallableOriginKind::DefinedNameCallable,
         params: Rc::from(
@@ -4751,16 +4760,28 @@ fn lambda_binding_from_defined_name_binding(binding: &CallableDefinedNameBinding
         closure: binding
             .closure
             .iter()
-            .filter_map(|(name, binding)| match binding {
-                DefinedNameBinding::Value(value) => Some((
-                    name.clone(),
-                    HelperBinding::Arg(CallArgValue::Eval(value.clone())),
-                )),
-                DefinedNameBinding::Reference(reference) => Some((
-                    name.clone(),
-                    HelperBinding::Arg(CallArgValue::Reference(reference.clone())),
-                )),
-                DefinedNameBinding::Callable(_) => None,
+            .map(|(name, binding)| {
+                let helper_binding = match binding {
+                    DefinedNameBinding::Value(value) => {
+                        HelperBinding::Arg(CallArgValue::Eval(value.clone()))
+                    }
+                    DefinedNameBinding::Reference(reference) => {
+                        HelperBinding::Arg(CallArgValue::Reference(reference.clone()))
+                    }
+                    // Preserve nested callable closure entries so a callable can
+                    // invoke another captured callable (composition / mutual
+                    // reference). Register the nested callable in the shared
+                    // registry and carry it as a lambda value, mirroring how a
+                    // top-level `DefinedNameBinding::Callable` is surfaced.
+                    DefinedNameBinding::Callable(nested) => {
+                        HelperBinding::Arg(CallArgValue::Eval(EvalValue::Lambda(
+                            callable_registry.borrow_mut().register(
+                                lambda_binding_from_defined_name_binding(nested, callable_registry),
+                            ),
+                        )))
+                    }
+                };
+                (name.clone(), helper_binding)
             })
             .collect(),
     }
@@ -5686,11 +5707,15 @@ impl ReferenceResolver for LocalReferenceResolver<'_> {
                 DefinedNameBinding::Reference(reference_like) => {
                     self.resolve_reference(reference_like)
                 }
-                DefinedNameBinding::Callable(binding) => Ok(EvalValue::Lambda(
-                    self.callable_registry
-                        .borrow_mut()
-                        .register(lambda_binding_from_defined_name_binding(binding)),
-                )),
+                DefinedNameBinding::Callable(binding) => {
+                    let lambda = lambda_binding_from_defined_name_binding(
+                        binding,
+                        self.callable_registry,
+                    );
+                    Ok(EvalValue::Lambda(
+                        self.callable_registry.borrow_mut().register(lambda),
+                    ))
+                }
             };
         }
 
