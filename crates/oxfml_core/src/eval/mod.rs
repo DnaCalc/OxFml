@@ -932,6 +932,12 @@ struct CallableRegistry {
     next_id: usize,
     bindings: BTreeMap<String, RegisteredCallableBinding>,
     builtin_call_targets: BTreeMap<String, FunctionCallTarget>,
+    /// Compiled lambda bodies keyed by the body's structural identity, so a body
+    /// of a given shape compiles once per frame instead of once per invocation.
+    /// The key is the body's structural `Debug` form (collision-safe via `String`
+    /// equality); bodies are compiled in a fresh zero-based scope, so the cached
+    /// `CompiledExpr` is binding-independent (helper slots are filled per call).
+    compiled_body_cache: BTreeMap<String, Rc<CompiledExpr>>,
 }
 
 impl CallableRegistry {
@@ -986,6 +992,23 @@ impl CallableRegistry {
 
     fn builtin_call_target(&self, token: &str) -> Option<FunctionCallTarget> {
         self.builtin_call_targets.get(token).cloned()
+    }
+
+    /// Get-or-compile a lambda body keyed by its structural identity. This is the
+    /// per-frame compiled-body cache that keeps a defined-name callable invoked
+    /// repeatedly (e.g. `B(x)` inside `MAP(arr, LAMBDA(x, B(x)))`) from
+    /// recompiling its body on every call. Keying on structural identity (not the
+    /// callable name) also dedups distinct callables that share a body shape, and
+    /// is the substrate for later cross-formula sharing.
+    fn get_or_compile_body(&mut self, body: &BoundExpr) -> Rc<CompiledExpr> {
+        let key = format!("{body:?}");
+        if let Some(cached) = self.compiled_body_cache.get(&key) {
+            return cached.clone();
+        }
+        let mut scope = CompileHelperScope::default();
+        let compiled = Rc::new(compile_expr_for_evaluation(body, &mut scope));
+        self.compiled_body_cache.insert(key, compiled.clone());
+        compiled
     }
 }
 
@@ -4739,6 +4762,11 @@ fn lambda_binding_from_defined_name_binding(
     binding: &CallableDefinedNameBinding,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> LambdaBinding {
+    // Compute the (cached) compiled body first so its registry borrow is released
+    // before the closure loop below borrows the registry again (RefCell).
+    let body = callable_registry
+        .borrow_mut()
+        .get_or_compile_body(&binding.body);
     LambdaBinding {
         origin_kind: CallableOriginKind::DefinedNameCallable,
         params: Rc::from(
@@ -4753,10 +4781,7 @@ fn lambda_binding_from_defined_name_binding(
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
         ),
-        body: Rc::new({
-            let mut scope = CompileHelperScope::default();
-            compile_expr_for_evaluation(&binding.body, &mut scope)
-        }),
+        body,
         closure: binding
             .closure
             .iter()
@@ -4774,10 +4799,13 @@ fn lambda_binding_from_defined_name_binding(
                     // registry and carry it as a lambda value, mirroring how a
                     // top-level `DefinedNameBinding::Callable` is surfaced.
                     DefinedNameBinding::Callable(nested) => {
+                        // Build the nested binding (which itself borrows the
+                        // registry for its cached body) before borrowing the
+                        // registry to register it, to avoid a RefCell double-borrow.
+                        let nested_binding =
+                            lambda_binding_from_defined_name_binding(nested, callable_registry);
                         HelperBinding::Arg(CallArgValue::Eval(EvalValue::Lambda(
-                            callable_registry.borrow_mut().register(
-                                lambda_binding_from_defined_name_binding(nested, callable_registry),
-                            ),
+                            callable_registry.borrow_mut().register(nested_binding),
                         )))
                     }
                 };
