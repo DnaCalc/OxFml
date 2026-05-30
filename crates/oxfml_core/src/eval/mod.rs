@@ -4368,24 +4368,14 @@ fn evaluate_invocation(
     if is_missing_helper_local_callee_name(callee, helper_bindings, &context.defined_names) {
         return Ok(EvalValue::Error(WorksheetErrorCode::Name));
     }
-    let lambda = match lambda_binding_for_callee(callee, helper_bindings, callable_registry) {
-        Some(binding) => binding,
-        None => match lambda_binding_for_defined_name_callee(
-            callee,
-            &context.defined_names,
-            callable_registry,
-        ) {
-            Some(binding) => binding,
-            None => lambda_binding_for_evaluated_callee(
-                callee,
-                context,
-                resolver,
-                helper_bindings,
-                callable_registry,
-                trace,
-            )?,
-        },
-    };
+    let lambda = resolve_callable(
+        callee,
+        context,
+        resolver,
+        helper_bindings,
+        callable_registry,
+        trace,
+    )?;
     let required_arity = lambda_required_arity(&lambda.params);
     if args.len() > lambda.params.len() {
         return Ok(EvalValue::Error(WorksheetErrorCode::Value));
@@ -4468,6 +4458,40 @@ fn evaluate_invocation(
     })?;
     record_prepared_call_returned_value(trace, prepared_call_index, &value);
     Ok(value)
+}
+
+/// The single entry point that resolves a callee expression to an invocable
+/// `LambdaBinding`. All callable invocation funnels through here; it tries each
+/// callable source in precedence order:
+///   1. an immediate lambda literal or helper-local lambda (already compiled in
+///      the formula plan / reused from the helper binding frame),
+///   2. a host-supplied defined-name callable (its body compiled via the
+///      structural compiled-body cache, closure rebuilt per call),
+///   3. an evaluated expression that yields a lambda value (registry lookup).
+fn resolve_callable(
+    callee: &CompiledExpr,
+    context: &EvaluationContext<'_>,
+    resolver: &mut LocalReferenceResolver<'_>,
+    helper_bindings: &HelperBindingFrame,
+    callable_registry: &RefCell<CallableRegistry>,
+    trace: &mut EvaluationTrace,
+) -> Result<LambdaBinding, EvaluationError> {
+    if let Some(binding) = lambda_binding_for_callee(callee, helper_bindings, callable_registry) {
+        return Ok(binding);
+    }
+    if let Some(binding) =
+        lambda_binding_for_defined_name_callee(callee, &context.defined_names, callable_registry)
+    {
+        return Ok(binding);
+    }
+    lambda_binding_for_evaluated_callee(
+        callee,
+        context,
+        resolver,
+        helper_bindings,
+        callable_registry,
+        trace,
+    )
 }
 
 fn is_missing_helper_local_callee_name(
