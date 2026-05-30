@@ -937,7 +937,17 @@ struct CallableRegistry {
     /// The key is the body's structural `Debug` form (collision-safe via `String`
     /// equality); bodies are compiled in a fresh zero-based scope, so the cached
     /// `CompiledExpr` is binding-independent (helper slots are filled per call).
+    /// This is also the dedup/sharing substrate across distinct callables that
+    /// happen to share a body shape.
     compiled_body_cache: BTreeMap<String, Rc<CompiledExpr>>,
+    /// O(1) fast path over `compiled_body_cache`: maps a frame-stable body address
+    /// to its compiled form so a defined-name callable invoked repeatedly (the hot
+    /// `B(x)` loop case) resolves its body without recomputing the structural key.
+    /// Safe because host-supplied bindings live in the frame's `defined_names` for
+    /// the whole evaluation and this registry is frame-local, so addresses are
+    /// stable and never reused within a frame. The address is only ever compared,
+    /// never dereferenced; a miss simply falls back to the structural cache.
+    compiled_body_by_addr: BTreeMap<usize, Rc<CompiledExpr>>,
 }
 
 impl CallableRegistry {
@@ -1001,13 +1011,20 @@ impl CallableRegistry {
     /// callable name) also dedups distinct callables that share a body shape, and
     /// is the substrate for later cross-formula sharing.
     fn get_or_compile_body(&mut self, body: &BoundExpr) -> Rc<CompiledExpr> {
-        let key = format!("{body:?}");
-        if let Some(cached) = self.compiled_body_cache.get(&key) {
+        let addr = body as *const BoundExpr as usize;
+        if let Some(cached) = self.compiled_body_by_addr.get(&addr) {
             return cached.clone();
         }
-        let mut scope = CompileHelperScope::default();
-        let compiled = Rc::new(compile_expr_for_evaluation(body, &mut scope));
-        self.compiled_body_cache.insert(key, compiled.clone());
+        let key = format!("{body:?}");
+        let compiled = if let Some(cached) = self.compiled_body_cache.get(&key) {
+            cached.clone()
+        } else {
+            let mut scope = CompileHelperScope::default();
+            let compiled = Rc::new(compile_expr_for_evaluation(body, &mut scope));
+            self.compiled_body_cache.insert(key, compiled.clone());
+            compiled
+        };
+        self.compiled_body_by_addr.insert(addr, compiled.clone());
         compiled
     }
 }
