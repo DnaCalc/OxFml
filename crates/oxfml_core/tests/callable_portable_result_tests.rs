@@ -434,3 +434,128 @@ fn cell_captured_reference_uses_display_identity_and_no_defined_name_binding() {
     // No baked closure regardless of reference kind.
     assert!(portable.binding.closure.is_empty());
 }
+
+// ---------------------------------------------------------------------------
+// BF2 (fml-ds0.21): accept a re-supplied callable in *value/deref* position and
+// invoke it. fml-ds0.20's round-trip tests above place the re-supplied name in
+// direct *call* position (`=CapFn(99)`), which is served by the defined-name
+// call-position fast path. The bead's distinct scope is the value/deref path: a
+// `DefinedNameBinding::Callable` supplied back as a name first dereferences to an
+// `EvalValue::Lambda` value, and only then is invoked. These tests complete the
+// result -> store -> re-supply -> invoke round-trip for that path and assert that
+// captured refs re-resolve live (not from a baked snapshot).
+
+/// Produce a portable callable from a top-level LAMBDA that captures the outer
+/// defined name `Cap`, defining `Cap` as `cap` in the producing scope.
+fn produce_capped_callable(cap: f64) -> oxfml_core::eval::CallableDefinedNameBinding {
+    let mut producer = SingleFormulaHost::new("portable:bf2:producer", "=LAMBDA(x,MIN(x,Cap))");
+    producer.set_defined_name_value("Cap", EvalValue::Number(cap));
+    let produced = producer
+        .recalc(None, Some(&oxfml_en_us_locale_context()))
+        .expect("producer recalc should succeed")
+        .portable_callable
+        .expect("producer should surface a portable callable");
+    // Capture travels as a dependency fact, not a baked closure (fml-ds0.20).
+    assert!(produced.binding.closure.is_empty());
+    assert_eq!(produced.captured_refs[0].name, "Cap");
+    produced.binding
+}
+
+#[test]
+fn resupplied_callable_invokes_from_let_value_position() {
+    // Re-supply the callable as a defined name, bind it to a LET-local in *value*
+    // position (`LET(g, Capped, ...)`), then invoke that local. The name resolves
+    // to an `EvalValue::Lambda` first (value/deref path), then is invoked — unlike
+    // the fml-ds0.20 direct-call-position round-trip.
+    let mut consumer = SingleFormulaHost::new("portable:bf2:let", "=LET(g, Capped, g(99))");
+    consumer.set_defined_name_callable("Capped", produce_capped_callable(10.0));
+    consumer.set_defined_name_value("Cap", EvalValue::Number(10.0));
+    let output = consumer
+        .recalc(None, Some(&oxfml_en_us_locale_context()))
+        .expect("consumer recalc should succeed");
+    // Cap=10 resolves live in the consumer, so MIN(99,10)=10.
+    assert_eq!(output.published_worksheet_value, EvalValue::Number(10.0));
+}
+
+#[test]
+fn resupplied_callable_invokes_when_passed_as_argument() {
+    // Re-supply the callable as a defined name and pass it (by name, in value
+    // position) as an argument to a helper lambda that invokes it. The callable
+    // name dereferences to a lambda value, flows through the call as an argument,
+    // and is invoked from a helper slot.
+    let mut consumer = SingleFormulaHost::new(
+        "portable:bf2:arg",
+        "=LET(apply, LAMBDA(f, f(99)), apply(Capped))",
+    );
+    consumer.set_defined_name_callable("Capped", produce_capped_callable(10.0));
+    consumer.set_defined_name_value("Cap", EvalValue::Number(10.0));
+    let output = consumer
+        .recalc(None, Some(&oxfml_en_us_locale_context()))
+        .expect("consumer recalc should succeed");
+    assert_eq!(output.published_worksheet_value, EvalValue::Number(10.0));
+}
+
+#[test]
+fn resupplied_callable_resolves_capture_live_through_value_position() {
+    // Oracle-faithful capture model across the value/deref path: the callable was
+    // produced with Cap=5, but the consumer defines a live Cap=100. Dereferencing
+    // the name to a lambda value and invoking it must observe the consumer's live
+    // 100 (MIN(99,100)=99), NOT the producer's stale 5. This is what makes the
+    // captured-ref invalidation edges meaningful on the value/deref path too.
+    let mut consumer = SingleFormulaHost::new("portable:bf2:live", "=LET(g, Capped, g(99))");
+    consumer.set_defined_name_callable("Capped", produce_capped_callable(5.0));
+    consumer.set_defined_name_value("Cap", EvalValue::Number(100.0));
+    let output = consumer
+        .recalc(None, Some(&oxfml_en_us_locale_context()))
+        .expect("consumer recalc should succeed");
+    assert_eq!(
+        output.published_worksheet_value,
+        EvalValue::Number(99.0),
+        "Cap resolves live to the consumer's 100 through the value/deref path"
+    );
+}
+
+#[test]
+fn resupplied_callable_in_bare_value_position_displays_calc_like_top_level_lambda() {
+    // A bare reference to the re-supplied callable name (no invocation) is a
+    // top-level callable result, so it displays `#CALC!` just like a bare top-level
+    // LAMBDA literal.
+    //
+    // Documented limitation (fml-ds0.21 scope): re-EXPORT of a bare re-supplied
+    // callable is NOT in scope for this round-trip. `portable_callable_for_top_level_result`
+    // only surfaces a portable payload when the formula root is a literal `LAMBDA(...)`
+    // call-expression; a bare `Name` reference (`=Capped`) does not, so no portable
+    // payload is re-emitted. The bead's round-trip is store -> re-supply -> invoke
+    // (exercised by the sibling tests), not store -> re-supply -> re-export.
+    let mut consumer = SingleFormulaHost::new("portable:bf2:bare", "=Capped");
+    consumer.set_defined_name_callable("Capped", produce_capped_callable(10.0));
+    consumer.set_defined_name_value("Cap", EvalValue::Number(10.0));
+    let output = consumer
+        .recalc(None, Some(&oxfml_en_us_locale_context()))
+        .expect("consumer recalc should succeed");
+    assert_eq!(
+        output.published_worksheet_value,
+        EvalValue::Error(WorksheetErrorCode::Calc),
+        "a bare re-supplied callable displays #CALC! (Excel oracle)"
+    );
+    assert!(
+        output.portable_callable.is_none(),
+        "a bare re-supplied callable is not re-portably surfaced (only literal LAMBDA roots are)"
+    );
+}
+
+#[test]
+fn resupplied_callable_under_arity_errors_no_partial_application() {
+    // Documented OxFml limitation: partial application is not supported. Invoking a
+    // re-supplied arity-1 callable through the value/deref path with zero args is an
+    // arity error, not a curried partial.
+    let mut consumer = SingleFormulaHost::new("portable:bf2:arity", "=LET(g, Capped, g())");
+    consumer.set_defined_name_callable("Capped", produce_capped_callable(10.0));
+    consumer.set_defined_name_value("Cap", EvalValue::Number(10.0));
+    let result = consumer.recalc(None, Some(&oxfml_en_us_locale_context()));
+    let error = result.expect_err("under-arity invocation must surface an evaluation error");
+    assert!(
+        error.contains("arity"),
+        "under-arity invocation must report an arity mismatch, got: {error}"
+    );
+}
