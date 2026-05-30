@@ -90,6 +90,24 @@ Current retained local evidence:
      - `evaluator_matches_excel_named_recursion_failure_boundary`
      - `evaluator_matches_excel_let_self_application_recursion_success_boundary`
      - `evaluator_matches_excel_let_self_application_recursion_failure_boundary`
+6. mutual recursion across two callable defined names (BF4 / fml-ds0.23,
+   building on the fml-ds0.22 callable-calls-callable composition lane):
+   - each callable resolves the other by `ValueLike` name through
+     `context.defined_names` at invocation time, sharing the same per-call
+     recursion budget as self-recursive defined-name callables,
+   - bounded ping-pong: `=IsEven(10)` -> `1`, `=IsEven(7)` -> `0`
+     (`IsEven(n)=IF(n=0,1,IsOdd(n-1))`, `IsOdd(n)=IF(n=0,0,IsEven(n-1))`),
+   - the shared per-call budget is pinned by an exact boundary, not merely
+     asserted: `IsEven(n)` makes `n + 1` budgeted invocations exactly like
+     `CountDown(n)`, so it reproduces the identical self-recursion boundary --
+     `=IsEven(5460)` -> `1`, `=IsEven(5461)` -> `#NUM!`,
+   - runaway mutual recursion (no base case) capped to worksheet-visible
+     `#NUM!`, identical to the self-recursive `Loop()` lane,
+   - proof rows:
+     - `evaluator_executes_bounded_mutual_recursive_defined_name_callables`
+     - `evaluator_matches_shared_budget_mutual_recursion_success_boundary`
+     - `evaluator_matches_shared_budget_mutual_recursion_failure_boundary`
+     - `evaluator_projects_runaway_mutual_recursive_defined_name_callables_as_num_error`
 
 ## 6.2 Explicit Excel Comparison Notes
 
@@ -136,7 +154,11 @@ The currently admitted local recursion slice is:
    - `CountDown(5460)` success / `CountDown(5461)` `#NUM!`,
    - `LET` self-application `4094` success / `4095` `#NUM!`,
 5. direct helper-local self-recursion by name surfaces worksheet-visible `#NAME?`,
-6. no claim yet for broader workbook Name Manager parity or every branch-lazy function family.
+6. mutual recursion across two callable defined names (verified bounded success and
+   runaway `#NUM!`), sharing the same per-call recursion budget as self-recursion,
+   with the shared boundary pinned exactly by `IsEven(5460)` success /
+   `IsEven(5461)` `#NUM!` (matching `CountDown(5460)` / `CountDown(5461)`),
+7. no claim yet for broader workbook Name Manager parity or every branch-lazy function family.
 
 ## 7. Status
 

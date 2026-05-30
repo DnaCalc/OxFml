@@ -2247,6 +2247,233 @@ fn evaluator_matches_excel_named_recursion_failure_boundary() {
     );
 }
 
+// Mutual recursion across two callable defined names: `IsEven(n)` calls
+// `IsOdd(n-1)` and vice versa, each resolving the other by `ValueLike` name
+// through `context.defined_names`. Building on fml-ds0.22 (callable-calls-
+// callable composition), this verifies that the recursive ping-pong bottoms
+// out correctly within the shared recursion budget (BF4 / fml-ds0.23).
+#[test]
+fn evaluator_executes_bounded_mutual_recursive_defined_name_callables() {
+    let mut bindings = BTreeMap::new();
+    // IsEven(n) = IF(n=0, 1, IsOdd(n-1))
+    bindings.insert(
+        "IsEven".to_string(),
+        DefinedNameBinding::Callable(local_callable_binding(
+            "arity=1;params=n;captures=-;body=FunctionCall",
+            vec!["n"],
+            BoundExpr::FunctionCall {
+                function_name: "IF".to_string(),
+                args: vec![
+                    BoundExpr::Binary {
+                        op: BinaryOp::Equal,
+                        left: Box::new(name_ref_expr("n", NameKind::HelperLocal)),
+                        right: Box::new(BoundExpr::NumberLiteral("0".to_string())),
+                    },
+                    BoundExpr::NumberLiteral("1".to_string()),
+                    BoundExpr::Invocation {
+                        callee: Box::new(name_ref_expr("IsOdd", NameKind::ValueLike)),
+                        args: vec![BoundExpr::Binary {
+                            op: BinaryOp::Subtract,
+                            left: Box::new(name_ref_expr("n", NameKind::HelperLocal)),
+                            right: Box::new(BoundExpr::NumberLiteral("1".to_string())),
+                        }],
+                    },
+                ],
+            },
+            BTreeMap::new(),
+        )),
+    );
+    // IsOdd(n) = IF(n=0, 0, IsEven(n-1))
+    bindings.insert(
+        "IsOdd".to_string(),
+        DefinedNameBinding::Callable(local_callable_binding(
+            "arity=1;params=n;captures=-;body=FunctionCall",
+            vec!["n"],
+            BoundExpr::FunctionCall {
+                function_name: "IF".to_string(),
+                args: vec![
+                    BoundExpr::Binary {
+                        op: BinaryOp::Equal,
+                        left: Box::new(name_ref_expr("n", NameKind::HelperLocal)),
+                        right: Box::new(BoundExpr::NumberLiteral("0".to_string())),
+                    },
+                    BoundExpr::NumberLiteral("0".to_string()),
+                    BoundExpr::Invocation {
+                        callee: Box::new(name_ref_expr("IsEven", NameKind::ValueLike)),
+                        args: vec![BoundExpr::Binary {
+                            op: BinaryOp::Subtract,
+                            left: Box::new(name_ref_expr("n", NameKind::HelperLocal)),
+                            right: Box::new(BoundExpr::NumberLiteral("1".to_string())),
+                        }],
+                    },
+                ],
+            },
+            BTreeMap::new(),
+        )),
+    );
+
+    // IsEven(10) -> 1 (even), IsEven(7) -> 0 (odd), exercising the full
+    // ping-pong chain in both directions.
+    let even_output = evaluate(
+        "=IsEven(10)",
+        Some(bindings.clone()),
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
+    assert_eq!(even_output.oxfunc_value, EvalValue::Number(1.0));
+
+    let odd_output = evaluate(
+        "=IsEven(7)",
+        Some(bindings),
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
+    assert_eq!(odd_output.oxfunc_value, EvalValue::Number(0.0));
+}
+
+// Builds the `IsEven`/`IsOdd` mutually recursive defined-name callable pair:
+//   IsEven(n) = IF(n=0, 1, IsOdd(n-1))
+//   IsOdd(n)  = IF(n=0, 0, IsEven(n-1))
+// Each callable resolves the other by `ValueLike` name through
+// `context.defined_names`; both charge the same per-call recursion base cost,
+// so an `IsEven(n)` evaluation makes exactly `n + 1` budgeted invocations,
+// mirroring the self-recursive `CountDown(n)` chain.
+fn mutual_even_odd_bindings() -> BTreeMap<String, DefinedNameBinding> {
+    let mut bindings = BTreeMap::new();
+    bindings.insert(
+        "IsEven".to_string(),
+        DefinedNameBinding::Callable(local_callable_binding(
+            "arity=1;params=n;captures=-;body=FunctionCall",
+            vec!["n"],
+            BoundExpr::FunctionCall {
+                function_name: "IF".to_string(),
+                args: vec![
+                    BoundExpr::Binary {
+                        op: BinaryOp::Equal,
+                        left: Box::new(name_ref_expr("n", NameKind::HelperLocal)),
+                        right: Box::new(BoundExpr::NumberLiteral("0".to_string())),
+                    },
+                    BoundExpr::NumberLiteral("1".to_string()),
+                    BoundExpr::Invocation {
+                        callee: Box::new(name_ref_expr("IsOdd", NameKind::ValueLike)),
+                        args: vec![BoundExpr::Binary {
+                            op: BinaryOp::Subtract,
+                            left: Box::new(name_ref_expr("n", NameKind::HelperLocal)),
+                            right: Box::new(BoundExpr::NumberLiteral("1".to_string())),
+                        }],
+                    },
+                ],
+            },
+            BTreeMap::new(),
+        )),
+    );
+    bindings.insert(
+        "IsOdd".to_string(),
+        DefinedNameBinding::Callable(local_callable_binding(
+            "arity=1;params=n;captures=-;body=FunctionCall",
+            vec!["n"],
+            BoundExpr::FunctionCall {
+                function_name: "IF".to_string(),
+                args: vec![
+                    BoundExpr::Binary {
+                        op: BinaryOp::Equal,
+                        left: Box::new(name_ref_expr("n", NameKind::HelperLocal)),
+                        right: Box::new(BoundExpr::NumberLiteral("0".to_string())),
+                    },
+                    BoundExpr::NumberLiteral("0".to_string()),
+                    BoundExpr::Invocation {
+                        callee: Box::new(name_ref_expr("IsEven", NameKind::ValueLike)),
+                        args: vec![BoundExpr::Binary {
+                            op: BinaryOp::Subtract,
+                            left: Box::new(name_ref_expr("n", NameKind::HelperLocal)),
+                            right: Box::new(BoundExpr::NumberLiteral("1".to_string())),
+                        }],
+                    },
+                ],
+            },
+            BTreeMap::new(),
+        )),
+    );
+    bindings
+}
+
+// Mutual recursion shares the same per-call recursion budget as self-recursion:
+// `IsEven(n)` makes `n + 1` budgeted invocations, exactly like `CountDown(n)`,
+// so it pins the *same* boundary the self-recursive lane pins with
+// `CountDown(5460)` success / `CountDown(5461)` #NUM!. `IsEven(5460)` reaches
+// its base case at the last admitted frame and returns `1` (5460 is even);
+// `IsEven(5461)` needs one more invocation than the budget allows and is
+// projected as `#NUM!`. This is the evidenced (not merely asserted) proof that
+// mutual recursion and self-recursion share one budget (BF4 / fml-ds0.23).
+#[test]
+fn evaluator_matches_shared_budget_mutual_recursion_success_boundary() {
+    let output = evaluate(
+        "=IsEven(5460)",
+        Some(mutual_even_odd_bindings()),
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
+    assert_eq!(output.oxfunc_value, EvalValue::Number(1.0));
+}
+
+#[test]
+fn evaluator_matches_shared_budget_mutual_recursion_failure_boundary() {
+    let output = evaluate(
+        "=IsEven(5461)",
+        Some(mutual_even_odd_bindings()),
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
+    assert_eq!(
+        output.oxfunc_value,
+        EvalValue::Error(WorksheetErrorCode::Num)
+    );
+}
+
+// Runaway mutual recursion (each callable unconditionally invokes the other
+// with no base case) must be projected as `#NUM!`, proving the shared
+// recursion budget bounds mutual recursion the same way it bounds the
+// self-recursive `Loop()` case (BF4 / fml-ds0.23).
+#[test]
+fn evaluator_projects_runaway_mutual_recursive_defined_name_callables_as_num_error() {
+    let mut bindings = BTreeMap::new();
+    bindings.insert(
+        "PingA".to_string(),
+        DefinedNameBinding::Callable(local_callable_binding(
+            "arity=0;params=-;captures=-;body=Invocation",
+            vec![],
+            BoundExpr::Invocation {
+                callee: Box::new(name_ref_expr("PingB", NameKind::ValueLike)),
+                args: vec![],
+            },
+            BTreeMap::new(),
+        )),
+    );
+    bindings.insert(
+        "PingB".to_string(),
+        DefinedNameBinding::Callable(local_callable_binding(
+            "arity=0;params=-;captures=-;body=Invocation",
+            vec![],
+            BoundExpr::Invocation {
+                callee: Box::new(name_ref_expr("PingA", NameKind::ValueLike)),
+                args: vec![],
+            },
+            BTreeMap::new(),
+        )),
+    );
+
+    let output = evaluate(
+        "=PingA()",
+        Some(bindings),
+        None,
+        Some(&oxfml_en_us_locale_context()),
+    );
+    assert_eq!(
+        output.oxfunc_value,
+        EvalValue::Error(WorksheetErrorCode::Num)
+    );
+}
+
 #[test]
 fn evaluator_matches_excel_builtin_colliding_let_recursive_name_frontier_ftc_0443() {
     let output = evaluate(
