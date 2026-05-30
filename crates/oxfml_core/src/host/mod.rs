@@ -13,7 +13,8 @@ use crate::binding::{
 };
 use crate::eval::{
     CallableDefinedNameBinding, DefinedNameBinding, EvaluationBackend, EvaluationContext,
-    EvaluationOutput, EvaluationTraceMode, SparseReferenceValuesBinding, evaluate_formula,
+    EvaluationOutput, EvaluationTraceMode, PortableCallableValue, SparseReferenceValuesBinding,
+    evaluate_formula,
 };
 use crate::format::canonicalize_locale_context;
 use crate::interface::{
@@ -99,6 +100,12 @@ pub struct HostRecalcOutput {
     pub typed_query_bundle_spec: TypedContextQueryBundleSpec,
     pub evaluation: EvaluationOutput,
     pub published_worksheet_value: EvalValue,
+    /// Portable callable payload when the formula's top-level result is a
+    /// callable. The host stores this opaquely and re-supplies it later via
+    /// `set_defined_name_callable`; `captured_refs` carry the invalidation facts.
+    /// Mirrors `evaluation.portable_callable` for convenient access alongside
+    /// `published_worksheet_value`.
+    pub portable_callable: Option<PortableCallableValue>,
     pub returned_value_surface: ReturnedValueSurface,
     pub verification_publication_surface: VerificationPublicationSurface,
     pub execution_outcome_surface: ExecutionOutcomeSurface,
@@ -589,6 +596,7 @@ impl SingleFormulaHost {
             verification_publication_context,
         );
         let execution_outcome_surface = execution_outcome_surface(&commit_decision);
+        let portable_callable = evaluation.portable_callable.clone();
 
         Ok(HostRecalcOutput {
             source,
@@ -599,6 +607,7 @@ impl SingleFormulaHost {
             execution_contract,
             typed_query_bundle_spec,
             published_worksheet_value,
+            portable_callable,
             returned_value_surface,
             verification_publication_surface,
             execution_outcome_surface,
@@ -1067,6 +1076,7 @@ fn synthetic_bind_mismatch_evaluation(
         returned_value_surface: ReturnedValueSurface::from_extended_value(&ExtendedValue::Core(
             EvalValue::Error(WorksheetErrorCode::Value),
         )),
+        portable_callable: None,
         trace: crate::eval::EvaluationTrace {
             prepared_calls: Vec::new(),
         },
@@ -1155,6 +1165,7 @@ mod tests {
                     kvps: vec![],
                 })),
             ),
+            portable_callable: None,
             trace: EvaluationTrace {
                 prepared_calls: Vec::new(),
             },

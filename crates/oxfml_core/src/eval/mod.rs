@@ -204,6 +204,55 @@ pub struct CallableDefinedNameBinding {
     pub closure: BTreeMap<String, DefinedNameBinding>,
 }
 
+/// A single captured-reference dependency fact surfaced alongside a portable
+/// callable result. The host uses these to build invalidation edges so that a
+/// caller re-evaluates when a captured reference's value changes, and to
+/// re-supply each captured value into the consuming scope before invoking the
+/// callable (the body resolves captures live, not from a baked snapshot — see
+/// `PortableCallableValue`). OxFml owns the free-vs-bound analysis that produces
+/// these facts; the host never inspects the callable body.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CallableCapturedRef {
+    /// The free name as written in the callable body (e.g. a defined-name). For a
+    /// free name that the binder lowered to a `#NAME?` error reference because it
+    /// is not yet defined in the producing scope, this preserves the original
+    /// name text so the host can track it as a pending dependency.
+    pub name: String,
+    /// A stable identity string for the captured reference, suitable as a
+    /// dependency-edge key. For a defined-name (resolved or pending) this is
+    /// `name:<Name>`; for other reference kinds (cell, area, ...) it mirrors
+    /// `NormalizedReference`'s `Display` form.
+    pub identity: String,
+    /// The resolved binding for this captured name in the *defining* scope, when
+    /// available. This is informational (a dependency snapshot the host may use
+    /// to seed re-supply); it is NOT baked into the callable's closure. `None`
+    /// means the name is free but currently unresolved in the supplied
+    /// defined-name scope (e.g. a not-yet-defined name, or a non-defined-name
+    /// reference such as a cell) — still a dependency the host should track so a
+    /// later definition triggers re-evaluation.
+    pub binding: Option<DefinedNameBinding>,
+}
+
+/// A portable callable value surfaced when a formula's top-level result is a
+/// callable. The host can store `binding` opaquely and hand it back later (see
+/// `set_defined_name_callable`); `captured_refs` carry the dependency facts the
+/// host needs to wire invalidation edges.
+///
+/// Capture model (oracle-faithful): captured top-level defined names are resolved
+/// at INVOCATION time, not at definition time, mirroring Excel's resolution of
+/// workbook-level defined names. The producer therefore does NOT snapshot captured
+/// values into `binding.closure`; it surfaces each captured-ref identity in
+/// `captured_refs`. The host re-supplies the current value of each captured ref
+/// into the consuming scope (alongside the re-supplied callable), where the body
+/// resolves it live. This keeps the `captured_refs` invalidation edges meaningful:
+/// changing a captured name re-evaluates the consumer against the new value rather
+/// than against a stale baked snapshot.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PortableCallableValue {
+    pub binding: CallableDefinedNameBinding,
+    pub captured_refs: Vec<CallableCapturedRef>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct EvaluationTrace {
     pub prepared_calls: Vec<PreparedCall>,
@@ -423,6 +472,10 @@ pub struct EvaluationOutput {
     pub result: PreparedResult,
     pub oxfunc_value: EvalValue,
     pub returned_value_surface: ReturnedValueSurface,
+    /// Set when the formula's top-level result is a callable. Carries the
+    /// portable callable payload plus captured-ref dependency facts so a host can
+    /// store the callable and re-supply it later. `None` for ordinary results.
+    pub portable_callable: Option<PortableCallableValue>,
     pub trace: EvaluationTrace,
 }
 
@@ -1652,6 +1705,11 @@ pub fn evaluate_formula(
     )?;
     let value = dereference_final_output_value(value, &mut resolver)?;
     let output_value = sanitize_final_output_value(value, &frame.callable_registry);
+    let portable_callable = portable_callable_for_top_level_result(
+        &output_value,
+        context.bind_formula,
+        &context.defined_names,
+    );
 
     Ok(EvaluationOutput {
         result: prepared_result_from_eval_value(&output_value, context.plan),
@@ -1661,8 +1719,322 @@ pub fn evaluate_formula(
             &context,
         ),
         oxfunc_value: output_value,
+        portable_callable,
         trace: frame.into_trace(),
     })
+}
+
+/// Build a portable callable payload when the formula's top-level result is a
+/// callable (`EvalValue::Lambda`) and the bound root is a `LAMBDA(...)` literal.
+///
+/// Coverage note (fml-ds0.20 narrowed AC, follow-up filed as fml-ds0.20.1): this
+/// path intentionally covers only a bound root that is a bare `LAMBDA(...)`
+/// literal. A callable produced via `LET`/`IF`/currying (e.g.
+/// `=LET(f, LAMBDA(x,x+1), f)`) does NOT yield a portable payload here, because
+/// its portable `body: BoundExpr` is not statically derivable from the bound
+/// root without fabrication; those forms still publish `Error(Calc)`.
+///
+/// Two distinct concerns are kept separate so the surfaces never contradict each
+/// other:
+///   * Descriptive metadata (`carrier.capture_mode`, `profile.capture_names`,
+///     `profile.body_kind`, `summary`) is derived from the runtime
+///     `OxLambdaValue` — the evaluator's already-computed source of truth — via
+///     the same helpers that feed `callable_profile_detail`/`callable_carrier`.
+///     This guarantees the portable surface agrees with
+///     `evaluation.result.callable_*` for the same value. In particular, a free
+///     top-level defined-name (e.g. `Cap` in `=LAMBDA(x,MIN(x,Cap))`) is NOT a
+///     lexical capture: the engine resolves it live at invocation time, so the
+///     runtime reports `NoCapture` and the portable metadata follows suit.
+///   * The re-supply payload (`params`, `optional_parameter_names`, `body`) is
+///     read straight from the bound LAMBDA expression so the host can store and
+///     hand the callable back. `closure` is left EMPTY for top-level
+///     defined-name captures: baking a snapshot would shadow the consumer's live
+///     value on re-supply and make the `captured_refs` invalidation edges
+///     meaningless. The host re-supplies the current value of each captured ref
+///     (tracked via `captured_refs`) into the consuming scope, where the body
+///     resolves it live — matching Excel's invocation-time name resolution.
+///
+/// `captured_refs` always carries the captured-ref dependency identities (the
+/// free names in the body that are not bound parameters) so the host can build
+/// invalidation edges, including for names that are currently unresolved.
+///
+/// Returns `None` for non-callable results, or for callable results whose bound
+/// root is not a directly portable LAMBDA literal (e.g. a curried or
+/// LET-returned callable): we never fabricate a body we cannot honestly derive.
+fn portable_callable_for_top_level_result(
+    output_value: &EvalValue,
+    bind_formula: &BoundFormula,
+    defined_names: &BTreeMap<String, DefinedNameBinding>,
+) -> Option<PortableCallableValue> {
+    let EvalValue::Lambda(runtime_lambda) = output_value else {
+        return None;
+    };
+    let (params, optional_params, body) = lambda_literal_params_and_body(&bind_formula.root)?;
+
+    let bound_param_keys = params
+        .iter()
+        .chain(optional_params.iter())
+        .map(|name| helper_name_key(name))
+        .collect::<BTreeSet<_>>();
+    let mut free_refs = Vec::new();
+    collect_free_bound_references(body, &bound_param_keys, &mut free_refs);
+
+    let captured_refs = free_refs
+        .into_iter()
+        .map(|reference| {
+            let (name, identity) = captured_ref_name_and_identity(&reference);
+            // The captured-ref *identity* is a dependency fact for the host; we do
+            // NOT bake the captured value into `closure`. Top-level defined names
+            // are re-resolved live at invocation time (see closure note below).
+            let binding = match &reference {
+                NormalizedReference::Name(name_ref) => defined_names.get(&name_ref.name).cloned(),
+                _ => None,
+            };
+            CallableCapturedRef {
+                name,
+                identity,
+                binding,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    // Descriptive metadata mirrors the runtime lambda (the evaluator's source of
+    // truth) so the portable surface never contradicts `evaluation.result`. The
+    // runtime carrier/profile is the SAME data the runtime result publishes for an
+    // `EvalValue::Lambda` (see PreparedResult for `EvalValue::Lambda`:
+    // `callable_carrier`/`callable_profile_detail`). If either cannot be derived
+    // we treat the result as not portable (return None) rather than fabricate a
+    // fallback, so the portable surface can never silently diverge from
+    // `evaluation.result.callable_*`.
+    let carrier = callable_carrier_from_lambda_value(runtime_lambda)?;
+    let profile = callable_profile_detail_from_lambda_value(runtime_lambda)?;
+    let summary = lambda_summary(runtime_lambda).to_string();
+
+    // The re-supply payload carries params/body verbatim from the bound AST. The
+    // closure is intentionally empty: captured top-level defined names travel as
+    // `captured_refs` identities and are re-resolved live by the consuming host,
+    // not snapshotted here (which would shadow the consumer's live value).
+    let closure = BTreeMap::new();
+
+    let binding = CallableDefinedNameBinding {
+        summary,
+        carrier,
+        profile,
+        params,
+        optional_parameter_names: optional_params,
+        body: body.clone(),
+        closure,
+    };
+
+    Some(PortableCallableValue {
+        binding,
+        captured_refs,
+    })
+}
+
+/// Derive the host-facing `(name, identity)` for a captured free reference.
+///
+/// For a resolved defined-name we use the name verbatim and a `name:<Name>`
+/// identity (matching `NormalizedReference`'s `Display`). For a free name that
+/// the binder lowered to a `#NAME?` error reference (because it is not yet
+/// defined in the producing scope), we recover the original name text from the
+/// error's `source_text` so the host can still wire a pending invalidation edge
+/// keyed on the name that will fire when the name later becomes defined. Other
+/// reference kinds (cells, areas, ...) fall back to their `Display` identity.
+fn captured_ref_name_and_identity(reference: &NormalizedReference) -> (String, String) {
+    match reference {
+        NormalizedReference::Name(name) => (name.name.clone(), format!("name:{}", name.name)),
+        NormalizedReference::Error(error)
+            if error.error_class == "#NAME?" && is_identifier_like(&error.source_text) =>
+        {
+            // An unresolved free name: surface the pending dependency by name so
+            // the host can track it until the name becomes defined.
+            (
+                error.source_text.clone(),
+                format!("name:{}", error.source_text),
+            )
+        }
+        other => {
+            let identity = other.to_string();
+            (identity.clone(), identity)
+        }
+    }
+}
+
+/// Whether `text` is a plausible defined-name identifier (as opposed to a
+/// synthetic error source-text like "range"/"union"/"intersection" or an empty
+/// string). Used to distinguish an unresolved free *name* from other `#NAME?`
+/// error references.
+fn is_identifier_like(text: &str) -> bool {
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) if first.is_alphabetic() || first == '_' => {}
+        _ => return false,
+    }
+    chars.all(|ch| ch.is_alphanumeric() || ch == '_' || ch == '.')
+}
+
+/// Extract `(required params, optional params, body)` from a bound `LAMBDA(...)`
+/// literal expression, or `None` if the expression is not a LAMBDA literal.
+fn lambda_literal_params_and_body(
+    expr: &BoundExpr,
+) -> Option<(Vec<String>, Vec<String>, &BoundExpr)> {
+    let BoundExpr::FunctionCall {
+        function_name,
+        args,
+    } = expr
+    else {
+        return None;
+    };
+    if !function_name.eq_ignore_ascii_case("LAMBDA") || args.is_empty() {
+        return None;
+    }
+    let body_index = args.len() - 1;
+    let mut params = Vec::new();
+    let mut optional_params = Vec::new();
+    for arg in &args[..body_index] {
+        match arg {
+            BoundExpr::HelperParameterName(name) => params.push(name.clone()),
+            BoundExpr::HelperOptionalParameterName(name) => {
+                params.push(name.clone());
+                optional_params.push(name.clone());
+            }
+            // A non-parameter in the head means this is not a plain LAMBDA literal
+            // we can portably describe; bail rather than guess.
+            _ => return None,
+        }
+    }
+    Some((params, optional_params, &args[body_index]))
+}
+
+/// Collect the free references in a bound expression that are not shadowed by the
+/// supplied bound-parameter name keys. Mirrors the helper free-name analysis but
+/// operates on the portable `BoundExpr` so the result is host-facing.
+fn collect_free_bound_references(
+    expr: &BoundExpr,
+    bound_names: &BTreeSet<String>,
+    out: &mut Vec<NormalizedReference>,
+) {
+    match expr {
+        BoundExpr::NumberLiteral(_)
+        | BoundExpr::StringLiteral(_)
+        | BoundExpr::LogicalLiteral(_)
+        | BoundExpr::OmittedArgument
+        | BoundExpr::HelperParameterName(_)
+        | BoundExpr::HelperOptionalParameterName(_) => {}
+        BoundExpr::ArrayLiteral(rows) => {
+            for row in rows {
+                for cell in row {
+                    collect_free_bound_references(cell, bound_names, out);
+                }
+            }
+        }
+        BoundExpr::Binary { left, right, .. } => {
+            collect_free_bound_references(left, bound_names, out);
+            collect_free_bound_references(right, bound_names, out);
+        }
+        BoundExpr::Unary { expr, .. } | BoundExpr::ImplicitIntersection(expr) => {
+            collect_free_bound_references(expr, bound_names, out);
+        }
+        BoundExpr::FunctionCall {
+            function_name,
+            args,
+        } => {
+            if function_name.eq_ignore_ascii_case("LAMBDA") && !args.is_empty() {
+                collect_free_bound_references_in_nested_lambda(args, bound_names, out);
+                return;
+            }
+            if function_name.eq_ignore_ascii_case("LET") && args.len() >= 3 {
+                collect_free_bound_references_in_let(args, bound_names, out);
+                return;
+            }
+            for arg in args {
+                collect_free_bound_references(arg, bound_names, out);
+            }
+        }
+        BoundExpr::Invocation { callee, args } => {
+            collect_free_bound_references(callee, bound_names, out);
+            for arg in args {
+                collect_free_bound_references(arg, bound_names, out);
+            }
+        }
+        BoundExpr::Reference(reference) => {
+            collect_free_reference_atoms(reference, bound_names, out);
+        }
+    }
+}
+
+fn collect_free_bound_references_in_nested_lambda(
+    args: &[BoundExpr],
+    bound_names: &BTreeSet<String>,
+    out: &mut Vec<NormalizedReference>,
+) {
+    let body_index = args.len() - 1;
+    let mut nested_bound = bound_names.clone();
+    for arg in &args[..body_index] {
+        match arg {
+            BoundExpr::HelperParameterName(name) | BoundExpr::HelperOptionalParameterName(name) => {
+                nested_bound.insert(helper_name_key(name));
+            }
+            _ => {}
+        }
+    }
+    collect_free_bound_references(&args[body_index], &nested_bound, out);
+}
+
+fn collect_free_bound_references_in_let(
+    args: &[BoundExpr],
+    bound_names: &BTreeSet<String>,
+    out: &mut Vec<NormalizedReference>,
+) {
+    let last_index = args.len() - 1;
+    let mut local_bound = bound_names.clone();
+    let mut index = 0usize;
+    while index + 1 < last_index {
+        collect_free_bound_references(&args[index + 1], &local_bound, out);
+        if let BoundExpr::HelperParameterName(name) = &args[index] {
+            local_bound.insert(helper_name_key(name));
+        }
+        index += 2;
+    }
+    collect_free_bound_references(&args[last_index], &local_bound, out);
+}
+
+fn collect_free_reference_atoms(
+    reference: &ReferenceExpr,
+    bound_names: &BTreeSet<String>,
+    out: &mut Vec<NormalizedReference>,
+) {
+    match reference {
+        ReferenceExpr::Atom(atom) => {
+            // A helper-local name shadowed by a bound parameter is not a free
+            // captured reference; skip it.
+            if let NormalizedReference::Name(name) = atom
+                && matches!(name.kind, NameKind::HelperLocal)
+                && bound_names.contains(&helper_name_key(&name.name))
+            {
+                return;
+            }
+            if !out.contains(atom) {
+                out.push(atom.clone());
+            }
+        }
+        ReferenceExpr::Spill { anchor } => {
+            collect_free_reference_atoms(anchor, bound_names, out);
+        }
+        ReferenceExpr::Range { start, end }
+        | ReferenceExpr::Union {
+            left: start,
+            right: end,
+        }
+        | ReferenceExpr::Intersection {
+            left: start,
+            right: end,
+        } => {
+            collect_free_reference_atoms(start, bound_names, out);
+            collect_free_reference_atoms(end, bound_names, out);
+        }
+    }
 }
 
 fn returned_value_surface_for_output(

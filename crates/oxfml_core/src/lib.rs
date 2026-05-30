@@ -69,11 +69,12 @@ pub use carrier::{
     validate_data_validation_formula,
 };
 pub use eval::{
-    CallableCaptureMode, CallableDefinedNameBinding, CallableInvocationModel, CallableOriginKind,
-    CallableValueCarrier, CallableValueProfile, DefinedNameBinding, EvaluationBackend,
-    EvaluationContext, EvaluationError, EvaluationOutput, EvaluationTrace, EvaluationTraceMode,
-    PreparedArgument, PreparedBlanknessClass, PreparedCall, PreparedEvaluationMode, PreparedResult,
-    PreparedResultClass, PreparedSourceClass, PreparedStructureClass, evaluate_formula,
+    CallableCaptureMode, CallableCapturedRef, CallableDefinedNameBinding, CallableInvocationModel,
+    CallableOriginKind, CallableValueCarrier, CallableValueProfile, DefinedNameBinding,
+    EvaluationBackend, EvaluationContext, EvaluationError, EvaluationOutput, EvaluationTrace,
+    EvaluationTraceMode, PortableCallableValue, PreparedArgument, PreparedBlanknessClass,
+    PreparedCall, PreparedEvaluationMode, PreparedResult, PreparedResultClass, PreparedSourceClass,
+    PreparedStructureClass, evaluate_formula,
 };
 pub use interface::{
     HostFunctionInvocation, HostFunctionProvider, HostFunctionProviderError,
