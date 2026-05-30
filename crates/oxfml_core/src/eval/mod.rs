@@ -6328,3 +6328,48 @@ const CALLABLE_ARRAY_CARRIER_PREFIX: &str = "oxfml.callable-array::";
 fn callable_token(id: usize, summary: &str) -> String {
     format!("oxfml.callable.{id}::{summary}")
 }
+
+#[cfg(test)]
+mod compiled_body_cache_tests {
+    use super::*;
+    use crate::binding::{BinaryOp, BoundExpr};
+
+    fn add_body() -> BoundExpr {
+        BoundExpr::Binary {
+            op: BinaryOp::Add,
+            left: Box::new(BoundExpr::HelperParameterName("x".to_string())),
+            right: Box::new(BoundExpr::NumberLiteral("3".to_string())),
+        }
+    }
+
+    #[test]
+    fn compiled_body_cache_reuses_same_shape_and_separates_distinct_shapes() {
+        let registry = RefCell::new(CallableRegistry::default());
+
+        // The same body shape compiles once: a second request returns the SAME
+        // Rc (a cache hit, not a recompile). This is the property that keeps
+        // B(x) inside MAP(arr, LAMBDA(x, B(x))) from recompiling per element.
+        let first = registry.borrow_mut().get_or_compile_body(&add_body());
+        let second = registry.borrow_mut().get_or_compile_body(&add_body());
+        assert!(
+            Rc::ptr_eq(&first, &second),
+            "same body shape should reuse one compiled body"
+        );
+
+        // An equal-by-value clone hits the same cache entry (structural identity).
+        let clone = add_body();
+        let third = registry.borrow_mut().get_or_compile_body(&clone);
+        assert!(Rc::ptr_eq(&first, &third));
+
+        // A different shape compiles separately.
+        let mul_body = BoundExpr::Binary {
+            op: BinaryOp::Multiply,
+            left: Box::new(BoundExpr::HelperParameterName("x".to_string())),
+            right: Box::new(BoundExpr::NumberLiteral("3".to_string())),
+        };
+        let other = registry.borrow_mut().get_or_compile_body(&mul_body);
+        assert!(!Rc::ptr_eq(&first, &other));
+
+        assert_eq!(registry.borrow().compiled_body_cache.len(), 2);
+    }
+}
