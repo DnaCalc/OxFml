@@ -950,10 +950,10 @@ fn parse_empirical_defined_name_binding(summary: &str) -> Result<DefinedNameBind
         .strip_prefix("Reference(")
         .and_then(|rest| rest.strip_suffix(')'))
     {
-        return Ok(DefinedNameBinding::Reference(ReferenceLike {
-            kind: oxfunc_core::value::ReferenceKind::A1,
-            target: target.to_string(),
-        }));
+        return Ok(DefinedNameBinding::Reference(ReferenceLike::new(
+            oxfunc_core::value::ReferenceKind::A1,
+            target.to_string(),
+        )));
     }
 
     Ok(DefinedNameBinding::Value(parse_empirical_eval_value(

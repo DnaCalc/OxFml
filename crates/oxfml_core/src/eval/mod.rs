@@ -3192,10 +3192,7 @@ fn evaluate_reference_as_call_arg(
         }
         CompiledReferenceExpr::Atom(NormalizedReference::WholeRow(rows)) => {
             call_arg_for_reference_like(
-                ReferenceLike {
-                    kind: ReferenceKind::Area,
-                    target: whole_row_target(rows),
-                },
+                ReferenceLike::new(ReferenceKind::Area, whole_row_target(rows)),
                 preserve_reference,
                 context,
                 resolver,
@@ -3203,10 +3200,7 @@ fn evaluate_reference_as_call_arg(
         }
         CompiledReferenceExpr::Atom(NormalizedReference::WholeColumn(columns)) => {
             call_arg_for_reference_like(
-                ReferenceLike {
-                    kind: ReferenceKind::Area,
-                    target: whole_column_target(columns),
-                },
+                ReferenceLike::new(ReferenceKind::Area, whole_column_target(columns)),
                 preserve_reference,
                 context,
                 resolver,
@@ -5763,26 +5757,20 @@ fn whole_column_target(columns: &crate::binding::WholeColumnRef) -> String {
 }
 
 fn reference_like_for_cell(cell: &CellRef) -> ReferenceLike {
-    ReferenceLike {
-        kind: ReferenceKind::A1,
-        target: a1_for_cell(cell),
-    }
+    ReferenceLike::new(ReferenceKind::A1, a1_for_cell(cell))
 }
 
 fn reference_like_for_area(area: &AreaRef) -> ReferenceLike {
-    ReferenceLike {
-        kind: ReferenceKind::Area,
-        target: a1_for_area(area),
-    }
+    ReferenceLike::new(ReferenceKind::Area, a1_for_area(area))
 }
 
 fn reference_like_for_structured(structured: &crate::binding::StructuredRef) -> ReferenceLike {
     match &structured.resolved_reference {
         StructuredResolvedRef::Cell(cell) => reference_like_for_cell(cell),
         StructuredResolvedRef::Area(area) => reference_like_for_area(area),
-        StructuredResolvedRef::EmptyArea(empty) => ReferenceLike {
-            kind: ReferenceKind::Structured,
-            target: format!(
+        StructuredResolvedRef::EmptyArea(empty) => ReferenceLike::new(
+            ReferenceKind::Structured,
+            format!(
                 "empty-structured:{}:{}:{}:{}",
                 empty.sheet_id,
                 match empty.section_kind {
@@ -5795,7 +5783,7 @@ fn reference_like_for_structured(structured: &crate::binding::StructuredRef) -> 
                 empty.selected_column_ids.join("|"),
                 empty.column_count
             ),
-        },
+        ),
     }
 }
 
