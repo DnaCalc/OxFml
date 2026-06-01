@@ -40,6 +40,7 @@ pub fn lex(input: &str) -> Vec<Token> {
             '^' => simple(TokenKind::Caret, ch, start),
             '*' => simple(TokenKind::Star, ch, start),
             '/' => simple(TokenKind::Slash, ch, start),
+            '.' => simple(TokenKind::Dot, ch, start),
             '@' => simple(TokenKind::At, ch, start),
             '#' => {
                 if let Some(end) = consume_error_literal(&chars, start) {
@@ -128,6 +129,9 @@ pub fn lex(input: &str) -> Vec<Token> {
             c if is_identifier_start(c) => {
                 index += 1;
                 while index < chars.len() {
+                    if chars[index] == '.' && matches!(chars.get(index + 1), Some('@' | '*')) {
+                        break;
+                    }
                     if is_identifier_continue(chars[index]) {
                         index += 1;
                         continue;

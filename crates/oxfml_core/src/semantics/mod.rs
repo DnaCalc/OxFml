@@ -368,6 +368,31 @@ impl SemanticCompiler {
                 self.record_reference_expression();
                 self.visit_reference_expr(reference);
             }
+            BoundExpr::HostReference(_) => {
+                self.record_reference_expression();
+                self.execution_profile.requires_host_interaction = true;
+                self.execution_profile.requires_reference_preservation = true;
+            }
+            BoundExpr::HostStructuralSelector(selector) => {
+                self.record_reference_expression();
+                self.execution_profile.requires_host_interaction = true;
+                self.execution_profile.requires_reference_preservation = true;
+                self.visit_expr(&selector.base);
+                for member in &selector.members {
+                    self.visit_expr(member);
+                }
+            }
+            BoundExpr::HostReferenceCollection(collection) => {
+                self.record_reference_expression();
+                self.execution_profile.requires_host_interaction = true;
+                self.execution_profile.requires_reference_preservation = true;
+                if let Some(base) = &collection.base {
+                    self.visit_expr(base);
+                }
+                for member in &collection.members {
+                    self.visit_expr(member);
+                }
+            }
             BoundExpr::ImplicitIntersection(inner) => {
                 self.record_reference_expression();
                 self.execution_profile.uses_implicit_intersection = true;
@@ -966,8 +991,23 @@ fn collect_helper_capture_names<'a>(
         | BoundExpr::LogicalLiteral(_)
         | BoundExpr::ArrayLiteral(_)
         | BoundExpr::OmittedArgument
+        | BoundExpr::HostReference(_)
         | BoundExpr::HelperParameterName(_)
         | BoundExpr::HelperOptionalParameterName(_) => {}
+        BoundExpr::HostStructuralSelector(selector) => {
+            collect_helper_capture_names(&selector.base, params, captures);
+            for member in &selector.members {
+                collect_helper_capture_names(member, params, captures);
+            }
+        }
+        BoundExpr::HostReferenceCollection(collection) => {
+            if let Some(base) = &collection.base {
+                collect_helper_capture_names(base, params, captures);
+            }
+            for member in &collection.members {
+                collect_helper_capture_names(member, params, captures);
+            }
+        }
         BoundExpr::Unary { expr, .. } => {
             collect_helper_capture_names(expr, params, captures);
         }

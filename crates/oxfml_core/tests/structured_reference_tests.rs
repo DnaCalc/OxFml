@@ -791,6 +791,8 @@ fn bind_with_table_context(formula: &str, context: BindContext) -> oxfml_core::B
             formula_token: source.formula_token(),
             ..context
         },
+
+        host_name_resolver: None,
     })
     .bound_formula
 }

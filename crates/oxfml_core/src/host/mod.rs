@@ -6,7 +6,9 @@ use oxfunc_core::functions::call_register_id_family::{
 use oxfunc_core::functions::rtd_fn::RtdProvider;
 use oxfunc_core::host_info::HostInfoProvider;
 use oxfunc_core::locale_format::LocaleFormatContext;
-use oxfunc_core::value::{EvalValue, ExcelText, ExtendedValue, ReferenceLike, WorksheetErrorCode};
+use oxfunc_core::value::{
+    CalcValue, EvalValue, ExcelText, ExtendedValue, ReferenceLike, WorksheetErrorCode,
+};
 
 use crate::binding::{
     BindContext, BindDiagnostic, BindRequest, BoundFormula, NameKind, bind_formula_incremental,
@@ -132,6 +134,16 @@ pub struct FirstHostReplayCapturePacket {
 }
 
 impl HostRecalcOutput {
+    pub fn published_calc_value(&self) -> CalcValue {
+        if self.published_worksheet_value == self.evaluation.oxfunc_value {
+            self.evaluation.calc_value()
+        } else {
+            let mut value = self.evaluation.calc_value();
+            value.core = CalcValue::from(self.published_worksheet_value.clone()).core;
+            value
+        }
+    }
+
     pub fn to_first_host_replay_capture_packet(&self) -> FirstHostReplayCapturePacket {
         FirstHostReplayCapturePacket {
             adapter_id: "oxfml.replay_adapter.v1".to_string(),
@@ -458,6 +470,8 @@ impl SingleFormulaHost {
                     caller_table_region: self.caller_table_region.clone(),
                     ..BindContext::default()
                 },
+
+                host_name_resolver: None,
             },
             cached_artifacts.map(|artifacts| &artifacts.bound_formula),
         );
@@ -1132,8 +1146,8 @@ mod tests {
     };
     use crate::interface::{ReturnedValueSurface, ReturnedValueSurfaceKind};
     use oxfunc_core::value::{
-        EvalValue, ExcelText, ExtendedValue, RichValue, RichValueData, RichValueType,
-        WorksheetErrorCode,
+        EvalValue, ExcelText, ExtendedValue, RichObjectValue, RichValue, RichValueData,
+        RichValueType, WorksheetErrorCode,
     };
 
     #[test]
@@ -1155,7 +1169,7 @@ mod tests {
             },
             oxfunc_value: EvalValue::Text(ExcelText::from_interop_assignment("Sphere")),
             returned_value_surface: ReturnedValueSurface::from_extended_value(
-                &ExtendedValue::RichValue(Box::new(RichValue {
+                &ExtendedValue::RichValue(Box::new(RichValue::Object(RichObjectValue {
                     value_type: RichValueType {
                         type_name: "_webimage".to_string(),
                         required_keys: vec!["WebImageIdentifier".to_string()],
@@ -1163,7 +1177,7 @@ mod tests {
                     },
                     fallback: RichValueData::Text(ExcelText::from_interop_assignment("Sphere")),
                     kvps: vec![],
-                })),
+                }))),
             ),
             portable_callable: None,
             trace: EvaluationTrace {

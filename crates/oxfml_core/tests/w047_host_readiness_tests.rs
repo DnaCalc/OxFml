@@ -360,6 +360,8 @@ fn bind_formula_text(
             structure_context_version: StructureContextVersion("w047-test".to_string()),
             ..BindContext::default()
         },
+
+        host_name_resolver: None,
     });
     bind.bound_formula
 }

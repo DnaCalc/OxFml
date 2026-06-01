@@ -589,6 +589,8 @@ fn compile_prepared_with_snapshot(
             names,
             ..BindContext::default()
         },
+
+        host_name_resolver: None,
     });
     let plan = compile_semantic_plan(oxfml_core::CompileSemanticPlanRequest {
         bound_formula: bind.bound_formula.clone(),

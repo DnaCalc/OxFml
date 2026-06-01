@@ -58,6 +58,8 @@ pub use oxfunc_core::functions::call_register_id_family::{
 
 pub use binding::{
     BindContext, BindDiagnostic, BindRequest, BindResult, BoundExpr, BoundFormula,
+    BoundHostReferenceCollection, BoundHostStructuralSelector, HostNameBindRecord,
+    HostStructuralSelectorResolveRequest, HostStructuralSelectorResolveResult,
     IncrementalBindResult, NormalizedReference, ReferenceExpr,
     StructuredReferenceBindDiagnosticLink, StructuredReferenceBindRecord,
     StructuredReferenceSelectedRegion, StructuredReferenceSourceTokenKind, StructuredSectionKind,

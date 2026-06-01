@@ -71,6 +71,8 @@ fn parse_and_bind_fixtures_match_initial_w002_slice() {
                 formula_token: source.formula_token(),
                 ..BindContext::default()
             },
+
+            host_name_resolver: None,
         });
 
         assert_eq!(
@@ -132,6 +134,8 @@ fn unresolved_identifier_becomes_typed_bind_diagnostic() {
         green_tree: parse.green_tree,
         red_projection: red,
         context: BindContext::default(),
+
+        host_name_resolver: None,
     });
 
     assert_eq!(bind.bound_formula.unresolved_references.len(), 1);
@@ -155,6 +159,8 @@ fn incremental_parse_red_and_bind_reuse_same_immutable_artifacts() {
             formula_token: source.formula_token(),
             ..BindContext::default()
         },
+
+        host_name_resolver: None,
     });
 
     let incremental_parse = parse_formula_incremental(
@@ -182,6 +188,8 @@ fn incremental_parse_red_and_bind_reuse_same_immutable_artifacts() {
                 formula_token: source.formula_token(),
                 ..BindContext::default()
             },
+
+            host_name_resolver: None,
         },
         Some(&bind.bound_formula),
     );
@@ -204,6 +212,8 @@ fn incremental_reference_breadth_reuse_keeps_whole_row_bindings() {
             formula_token: source.formula_token(),
             ..BindContext::default()
         },
+
+        host_name_resolver: None,
     });
 
     let incremental_parse = parse_formula_incremental(
@@ -231,6 +241,8 @@ fn incremental_reference_breadth_reuse_keeps_whole_row_bindings() {
                 formula_token: source.formula_token(),
                 ..BindContext::default()
             },
+
+            host_name_resolver: None,
         },
         Some(&bind.bound_formula),
     );
@@ -253,6 +265,8 @@ fn incremental_bind_invalidates_when_bind_context_changes() {
             formula_token: source.formula_token(),
             ..BindContext::default()
         },
+
+        host_name_resolver: None,
     });
 
     let mut names = std::collections::BTreeMap::new();
@@ -271,6 +285,8 @@ fn incremental_bind_invalidates_when_bind_context_changes() {
                 names,
                 ..BindContext::default()
             },
+
+            host_name_resolver: None,
         },
         Some(&bind.bound_formula),
     );
@@ -293,6 +309,8 @@ fn bind_inherits_explicit_sheet_qualifier_across_simple_a1_range() {
             formula_token: source.formula_token(),
             ..BindContext::default()
         },
+
+        host_name_resolver: None,
     });
 
     assert!(bind.bound_formula.diagnostics.is_empty());
@@ -325,6 +343,8 @@ fn bind_preserves_array_literal_multiplied_by_unary_negative_literal_shape() {
             formula_token: source.formula_token(),
             ..BindContext::default()
         },
+
+        host_name_resolver: None,
     });
 
     let BoundExpr::Binary { op, left, right } = &bind.bound_formula.root else {
@@ -367,6 +387,8 @@ fn bind_prefers_builtin_function_over_colliding_helper_local_in_call_position() 
             formula_token: source.formula_token(),
             ..BindContext::default()
         },
+
+        host_name_resolver: None,
     });
 
     assert!(bind.bound_formula.diagnostics.is_empty());
@@ -421,6 +443,8 @@ fn bind_surfaces_t_builtin_arity_authoring_reject_for_ftc_0444() {
             formula_token: source.formula_token(),
             ..BindContext::default()
         },
+
+        host_name_resolver: None,
     });
 
     assert!(bind.bound_formula.diagnostics.iter().any(|diagnostic| {
@@ -466,6 +490,8 @@ fn bind_surfaces_generic_builtin_arity_authoring_reject_for_plain_gcd_zero_arity
             formula_token: source.formula_token(),
             ..BindContext::default()
         },
+
+        host_name_resolver: None,
     });
 
     assert!(bind.bound_formula.diagnostics.iter().any(|diagnostic| {
@@ -506,6 +532,8 @@ fn bind_accepts_error_literal_inside_array_call_for_ftc_0837() {
             formula_token: source.formula_token(),
             ..BindContext::default()
         },
+
+        host_name_resolver: None,
     });
 
     assert!(bind.bound_formula.diagnostics.is_empty());
@@ -562,6 +590,8 @@ fn bind_accepts_filterxml_embedded_quoted_xml_string_for_ftc_1041() {
             formula_token: source.formula_token(),
             ..BindContext::default()
         },
+
+        host_name_resolver: None,
     });
 
     assert!(bind.bound_formula.diagnostics.is_empty());
@@ -619,6 +649,8 @@ fn parse_rejects_unbalanced_deep_parenthesis_family_for_ftc_0916_and_ftc_0987() 
             formula_token: source.formula_token(),
             ..BindContext::default()
         },
+
+        host_name_resolver: None,
     });
 
     assert!(bind.bound_formula.diagnostics.is_empty());
@@ -645,6 +677,8 @@ fn bind_prefers_helper_local_name_over_cell_like_reference_text() {
             formula_token: source.formula_token(),
             ..BindContext::default()
         },
+
+        host_name_resolver: None,
     });
 
     assert!(bind.bound_formula.diagnostics.is_empty());
@@ -688,6 +722,7 @@ fn syntax_kind_name(kind: SyntaxKind) -> &'static str {
         SyntaxKind::IdentifierExpr => "IdentifierExpr",
         SyntaxKind::QuotedIdentifierExpr => "QuotedIdentifierExpr",
         SyntaxKind::QualifiedReferenceExpr => "QualifiedReferenceExpr",
+        SyntaxKind::HostMemberReferenceExpr => "HostMemberReferenceExpr",
         SyntaxKind::CallExpr => "CallExpr",
         SyntaxKind::InvokeExpr => "InvokeExpr",
         SyntaxKind::ArgumentList => "ArgumentList",
@@ -717,6 +752,9 @@ fn bound_expr_name(expr: &BoundExpr) -> &'static str {
         BoundExpr::FunctionCall { .. } => "FunctionCall",
         BoundExpr::Invocation { .. } => "Invocation",
         BoundExpr::Reference(_) => "Reference",
+        BoundExpr::HostReference(_) => "HostReference",
+        BoundExpr::HostStructuralSelector(_) => "HostStructuralSelector",
+        BoundExpr::HostReferenceCollection(_) => "HostReferenceCollection",
         BoundExpr::ImplicitIntersection(_) => "ImplicitIntersection",
     }
 }

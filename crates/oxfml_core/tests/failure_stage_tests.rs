@@ -190,6 +190,8 @@ fn compile_prepared(formula: &str) -> PrepareRequest {
             formula_token: source.formula_token(),
             ..BindContext::default()
         },
+
+        host_name_resolver: None,
     });
     let semantic_plan = compile_semantic_plan(CompileSemanticPlanRequest {
         bound_formula: bind.bound_formula.clone(),

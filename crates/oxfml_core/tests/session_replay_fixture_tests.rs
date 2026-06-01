@@ -503,6 +503,8 @@ fn compile_prepared(formula: &str, with_input_name: bool) -> PrepareRequest {
             names,
             ..BindContext::default()
         },
+
+        host_name_resolver: None,
     });
     let plan = compile_semantic_plan(oxfml_core::CompileSemanticPlanRequest {
         bound_formula: bind.bound_formula.clone(),

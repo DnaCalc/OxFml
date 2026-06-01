@@ -3,10 +3,12 @@
 //! captured-ref dependency facts a host needs for invalidation, and the payload
 //! can be stored and re-supplied as a defined-name callable.
 
-use oxfml_core::eval::{CallableCaptureMode, CallableOriginKind, DefinedNameBinding};
+use oxfml_core::eval::{
+    CallableCaptureMode, CallableOriginKind, DefinedNameBinding, OxFmlCallableBinding,
+};
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::test_support::host::SingleFormulaHost;
-use oxfunc_core::value::{EvalValue, WorksheetErrorCode};
+use oxfunc_core::value::{CoreValue, EvalValue, RichValue, WorksheetErrorCode};
 
 #[test]
 fn top_level_lambda_with_capture_surfaces_portable_callable_payload() {
@@ -104,6 +106,40 @@ fn top_level_lambda_with_capture_surfaces_portable_callable_payload() {
         binding.closure.is_empty(),
         "top-level defined-name captures must not be baked into the closure"
     );
+
+    let calc_value = output.evaluation.calc_value();
+    assert_eq!(
+        calc_value.core,
+        CoreValue::Error(WorksheetErrorCode::Calc),
+        "callable CalcValue keeps #CALC! as the core worksheet fallback"
+    );
+    let Some(RichValue::Callable(callable)) = calc_value.rich.as_deref() else {
+        panic!("top-level callable should project as RichValue::Callable");
+    };
+    assert_eq!(callable.arity.min, 1);
+    assert_eq!(callable.arity.max, 1);
+    assert_eq!(
+        callable.summary,
+        "arity=1;required_arity=1;params=x;optional_params=-;captures=-;body=ResolvedFunctionCall"
+    );
+    let handle = callable
+        .handle
+        .as_any()
+        .downcast_ref::<OxFmlCallableBinding>()
+        .expect("callable handle should be OxFml-owned");
+    assert_eq!(handle.binding.params, vec!["x".to_string()]);
+    assert_eq!(handle.captured_refs.len(), 1);
+    assert_eq!(handle.captured_refs[0].identity, "name:Cap");
+
+    let published_calc_value = output.published_calc_value();
+    assert_eq!(
+        published_calc_value.core,
+        CoreValue::Error(WorksheetErrorCode::Calc)
+    );
+    assert!(matches!(
+        published_calc_value.rich.as_deref(),
+        Some(RichValue::Callable(_))
+    ));
 }
 
 #[test]

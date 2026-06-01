@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::{Deref, DerefMut};
@@ -40,10 +41,10 @@ use oxfunc_core::resolver::{
     ReferenceTextResolver, ResolvedReferenceValues, ResolverCapabilities,
 };
 use oxfunc_core::value::{
-    ArrayCellValue, CallArgValue, CallableArityShape as OxCallableArityShape,
+    ArrayCellValue, CalcValue, CallArgValue, CallableArityShape as OxCallableArityShape,
     CallableCaptureMode as OxCallableCaptureMode, CallableOriginKind as OxCallableOriginKind,
-    EvalArray, EvalValue, ExcelText, ExtendedValue, LambdaValue as OxLambdaValue, ReferenceKind,
-    ReferenceLike, WorksheetErrorCode,
+    CallableValue as OxCallableValue, EvalArray, EvalValue, ExcelText, ExtendedValue,
+    LambdaValue as OxLambdaValue, OpaqueCallable, ReferenceKind, ReferenceLike, WorksheetErrorCode,
 };
 use stacker::maybe_grow;
 
@@ -477,6 +478,40 @@ pub struct EvaluationOutput {
     /// store the callable and re-supply it later. `None` for ordinary results.
     pub portable_callable: Option<PortableCallableValue>,
     pub trace: EvaluationTrace,
+}
+
+impl EvaluationOutput {
+    pub fn calc_value(&self) -> CalcValue {
+        if let (EvalValue::Lambda(lambda), Some(portable)) =
+            (&self.oxfunc_value, &self.portable_callable)
+        {
+            return CalcValue::callable(OxCallableValue {
+                arity: lambda.arity_shape,
+                summary: lambda_summary(lambda).to_string(),
+                handle: Rc::new(OxFmlCallableBinding {
+                    callable_token: lambda.callable_token.clone(),
+                    invocation_contract_ref: lambda.invocation_contract_ref.clone(),
+                    binding: portable.binding.clone(),
+                    captured_refs: portable.captured_refs.clone(),
+                }),
+            });
+        }
+        CalcValue::from(self.oxfunc_value.clone())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct OxFmlCallableBinding {
+    pub callable_token: String,
+    pub invocation_contract_ref: String,
+    pub binding: CallableDefinedNameBinding,
+    pub captured_refs: Vec<CallableCapturedRef>,
+}
+
+impl OpaqueCallable for OxFmlCallableBinding {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1171,6 +1206,33 @@ fn compile_expr_for_evaluation(expr: &BoundExpr, scope: &mut CompileHelperScope)
         BoundExpr::Reference(reference) => {
             CompiledExpr::Reference(compile_reference_for_evaluation(reference, scope))
         }
+        BoundExpr::HostReference(record) => CompiledExpr::Reference(CompiledReferenceExpr::Atom(
+            NormalizedReference::Name(NameRef {
+                name: record.canonical_name.clone(),
+                workbook_id: String::new(),
+                sheet_id: String::new(),
+                kind: NameKind::ValueLike,
+                caller_context_dependent: record.caller_context_dependent,
+            }),
+        )),
+        BoundExpr::HostStructuralSelector(selector) => CompiledExpr::Reference(
+            CompiledReferenceExpr::Atom(NormalizedReference::Name(NameRef {
+                name: selector.selector_handle.clone(),
+                workbook_id: String::new(),
+                sheet_id: String::new(),
+                kind: NameKind::ReferenceLike,
+                caller_context_dependent: selector.caller_context_dependent,
+            })),
+        ),
+        BoundExpr::HostReferenceCollection(collection) => CompiledExpr::Reference(
+            CompiledReferenceExpr::Atom(NormalizedReference::Name(NameRef {
+                name: collection.collection_handle.clone(),
+                workbook_id: String::new(),
+                sheet_id: String::new(),
+                kind: NameKind::ReferenceLike,
+                caller_context_dependent: collection.caller_context_dependent,
+            })),
+        ),
         BoundExpr::ImplicitIntersection(inner) => CompiledExpr::ImplicitIntersection {
             call_target: function_call_target_from_function_id(FUNC_ID_OP_IMPLICIT_INTERSECTION),
             expr: Box::new(compile_expr_for_evaluation(inner, scope)),
@@ -1960,8 +2022,23 @@ fn collect_free_bound_references(
         | BoundExpr::StringLiteral(_)
         | BoundExpr::LogicalLiteral(_)
         | BoundExpr::OmittedArgument
+        | BoundExpr::HostReference(_)
         | BoundExpr::HelperParameterName(_)
         | BoundExpr::HelperOptionalParameterName(_) => {}
+        BoundExpr::HostStructuralSelector(selector) => {
+            collect_free_bound_references(&selector.base, bound_names, out);
+            for member in &selector.members {
+                collect_free_bound_references(member, bound_names, out);
+            }
+        }
+        BoundExpr::HostReferenceCollection(collection) => {
+            if let Some(base) = &collection.base {
+                collect_free_bound_references(base, bound_names, out);
+            }
+            for member in &collection.members {
+                collect_free_bound_references(member, bound_names, out);
+            }
+        }
         BoundExpr::ArrayLiteral(rows) => {
             for row in rows {
                 for cell in row {
@@ -5777,10 +5854,8 @@ impl ReferenceResolver for LocalReferenceResolver<'_> {
                     self.resolve_reference(reference_like)
                 }
                 DefinedNameBinding::Callable(binding) => {
-                    let lambda = lambda_binding_from_defined_name_binding(
-                        binding,
-                        self.callable_registry,
-                    );
+                    let lambda =
+                        lambda_binding_from_defined_name_binding(binding, self.callable_registry);
                     Ok(EvalValue::Lambda(
                         self.callable_registry.borrow_mut().register(lambda),
                     ))

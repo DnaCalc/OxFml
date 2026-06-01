@@ -21,7 +21,7 @@ use oxfunc_core::host_info::{
 };
 use oxfunc_core::value::{
     EvalValue, ExcelText, ExtendedValue, NumberFormatHint, PresentationHint, ReferenceLike,
-    RichValue, RichValueData, RichValueType,
+    RichObjectValue, RichValue, RichValueData, RichValueType,
 };
 
 mod common;
@@ -125,8 +125,8 @@ fn returned_value_surface_keeps_three_way_split() {
 
 #[test]
 fn returned_value_surface_preserves_image_rich_value_class() {
-    let rich_value =
-        ReturnedValueSurface::from_extended_value(&ExtendedValue::RichValue(Box::new(RichValue {
+    let rich_value = ReturnedValueSurface::from_extended_value(&ExtendedValue::RichValue(
+        Box::new(RichValue::Object(RichObjectValue {
             value_type: RichValueType {
                 type_name: "_webimage".to_string(),
                 required_keys: vec!["WebImageIdentifier".to_string()],
@@ -134,7 +134,8 @@ fn returned_value_surface_preserves_image_rich_value_class() {
             },
             fallback: RichValueData::Text(ExcelText::from_interop_assignment("Sphere")),
             kvps: vec![],
-        })));
+        })),
+    ));
     assert_eq!(rich_value.kind, ReturnedValueSurfaceKind::RichValue);
     assert_eq!(rich_value.payload_summary, "RichValue(_webimage)");
     assert_eq!(

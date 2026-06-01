@@ -40,6 +40,97 @@ pub struct FunctionCallSourceRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostNameBindRecord {
+    pub host_name_handle: String,
+    pub canonical_name: String,
+    pub host_dependency_key: Option<String>,
+    pub source_span: TextSpan,
+    pub source_token_text: String,
+    pub resolution_layer: String,
+    pub binding_kind: String,
+    pub shape_hint: Option<String>,
+    pub caller_context_dependent: bool,
+    pub diagnostics: Vec<String>,
+    pub replay_identity_contribution: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BoundHostStructuralSelector {
+    pub selector_handle: String,
+    pub selector_family: String,
+    pub base: Box<BoundExpr>,
+    pub members: Vec<BoundExpr>,
+    pub source_span: TextSpan,
+    pub source_token_text: String,
+    pub resolution_layer: String,
+    pub shape_hint: Option<String>,
+    pub caller_context_dependent: bool,
+    pub diagnostics: Vec<String>,
+    pub replay_identity_contribution: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BoundHostReferenceCollection {
+    pub collection_handle: String,
+    pub collection_family: String,
+    pub base: Option<Box<BoundExpr>>,
+    pub members: Vec<BoundExpr>,
+    pub source_span: TextSpan,
+    pub source_token_text: String,
+    pub resolution_layer: String,
+    pub shape_hint: Option<String>,
+    pub caller_context_dependent: bool,
+    pub diagnostics: Vec<String>,
+    pub replay_identity_contribution: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostNameResolveRequest {
+    pub source: FormulaSourceRecord,
+    pub source_span: TextSpan,
+    pub source_token_text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostNameResolveResult {
+    pub kind: NameKind,
+    pub bind_record: HostNameBindRecord,
+}
+
+pub trait HostNameResolver {
+    fn resolve_host_name(&self, request: &HostNameResolveRequest) -> Option<HostNameResolveResult>;
+
+    fn resolve_host_structural_selector(
+        &self,
+        _request: &HostStructuralSelectorResolveRequest,
+    ) -> Option<HostStructuralSelectorResolveResult> {
+        None
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostStructuralSelectorResolveRequest {
+    pub source: FormulaSourceRecord,
+    pub selector_handle: String,
+    pub selector_family: String,
+    pub base: BoundExpr,
+    pub source_span: TextSpan,
+    pub source_token_text: String,
+    pub member_token_text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostStructuralSelectorResolveResult {
+    pub selector: BoundHostStructuralSelector,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BindFunctionSurfaceKind {
+    BuiltIn,
+    Udf,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BoundExpr {
     NumberLiteral(String),
     StringLiteral(String),
@@ -66,6 +157,9 @@ pub enum BoundExpr {
         args: Vec<BoundExpr>,
     },
     Reference(ReferenceExpr),
+    HostReference(HostNameBindRecord),
+    HostStructuralSelector(BoundHostStructuralSelector),
+    HostReferenceCollection(BoundHostReferenceCollection),
     ImplicitIntersection(Box<BoundExpr>),
 }
 
@@ -119,6 +213,7 @@ pub struct BoundFormula {
     pub capability_requirements: Vec<String>,
     pub diagnostics: Vec<BindDiagnostic>,
     pub function_call_sources: Vec<FunctionCallSourceRecord>,
+    pub host_name_bind_records: Vec<HostNameBindRecord>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -130,6 +225,8 @@ pub struct BindContext {
     pub formula_token: FormulaToken,
     pub structure_context_version: StructureContextVersion,
     pub names: BTreeMap<String, NameKind>,
+    pub host_name_bind_records: BTreeMap<String, HostNameBindRecord>,
+    pub function_surfaces: BTreeMap<String, BindFunctionSurfaceKind>,
     pub name_caller_context_dependencies: BTreeMap<String, bool>,
     pub table_catalog: Vec<TableDescriptor>,
     pub enclosing_table_ref: Option<TableRef>,
@@ -146,6 +243,8 @@ impl Default for BindContext {
             formula_token: FormulaToken("fixture".to_string()),
             structure_context_version: StructureContextVersion("struct:v1".to_string()),
             names: BTreeMap::new(),
+            host_name_bind_records: BTreeMap::new(),
+            function_surfaces: BTreeMap::new(),
             name_caller_context_dependencies: BTreeMap::new(),
             table_catalog: Vec::new(),
             enclosing_table_ref: None,
@@ -154,12 +253,12 @@ impl Default for BindContext {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BindRequest {
+pub struct BindRequest<'a> {
     pub source: FormulaSourceRecord,
     pub green_tree: GreenTreeRoot,
     pub red_projection: RedProjection,
     pub context: BindContext,
+    pub host_name_resolver: Option<&'a dyn HostNameResolver>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -173,7 +272,7 @@ pub struct IncrementalBindResult {
     pub reused_bound_formula: bool,
 }
 
-pub fn bind_formula(request: BindRequest) -> BindResult {
+pub fn bind_formula(request: BindRequest<'_>) -> BindResult {
     let bind_context_fingerprint = hash_debug(&(
         request.context.workbook_id.clone(),
         request.context.sheet_id.clone(),
@@ -183,13 +282,16 @@ pub fn bind_formula(request: BindRequest) -> BindResult {
         request.context.structure_context_version.0.clone(),
         request.context.names.clone(),
         request.context.name_caller_context_dependencies.clone(),
+        request.context.host_name_bind_records.clone(),
         request.context.table_catalog.clone(),
         request.context.enclosing_table_ref.clone(),
         request.context.caller_table_region.clone(),
     ));
 
     let mut binder = Binder {
+        source: request.source.clone(),
         context: request.context,
+        host_name_resolver: request.host_name_resolver,
         formula_channel_kind: request.source.formula_channel_kind,
         diagnostics: Vec::new(),
         normalized_references: Vec::new(),
@@ -199,6 +301,7 @@ pub fn bind_formula(request: BindRequest) -> BindResult {
         capability_requirements: Vec::new(),
         helper_local_names: Vec::new(),
         function_call_sources: Vec::new(),
+        host_name_bind_records: Vec::new(),
     };
 
     let expr_node = request
@@ -240,12 +343,13 @@ pub fn bind_formula(request: BindRequest) -> BindResult {
             capability_requirements: binder.capability_requirements,
             diagnostics: binder.diagnostics,
             function_call_sources: binder.function_call_sources,
+            host_name_bind_records: binder.host_name_bind_records,
         },
     }
 }
 
 pub fn bind_formula_incremental(
-    request: BindRequest,
+    request: BindRequest<'_>,
     previous_bound_formula: Option<&BoundFormula>,
 ) -> IncrementalBindResult {
     let bind_context_fingerprint = hash_debug(&(
@@ -257,6 +361,7 @@ pub fn bind_formula_incremental(
         request.context.structure_context_version.0.clone(),
         request.context.names.clone(),
         request.context.name_caller_context_dependencies.clone(),
+        request.context.host_name_bind_records.clone(),
         request.context.table_catalog.clone(),
         request.context.enclosing_table_ref.clone(),
         request.context.caller_table_region.clone(),
@@ -281,8 +386,10 @@ pub fn bind_formula_incremental(
     }
 }
 
-struct Binder {
+struct Binder<'a> {
+    source: FormulaSourceRecord,
     context: BindContext,
+    host_name_resolver: Option<&'a dyn HostNameResolver>,
     formula_channel_kind: FormulaChannelKind,
     diagnostics: Vec<BindDiagnostic>,
     normalized_references: Vec<NormalizedReference>,
@@ -292,9 +399,10 @@ struct Binder {
     capability_requirements: Vec<String>,
     helper_local_names: Vec<String>,
     function_call_sources: Vec<FunctionCallSourceRecord>,
+    host_name_bind_records: Vec<HostNameBindRecord>,
 }
 
-impl Binder {
+impl Binder<'_> {
     fn bind_expr(&mut self, node: &GreenNode) -> BoundExpr {
         match node.kind {
             SyntaxKind::FormulaRoot | SyntaxKind::GroupingExpr => self.bind_first_child_expr(node),
@@ -310,6 +418,7 @@ impl Binder {
                 self.bind_identifier(node)
             }
             SyntaxKind::QualifiedReferenceExpr => self.bind_qualified_reference(node),
+            SyntaxKind::HostMemberReferenceExpr => self.bind_host_member_reference(node),
             SyntaxKind::RangeExpr => self.bind_range(node),
             SyntaxKind::UnionExpr => self.bind_union(node),
             SyntaxKind::IntersectionExpr => self.bind_intersection(node),
@@ -488,17 +597,19 @@ impl Binder {
             let normalized = NormalizedReference::Cell(cell_ref);
             self.push_reference_seed(&normalized);
             BoundExpr::Reference(ReferenceExpr::Atom(normalized))
-        } else if let Some(kind) = self.context.names.get(&text).cloned() {
+        } else if let Some(kind) = self.context_name_kind(&text, node.span) {
             let caller_context_dependent = self.name_caller_context_dependent(&text);
             let normalized = NormalizedReference::Name(NameRef {
-                name: text,
+                name: text.clone(),
                 workbook_id: self.context.workbook_id.clone(),
                 sheet_id: self.context.sheet_id.clone(),
                 kind,
                 caller_context_dependent,
             });
             self.push_reference_seed(&normalized);
-            BoundExpr::Reference(ReferenceExpr::Atom(normalized))
+            self.push_host_name_bind_record(&text, node.span)
+                .map(BoundExpr::HostReference)
+                .unwrap_or_else(|| BoundExpr::Reference(ReferenceExpr::Atom(normalized)))
         } else {
             self.unresolved_references.push(UnresolvedReferenceRecord {
                 source_text: text.clone(),
@@ -513,6 +624,67 @@ impl Binder {
                 source_text: text,
             })))
         }
+    }
+
+    fn bind_host_member_reference(&mut self, node: &GreenNode) -> BoundExpr {
+        let mut child_nodes = node.children.iter().filter_map(|child| match child {
+            GreenChild::Node(node) => Some(node.as_ref()),
+            GreenChild::Token(_) => None,
+        });
+        let base_node = child_nodes
+            .next()
+            .expect("host member reference should have base expression");
+        let base = self.bind_expr(base_node);
+        let member = node
+            .children
+            .iter()
+            .rev()
+            .find_map(|child| match child {
+                GreenChild::Token(token)
+                    if matches!(
+                        token.kind,
+                        crate::syntax::token::TokenKind::Identifier
+                            | crate::syntax::token::TokenKind::Star
+                    ) =>
+                {
+                    Some(token.text.clone())
+                }
+                _ => None,
+            })
+            .unwrap_or_default();
+        let selector_family = host_member_selector_family(&member);
+        let selector_handle = format!("host-member-selector:{}:{}", node.span.start, node.span.len);
+        let source_token_text = node_source_text(node);
+        if let Some(resolver) = self.host_name_resolver
+            && let Some(result) =
+                resolver.resolve_host_structural_selector(&HostStructuralSelectorResolveRequest {
+                    source: self.source.clone(),
+                    selector_handle: selector_handle.clone(),
+                    selector_family: selector_family.clone(),
+                    base: base.clone(),
+                    source_span: node.span,
+                    source_token_text: source_token_text.clone(),
+                    member_token_text: member.clone(),
+                })
+        {
+            return BoundExpr::HostStructuralSelector(result.selector);
+        }
+        BoundExpr::HostStructuralSelector(BoundHostStructuralSelector {
+            selector_handle,
+            selector_family,
+            base: Box::new(base),
+            members: Vec::new(),
+            source_span: node.span,
+            source_token_text,
+            resolution_layer: "host_member_reference_syntax".to_string(),
+            shape_hint: Some("host_structural_selector".to_string()),
+            caller_context_dependent: true,
+            diagnostics: Vec::new(),
+            replay_identity_contribution: format!(
+                "host-member-selector:v1:span={}:{};member={member}",
+                node.span.start, node.span.len
+            ),
+        })
     }
 
     fn bind_array_literal(&mut self, node: &GreenNode) -> BoundExpr {
@@ -844,15 +1016,18 @@ impl Binder {
             .helper_local_names
             .iter()
             .any(|name| name.eq_ignore_ascii_case(&function_name));
-        let context_name_kind = self.context.names.iter().find_map(|(name, kind)| {
-            name.eq_ignore_ascii_case(&function_name)
-                .then_some(kind.clone())
-        });
-        let context_name_match = context_name_kind.is_some();
+        let context_name_kind = self.context_name_kind(&function_name, callee_span);
         let builtin_function_meta = lookup_function_meta(&uppercase_function_name);
         let builtin_function_match = builtin_function_meta.is_some();
+        let host_reference_name_match = context_name_kind.is_some() && !builtin_function_match;
+        let _udf_function_match = !builtin_function_match
+            && !host_reference_name_match
+            && matches!(
+                self.function_surface_kind(&uppercase_function_name),
+                Some(BindFunctionSurfaceKind::Udf)
+            );
         let binds_as_invocation =
-            (helper_local_match && !builtin_function_match) || context_name_match;
+            (helper_local_match && !builtin_function_match) || host_reference_name_match;
 
         if !binds_as_invocation
             && let Some(meta) = builtin_function_meta.as_ref()
@@ -873,7 +1048,7 @@ impl Binder {
         }
 
         if binds_as_invocation {
-            let callee = self.bind_identifier_expr_from_name(&function_name);
+            let callee = self.bind_identifier_expr_from_name(&function_name, callee_span);
             return BoundExpr::Invocation {
                 callee: Box::new(callee),
                 args,
@@ -891,6 +1066,13 @@ impl Binder {
             function_name: uppercase_function_name,
             args,
         }
+    }
+
+    fn function_surface_kind(&self, function_name: &str) -> Option<BindFunctionSurfaceKind> {
+        self.context
+            .function_surfaces
+            .iter()
+            .find_map(|(name, kind)| name.eq_ignore_ascii_case(function_name).then_some(*kind))
     }
 
     fn bind_invoke(&mut self, node: &GreenNode) -> BoundExpr {
@@ -1104,7 +1286,59 @@ impl Binder {
             .unwrap_or(false)
     }
 
-    fn bind_identifier_expr_from_name(&mut self, text: &str) -> BoundExpr {
+    fn context_name_kind(&mut self, text: &str, source_span: TextSpan) -> Option<NameKind> {
+        if let Some(kind) = self
+            .context
+            .names
+            .iter()
+            .find_map(|(name, kind)| name.eq_ignore_ascii_case(text).then_some(kind.clone()))
+        {
+            return Some(kind);
+        }
+        let resolver = self.host_name_resolver?;
+        let resolved = resolver.resolve_host_name(&HostNameResolveRequest {
+            source: self.source.clone(),
+            source_span,
+            source_token_text: text.to_string(),
+        })?;
+        self.context.names.insert(
+            resolved.bind_record.canonical_name.clone(),
+            resolved.kind.clone(),
+        );
+        self.context.name_caller_context_dependencies.insert(
+            resolved.bind_record.canonical_name.clone(),
+            resolved.bind_record.caller_context_dependent,
+        );
+        self.context.host_name_bind_records.insert(
+            resolved.bind_record.canonical_name.clone(),
+            resolved.bind_record,
+        );
+        self.context
+            .names
+            .iter()
+            .find_map(|(name, kind)| name.eq_ignore_ascii_case(text).then_some(kind.clone()))
+    }
+
+    fn push_host_name_bind_record(
+        &mut self,
+        text: &str,
+        source_span: TextSpan,
+    ) -> Option<HostNameBindRecord> {
+        let Some(mut record) = self
+            .context
+            .host_name_bind_records
+            .iter()
+            .find_map(|(name, record)| name.eq_ignore_ascii_case(text).then_some(record.clone()))
+        else {
+            return None;
+        };
+        record.source_span = source_span;
+        record.source_token_text = text.to_string();
+        self.host_name_bind_records.push(record);
+        self.host_name_bind_records.last().cloned()
+    }
+
+    fn bind_identifier_expr_from_name(&mut self, text: &str, source_span: TextSpan) -> BoundExpr {
         if self.is_helper_local_name(text) {
             let normalized = NormalizedReference::Name(NameRef {
                 name: text.to_string(),
@@ -1136,7 +1370,7 @@ impl Binder {
             let normalized = NormalizedReference::Cell(cell_ref);
             self.push_reference_seed(&normalized);
             BoundExpr::Reference(ReferenceExpr::Atom(normalized))
-        } else if let Some(kind) = self.context.names.get(text).cloned() {
+        } else if let Some(kind) = self.context_name_kind(text, source_span) {
             let caller_context_dependent = self.name_caller_context_dependent(text);
             let normalized = NormalizedReference::Name(NameRef {
                 name: text.to_string(),
@@ -1146,7 +1380,9 @@ impl Binder {
                 caller_context_dependent,
             });
             self.push_reference_seed(&normalized);
-            BoundExpr::Reference(ReferenceExpr::Atom(normalized))
+            self.push_host_name_bind_record(text, source_span)
+                .map(BoundExpr::HostReference)
+                .unwrap_or_else(|| BoundExpr::Reference(ReferenceExpr::Atom(normalized)))
         } else {
             self.unresolved_references.push(UnresolvedReferenceRecord {
                 source_text: text.to_string(),
@@ -1183,6 +1419,17 @@ fn builtin_function_call_authoring_diagnostic(
     }
 
     None
+}
+
+fn host_member_selector_family(member: &str) -> String {
+    match member.trim_start_matches('@').to_ascii_uppercase().as_str() {
+        "CHILDREN" | "*" => "children".to_string(),
+        "PRECEDING" => "preceding".to_string(),
+        "FOLLOWING" => "following".to_string(),
+        "ANCESTORS" => "ancestors".to_string(),
+        "DESCENDANTS" | "**" => "recursive-descent".to_string(),
+        other => other.to_ascii_lowercase(),
+    }
 }
 
 fn builtin_function_arity_authoring_diagnostic(
@@ -1270,6 +1517,9 @@ fn array_literal_contains_inline_lambda_call(expr: &BoundExpr) -> bool {
         | BoundExpr::StringLiteral(_)
         | BoundExpr::LogicalLiteral(_)
         | BoundExpr::OmittedArgument
+        | BoundExpr::HostReference(_)
+        | BoundExpr::HostStructuralSelector(_)
+        | BoundExpr::HostReferenceCollection(_)
         | BoundExpr::HelperParameterName(_)
         | BoundExpr::HelperOptionalParameterName(_)
         | BoundExpr::Reference(_) => false,

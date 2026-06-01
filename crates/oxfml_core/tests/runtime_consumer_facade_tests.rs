@@ -9,9 +9,9 @@ use oxfml_core::consumer::replay::{ReplayProjectionRequest, ReplayProjectionServ
 use oxfml_core::consumer::runtime::{
     RuntimeEnvironment, RuntimeFormalInputBinding, RuntimeFormulaRequest,
     RuntimeHostFormulaContext, RuntimeHostNameBindResult, RuntimeHostNameBinding,
-    RuntimeHostReferenceBindResult, RuntimeHostReferenceSyntaxRule, RuntimeManagedSessionError,
-    RuntimeManagedSessionPhase, RuntimeOxFuncBridgeMetadata, RuntimeSessionFacade,
-    RuntimeSparseReferenceCell, RuntimeSparseReferenceValuesBinding,
+    RuntimeHostReferenceBindResult, RuntimeManagedSessionError, RuntimeManagedSessionPhase,
+    RuntimeOxFuncBridgeMetadata, RuntimeSessionFacade, RuntimeSparseReferenceCell,
+    RuntimeSparseReferenceValuesBinding,
 };
 use oxfml_core::format::{
     oxfml_en_us_format_profile, oxfml_en_us_locale_context, worksheet_error_text,
@@ -579,7 +579,6 @@ fn runtime_carries_host_reference_context_without_treecalc_semantics() {
         structure_context_version: Some("structure:v1".to_string()),
         caller_context_identity: Some("caller:sheet1-r1c1".to_string()),
         table_context_identity: Some("tables:v1".to_string()),
-        host_reference_syntax_rules: Vec::new(),
     };
     let bind_result = RuntimeHostReferenceBindResult {
         reference_handle: "host-ref:opaque-collection".to_string(),
@@ -656,417 +655,6 @@ fn runtime_carries_host_reference_context_without_treecalc_semantics() {
 }
 
 #[test]
-fn runtime_host_context_declared_syntax_rules_emit_source_preserving_matches() {
-    let mut children_rule =
-        RuntimeHostReferenceSyntaxRule::literal("children", "collection_selector", "@CHILDREN");
-    children_rule.shape_hint = Some("collection".to_string());
-    children_rule.caller_context_dependent = true;
-    children_rule.opaque_selector_payload = Some("selector-family:children".to_string());
-
-    let mut children_sugar_rule =
-        RuntimeHostReferenceSyntaxRule::literal("children_sugar", "collection_selector", ".*");
-    children_sugar_rule.shape_hint = Some("collection".to_string());
-    children_sugar_rule.caller_context_dependent = true;
-    children_sugar_rule.opaque_selector_payload =
-        Some("selector-family:children-sugar".to_string());
-
-    let host_context = RuntimeHostFormulaContext {
-        dialect_id: "oxcalc.treecalc-v1".to_string(),
-        capability_profile_id: "host-capabilities:treecalc-v1".to_string(),
-        resolution_rule_version: "treecalc-host-resolution:v1".to_string(),
-        host_namespace_version: Some("tree-host-ns:v1".to_string()),
-        registry_snapshot_identity: Some("registry:snapshot:v1".to_string()),
-        structure_context_version: Some("structure:v1".to_string()),
-        caller_context_identity: Some("caller:node-42".to_string()),
-        table_context_identity: None,
-        host_reference_syntax_rules: vec![children_rule, children_sugar_rule],
-    };
-    let source = FormulaSourceRecord::new(
-        "runtime:host-syntax-rules",
-        1,
-        "=SUM(@CHILDREN)+SUM(.*)+\"@CHILDREN\"",
-    );
-
-    let matches = host_context.declared_host_reference_syntax_matches(&source);
-
-    assert_eq!(matches.len(), 2);
-    assert_eq!(matches[0].rule_id, "children");
-    assert_eq!(matches[0].source_span, TextSpan::new(5, 9));
-    assert_eq!(matches[0].source_token_text, "@CHILDREN");
-    assert_eq!(
-        matches[0].opaque_selector_payload.as_deref(),
-        Some("selector-family:children")
-    );
-    assert_eq!(matches[1].rule_id, "children_sugar");
-    assert_eq!(matches[1].source_span, TextSpan::new(20, 2));
-    assert_eq!(matches[1].source_token_text, ".*");
-
-    let unresolved = matches[0].unresolved_bind_result();
-    assert_eq!(
-        unresolved.formal_reference_id.as_deref(),
-        Some("HOST_REF_5_9")
-    );
-    assert_eq!(unresolved.source_span, TextSpan::new(5, 9));
-    assert_eq!(unresolved.source_token_text, "@CHILDREN");
-    assert_eq!(unresolved.resolution_layer, "explicit_host_ref");
-    assert_eq!(unresolved.shape_hint.as_deref(), Some("collection"));
-    assert!(unresolved.caller_context_dependent);
-
-    let projection = host_context.project_declared_host_reference_syntax(&source);
-    assert_eq!(
-        projection.source.entered_formula_text,
-        "=SUM(HOST_REF_5_9)+SUM(HOST_REF_20_2)+\"@CHILDREN\""
-    );
-    assert_eq!(
-        projection.source.stored_formula_text.as_deref(),
-        Some("=SUM(@CHILDREN)+SUM(.*)+\"@CHILDREN\"")
-    );
-    assert_eq!(projection.matches, matches);
-    assert!(projection.diagnostics.is_empty());
-}
-
-#[test]
-fn runtime_host_context_declared_syntax_rules_emit_qualified_base_packets() {
-    let mut children_rule =
-        RuntimeHostReferenceSyntaxRule::literal("children", "collection_selector", "@CHILDREN");
-    children_rule.shape_hint = Some("collection".to_string());
-    children_rule.caller_context_dependent = true;
-    children_rule.opaque_selector_payload = Some("selector-family:children".to_string());
-
-    let mut children_sugar_rule =
-        RuntimeHostReferenceSyntaxRule::literal("children_sugar", "collection_selector", ".*");
-    children_sugar_rule.shape_hint = Some("collection".to_string());
-    children_sugar_rule.caller_context_dependent = true;
-    children_sugar_rule.opaque_selector_payload =
-        Some("selector-family:children-sugar".to_string());
-
-    let host_context = RuntimeHostFormulaContext {
-        dialect_id: "oxcalc.treecalc-v1".to_string(),
-        capability_profile_id: "host-capabilities:treecalc-v1".to_string(),
-        resolution_rule_version: "treecalc-host-resolution:v1".to_string(),
-        host_namespace_version: Some("tree-host-ns:v1".to_string()),
-        registry_snapshot_identity: Some("registry:snapshot:v1".to_string()),
-        structure_context_version: Some("structure:v1".to_string()),
-        caller_context_identity: Some("caller:node-42".to_string()),
-        table_context_identity: None,
-        host_reference_syntax_rules: vec![children_rule, children_sugar_rule],
-    };
-    let source = FormulaSourceRecord::new(
-        "runtime:host-qualified-syntax-rules",
-        1,
-        "=SUM(Base.@CHILDREN)+SUM(base.*)+\"Base.@CHILDREN\"",
-    );
-
-    let matches = host_context.declared_host_reference_syntax_matches(&source);
-
-    assert_eq!(matches.len(), 2);
-    assert_eq!(matches[0].rule_id, "children");
-    assert_eq!(matches[0].source_span, TextSpan::new(5, 14));
-    assert_eq!(matches[0].source_token_text, "Base.@CHILDREN");
-    assert_eq!(
-        matches[0].opaque_selector_payload.as_deref(),
-        Some("selector-family:children;base_token_text=Base")
-    );
-    assert_eq!(matches[1].rule_id, "children_sugar");
-    assert_eq!(matches[1].source_span, TextSpan::new(25, 6));
-    assert_eq!(matches[1].source_token_text, "base.*");
-    assert_eq!(
-        matches[1].opaque_selector_payload.as_deref(),
-        Some("selector-family:children-sugar;base_token_text=base")
-    );
-
-    let projection = host_context.project_declared_host_reference_syntax(&source);
-    assert_eq!(
-        projection.source.entered_formula_text,
-        "=SUM(HOST_REF_5_14)+SUM(HOST_REF_25_6)+\"Base.@CHILDREN\""
-    );
-    assert_eq!(
-        projection.source.stored_formula_text.as_deref(),
-        Some("=SUM(Base.@CHILDREN)+SUM(base.*)+\"Base.@CHILDREN\"")
-    );
-    assert_eq!(projection.matches, matches);
-    assert!(projection.diagnostics.is_empty());
-}
-
-#[test]
-fn runtime_host_context_declared_syntax_rules_emit_recursive_tail_packets() {
-    let mut children_sugar_rule =
-        RuntimeHostReferenceSyntaxRule::literal("children_sugar", "collection_selector", ".*");
-    children_sugar_rule.shape_hint = Some("collection".to_string());
-    children_sugar_rule.caller_context_dependent = true;
-    children_sugar_rule.opaque_selector_payload =
-        Some("selector-family:children-sugar".to_string());
-
-    let mut recursive_rule =
-        RuntimeHostReferenceSyntaxRule::literal("recursive", "collection_selector", "**");
-    recursive_rule.shape_hint = Some("collection".to_string());
-    recursive_rule.caller_context_dependent = true;
-    recursive_rule.opaque_selector_payload = Some("selector-family:recursive-descent".to_string());
-
-    let host_context = RuntimeHostFormulaContext {
-        dialect_id: "oxcalc.treecalc-v1".to_string(),
-        capability_profile_id: "host-capabilities:treecalc-v1".to_string(),
-        resolution_rule_version: "treecalc-host-resolution:v1".to_string(),
-        host_namespace_version: Some("tree-host-ns:v1".to_string()),
-        registry_snapshot_identity: Some("registry:snapshot:v1".to_string()),
-        structure_context_version: Some("structure:v1".to_string()),
-        caller_context_identity: Some("caller:node-42".to_string()),
-        table_context_identity: None,
-        host_reference_syntax_rules: vec![children_sugar_rule, recursive_rule],
-    };
-    let source = FormulaSourceRecord::new(
-        "runtime:host-recursive-tail-syntax-rules",
-        1,
-        "=SUM(Base.**.Margin)",
-    );
-
-    let matches = host_context.declared_host_reference_syntax_matches(&source);
-
-    assert_eq!(matches.len(), 1);
-    assert_eq!(matches[0].rule_id, "recursive");
-    assert_eq!(matches[0].source_span, TextSpan::new(5, 14));
-    assert_eq!(matches[0].source_token_text, "Base.**.Margin");
-    assert_eq!(
-        matches[0].opaque_selector_payload.as_deref(),
-        Some("selector-family:recursive-descent;base_token_text=Base;tail_token_text=Margin")
-    );
-
-    let projection = host_context.project_declared_host_reference_syntax(&source);
-    assert_eq!(
-        projection.source.entered_formula_text,
-        "=SUM(HOST_REF_5_14)"
-    );
-    assert_eq!(
-        projection.source.stored_formula_text.as_deref(),
-        Some("=SUM(Base.**.Margin)")
-    );
-    assert_eq!(projection.matches, matches);
-    assert!(projection.diagnostics.is_empty());
-}
-
-#[test]
-fn runtime_host_context_declared_syntax_rules_emit_unqualified_tail_packets() {
-    let mut next_sibling_rule =
-        RuntimeHostReferenceSyntaxRule::literal("next_sibling", "relative_selector", "@NEXT");
-    next_sibling_rule.shape_hint = Some("scalar-reference".to_string());
-    next_sibling_rule.caller_context_dependent = true;
-    next_sibling_rule.opaque_selector_payload = Some("selector-family:sibling-next".to_string());
-
-    let host_context = RuntimeHostFormulaContext {
-        dialect_id: "oxcalc.treecalc-v1".to_string(),
-        capability_profile_id: "host-capabilities:treecalc-v1".to_string(),
-        resolution_rule_version: "treecalc-host-resolution:v1".to_string(),
-        host_namespace_version: Some("tree-host-ns:v1".to_string()),
-        registry_snapshot_identity: Some("registry:snapshot:v1".to_string()),
-        structure_context_version: Some("structure:v1".to_string()),
-        caller_context_identity: Some("caller:node-42".to_string()),
-        table_context_identity: None,
-        host_reference_syntax_rules: vec![next_sibling_rule],
-    };
-    let source = FormulaSourceRecord::new(
-        "runtime:host-unqualified-tail-syntax-rules",
-        1,
-        "=@NEXT.Margin+@NEXT",
-    );
-
-    let matches = host_context.declared_host_reference_syntax_matches(&source);
-
-    assert_eq!(matches.len(), 2);
-    assert_eq!(matches[0].source_span, TextSpan::new(1, 12));
-    assert_eq!(matches[0].source_token_text, "@NEXT.Margin");
-    assert_eq!(
-        matches[0].opaque_selector_payload.as_deref(),
-        Some("selector-family:sibling-next;tail_token_text=Margin")
-    );
-    assert_eq!(matches[1].source_span, TextSpan::new(14, 5));
-    assert_eq!(matches[1].source_token_text, "@NEXT");
-    assert_eq!(
-        matches[1].opaque_selector_payload.as_deref(),
-        Some("selector-family:sibling-next")
-    );
-
-    let projection = host_context.project_declared_host_reference_syntax(&source);
-    assert_eq!(
-        projection.source.entered_formula_text,
-        "=HOST_REF_1_12+HOST_REF_14_5"
-    );
-    assert_eq!(projection.matches, matches);
-    assert!(projection.diagnostics.is_empty());
-}
-
-#[test]
-fn runtime_host_context_declared_syntax_rules_emit_reference_literal_array_packets() {
-    let mut literal_array_rule = RuntimeHostReferenceSyntaxRule::literal(
-        "reference_literal_array",
-        "collection_selector",
-        "{",
-    );
-    literal_array_rule.shape_hint = Some("collection".to_string());
-    literal_array_rule.caller_context_dependent = true;
-    literal_array_rule.opaque_selector_payload =
-        Some("selector-family:reference-literal-array".to_string());
-
-    let host_context = RuntimeHostFormulaContext {
-        dialect_id: "oxcalc.treecalc-v1".to_string(),
-        capability_profile_id: "host-capabilities:treecalc-v1".to_string(),
-        resolution_rule_version: "treecalc-host-resolution:v1".to_string(),
-        host_namespace_version: Some("tree-host-ns:v1".to_string()),
-        registry_snapshot_identity: Some("registry:snapshot:v1".to_string()),
-        structure_context_version: Some("structure:v1".to_string()),
-        caller_context_identity: Some("caller:node-42".to_string()),
-        table_context_identity: None,
-        host_reference_syntax_rules: vec![literal_array_rule],
-    };
-    let source = FormulaSourceRecord::new(
-        "runtime:host-reference-literal-array-syntax-rules",
-        1,
-        "=SUM({A,B})+SUM({A,1})",
-    );
-
-    let matches = host_context.declared_host_reference_syntax_matches(&source);
-
-    assert_eq!(matches.len(), 2);
-    assert_eq!(matches[0].source_span, TextSpan::new(5, 5));
-    assert_eq!(matches[0].source_token_text, "{A,B}");
-    assert_eq!(
-        matches[0].opaque_selector_payload.as_deref(),
-        Some("selector-family:reference-literal-array;element_token_texts=A|B")
-    );
-    assert_eq!(matches[1].source_span, TextSpan::new(16, 5));
-    assert_eq!(matches[1].source_token_text, "{A,1}");
-    assert_eq!(
-        matches[1].opaque_selector_payload.as_deref(),
-        Some("selector-family:reference-literal-array;element_token_texts=A|1")
-    );
-
-    let projection = host_context.project_declared_host_reference_syntax(&source);
-    assert_eq!(
-        projection.source.entered_formula_text,
-        "=SUM(HOST_REF_5_5)+SUM(HOST_REF_16_5)"
-    );
-    assert_eq!(projection.matches, matches);
-    assert!(projection.diagnostics.is_empty());
-}
-
-#[test]
-fn runtime_host_context_declared_syntax_rules_emit_repeated_prefix_anchor_packets() {
-    let mut ancestor_rule =
-        RuntimeHostReferenceSyntaxRule::literal("ancestor", "relative_selector", "^");
-    ancestor_rule.shape_hint = Some("scalar-reference".to_string());
-    ancestor_rule.caller_context_dependent = true;
-    ancestor_rule.opaque_selector_payload = Some("selector-family:ancestor-anchor".to_string());
-
-    let host_context = RuntimeHostFormulaContext {
-        dialect_id: "oxcalc.treecalc-v1".to_string(),
-        capability_profile_id: "host-capabilities:treecalc-v1".to_string(),
-        resolution_rule_version: "treecalc-host-resolution:v1".to_string(),
-        host_namespace_version: Some("tree-host-ns:v1".to_string()),
-        registry_snapshot_identity: Some("registry:snapshot:v1".to_string()),
-        structure_context_version: Some("structure:v1".to_string()),
-        caller_context_identity: Some("caller:node-42".to_string()),
-        table_context_identity: None,
-        host_reference_syntax_rules: vec![ancestor_rule],
-    };
-    let source = FormulaSourceRecord::new(
-        "runtime:host-repeated-prefix-anchor-syntax-rules",
-        1,
-        "=^+SUM(^^.Total)+2^3+^^^",
-    );
-
-    let matches = host_context.declared_host_reference_syntax_matches(&source);
-
-    assert_eq!(matches.len(), 3);
-    assert_eq!(matches[0].source_span, TextSpan::new(1, 1));
-    assert_eq!(matches[0].source_token_text, "^");
-    assert_eq!(
-        matches[0].opaque_selector_payload.as_deref(),
-        Some("selector-family:ancestor-anchor;repeat_count=1")
-    );
-    assert_eq!(matches[1].source_span, TextSpan::new(7, 8));
-    assert_eq!(matches[1].source_token_text, "^^.Total");
-    assert_eq!(
-        matches[1].opaque_selector_payload.as_deref(),
-        Some("selector-family:ancestor-anchor;repeat_count=2;tail_token_text=Total")
-    );
-    assert_eq!(matches[2].source_span, TextSpan::new(21, 3));
-    assert_eq!(matches[2].source_token_text, "^^^");
-    assert_eq!(
-        matches[2].opaque_selector_payload.as_deref(),
-        Some("selector-family:ancestor-anchor;repeat_count=3")
-    );
-
-    let projection = host_context.project_declared_host_reference_syntax(&source);
-    assert_eq!(
-        projection.source.entered_formula_text,
-        "=HOST_REF_1_1+SUM(HOST_REF_7_8)+2^3+HOST_REF_21_3"
-    );
-    assert_eq!(projection.matches, matches);
-    assert!(projection.diagnostics.is_empty());
-}
-
-#[test]
-fn runtime_host_context_declared_syntax_rules_emit_bracket_escaped_path_packets() {
-    let mut escaped_path_rule =
-        RuntimeHostReferenceSyntaxRule::literal("escaped_path", "path_reference", "[");
-    escaped_path_rule.shape_hint = Some("scalar-reference".to_string());
-    escaped_path_rule.caller_context_dependent = true;
-    escaped_path_rule.opaque_selector_payload = Some("selector-family:escaped-path".to_string());
-
-    let host_context = RuntimeHostFormulaContext {
-        dialect_id: "oxcalc.treecalc-v1".to_string(),
-        capability_profile_id: "host-capabilities:treecalc-v1".to_string(),
-        resolution_rule_version: "treecalc-host-resolution:v1".to_string(),
-        host_namespace_version: Some("tree-host-ns:v1".to_string()),
-        registry_snapshot_identity: Some("registry:snapshot:v1".to_string()),
-        structure_context_version: Some("structure:v1".to_string()),
-        caller_context_identity: Some("caller:node-42".to_string()),
-        table_context_identity: None,
-        host_reference_syntax_rules: vec![escaped_path_rule],
-    };
-    let source = FormulaSourceRecord::new(
-        "runtime:host-bracket-escaped-path-syntax-rules",
-        1,
-        "=[Sales Q1]+Region.[Net Revenue]+SalesTable[Amount]+[Foo'[Bar]+[Foo']Bar]+[Foo''Bar]+['@Special]",
-    );
-
-    let matches = host_context.declared_host_reference_syntax_matches(&source);
-
-    assert_eq!(
-        matches
-            .iter()
-            .map(|syntax_match| syntax_match.source_token_text.as_str())
-            .collect::<Vec<_>>(),
-        vec![
-            "[Sales Q1]",
-            "Region.[Net Revenue]",
-            "[Foo'[Bar]",
-            "[Foo']Bar]",
-            "[Foo''Bar]",
-            "['@Special]"
-        ]
-    );
-    assert_eq!(
-        matches[1].opaque_selector_payload.as_deref(),
-        Some("selector-family:escaped-path;path_token_text=Region.[Net Revenue]")
-    );
-    assert!(matches.iter().all(|syntax_match| {
-        !syntax_match
-            .source_token_text
-            .contains("SalesTable[Amount]")
-    }));
-
-    let projection = host_context.project_declared_host_reference_syntax(&source);
-    assert!(
-        projection
-            .source
-            .entered_formula_text
-            .contains("SalesTable[Amount]")
-    );
-    assert_eq!(projection.matches, matches);
-    assert!(projection.diagnostics.is_empty());
-}
-
-#[test]
 fn runtime_host_namespace_version_mutation_changes_identity_without_explicit_host_reference() {
     let host_context = RuntimeHostFormulaContext {
         dialect_id: "generic-host-v1".to_string(),
@@ -1077,7 +665,6 @@ fn runtime_host_namespace_version_mutation_changes_identity_without_explicit_hos
         structure_context_version: Some("structure:v1".to_string()),
         caller_context_identity: Some("caller:sheet1-r1c1".to_string()),
         table_context_identity: None,
-        host_reference_syntax_rules: Vec::new(),
     };
     let request = RuntimeFormulaRequest::new(
         FormulaSourceRecord::new("runtime:w074-host-namespace-version", 1, "=SUM(1,2)"),
@@ -1134,11 +721,11 @@ fn runtime_bare_host_name_binding_maps_to_defined_name_lane_and_replay_identity(
         structure_context_version: Some("structure:v1".to_string()),
         caller_context_identity: Some("caller:node-a".to_string()),
         table_context_identity: None,
-        host_reference_syntax_rules: Vec::new(),
     };
     let bind_result = RuntimeHostNameBindResult {
         host_name_handle: "host-name:margin".to_string(),
         canonical_name: "HostMargin".to_string(),
+        host_dependency_key: None,
         source_span: TextSpan::new(1, 10),
         source_token_text: "HostMargin".to_string(),
         resolution_layer: "defined_name_lane".to_string(),
@@ -1224,11 +811,11 @@ fn managed_runtime_executes_bare_host_name_binding_with_same_prepared_identity()
         structure_context_version: Some("structure:v1".to_string()),
         caller_context_identity: Some("caller:node-a".to_string()),
         table_context_identity: None,
-        host_reference_syntax_rules: Vec::new(),
     };
     let bind_result = RuntimeHostNameBindResult {
         host_name_handle: "host-name:managed-margin".to_string(),
         canonical_name: "HostMargin".to_string(),
+        host_dependency_key: None,
         source_span: TextSpan::new(1, 10),
         source_token_text: "HostMargin".to_string(),
         resolution_layer: "defined_name_lane".to_string(),
@@ -1277,6 +864,7 @@ fn runtime_bare_host_callable_uses_defined_name_lambda_lane() {
     let bind_result = RuntimeHostNameBindResult {
         host_name_handle: "host-name:lambda".to_string(),
         canonical_name: "HostLambda".to_string(),
+        host_dependency_key: None,
         source_span: TextSpan::new(1, 10),
         source_token_text: "HostLambda".to_string(),
         resolution_layer: "defined_name_lambda_lane".to_string(),

@@ -1072,6 +1072,7 @@ fn build_candidate_result(
                     capability_requirements: Vec::new(),
                     diagnostics: Vec::new(),
                     function_call_sources: Vec::new(),
+                    host_name_bind_records: Vec::new(),
                 },
                 semantic_plan: semantic_plan.clone(),
                 library_context_snapshot_ref: semantic_plan.library_context_snapshot_ref.clone(),

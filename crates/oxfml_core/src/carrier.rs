@@ -138,12 +138,27 @@ fn collect_expr_restrictions(expr: &BoundExpr, restrictions: &mut Vec<CarrierRes
         BoundExpr::Reference(reference) => {
             collect_reference_restrictions(reference, restrictions);
         }
+        BoundExpr::HostStructuralSelector(selector) => {
+            collect_expr_restrictions(&selector.base, restrictions);
+            for member in &selector.members {
+                collect_expr_restrictions(member, restrictions);
+            }
+        }
+        BoundExpr::HostReferenceCollection(collection) => {
+            if let Some(base) = &collection.base {
+                collect_expr_restrictions(base, restrictions);
+            }
+            for member in &collection.members {
+                collect_expr_restrictions(member, restrictions);
+            }
+        }
         BoundExpr::ImplicitIntersection(inner) => collect_expr_restrictions(inner, restrictions),
         BoundExpr::NumberLiteral(_)
         | BoundExpr::StringLiteral(_)
         | BoundExpr::LogicalLiteral(_)
         | BoundExpr::ArrayLiteral(_)
         | BoundExpr::OmittedArgument
+        | BoundExpr::HostReference(_)
         | BoundExpr::HelperParameterName(_)
         | BoundExpr::HelperOptionalParameterName(_) => {}
     }

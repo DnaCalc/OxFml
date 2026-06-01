@@ -390,6 +390,22 @@ impl Parser {
                         GreenChild::Node(Box::new(args)),
                     ],
                 );
+            } else if self.at(TokenKind::Dot) {
+                let dot = self.bump();
+                self.skip_whitespace();
+                let at = self.at(TokenKind::At).then(|| self.bump());
+                self.skip_whitespace();
+                let member = if self.at(TokenKind::Identifier) || self.at(TokenKind::Star) {
+                    self.bump()
+                } else {
+                    self.expect(TokenKind::Identifier, "expected host member selector")
+                };
+                let mut children = vec![GreenChild::Node(Box::new(node)), GreenChild::Token(dot)];
+                if let Some(at) = at {
+                    children.push(GreenChild::Token(at));
+                }
+                children.push(GreenChild::Token(member));
+                node = GreenNode::new(SyntaxKind::HostMemberReferenceExpr, children);
             } else {
                 break;
             }

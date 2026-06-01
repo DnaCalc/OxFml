@@ -24,6 +24,8 @@ fn bind_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::bind
             formula_token: source.formula_token(),
             ..BindContext::default()
         },
+
+        host_name_resolver: None,
     })
 }
 

@@ -12,6 +12,7 @@ pub enum SyntaxKind {
     IdentifierExpr,
     QuotedIdentifierExpr,
     QualifiedReferenceExpr,
+    HostMemberReferenceExpr,
     CallExpr,
     InvokeExpr,
     ArgumentList,

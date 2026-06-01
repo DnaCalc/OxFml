@@ -56,6 +56,8 @@ pub fn compile_formula_with_library_context(
             formula_token: source.formula_token(),
             ..BindContext::default()
         },
+
+        host_name_resolver: None,
     });
 
     let semantic_plan = compile_semantic_plan(CompileSemanticPlanRequest {

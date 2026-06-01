@@ -147,6 +147,8 @@ fn contract_for(formula: &str) -> oxfml_core::ExecutionContract {
             structure_context_version: StructureContextVersion("scheduler-struct-v1".to_string()),
             ..BindContext::default()
         },
+
+        host_name_resolver: None,
     });
 
     let plan = oxfml_core::compile_semantic_plan(oxfml_core::CompileSemanticPlanRequest {

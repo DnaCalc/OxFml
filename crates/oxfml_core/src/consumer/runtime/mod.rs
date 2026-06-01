@@ -10,11 +10,13 @@ use oxfunc_core::registry::{
 use oxfunc_core::resolver::{
     ResolvedReferenceCell, ResolvedReferenceExtent, ResolvedReferenceValues,
 };
-use oxfunc_core::value::{ArrayCellValue, EvalValue, ReferenceLike, WorksheetErrorCode};
+use oxfunc_core::value::{
+    ArrayCellValue, CalcValue, EvalValue, ExcelText, ReferenceLike, WorksheetErrorCode,
+};
 
 use crate::binding::{
-    BindContext, BindDiagnostic, BoundFormula, NameKind, NormalizedReference,
-    StructuredReferenceBindRecord, bind_formula,
+    BindContext, BindDiagnostic, BindFunctionSurfaceKind, BoundFormula, HostNameBindRecord,
+    HostNameResolver, NameKind, NormalizedReference, StructuredReferenceBindRecord, bind_formula,
 };
 use crate::consumer::ConsumerLibraryContextState;
 use crate::eval::{
@@ -54,6 +56,27 @@ use crate::syntax::token::{SyntaxDiagnostic, TextSpan};
 use oxfunc_core::functions::call_register_id_family::RegisteredExternalProviderError;
 use oxfunc_core::functions::surface_dispatch::FUNC_ID_OP_DIVIDE;
 
+pub use crate::binding::{
+    HostNameResolveRequest as RuntimeHostNameResolveRequest,
+    HostNameResolveResult as RuntimeHostNameResolveResult,
+    HostNameResolver as RuntimeHostNameResolver,
+    HostStructuralSelectorResolveRequest as RuntimeHostStructuralSelectorResolveRequest,
+    HostStructuralSelectorResolveResult as RuntimeHostStructuralSelectorResolveResult,
+};
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RuntimeAuthoredInputResult {
+    Literal(CalcValue),
+    Formula(BoundFormula),
+    Diagnostics(RuntimeAuthoredInputDiagnostics),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeAuthoredInputDiagnostics {
+    pub syntax_diagnostics: Vec<SyntaxDiagnostic>,
+    pub bind_diagnostics: Vec<BindDiagnostic>,
+}
+
 pub struct RuntimeEnvironment<'a> {
     structure_context_version: StructureContextVersion,
     caller_row: u32,
@@ -65,6 +88,7 @@ pub struct RuntimeEnvironment<'a> {
     sparse_reference_value_bindings: Vec<RuntimeSparseReferenceValuesBinding>,
     host_formula_context: Option<RuntimeHostFormulaContext>,
     host_name_bindings: Vec<RuntimeHostNameBinding>,
+    host_name_resolver: Option<&'a dyn HostNameResolver>,
     host_reference_bind_results: Vec<RuntimeHostReferenceBindResult>,
     table_catalog: Vec<TableDescriptor>,
     enclosing_table_ref: Option<TableRef>,
@@ -93,6 +117,7 @@ impl<'a> RuntimeEnvironment<'a> {
             sparse_reference_value_bindings: Vec::new(),
             host_formula_context: None,
             host_name_bindings: Vec::new(),
+            host_name_resolver: None,
             host_reference_bind_results: Vec::new(),
             table_catalog: Vec::new(),
             enclosing_table_ref: None,
@@ -123,6 +148,38 @@ impl<'a> RuntimeEnvironment<'a> {
             &[],
             &EvalValue::Error(WorksheetErrorCode::Value),
         )
+    }
+
+    pub fn interpret_authored_input(
+        &self,
+        source: FormulaSourceRecord,
+    ) -> RuntimeAuthoredInputResult {
+        if !source_text_is_formula_entry(&source.entered_formula_text) {
+            return RuntimeAuthoredInputResult::Literal(calc_value_from_cell_entry_text(
+                &source.entered_formula_text,
+            ));
+        }
+
+        let parse = parse_formula(ParseRequest {
+            source: source.clone(),
+        });
+        let syntax_diagnostics = parse.green_tree.diagnostics.clone();
+        if !syntax_diagnostics.is_empty() {
+            return RuntimeAuthoredInputResult::Diagnostics(RuntimeAuthoredInputDiagnostics {
+                syntax_diagnostics,
+                bind_diagnostics: Vec::new(),
+            });
+        }
+
+        let red_projection = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
+        let bind = bind_formula(crate::binding::BindRequest {
+            source: source.clone(),
+            green_tree: parse.green_tree,
+            red_projection,
+            context: self.bind_context_for_source(&source),
+            host_name_resolver: self.host_name_resolver,
+        });
+        RuntimeAuthoredInputResult::Formula(bind.bound_formula)
     }
 
     pub fn open_session(self) -> RuntimeSessionFacade<'a> {
@@ -198,6 +255,11 @@ impl<'a> RuntimeEnvironment<'a> {
         host_name_bindings: Vec<RuntimeHostNameBinding>,
     ) -> Self {
         self.host_name_bindings = host_name_bindings;
+        self
+    }
+
+    pub fn with_host_name_resolver(mut self, host_name_resolver: &'a dyn HostNameResolver) -> Self {
+        self.host_name_resolver = Some(host_name_resolver);
         self
     }
 
@@ -359,6 +421,43 @@ impl<'a> RuntimeEnvironment<'a> {
         ))
     }
 
+    fn bind_context_for_source(&self, source: &FormulaSourceRecord) -> BindContext {
+        let mut bind_names = self.defined_names.clone();
+        bind_names.extend(host_name_defined_names(&self.host_name_bindings));
+        bind_names.extend(formal_input_defined_names(&self.formal_input_bindings));
+        let name_caller_context_dependencies =
+            host_name_caller_context_dependencies(&self.host_name_bindings);
+        BindContext {
+            structure_context_version: self.structure_context_version.clone(),
+            caller_row: self.caller_row,
+            caller_col: self.caller_col,
+            formula_token: source.formula_token(),
+            names: bind_names
+                .iter()
+                .map(|(name, binding)| {
+                    (
+                        name.clone(),
+                        match binding {
+                            DefinedNameBinding::Value(_) => NameKind::ValueLike,
+                            DefinedNameBinding::Reference(_) => NameKind::ReferenceLike,
+                            DefinedNameBinding::Callable(_) => NameKind::ValueLike,
+                        },
+                    )
+                })
+                .collect(),
+            host_name_bind_records: host_name_bind_records(&self.host_name_bindings),
+            function_surfaces: bind_function_surfaces(
+                self.function_registry,
+                self.capability_overlay,
+            ),
+            name_caller_context_dependencies,
+            table_catalog: self.table_catalog.clone(),
+            enclosing_table_ref: self.enclosing_table_ref.clone(),
+            caller_table_region: self.caller_table_region.clone(),
+            ..BindContext::default()
+        }
+    }
+
     fn build_host(&self, source: &FormulaSourceRecord) -> SingleFormulaHost {
         let mut host = SingleFormulaHost::new(
             source.formula_stable_id.0.clone(),
@@ -445,6 +544,31 @@ impl<'a> RuntimeEnvironment<'a> {
             entries,
         })
     }
+}
+
+fn bind_function_surfaces(
+    registry: &FunctionRegistry,
+    capability_overlay: Option<&CapabilityOverlay>,
+) -> BTreeMap<String, BindFunctionSurfaceKind> {
+    let entries = registry.iter().filter(|entry| {
+        capability_overlay
+            .map(|overlay| {
+                matches!(
+                    overlay.availability_for(&entry.meta.function_id),
+                    FunctionAvailability::Available
+                )
+            })
+            .unwrap_or(true)
+    });
+    entries
+        .map(|entry| {
+            let kind = match entry.source {
+                FunctionSource::BuiltIn => BindFunctionSurfaceKind::BuiltIn,
+                FunctionSource::Udf { .. } => BindFunctionSurfaceKind::Udf,
+            };
+            (entry.surface_name.to_ascii_uppercase(), kind)
+        })
+        .collect()
 }
 
 fn runtime_registry_snapshot_entry(
@@ -534,6 +658,33 @@ fn host_name_caller_context_dependencies(
             (
                 binding.bind_result.canonical_name.clone(),
                 binding.bind_result.caller_context_dependent,
+            )
+        })
+        .collect()
+}
+
+fn host_name_bind_records(
+    host_name_bindings: &[RuntimeHostNameBinding],
+) -> BTreeMap<String, HostNameBindRecord> {
+    host_name_bindings
+        .iter()
+        .map(|binding| {
+            let result = &binding.bind_result;
+            (
+                result.canonical_name.clone(),
+                HostNameBindRecord {
+                    host_name_handle: result.host_name_handle.clone(),
+                    canonical_name: result.canonical_name.clone(),
+                    host_dependency_key: result.host_dependency_key.clone(),
+                    source_span: result.source_span,
+                    source_token_text: result.source_token_text.clone(),
+                    resolution_layer: result.resolution_layer.clone(),
+                    binding_kind: result.binding_kind.clone(),
+                    shape_hint: result.shape_hint.clone(),
+                    caller_context_dependent: result.caller_context_dependent,
+                    diagnostics: result.diagnostics.clone(),
+                    replay_identity_contribution: result.replay_identity_contribution.clone(),
+                },
             )
         })
         .collect()
@@ -693,6 +844,16 @@ pub struct RuntimeFormulaResult {
 }
 
 impl RuntimeFormulaResult {
+    pub fn published_calc_value(&self) -> CalcValue {
+        if self.published_worksheet_value == self.evaluation.oxfunc_value {
+            self.evaluation.calc_value()
+        } else {
+            let mut value = self.evaluation.calc_value();
+            value.core = CalcValue::from(self.published_worksheet_value.clone()).core;
+            value
+        }
+    }
+
     pub fn prepared_formula_package(&self) -> RuntimePreparedFormulaPackage {
         self.prepared_formula_identity.prepared_formula_package()
     }
@@ -2173,658 +2334,19 @@ pub struct RuntimeHostFormulaContext {
     pub structure_context_version: Option<String>,
     pub caller_context_identity: Option<String>,
     pub table_context_identity: Option<String>,
-    pub host_reference_syntax_rules: Vec<RuntimeHostReferenceSyntaxRule>,
 }
 
 impl RuntimeHostFormulaContext {
     pub fn cache_identity_contribution(&self) -> String {
         runtime_hash_debug(self)
     }
-
-    #[must_use]
-    pub fn declared_host_reference_syntax_matches(
-        &self,
-        source: &FormulaSourceRecord,
-    ) -> Vec<RuntimeHostReferenceSyntaxMatch> {
-        self.host_reference_syntax_rules
-            .iter()
-            .flat_map(|rule| declared_host_reference_syntax_matches(source, self, rule))
-            .collect()
-    }
-
-    #[must_use]
-    pub fn project_declared_host_reference_syntax(
-        &self,
-        source: &FormulaSourceRecord,
-    ) -> RuntimeHostReferenceSyntaxProjection {
-        self.project_host_reference_syntax_matches(
-            source,
-            self.declared_host_reference_syntax_matches(source),
-        )
-    }
-
-    #[must_use]
-    pub fn project_host_reference_syntax_matches(
-        &self,
-        source: &FormulaSourceRecord,
-        matches: impl IntoIterator<Item = RuntimeHostReferenceSyntaxMatch>,
-    ) -> RuntimeHostReferenceSyntaxProjection {
-        let mut matches = matches.into_iter().collect::<Vec<_>>();
-        matches.sort_by_key(|syntax_match| syntax_match.source_span.start);
-
-        let mut projected_text = String::with_capacity(source.entered_formula_text.len());
-        let mut accepted_matches = Vec::new();
-        let mut diagnostics = Vec::new();
-        let mut cursor = 0usize;
-        for syntax_match in matches {
-            let start = syntax_match.source_span.start;
-            let end = syntax_match.source_span.end();
-            if start < cursor {
-                diagnostics.push(format!(
-                    "overlapping_host_reference_syntax_match:{}:{}-{end}",
-                    syntax_match.source_token_text, start
-                ));
-                continue;
-            }
-            projected_text.push_str(&source.entered_formula_text[cursor..start]);
-            projected_text.push_str(&syntax_match.formal_token_text());
-            cursor = end;
-            accepted_matches.push(syntax_match);
-        }
-        if accepted_matches.is_empty() {
-            return RuntimeHostReferenceSyntaxProjection {
-                source: source.clone(),
-                matches: accepted_matches,
-                diagnostics,
-            };
-        }
-        projected_text.push_str(&source.entered_formula_text[cursor..]);
-        let mut projected_source = source.clone();
-        projected_source.stored_formula_text = Some(source.entered_formula_text.clone());
-        projected_source.entered_formula_text = projected_text;
-        RuntimeHostReferenceSyntaxProjection {
-            source: projected_source,
-            matches: accepted_matches,
-            diagnostics,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RuntimeHostReferenceSyntaxProjection {
-    pub source: FormulaSourceRecord,
-    pub matches: Vec<RuntimeHostReferenceSyntaxMatch>,
-    pub diagnostics: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RuntimeHostReferenceSyntaxRule {
-    pub rule_id: String,
-    pub rule_family: String,
-    pub pattern_text: String,
-    pub token_kind: String,
-    pub resolution_layer: String,
-    pub shape_hint: Option<String>,
-    pub caller_context_dependent: bool,
-    pub opaque_selector_payload: Option<String>,
-}
-
-impl RuntimeHostReferenceSyntaxRule {
-    #[must_use]
-    pub fn literal(
-        rule_id: impl Into<String>,
-        rule_family: impl Into<String>,
-        pattern_text: impl Into<String>,
-    ) -> Self {
-        Self {
-            rule_id: rule_id.into(),
-            rule_family: rule_family.into(),
-            pattern_text: pattern_text.into(),
-            token_kind: "literal".to_string(),
-            resolution_layer: "explicit_host_ref".to_string(),
-            shape_hint: None,
-            caller_context_dependent: false,
-            opaque_selector_payload: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RuntimeHostReferenceSyntaxMatch {
-    pub syntax_match_handle: String,
-    pub rule_id: String,
-    pub rule_family: String,
-    pub source_span: TextSpan,
-    pub source_token_text: String,
-    pub token_kind: String,
-    pub opaque_selector_payload: Option<String>,
-    pub resolution_layer: String,
-    pub shape_hint: Option<String>,
-    pub caller_context_dependent: bool,
-    pub diagnostics: Vec<String>,
-}
-
-impl RuntimeHostReferenceSyntaxMatch {
-    #[must_use]
-    pub fn formal_token_text(&self) -> String {
-        format!(
-            "HOST_REF_{}_{}",
-            self.source_span.start, self.source_span.len
-        )
-    }
-
-    #[must_use]
-    pub fn unresolved_bind_result(&self) -> RuntimeHostReferenceBindResult {
-        RuntimeHostReferenceBindResult {
-            reference_handle: self.syntax_match_handle.clone(),
-            formal_reference_id: Some(self.formal_token_text()),
-            source_span: self.source_span,
-            source_token_text: self.source_token_text.clone(),
-            opaque_selector_payload: self.opaque_selector_payload.clone(),
-            resolution_layer: self.resolution_layer.clone(),
-            shape_hint: self.shape_hint.clone(),
-            caller_context_dependent: self.caller_context_dependent,
-            diagnostics: self.diagnostics.clone(),
-            replay_identity_contribution: format!(
-                "host-reference-syntax-match:{}:{}:{}:{}",
-                self.rule_id, self.rule_family, self.source_span.start, self.source_span.len
-            ),
-        }
-    }
-}
-
-fn declared_host_reference_syntax_matches(
-    source: &FormulaSourceRecord,
-    context: &RuntimeHostFormulaContext,
-    rule: &RuntimeHostReferenceSyntaxRule,
-) -> Vec<RuntimeHostReferenceSyntaxMatch> {
-    let text = source.entered_formula_text.as_str();
-    if rule.pattern_text.is_empty() {
-        return Vec::new();
-    }
-
-    let mut matches = Vec::new();
-    let mut index = 0usize;
-    let mut in_string = false;
-    while index < text.len() {
-        let Some(current) = text[index..].chars().next() else {
-            break;
-        };
-
-        if in_string {
-            if current == '"' {
-                let next = index + current.len_utf8();
-                if text[next..].starts_with('"') {
-                    index = next + 1;
-                } else {
-                    in_string = false;
-                    index = next;
-                }
-            } else {
-                index += current.len_utf8();
-            }
-            continue;
-        }
-        if current == '"' {
-            in_string = true;
-            index += current.len_utf8();
-            continue;
-        }
-
-        if text[index..].starts_with(rule.pattern_text.as_str()) {
-            if rule.pattern_text == "{"
-                && let Some(syntax_match) =
-                    declared_host_reference_literal_array_syntax_match(text, index, context, rule)
-            {
-                index = syntax_match.source_span.end();
-                matches.push(syntax_match);
-                continue;
-            }
-            if rule.pattern_text == "^"
-                && let Some(syntax_match) =
-                    declared_host_reference_repeated_prefix_syntax_match(text, index, context, rule)
-            {
-                index = syntax_match.source_span.end();
-                matches.push(syntax_match);
-                continue;
-            }
-            if rule.pattern_text == "["
-                && let Some(syntax_match) =
-                    declared_host_reference_bracket_path_syntax_match(text, index, context, rule)
-            {
-                index = syntax_match.source_span.end();
-                matches.push(syntax_match);
-                continue;
-            }
-            let selector_end = index + rule.pattern_text.len();
-            if host_reference_literal_pattern_is_prefix_of_longer_token(
-                text,
-                selector_end,
-                &rule.pattern_text,
-            ) {
-                index += current.len_utf8();
-                continue;
-            }
-            let qualified_base = qualified_host_reference_base(text, index, &rule.pattern_text);
-            let qualified_tail = qualified_host_reference_tail(text, selector_end);
-            let end = qualified_tail
-                .as_ref()
-                .map_or(selector_end, |tail| tail.source_end);
-            let unqualified_match =
-                host_syntax_boundary_before(text, index) && host_syntax_boundary_after(text, end);
-            let qualified_match = qualified_base.is_some() && host_syntax_boundary_after(text, end);
-            if !unqualified_match && !qualified_match {
-                index += current.len_utf8();
-                continue;
-            }
-
-            let span_start = qualified_base
-                .as_ref()
-                .map_or(index, |base| base.source_start);
-            let span = TextSpan::new(span_start, end - span_start);
-            let source_token_text = text[span.start..span.end()].to_string();
-            let opaque_selector_payload = if qualified_base.is_some() || qualified_tail.is_some() {
-                Some(host_reference_selector_payload_with_qualifiers(
-                    rule.opaque_selector_payload.as_deref(),
-                    qualified_base.as_ref().map(|base| base.token_text.as_str()),
-                    qualified_tail.as_ref().map(|tail| tail.token_text.as_str()),
-                ))
-            } else {
-                rule.opaque_selector_payload.clone()
-            };
-            matches.push(RuntimeHostReferenceSyntaxMatch {
-                syntax_match_handle: format!(
-                    "host-reference-syntax:{}:{}:{}:{}",
-                    context.dialect_id, rule.rule_id, span.start, span.len
-                ),
-                rule_id: rule.rule_id.clone(),
-                rule_family: rule.rule_family.clone(),
-                source_span: span,
-                source_token_text,
-                token_kind: rule.token_kind.clone(),
-                opaque_selector_payload,
-                resolution_layer: rule.resolution_layer.clone(),
-                shape_hint: rule.shape_hint.clone(),
-                caller_context_dependent: rule.caller_context_dependent,
-                diagnostics: Vec::new(),
-            });
-            index += rule.pattern_text.len();
-            continue;
-        }
-
-        index += current.len_utf8();
-    }
-    matches
-}
-
-fn declared_host_reference_bracket_path_syntax_match(
-    text: &str,
-    start: usize,
-    context: &RuntimeHostFormulaContext,
-    rule: &RuntimeHostReferenceSyntaxRule,
-) -> Option<RuntimeHostReferenceSyntaxMatch> {
-    let qualified_base = if start > 0 && text[..start].ends_with('.') {
-        qualified_host_reference_base_before_dot(text, start - 1)
-    } else {
-        None
-    };
-    if qualified_base.is_none() && !host_syntax_boundary_before(text, start) {
-        return None;
-    }
-    let end = host_reference_path_token_end(text, start)?;
-    if !host_syntax_boundary_after(text, end) {
-        return None;
-    }
-    let span_start = qualified_base
-        .as_ref()
-        .map_or(start, |base| base.source_start);
-    let span = TextSpan::new(span_start, end - span_start);
-    let source_token_text = text[span.start..span.end()].to_string();
-    let mut opaque_selector_payload = rule
-        .opaque_selector_payload
-        .clone()
-        .unwrap_or_else(|| "selector-family:escaped-path".to_string());
-    opaque_selector_payload.push_str(";path_token_text=");
-    opaque_selector_payload.push_str(&source_token_text);
-
-    Some(RuntimeHostReferenceSyntaxMatch {
-        syntax_match_handle: format!(
-            "host-reference-syntax:{}:{}:{}:{}",
-            context.dialect_id, rule.rule_id, span.start, span.len
-        ),
-        rule_id: rule.rule_id.clone(),
-        rule_family: rule.rule_family.clone(),
-        source_span: span,
-        source_token_text,
-        token_kind: rule.token_kind.clone(),
-        opaque_selector_payload: Some(opaque_selector_payload),
-        resolution_layer: rule.resolution_layer.clone(),
-        shape_hint: rule.shape_hint.clone(),
-        caller_context_dependent: rule.caller_context_dependent,
-        diagnostics: Vec::new(),
-    })
-}
-
-fn host_reference_path_token_end(text: &str, bracket_start: usize) -> Option<usize> {
-    let mut end = host_reference_bracketed_segment_end(text, bracket_start)?;
-    loop {
-        let after = text.get(end..)?;
-        if !after.starts_with('.') {
-            break;
-        }
-        let segment_start = end + 1;
-        let first = text[segment_start..].chars().next()?;
-        if first == '[' {
-            end = host_reference_bracketed_segment_end(text, segment_start)?;
-        } else if host_reference_base_leading_char(first) {
-            end = segment_start;
-            for (offset, ch) in text[segment_start..].char_indices() {
-                if host_reference_base_char(ch) {
-                    end = segment_start + offset + ch.len_utf8();
-                } else {
-                    break;
-                }
-            }
-        } else {
-            break;
-        }
-    }
-    Some(end)
-}
-
-fn host_reference_bracketed_segment_end(text: &str, start: usize) -> Option<usize> {
-    if !text.get(start..)?.starts_with('[') {
-        return None;
-    }
-    let mut cursor = start + 1;
-    let mut saw_content = false;
-    while cursor < text.len() {
-        let current = text[cursor..].chars().next()?;
-        if current == '\'' {
-            cursor += current.len_utf8();
-            let escaped = text[cursor..].chars().next()?;
-            saw_content = true;
-            cursor += escaped.len_utf8();
-            continue;
-        }
-        if current == ']' {
-            return saw_content.then_some(cursor + 1);
-        }
-        saw_content = true;
-        cursor += current.len_utf8();
-    }
-    None
-}
-
-fn declared_host_reference_repeated_prefix_syntax_match(
-    text: &str,
-    start: usize,
-    context: &RuntimeHostFormulaContext,
-    rule: &RuntimeHostReferenceSyntaxRule,
-) -> Option<RuntimeHostReferenceSyntaxMatch> {
-    if !host_syntax_boundary_before(text, start) {
-        return None;
-    }
-    let mut selector_end = start;
-    while text[selector_end..].starts_with(rule.pattern_text.as_str()) {
-        selector_end += rule.pattern_text.len();
-    }
-    let repeat_count = (selector_end - start) / rule.pattern_text.len();
-    if repeat_count == 0 {
-        return None;
-    }
-    let qualified_tail = qualified_host_reference_tail(text, selector_end);
-    let end = qualified_tail
-        .as_ref()
-        .map_or(selector_end, |tail| tail.source_end);
-    if !host_syntax_boundary_after(text, end) {
-        return None;
-    }
-    let span = TextSpan::new(start, end - start);
-    let source_token_text = text[span.start..span.end()].to_string();
-    let mut opaque_selector_payload = rule
-        .opaque_selector_payload
-        .clone()
-        .unwrap_or_else(|| "selector-family:repeated-prefix".to_string());
-    opaque_selector_payload.push_str(";repeat_count=");
-    opaque_selector_payload.push_str(&repeat_count.to_string());
-    if let Some(tail) = qualified_tail.as_ref() {
-        opaque_selector_payload.push_str(";tail_token_text=");
-        opaque_selector_payload.push_str(&tail.token_text);
-    }
-
-    Some(RuntimeHostReferenceSyntaxMatch {
-        syntax_match_handle: format!(
-            "host-reference-syntax:{}:{}:{}:{}",
-            context.dialect_id, rule.rule_id, span.start, span.len
-        ),
-        rule_id: rule.rule_id.clone(),
-        rule_family: rule.rule_family.clone(),
-        source_span: span,
-        source_token_text,
-        token_kind: rule.token_kind.clone(),
-        opaque_selector_payload: Some(opaque_selector_payload),
-        resolution_layer: rule.resolution_layer.clone(),
-        shape_hint: rule.shape_hint.clone(),
-        caller_context_dependent: rule.caller_context_dependent,
-        diagnostics: Vec::new(),
-    })
-}
-
-fn declared_host_reference_literal_array_syntax_match(
-    text: &str,
-    start: usize,
-    context: &RuntimeHostFormulaContext,
-    rule: &RuntimeHostReferenceSyntaxRule,
-) -> Option<RuntimeHostReferenceSyntaxMatch> {
-    let end = host_reference_literal_array_end(text, start)?;
-    if !host_syntax_boundary_before(text, start) || !host_syntax_boundary_after(text, end) {
-        return None;
-    }
-    let source_token_text = text[start..end].to_string();
-    let element_token_texts = host_reference_literal_array_element_token_texts(&source_token_text)?;
-    let span = TextSpan::new(start, end - start);
-    let mut opaque_selector_payload = rule
-        .opaque_selector_payload
-        .clone()
-        .unwrap_or_else(|| "selector-family:reference-literal-array".to_string());
-    opaque_selector_payload.push_str(";element_token_texts=");
-    opaque_selector_payload.push_str(&element_token_texts.join("|"));
-    Some(RuntimeHostReferenceSyntaxMatch {
-        syntax_match_handle: format!(
-            "host-reference-syntax:{}:{}:{}:{}",
-            context.dialect_id, rule.rule_id, span.start, span.len
-        ),
-        rule_id: rule.rule_id.clone(),
-        rule_family: rule.rule_family.clone(),
-        source_span: span,
-        source_token_text,
-        token_kind: rule.token_kind.clone(),
-        opaque_selector_payload: Some(opaque_selector_payload),
-        resolution_layer: rule.resolution_layer.clone(),
-        shape_hint: rule.shape_hint.clone(),
-        caller_context_dependent: rule.caller_context_dependent,
-        diagnostics: Vec::new(),
-    })
-}
-
-fn host_reference_literal_array_end(text: &str, start: usize) -> Option<usize> {
-    let mut cursor = start + 1;
-    while cursor < text.len() {
-        let current = text[cursor..].chars().next()?;
-        match current {
-            '}' => return Some(cursor + 1),
-            '"' => {
-                cursor += 1;
-                while cursor < text.len() {
-                    let string_current = text[cursor..].chars().next()?;
-                    cursor += string_current.len_utf8();
-                    if string_current == '"' {
-                        if text[cursor..].starts_with('"') {
-                            cursor += 1;
-                        } else {
-                            break;
-                        }
-                    }
-                }
-            }
-            _ => cursor += current.len_utf8(),
-        }
-    }
-    None
-}
-
-fn host_reference_literal_array_element_token_texts(
-    source_token_text: &str,
-) -> Option<Vec<String>> {
-    let inner = source_token_text.strip_prefix('{')?.strip_suffix('}')?;
-    let elements = inner
-        .split(',')
-        .map(str::trim)
-        .map(str::to_string)
-        .collect::<Vec<_>>();
-    (!elements.is_empty() && elements.iter().all(|element| !element.is_empty())).then_some(elements)
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct QualifiedHostReferenceBase {
-    source_start: usize,
-    token_text: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct QualifiedHostReferenceTail {
-    source_end: usize,
-    token_text: String,
-}
-
-fn host_reference_literal_pattern_is_prefix_of_longer_token(
-    text: &str,
-    selector_end: usize,
-    pattern_text: &str,
-) -> bool {
-    pattern_text.ends_with('*') && text[selector_end..].starts_with('*')
-}
-
-fn qualified_host_reference_base(
-    text: &str,
-    pattern_start: usize,
-    pattern_text: &str,
-) -> Option<QualifiedHostReferenceBase> {
-    if pattern_text.starts_with('.') {
-        return qualified_host_reference_base_before_dot(text, pattern_start);
-    }
-    if pattern_start == 0 || !text[..pattern_start].ends_with('.') {
-        return None;
-    }
-    qualified_host_reference_base_before_dot(text, pattern_start - 1)
-}
-
-fn qualified_host_reference_base_before_dot(
-    text: &str,
-    dot_index: usize,
-) -> Option<QualifiedHostReferenceBase> {
-    if dot_index == 0 || !text.is_char_boundary(dot_index) {
-        return None;
-    }
-    let mut start = dot_index;
-    for (index, ch) in text[..dot_index].char_indices().rev() {
-        if host_reference_base_char(ch) {
-            start = index;
-        } else {
-            break;
-        }
-    }
-    if start == dot_index
-        || !text[start..dot_index]
-            .chars()
-            .next()
-            .is_some_and(host_reference_base_leading_char)
-    {
-        return None;
-    }
-    Some(QualifiedHostReferenceBase {
-        source_start: start,
-        token_text: text[start..dot_index].to_string(),
-    })
-}
-
-fn qualified_host_reference_tail(
-    text: &str,
-    selector_end: usize,
-) -> Option<QualifiedHostReferenceTail> {
-    let after_selector = text.get(selector_end..)?;
-    if !after_selector.starts_with('.') {
-        return None;
-    }
-    let tail_start = selector_end + 1;
-    let first = text[tail_start..].chars().next()?;
-    if !host_reference_base_leading_char(first) {
-        return None;
-    }
-    let mut end = tail_start;
-    for (offset, ch) in text[tail_start..].char_indices() {
-        if host_reference_base_char(ch) {
-            end = tail_start + offset + ch.len_utf8();
-        } else {
-            break;
-        }
-    }
-    Some(QualifiedHostReferenceTail {
-        source_end: end,
-        token_text: text[tail_start..end].to_string(),
-    })
-}
-
-fn host_reference_base_char(ch: char) -> bool {
-    ch.is_ascii_alphanumeric() || matches!(ch, '_' | '$' | '.')
-}
-
-fn host_reference_base_leading_char(ch: char) -> bool {
-    ch.is_ascii_alphabetic() || matches!(ch, '_' | '$')
-}
-
-fn host_reference_selector_payload_with_qualifiers(
-    payload: Option<&str>,
-    base_token_text: Option<&str>,
-    tail_token_text: Option<&str>,
-) -> String {
-    let mut enriched = payload.unwrap_or("selector-family:unknown").to_string();
-    if let Some(base_token_text) = base_token_text {
-        enriched.push_str(";base_token_text=");
-        enriched.push_str(base_token_text);
-    }
-    if let Some(tail_token_text) = tail_token_text {
-        enriched.push_str(";tail_token_text=");
-        enriched.push_str(tail_token_text);
-    }
-    enriched
-}
-
-fn host_syntax_boundary_before(text: &str, start: usize) -> bool {
-    previous_non_whitespace_char(text, start).is_none_or(|ch| !host_syntax_identifier_char(ch))
-}
-
-fn host_syntax_boundary_after(text: &str, end: usize) -> bool {
-    next_non_whitespace_char(text, end).is_none_or(|ch| !host_syntax_identifier_char(ch))
-}
-
-fn previous_non_whitespace_char(text: &str, end: usize) -> Option<char> {
-    text[..end].chars().rev().find(|ch| !ch.is_whitespace())
-}
-
-fn next_non_whitespace_char(text: &str, start: usize) -> Option<char> {
-    text[start..].chars().find(|ch| !ch.is_whitespace())
-}
-
-fn host_syntax_identifier_char(ch: char) -> bool {
-    ch.is_ascii_alphanumeric() || matches!(ch, '_' | '$')
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeHostNameBindResult {
     pub host_name_handle: String,
     pub canonical_name: String,
+    pub host_dependency_key: Option<String>,
     pub source_span: TextSpan,
     pub source_token_text: String,
     pub resolution_layer: String,
@@ -3745,6 +3267,53 @@ fn runtime_hash_debug<T: std::fmt::Debug>(value: &T) -> String {
     format!("{:016x}", hasher.finish())
 }
 
+fn source_text_is_formula_entry(text: &str) -> bool {
+    text.trim_start().starts_with('=')
+}
+
+fn calc_value_from_cell_entry_text(text: &str) -> CalcValue {
+    if text.is_empty() {
+        return CalcValue::empty();
+    }
+    if let Some(forced_text) = text.strip_prefix('\'') {
+        return CalcValue::text(ExcelText::from_interop_assignment(forced_text));
+    }
+    if text.eq_ignore_ascii_case("TRUE") {
+        return CalcValue::logical(true);
+    }
+    if text.eq_ignore_ascii_case("FALSE") {
+        return CalcValue::logical(false);
+    }
+    if let Ok(number) = text.parse::<f64>()
+        && number.is_finite()
+    {
+        return CalcValue::number(number);
+    }
+    if let Some(decoded) = decode_cell_entry_quoted_string(text) {
+        return CalcValue::text(ExcelText::from_interop_assignment(&decoded));
+    }
+    CalcValue::text(ExcelText::from_interop_assignment(text))
+}
+
+fn decode_cell_entry_quoted_string(text: &str) -> Option<String> {
+    let inner = text.strip_prefix('"')?.strip_suffix('"')?;
+    let mut decoded = String::new();
+    let mut chars = inner.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '"' {
+            if chars.peek() == Some(&'"') {
+                chars.next();
+                decoded.push('"');
+            } else {
+                return None;
+            }
+        } else {
+            decoded.push(ch);
+        }
+    }
+    Some(decoded)
+}
+
 struct CompiledRuntimePrepareRequest {
     prepare_request: PrepareRequest,
     syntax_diagnostics: Vec<SyntaxDiagnostic>,
@@ -3762,41 +3331,12 @@ fn compile_runtime_prepare_request(
     });
     let syntax_diagnostics = parse.green_tree.diagnostics.clone();
     let red_projection = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
-    let mut bind_names = environment.defined_names.clone();
-    bind_names.extend(host_name_defined_names(&environment.host_name_bindings));
-    bind_names.extend(formal_input_defined_names(
-        &environment.formal_input_bindings,
-    ));
-    let name_caller_context_dependencies =
-        host_name_caller_context_dependencies(&environment.host_name_bindings);
     let bind = bind_formula(crate::binding::BindRequest {
         source: source.clone(),
         green_tree: parse.green_tree,
         red_projection,
-        context: BindContext {
-            structure_context_version: environment.structure_context_version.clone(),
-            caller_row: environment.caller_row,
-            caller_col: environment.caller_col,
-            formula_token: source.formula_token(),
-            names: bind_names
-                .iter()
-                .map(|(name, binding)| {
-                    (
-                        name.clone(),
-                        match binding {
-                            DefinedNameBinding::Value(_) => NameKind::ValueLike,
-                            DefinedNameBinding::Reference(_) => NameKind::ReferenceLike,
-                            DefinedNameBinding::Callable(_) => NameKind::ValueLike,
-                        },
-                    )
-                })
-                .collect(),
-            name_caller_context_dependencies,
-            table_catalog: environment.table_catalog.clone(),
-            enclosing_table_ref: environment.enclosing_table_ref.clone(),
-            caller_table_region: environment.caller_table_region.clone(),
-            ..BindContext::default()
-        },
+        context: environment.bind_context_for_source(&source),
+        host_name_resolver: environment.host_name_resolver,
     });
     let library_context_view = environment.library_context.pinned_view();
     let base_library_context_snapshot = library_context_view.resolve_snapshot();
@@ -3969,4 +3509,254 @@ fn syntax_diagnostic_execution_error(diagnostics: &[SyntaxDiagnostic]) -> String
         "formula execution rejected due to syntax diagnostics: {} at {}:{}",
         first.message, first.span.start, first.span.len
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::BoundExpr;
+    use oxfunc_core::function::{
+        ArgPreparationProfile, Arity, CoercionLiftProfile, DeterminismClass, FecDependencyProfile,
+        HostInteractionClass, KernelSignatureClass, ThreadSafetyClass, VolatilityClass,
+    };
+    use oxfunc_core::registry::{
+        FunctionRegistry, ParameterDescriptor, UdfExecutionProfile, UdfInvocationTargetDescriptor,
+        UdfRegistrationRequest, UdfRegistrationResult, UdfReplacementPolicy, UdfSourceKind,
+        builtin_registry,
+    };
+    use oxfunc_core::value::EvalValue;
+    use std::collections::BTreeMap;
+
+    fn formula(text: &str) -> FormulaSourceRecord {
+        FormulaSourceRecord::new("formula:test", 1, text)
+    }
+
+    fn bound_formula_from(environment: RuntimeEnvironment<'_>, text: &str) -> BoundFormula {
+        match environment.interpret_authored_input(formula(text)) {
+            RuntimeAuthoredInputResult::Formula(bound_formula) => bound_formula,
+            other => panic!("expected formula for {text}, got {other:?}"),
+        }
+    }
+
+    fn registry_with_udf(surface_name: &str) -> FunctionRegistry {
+        let mut registry = builtin_registry().clone();
+        let result = registry.register_udf_request(test_udf_registration_request(
+            &format!("SRC.test.{surface_name}"),
+            &format!("FUNC.UDF.{surface_name}"),
+            surface_name,
+        ));
+        assert!(matches!(result, UdfRegistrationResult::Registered { .. }));
+        registry
+    }
+
+    fn test_udf_registration_request(
+        source_registration_id: &str,
+        function_id: &str,
+        surface_name: &str,
+    ) -> UdfRegistrationRequest {
+        UdfRegistrationRequest {
+            stable_source_registration_id: source_registration_id.to_string(),
+            function_id: function_id.to_string(),
+            surface_name: surface_name.to_string(),
+            source_kind: UdfSourceKind::XllRegisteredFunction,
+            source_provenance: Some("runtime bind test".to_string()),
+            arity: Arity::exact(1),
+            parameters: vec![ParameterDescriptor {
+                name: "value".to_string(),
+                optional: false,
+                repeats: false,
+                short_description: None,
+            }],
+            display_signature: None,
+            determinism: DeterminismClass::Deterministic,
+            volatility: VolatilityClass::NonVolatile,
+            host_interaction: HostInteractionClass::None,
+            thread_safety: ThreadSafetyClass::SafePure,
+            arg_preparation_profile: ArgPreparationProfile::ValuesOnlyPreAdapter,
+            coercion_lift_profile: CoercionLiftProfile::Custom,
+            kernel_signature_class: KernelSignatureClass::Custom,
+            fec_dependency_profile: FecDependencyProfile::None,
+            surface_fec_dependency_profile: FecDependencyProfile::None,
+            short_description: Some("runtime bind test UDF".to_string()),
+            long_description: None,
+            category: Some("User Defined".to_string()),
+            execution_profile: Some(UdfExecutionProfile {
+                host_execution_profile_key: Some("runtime-bind-test".to_string()),
+                required_capability_set_keys: Vec::new(),
+                async_invocation: false,
+                streaming: false,
+                cancellable: false,
+                externally_invalidated: false,
+            }),
+            invocation_target: Some(UdfInvocationTargetDescriptor::Xll {
+                module_path: Some("Book1.xll".to_string()),
+                export_name: surface_name.to_string(),
+                type_text: None,
+                register_id: None,
+                opaque_runtime_values: Vec::new(),
+            }),
+            replacement_policy: UdfReplacementPolicy::RejectOnCollision,
+        }
+    }
+
+    #[test]
+    fn bind_context_builtin_function_wins_over_defined_name() {
+        let mut defined_names = BTreeMap::new();
+        defined_names.insert(
+            "SUM".to_string(),
+            DefinedNameBinding::Value(EvalValue::Number(1.0)),
+        );
+
+        let bound = bound_formula_from(
+            RuntimeEnvironment::new().with_defined_names(defined_names),
+            "=SUM(1,2)",
+        );
+
+        assert!(matches!(
+            bound.root,
+            BoundExpr::FunctionCall {
+                ref function_name,
+                ..
+            } if function_name == "SUM"
+        ));
+    }
+
+    #[test]
+    fn bind_context_host_name_wins_over_udf_surface() {
+        let registry = registry_with_udf("MYNODE");
+        let mut defined_names = BTreeMap::new();
+        defined_names.insert(
+            "MYNODE".to_string(),
+            DefinedNameBinding::Value(EvalValue::Number(1.0)),
+        );
+
+        let bound = bound_formula_from(
+            RuntimeEnvironment::new()
+                .with_function_registry(&registry)
+                .with_defined_names(defined_names),
+            "=MYNODE(12)",
+        );
+
+        assert!(matches!(bound.root, BoundExpr::Invocation { .. }));
+        assert!(bound.function_call_sources.is_empty());
+    }
+
+    #[test]
+    fn bound_formula_preserves_host_name_bind_record() {
+        let binding = RuntimeHostNameBinding {
+            bind_result: RuntimeHostNameBindResult {
+                host_name_handle: "host-name:node-a".to_string(),
+                canonical_name: "NodeA".to_string(),
+                host_dependency_key: None,
+                source_span: TextSpan::new(0, 0),
+                source_token_text: "NodeA".to_string(),
+                resolution_layer: "treecalc_host_name".to_string(),
+                binding_kind: "defined_name_value_like".to_string(),
+                shape_hint: Some("scalar_node_value".to_string()),
+                caller_context_dependent: false,
+                diagnostics: Vec::new(),
+                replay_identity_contribution: "host-name:node-a:replay".to_string(),
+            },
+            binding: DefinedNameBinding::Value(EvalValue::Number(1.0)),
+        };
+
+        let bound = bound_formula_from(
+            RuntimeEnvironment::new().with_host_name_bindings(vec![binding]),
+            "=NodeA(12)",
+        );
+
+        assert!(matches!(bound.root, BoundExpr::Invocation { .. }));
+        assert_eq!(bound.host_name_bind_records.len(), 1);
+        let record = &bound.host_name_bind_records[0];
+        assert_eq!(record.host_name_handle, "host-name:node-a");
+        assert_eq!(record.canonical_name, "NodeA");
+        assert_eq!(record.source_token_text, "NodeA");
+        assert_eq!(record.source_span, TextSpan::new(1, 5));
+    }
+
+    struct SingleNameResolver;
+
+    impl RuntimeHostNameResolver for SingleNameResolver {
+        fn resolve_host_name(
+            &self,
+            request: &RuntimeHostNameResolveRequest,
+        ) -> Option<RuntimeHostNameResolveResult> {
+            if !request.source_token_text.eq_ignore_ascii_case("NodeA") {
+                return None;
+            }
+            Some(RuntimeHostNameResolveResult {
+                kind: NameKind::ValueLike,
+                bind_record: HostNameBindRecord {
+                    host_name_handle: "host-name:resolver-node-a".to_string(),
+                    canonical_name: "NodeA".to_string(),
+                    host_dependency_key: None,
+                    source_span: request.source_span,
+                    source_token_text: request.source_token_text.clone(),
+                    resolution_layer: "treecalc_host_name".to_string(),
+                    binding_kind: "defined_name_value_like".to_string(),
+                    shape_hint: Some("scalar_node_value".to_string()),
+                    caller_context_dependent: false,
+                    diagnostics: Vec::new(),
+                    replay_identity_contribution: "host-name:resolver-node-a:replay".to_string(),
+                },
+            })
+        }
+    }
+
+    #[test]
+    fn runtime_environment_resolves_host_names_by_callback() {
+        let resolver = SingleNameResolver;
+
+        let bound = bound_formula_from(
+            RuntimeEnvironment::new().with_host_name_resolver(&resolver),
+            "=NodeA(12)",
+        );
+
+        assert!(matches!(bound.root, BoundExpr::Invocation { .. }));
+        assert_eq!(bound.host_name_bind_records.len(), 1);
+        assert_eq!(
+            bound.host_name_bind_records[0].host_name_handle,
+            "host-name:resolver-node-a"
+        );
+    }
+
+    #[test]
+    fn parser_binds_host_member_selector_without_projection() {
+        let resolver = SingleNameResolver;
+
+        let bound = bound_formula_from(
+            RuntimeEnvironment::new().with_host_name_resolver(&resolver),
+            "=SUM(NodeA.@CHILDREN)",
+        );
+
+        let BoundExpr::FunctionCall { args, .. } = &bound.root else {
+            panic!("expected SUM call");
+        };
+        assert!(matches!(
+            args.as_slice(),
+            [BoundExpr::HostStructuralSelector(selector)]
+                if selector.selector_family == "children"
+                    && matches!(&*selector.base, BoundExpr::HostReference(record)
+                        if record.canonical_name == "NodeA")
+        ));
+    }
+
+    #[test]
+    fn bind_context_udf_surface_is_a_function_call_when_no_host_name_matches() {
+        let registry = registry_with_udf("MYUDF");
+
+        let bound = bound_formula_from(
+            RuntimeEnvironment::new().with_function_registry(&registry),
+            "=MYUDF(12)",
+        );
+
+        assert!(matches!(
+            bound.root,
+            BoundExpr::FunctionCall {
+                ref function_name,
+                ..
+            } if function_name == "MYUDF"
+        ));
+        assert_eq!(bound.function_call_sources.len(), 1);
+    }
 }

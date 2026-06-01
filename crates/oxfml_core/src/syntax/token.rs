@@ -49,6 +49,7 @@ pub enum TokenKind {
     Caret,
     Star,
     Slash,
+    Dot,
     At,
     Hash,
     Bang,

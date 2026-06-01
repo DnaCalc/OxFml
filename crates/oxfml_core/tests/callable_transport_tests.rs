@@ -290,6 +290,8 @@ fn bind_body_formula(case_id: &str, formula: &str, names: BTreeMap<String, NameK
             formula_token: source.formula_token(),
             ..BindContext::default()
         },
+
+        host_name_resolver: None,
     });
     bind.bound_formula.root
 }

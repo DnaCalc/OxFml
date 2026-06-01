@@ -138,6 +138,8 @@ pub(crate) fn apply_formula_edit(request: FormulaEditRequest<'_>) -> FormulaEdit
                     green_tree: parse.green_tree.clone(),
                     red_projection: red.red_projection.clone(),
                     context: request.bind_context.clone(),
+
+                    host_name_resolver: None,
                 },
                 request.previous_bound_formula,
             );

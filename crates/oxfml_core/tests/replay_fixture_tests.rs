@@ -787,6 +787,8 @@ fn compile(formula: &str) -> oxfml_core::SemanticPlan {
             structure_context_version: StructureContextVersion("replay-struct-v1".to_string()),
             ..BindContext::default()
         },
+
+        host_name_resolver: None,
     });
 
     compile_semantic_plan(CompileSemanticPlanRequest {
@@ -1118,6 +1120,8 @@ fn evaluate_fixture_formula(
             names: name_kinds,
             ..BindContext::default()
         },
+
+        host_name_resolver: None,
     });
 
     let plan = compile_semantic_plan(CompileSemanticPlanRequest {

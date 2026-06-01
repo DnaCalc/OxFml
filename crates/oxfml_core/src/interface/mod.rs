@@ -10,7 +10,9 @@ use oxfunc_core::host_info::{HostInfoError, HostInfoProvider};
 use oxfunc_core::locale_format::LocaleFormatContext;
 use oxfunc_core::registry::builtin_registry;
 use oxfunc_core::resolver::ReferenceTextResolver;
-use oxfunc_core::value::{EvalValue, ExtendedValue, PresentationHint, WorksheetErrorCode};
+use oxfunc_core::value::{
+    EvalValue, ExtendedValue, PresentationHint, RichValue, WorksheetErrorCode,
+};
 
 use crate::semantics::{LibraryContextSnapshot, LibraryContextSnapshotEntry};
 
@@ -559,10 +561,10 @@ impl ReturnedValueSurface {
             },
             ExtendedValue::RichValue(rich) => Self {
                 kind: ReturnedValueSurfaceKind::RichValue,
-                payload_summary: format!("RichValue({})", rich.value_type.type_name),
-                rich_value_type_name: Some(rich.value_type.type_name.clone()),
+                payload_summary: format!("RichValue({})", rich_value_type_name(rich.as_ref())),
+                rich_value_type_name: Some(rich_value_type_name(rich.as_ref()).to_string()),
                 producer_capability_set_keys: rich_value_producer_capability_set_keys(
-                    &rich.value_type.type_name,
+                    rich_value_type_name(rich.as_ref()),
                 ),
                 exercised_capability_keys: Vec::new(),
                 presentation_hint: None,
@@ -772,6 +774,15 @@ impl ReturnedValueSurface {
                 }),
             },
         }
+    }
+}
+
+fn rich_value_type_name(value: &RichValue) -> &str {
+    match value {
+        RichValue::Object(object) => &object.value_type.type_name,
+        RichValue::Callable(_) => "callable",
+        RichValue::Presentation(_) => "presentation",
+        RichValue::ErrorMetadata(_) => "error_metadata",
     }
 }
 
