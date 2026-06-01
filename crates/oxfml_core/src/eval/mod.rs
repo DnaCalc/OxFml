@@ -1592,6 +1592,23 @@ fn context_free_call_arg_for_expr(expr: &CompiledExpr) -> Option<CallArgValue> {
     }
 }
 
+fn calc_value_from_call_arg(arg: &CallArgValue) -> CalcValue {
+    match arg {
+        CallArgValue::Eval(value) => CalcValue::from(value.clone()),
+        CallArgValue::MissingArg => CalcValue::missing(),
+        CallArgValue::EmptyCell => CalcValue::empty(),
+        CallArgValue::Reference(reference) => CalcValue::reference(reference.clone()),
+    }
+}
+
+fn calc_values_from_call_args(args: &[CallArgValue]) -> Vec<CalcValue> {
+    args.iter().map(calc_value_from_call_arg).collect()
+}
+
+fn legacy_call_args_from_calc_values(args: &[CalcValue]) -> Vec<CallArgValue> {
+    args.iter().cloned().map(CallArgValue::value).collect()
+}
+
 fn invoke_context_free_function_call(
     call_target: &FunctionCallTarget,
     args: &[CallArgValue],
@@ -1609,7 +1626,8 @@ fn invoke_context_free_function_call(
         callable_registry: &callable_registry,
     };
     let mut fec = FunctionExecutionContextBundle::new(&resolver);
-    match call_target.invoke(args, &mut fec) {
+    let calc_args = calc_values_from_call_args(args);
+    match call_target.invoke(&calc_args, &mut fec) {
         Ok(value) => value,
         Err(code) => EvalValue::Error(code),
     }
@@ -2726,13 +2744,14 @@ fn evaluate_ordinary_function_call(
                 preserve_reference,
             ));
         }
-        scratch.push_arg(call_arg);
+        scratch.push_arg(calc_value_from_call_arg(&call_arg));
     }
 
+    let legacy_call_args = legacy_call_args_from_calc_values(scratch.call_args());
     let collapse_hstack_empty_carrier = meta.function_id == FUNC_ID_HSTACK
         && args
             .iter()
-            .zip(scratch.call_args().iter())
+            .zip(legacy_call_args.iter())
             .any(|(arg, call_arg)| hstack_arg_should_collapse(arg, call_arg, helper_bindings));
 
     // Excel trailing omitted arguments behave like absent optional arguments at the
@@ -2746,7 +2765,7 @@ fn evaluate_ordinary_function_call(
     {
         let call_args = scratch.call_args_mut();
         for _ in 0..trailing_omitted_count {
-            if !matches!(call_args.last(), Some(CallArgValue::MissingArg)) {
+            if !call_args.last().is_some_and(CalcValue::is_missing) {
                 break;
             }
             if records_prepared_calls {
@@ -2757,13 +2776,14 @@ fn evaluate_ordinary_function_call(
     }
 
     let prepared_call_index = if records_prepared_calls {
+        let legacy_call_args = legacy_call_args_from_calc_values(scratch.call_args());
         let register_id_request = if meta.function_id == FUNC_ID_REGISTER_ID {
-            parse_register_id_request(scratch.call_args(), resolver).ok()
+            parse_register_id_request(&legacy_call_args, resolver).ok()
         } else {
             None
         };
         let registered_external_call_request = if meta.function_id == FUNC_ID_CALL {
-            parse_call_request(scratch.call_args(), resolver).ok()
+            parse_call_request(&legacy_call_args, resolver).ok()
         } else {
             None
         };
@@ -2806,7 +2826,7 @@ fn evaluate_ordinary_function_call(
             Err(_error)
                 if allow_host_query_worksheet_error_fallback(
                     meta.function_id,
-                    scratch.call_args(),
+                    &legacy_call_args_from_calc_values(scratch.call_args()),
                     resolver,
                     context.host_info,
                 ) =>
@@ -2967,7 +2987,8 @@ fn evaluate_function_call_target(
     fec.rtd_provider = context.rtd_provider;
     fec.registered_external_provider = context.registered_external_provider;
     fec.reference_text_resolver = context.reference_text_resolver;
-    call_target.invoke(args, &mut fec)
+    let calc_args = calc_values_from_call_args(args);
+    call_target.invoke(&calc_args, &mut fec)
 }
 
 fn evaluate_function_call_target_scratch(
@@ -5922,8 +5943,9 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
             fec.rtd_provider = self.context.rtd_provider;
             fec.registered_external_provider = self.context.registered_external_provider;
             fec.reference_text_resolver = self.context.reference_text_resolver;
+            let calc_args = calc_values_from_call_args(&call_args);
             let value = call_target
-                .invoke(&call_args, &mut fec)
+                .invoke(&calc_args, &mut fec)
                 .map_err(|_| CallableInvocationError::Worksheet(WorksheetErrorCode::Value))?;
             return Ok(prepared_arg_from_eval_value(value));
         }
@@ -6149,7 +6171,8 @@ fn build_scratch_from_prepared_args(
 ) {
     scratch.clear();
     for arg in args {
-        scratch.push_arg(call_arg_from_prepared(arg, callable_registry));
+        let call_arg = call_arg_from_prepared(arg, callable_registry);
+        scratch.push_arg(calc_value_from_call_arg(&call_arg));
     }
 }
 
