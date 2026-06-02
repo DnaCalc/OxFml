@@ -41,9 +41,8 @@ use oxfunc_core::resolver::{
 };
 use oxfunc_core::value::{
     ArrayCellValue, CalcValue, CallArgValue, CallableArityShape as OxCallableArityShape,
-    CallableCaptureMode as OxCallableCaptureMode, CallableOriginKind as OxCallableOriginKind,
-    CallableValue as OxCallableValue, CoreValue, EvalArray, EvalValue, ExcelText,
-    LambdaValue as OxLambdaValue, OpaqueCallable, ReferenceKind, ReferenceLike, WorksheetErrorCode,
+    CallableValue as OxCallableValue, CoreValue, EvalArray, EvalValue, ExcelText, OpaqueCallable,
+    ReferenceKind, ReferenceLike, WorksheetErrorCode,
 };
 use stacker::maybe_grow;
 
@@ -270,7 +269,6 @@ const SPECIAL_LAMBDA_FUNCTION_ID: &str = "SPECIAL.LAMBDA";
 const SPECIAL_LEGACY_SINGLE_FUNCTION_ID: &str = "SPECIAL.LEGACY_SINGLE";
 const SPECIAL_EXTERNAL_REFERENCE_DEFERRED_FUNCTION_ID: &str = "SPECIAL.EXTERNAL_REFERENCE_DEFERRED";
 const HELPER_LAMBDA_INVOCATION_CONTRACT_REF: &str = "oxfml.helper_lambda.invoke.v1";
-const BUILTIN_CALLABLE_INVOCATION_CONTRACT_REF: &str = "oxfml.builtin_callable.invoke.v1";
 const LOCAL_CALLABLE_RECURSION_BUDGET_UNITS: usize = 16_383;
 const LOCAL_CALLABLE_RECURSION_BASE_COST_UNITS: usize = 3;
 const LOCAL_CALLABLE_RECURSION_LAMBDA_ARG_COST_UNITS: usize = 1;
@@ -481,19 +479,8 @@ pub struct EvaluationOutput {
 
 impl EvaluationOutput {
     pub fn calc_value(&self) -> CalcValue {
-        if let (EvalValue::Lambda(lambda), Some(portable)) =
-            (&self.oxfunc_value, &self.portable_callable)
-        {
-            return CalcValue::callable(OxCallableValue {
-                arity: lambda.arity_shape,
-                summary: lambda_summary(lambda).to_string(),
-                handle: Rc::new(OxFmlCallableBinding {
-                    callable_token: lambda.callable_token.clone(),
-                    invocation_contract_ref: lambda.invocation_contract_ref.clone(),
-                    binding: portable.binding.clone(),
-                    captured_refs: portable.captured_refs.clone(),
-                }),
-            });
+        if let Some(portable) = &self.portable_callable {
+            return CalcValue::callable(callable_value_from_portable(portable));
         }
         CalcValue::from(self.oxfunc_value.clone())
     }
@@ -513,12 +500,50 @@ impl OpaqueCallable for OxFmlCallableBinding {
     }
 }
 
+fn callable_value_from_portable(portable: &PortableCallableValue) -> OxCallableValue {
+    OxCallableValue {
+        arity: OxCallableArityShape::range(
+            portable.binding.profile.required_arity,
+            portable.binding.profile.arity,
+        ),
+        summary: portable.binding.summary.clone(),
+        handle: Rc::new(OxFmlCallableBinding {
+            callable_token: callable_token(
+                0,
+                portable.binding.carrier.origin_kind,
+                &portable.binding.summary,
+            ),
+            invocation_contract_ref: HELPER_LAMBDA_INVOCATION_CONTRACT_REF.to_string(),
+            binding: portable.binding.clone(),
+            captured_refs: portable.captured_refs.clone(),
+        }),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct OxFmlRuntimeCallableHandle {
+    callable_token: String,
+}
+
+impl OpaqueCallable for OxFmlRuntimeCallableHandle {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 fn callable_token_from_oxfunc_callable(callable: &OxCallableValue) -> String {
     callable
         .handle
         .as_any()
         .downcast_ref::<OxFmlCallableBinding>()
         .map(|binding| binding.callable_token.clone())
+        .or_else(|| {
+            callable
+                .handle
+                .as_any()
+                .downcast_ref::<OxFmlRuntimeCallableHandle>()
+                .map(|binding| binding.callable_token.clone())
+        })
         .unwrap_or_else(|| callable.summary.clone())
 }
 
@@ -680,10 +705,6 @@ impl HelperBindingFrame {
                 "attempted to update helper slot {slot} outside the compiled slot frame"
             );
         }
-    }
-
-    fn is_empty(&self) -> bool {
-        self.layers.iter().all(|layer| layer.is_empty())
     }
 
     fn keys(&self) -> impl Iterator<Item = &String> {
@@ -861,7 +882,7 @@ struct LambdaBinding {
 
 #[derive(Debug, Clone, PartialEq)]
 struct RegisteredCallableBinding {
-    value: OxLambdaValue,
+    value: OxCallableValue,
     lambda: LambdaBinding,
 }
 
@@ -988,20 +1009,20 @@ struct CallableRegistry {
 }
 
 impl CallableRegistry {
-    fn register(&mut self, lambda: LambdaBinding) -> OxLambdaValue {
+    fn register(&mut self, lambda: LambdaBinding) -> OxCallableValue {
         self.next_id += 1;
-        let token = callable_token(self.next_id, &lambda_value_summary_from_binding(&lambda));
-        let oxfunc_value = OxLambdaValue::new(
-            token.clone(),
-            oxfunc_origin_kind_from_local(lambda.origin_kind),
-            OxCallableArityShape::range(lambda_required_arity(&lambda.params), lambda.params.len()),
-            if lambda.closure.is_empty() {
-                OxCallableCaptureMode::NoCapture
-            } else {
-                OxCallableCaptureMode::LexicalCapture
-            },
-            HELPER_LAMBDA_INVOCATION_CONTRACT_REF,
-        );
+        let summary = lambda_value_summary_from_binding(&lambda);
+        let token = callable_token(self.next_id, lambda.origin_kind, &summary);
+        let oxfunc_value = OxCallableValue {
+            arity: OxCallableArityShape::range(
+                lambda_required_arity(&lambda.params),
+                lambda.params.len(),
+            ),
+            summary,
+            handle: Rc::new(OxFmlRuntimeCallableHandle {
+                callable_token: token.clone(),
+            }),
+        };
         self.bindings.insert(
             token,
             RegisteredCallableBinding {
@@ -1016,25 +1037,37 @@ impl CallableRegistry {
         self.bindings.get(token)
     }
 
-    fn value(&self, token: &str) -> Option<OxLambdaValue> {
+    fn value(&self, token: &str) -> Option<OxCallableValue> {
         self.bindings
             .get(token)
             .map(|binding| binding.value.clone())
     }
 
-    fn register_builtin_call_target(&mut self, call_target: FunctionCallTarget) -> OxLambdaValue {
+    fn builtin_value(&self, token: &str) -> Option<OxCallableValue> {
+        let call_target = self.builtin_call_targets.get(token)?;
+        let meta = call_target.function_meta();
+        Some(OxCallableValue {
+            arity: OxCallableArityShape::range(meta.arity.min, meta.arity.max),
+            summary: token.to_string(),
+            handle: Rc::new(OxFmlRuntimeCallableHandle {
+                callable_token: token.to_string(),
+            }),
+        })
+    }
+
+    fn register_builtin_call_target(&mut self, call_target: FunctionCallTarget) -> OxCallableValue {
         let token = format!("oxfml.builtin::{}", call_target.function_id());
         self.builtin_call_targets
             .entry(token.clone())
             .or_insert_with(|| call_target.clone());
         let meta = call_target.function_meta();
-        OxLambdaValue::new(
-            token,
-            OxCallableOriginKind::BuiltInCallable,
-            OxCallableArityShape::range(meta.arity.min, meta.arity.max),
-            OxCallableCaptureMode::NoCapture,
-            BUILTIN_CALLABLE_INVOCATION_CONTRACT_REF,
-        )
+        OxCallableValue {
+            arity: OxCallableArityShape::range(meta.arity.min, meta.arity.max),
+            summary: token.clone(),
+            handle: Rc::new(OxFmlRuntimeCallableHandle {
+                callable_token: token,
+            }),
+        }
     }
 
     fn builtin_call_target(&self, token: &str) -> Option<FunctionCallTarget> {
@@ -1603,8 +1636,33 @@ fn calc_value_from_call_arg(arg: &CallArgValue) -> CalcValue {
     }
 }
 
+fn calc_value_from_call_arg_with_registry(
+    arg: &CallArgValue,
+    callable_registry: &RefCell<CallableRegistry>,
+) -> CalcValue {
+    match arg {
+        CallArgValue::Eval(value) => {
+            callable_value_from_carrier_eval_value(value, callable_registry)
+                .map(CalcValue::callable)
+                .unwrap_or_else(|| CalcValue::from(value.clone()))
+        }
+        CallArgValue::MissingArg => CalcValue::missing(),
+        CallArgValue::EmptyCell => CalcValue::empty(),
+        CallArgValue::Reference(reference) => CalcValue::reference(reference.clone()),
+    }
+}
+
 fn calc_values_from_call_args(args: &[CallArgValue]) -> Vec<CalcValue> {
     args.iter().map(calc_value_from_call_arg).collect()
+}
+
+fn calc_values_from_call_args_with_registry(
+    args: &[CallArgValue],
+    callable_registry: &RefCell<CallableRegistry>,
+) -> Vec<CalcValue> {
+    args.iter()
+        .map(|arg| calc_value_from_call_arg_with_registry(arg, callable_registry))
+        .collect()
 }
 
 fn legacy_call_args_from_calc_values(args: &[CalcValue]) -> Vec<CallArgValue> {
@@ -1613,7 +1671,7 @@ fn legacy_call_args_from_calc_values(args: &[CalcValue]) -> Vec<CallArgValue> {
 
 fn eval_value_from_calc_value(value: CalcValue) -> EvalValue {
     if let Some(callable) = value.callable_value() {
-        return EvalValue::Text(callable_array_carrier_text(&callable.summary));
+        return eval_value_from_callable_value(callable);
     }
 
     match value.core {
@@ -1631,6 +1689,13 @@ fn invoke_context_free_function_call(
     call_target: &FunctionCallTarget,
     args: &[CallArgValue],
 ) -> EvalValue {
+    debug_assert!(
+        args.iter().all(|arg| match arg {
+            CallArgValue::Eval(value) => !eval_value_is_callable_transport(value),
+            _ => true,
+        }),
+        "context-free invocation cannot transport callable arguments"
+    );
     let reference_system_provider = &NULL_REFERENCE_SYSTEM_PROVIDER;
     let mut fec = FunctionExecutionContextBundle::new(&reference_system_provider);
     let calc_args = calc_values_from_call_args(args);
@@ -1824,12 +1889,20 @@ pub fn evaluate_formula(
     let output_value = sanitize_final_output_value(value, &frame.callable_registry);
     let portable_callable = portable_callable_for_top_level_result(
         &output_value,
+        &frame.callable_registry,
         context.bind_formula,
         &context.defined_names,
     );
 
+    let result = match &portable_callable {
+        Some(portable) => {
+            prepared_result_from_portable_callable(&output_value, context.plan, portable)
+        }
+        None => prepared_result_from_eval_value(&output_value, context.plan),
+    };
+
     Ok(EvaluationOutput {
-        result: prepared_result_from_eval_value(&output_value, context.plan),
+        result,
         returned_value_surface: returned_value_surface_for_output(
             &context.compiled_plan.root,
             &output_value,
@@ -1841,8 +1914,8 @@ pub fn evaluate_formula(
     })
 }
 
-/// Build a portable callable payload when the formula's top-level result is a
-/// callable (`EvalValue::Lambda`) and the bound root is a `LAMBDA(...)` literal.
+/// Build a portable callable payload when the formula's top-level result is an
+/// opaque callable value and the bound root is a `LAMBDA(...)` literal.
 ///
 /// Coverage note (fml-ds0.20 narrowed AC, follow-up filed as fml-ds0.20.1): this
 /// path intentionally covers only a bound root that is a bare `LAMBDA(...)`
@@ -1855,7 +1928,7 @@ pub fn evaluate_formula(
 /// other:
 ///   * Descriptive metadata (`carrier.capture_mode`, `profile.capture_names`,
 ///     `profile.body_kind`, `summary`) is derived from the runtime
-///     `OxLambdaValue` — the evaluator's already-computed source of truth — via
+///     `CallableValue` — the evaluator's already-computed source of truth — via
 ///     the same helpers that feed `callable_profile_detail`/`callable_carrier`.
 ///     This guarantees the portable surface agrees with
 ///     `evaluation.result.callable_*` for the same value. In particular, a free
@@ -1880,12 +1953,11 @@ pub fn evaluate_formula(
 /// LET-returned callable): we never fabricate a body we cannot honestly derive.
 fn portable_callable_for_top_level_result(
     output_value: &EvalValue,
+    callable_registry: &RefCell<CallableRegistry>,
     bind_formula: &BoundFormula,
     defined_names: &BTreeMap<String, DefinedNameBinding>,
 ) -> Option<PortableCallableValue> {
-    let EvalValue::Lambda(runtime_lambda) = output_value else {
-        return None;
-    };
+    let runtime_callable = callable_value_from_carrier_eval_value(output_value, callable_registry)?;
     let (params, optional_params, body) = lambda_literal_params_and_body(&bind_formula.root)?;
 
     let bound_param_keys = params
@@ -1918,14 +1990,14 @@ fn portable_callable_for_top_level_result(
     // Descriptive metadata mirrors the runtime lambda (the evaluator's source of
     // truth) so the portable surface never contradicts `evaluation.result`. The
     // runtime carrier/profile is the SAME data the runtime result publishes for an
-    // `EvalValue::Lambda` (see PreparedResult for `EvalValue::Lambda`:
+    // callable value (see PreparedResult for callable metadata:
     // `callable_carrier`/`callable_profile_detail`). If either cannot be derived
     // we treat the result as not portable (return None) rather than fabricate a
     // fallback, so the portable surface can never silently diverge from
     // `evaluation.result.callable_*`.
-    let carrier = callable_carrier_from_lambda_value(runtime_lambda)?;
-    let profile = callable_profile_detail_from_lambda_value(runtime_lambda)?;
-    let summary = lambda_summary(runtime_lambda).to_string();
+    let carrier = callable_carrier_from_callable_value(&runtime_callable)?;
+    let profile = callable_profile_detail_from_callable_value(&runtime_callable)?;
+    let summary = runtime_callable.summary.clone();
 
     // The re-supply payload carries params/body verbatim from the bound AST. The
     // closure is intentionally empty: captured top-level defined names travel as
@@ -2511,8 +2583,8 @@ fn evaluate_expr_value(
             callable_registry,
             trace,
         ),
-        CompiledExpr::BuiltinCallable(callable) => Ok(EvalValue::Lambda(
-            built_in_callable_lambda_from_call_target(&callable.call_target, callable_registry),
+        CompiledExpr::BuiltinCallable(callable) => Ok(eval_value_from_callable_value(
+            &built_in_callable_from_call_target(&callable.call_target, callable_registry),
         )),
         CompiledExpr::Invocation { callee, args } => evaluate_invocation(
             callee,
@@ -2705,7 +2777,10 @@ fn evaluate_ordinary_function_call(
                 preserve_reference,
             ));
         }
-        scratch.push_arg(calc_value_from_call_arg(&call_arg));
+        scratch.push_arg(calc_value_from_call_arg_with_registry(
+            &call_arg,
+            callable_registry,
+        ));
     }
 
     let legacy_call_args = legacy_call_args_from_calc_values(scratch.call_args());
@@ -2947,7 +3022,7 @@ fn evaluate_function_call_target(
     fec.callable_invoker = Some(&callable_invoker);
     fec.rtd_provider = context.rtd_provider;
     fec.registered_external_provider = context.registered_external_provider;
-    let calc_args = calc_values_from_call_args(args);
+    let calc_args = calc_values_from_call_args_with_registry(args, callable_registry);
     call_target
         .invoke(&calc_args, &mut fec)
         .map(eval_value_from_calc_value)
@@ -3722,8 +3797,9 @@ fn call_arg_for_name(
         }
         DefinedNameBinding::Callable(binding) => {
             let lambda = lambda_binding_from_defined_name_binding(binding, callable_registry);
-            Ok(CallArgValue::Eval(EvalValue::Lambda(
-                callable_registry.borrow_mut().register(lambda),
+            let callable = callable_registry.borrow_mut().register(lambda);
+            Ok(CallArgValue::Eval(eval_value_from_callable_value(
+                &callable,
             )))
         }
     }
@@ -3769,14 +3845,17 @@ fn call_arg_for_helper_binding(
             params,
             body,
             closure,
-        } => Ok(CallArgValue::Eval(EvalValue::Lambda(
-            callable_registry.borrow_mut().register(LambdaBinding {
+        } => {
+            let callable = callable_registry.borrow_mut().register(LambdaBinding {
                 origin_kind: CallableOriginKind::HelperLambda,
                 params: params.clone(),
                 body: body.clone(),
                 closure: closure.clone(),
-            }),
-        ))),
+            });
+            Ok(CallArgValue::Eval(eval_value_from_callable_value(
+                &callable,
+            )))
+        }
     }
 }
 
@@ -3784,15 +3863,16 @@ fn built_in_callable_arg_for_call_target(
     call_target: &FunctionCallTarget,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> Result<CallArgValue, EvaluationError> {
-    Ok(CallArgValue::Eval(EvalValue::Lambda(
-        built_in_callable_lambda_from_call_target(call_target, callable_registry),
+    let callable = built_in_callable_from_call_target(call_target, callable_registry);
+    Ok(CallArgValue::Eval(eval_value_from_callable_value(
+        &callable,
     )))
 }
 
-fn built_in_callable_lambda_from_call_target(
+fn built_in_callable_from_call_target(
     call_target: &FunctionCallTarget,
     callable_registry: &RefCell<CallableRegistry>,
-) -> OxLambdaValue {
+) -> OxCallableValue {
     callable_registry
         .borrow_mut()
         .register_builtin_call_target(call_target.clone())
@@ -4398,12 +4478,13 @@ fn evaluate_lambda_call(
 
     let parameter_names = lambda_param_names(&params);
     let capture_names = helper_capture_names(&args[body_index], &parameter_names, helper_bindings);
-    let value = EvalValue::Lambda(callable_registry.borrow_mut().register(LambdaBinding {
+    let callable = callable_registry.borrow_mut().register(LambdaBinding {
         origin_kind: CallableOriginKind::HelperLambda,
         params: Rc::from(params.into_boxed_slice()),
         body: Rc::new(args[body_index].clone()),
         closure: helper_closure_from_names(helper_bindings, &capture_names),
-    }));
+    });
+    let value = eval_value_from_callable_value(&callable);
     record_prepared_call_returned_value(trace, prepared_call_index, &value);
     Ok(value)
 }
@@ -4510,7 +4591,7 @@ fn evaluate_invocation(
             false,
             trace,
         )?;
-        if matches!(prepared, CallArgValue::Eval(EvalValue::Lambda(_))) {
+        if call_arg_callable_value(&prepared, callable_registry).is_some() {
             recursion_cost_units += LOCAL_CALLABLE_RECURSION_LAMBDA_ARG_COST_UNITS;
         }
         if records_prepared_calls {
@@ -4627,7 +4708,7 @@ fn lambda_binding_for_evaluated_callee(
         callable_registry,
         trace,
     )?;
-    let EvalValue::Lambda(lambda) = value else {
+    let Some(callable) = callable_value_from_carrier_eval_value(&value, callable_registry) else {
         return Err(EvaluationError {
             message: format!(
                 "only immediate, helper-bound, defined-name, or lambda-valued callable invocation is supported; callee evaluated to {}",
@@ -4635,15 +4716,13 @@ fn lambda_binding_for_evaluated_callee(
             ),
         });
     };
+    let callable_token = callable_token_from_oxfunc_callable(&callable);
     callable_registry
         .borrow()
-        .get(&lambda.callable_token)
+        .get(&callable_token)
         .map(|binding| binding.lambda.clone())
         .ok_or_else(|| EvaluationError {
-            message: format!(
-                "no callable binding available for lambda token {}",
-                lambda.callable_token
-            ),
+            message: format!("no callable binding available for callable token {callable_token}"),
         })
 }
 
@@ -4655,7 +4734,7 @@ fn eval_value_kind(value: &EvalValue) -> &'static str {
         EvalValue::Error(_) => "Error",
         EvalValue::Array(_) => "Array",
         EvalValue::Reference(_) => "Reference",
-        EvalValue::Lambda(_) => "Lambda",
+        _ => "Callable",
     }
 }
 
@@ -4695,13 +4774,18 @@ fn helper_binding_from_expr(
             }
         }
         _ => {
-            if let CallArgValue::Eval(EvalValue::Lambda(lambda)) = &fallback {
-                if let Some(binding) = callable_registry.borrow().get(&lambda.callable_token) {
-                    return HelperBinding::Lambda {
-                        params: binding.lambda.params.clone(),
-                        body: binding.lambda.body.clone(),
-                        closure: binding.lambda.closure.clone(),
-                    };
+            if let CallArgValue::Eval(value) = &fallback {
+                if let Some(callable) =
+                    callable_value_from_carrier_eval_value(value, callable_registry)
+                {
+                    let callable_token = callable_token_from_oxfunc_callable(&callable);
+                    if let Some(binding) = callable_registry.borrow().get(&callable_token) {
+                        return HelperBinding::Lambda {
+                            params: binding.lambda.params.clone(),
+                            body: binding.lambda.body.clone(),
+                            closure: binding.lambda.closure.clone(),
+                        };
+                    }
                 }
             }
             if matches!(
@@ -4831,11 +4915,16 @@ fn lambda_binding_for_callee(
                     body: body.clone(),
                     closure: closure.clone(),
                 }),
-                Some(HelperBinding::Arg(CallArgValue::Eval(EvalValue::Lambda(lambda)))) => {
-                    callable_registry
-                        .borrow()
-                        .get(&lambda.callable_token)
-                        .map(|binding| binding.lambda.clone())
+                Some(HelperBinding::Arg(CallArgValue::Eval(value))) => {
+                    callable_value_from_carrier_eval_value(value, callable_registry).and_then(
+                        |callable| {
+                            let callable_token = callable_token_from_oxfunc_callable(&callable);
+                            callable_registry
+                                .borrow()
+                                .get(&callable_token)
+                                .map(|binding| binding.lambda.clone())
+                        },
+                    )
                 }
                 _ => None,
             }
@@ -4852,11 +4941,16 @@ fn lambda_binding_for_callee(
                     body,
                     closure,
                 }),
-                Some(HelperBinding::Arg(CallArgValue::Eval(EvalValue::Lambda(lambda)))) => {
-                    callable_registry
-                        .borrow()
-                        .get(&lambda.callable_token)
-                        .map(|binding| binding.lambda.clone())
+                Some(HelperBinding::Arg(CallArgValue::Eval(value))) => {
+                    callable_value_from_carrier_eval_value(&value, callable_registry).and_then(
+                        |callable| {
+                            let callable_token = callable_token_from_oxfunc_callable(&callable);
+                            callable_registry
+                                .borrow()
+                                .get(&callable_token)
+                                .map(|binding| binding.lambda.clone())
+                        },
+                    )
                 }
                 _ => None,
             }
@@ -4921,16 +5015,17 @@ fn lambda_binding_from_defined_name_binding(
                     // Preserve nested callable closure entries so a callable can
                     // invoke another captured callable (composition / mutual
                     // reference). Register the nested callable in the shared
-                    // registry and carry it as a lambda value, mirroring how a
-                    // top-level `DefinedNameBinding::Callable` is surfaced.
+                    // registry and carry it as an opaque callable value, mirroring
+                    // how a top-level callable is surfaced.
                     DefinedNameBinding::Callable(nested) => {
                         // Build the nested binding (which itself borrows the
                         // registry for its cached body) before borrowing the
                         // registry to register it, to avoid a RefCell double-borrow.
                         let nested_binding =
                             lambda_binding_from_defined_name_binding(nested, callable_registry);
-                        HelperBinding::Arg(CallArgValue::Eval(EvalValue::Lambda(
-                            callable_registry.borrow_mut().register(nested_binding),
+                        let callable = callable_registry.borrow_mut().register(nested_binding);
+                        HelperBinding::Arg(CallArgValue::Eval(eval_value_from_callable_value(
+                            &callable,
                         )))
                     }
                 };
@@ -5472,6 +5567,38 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
         None
     };
 
+    if let Some(summary) = eval_value_callable_transport_summary(value)
+        .and_then(|token| callable_summary_from_transport_token(&token))
+    {
+        let profile = callable_profile_detail_from_summary(&summary);
+        return PreparedResult {
+            result_class: PreparedResultClass::Scalar,
+            structure_class: PreparedStructureClass::DirectScalar,
+            payload_summary: format!("Lambda({summary})"),
+            blankness_class: PreparedBlanknessClass::NonBlank,
+            reference_target: None,
+            callable_carrier: profile.as_ref().map(|profile| CallableValueCarrier {
+                origin_kind: eval_value_callable_transport_summary(value)
+                    .as_deref()
+                    .map(callable_origin_kind_from_transport_token)
+                    .unwrap_or(CallableOriginKind::HelperLambda),
+                invocation_model: CallableInvocationModel::TypedInvocationOnly,
+                capture_mode: if profile.capture_names.is_empty() {
+                    CallableCaptureMode::NoCapture
+                } else {
+                    CallableCaptureMode::LexicalCapture
+                },
+                arity: profile.arity,
+            }),
+            callable_profile: Some(summary),
+            callable_profile_detail: profile,
+            deferred_reason,
+            format_hint,
+            publication_hint,
+            capability_dependencies,
+        };
+    }
+
     match value {
         EvalValue::Number(number) => PreparedResult {
             result_class: PreparedResultClass::Scalar,
@@ -5557,21 +5684,38 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
             publication_hint,
             capability_dependencies,
         },
-        EvalValue::Lambda(name) => PreparedResult {
+        other => PreparedResult {
             result_class: PreparedResultClass::Scalar,
             structure_class: PreparedStructureClass::DirectScalar,
-            payload_summary: format!("Lambda({})", lambda_summary(name)),
+            payload_summary: format!("{other:?}"),
             blankness_class: PreparedBlanknessClass::NonBlank,
             reference_target: None,
-            callable_carrier: callable_carrier_from_lambda_value(name),
-            callable_profile: Some(lambda_summary(name).to_string()),
-            callable_profile_detail: callable_profile_detail_from_lambda_value(name),
+            callable_carrier: None,
+            callable_profile: None,
+            callable_profile_detail: None,
             deferred_reason: deferred_reason.clone(),
             format_hint,
             publication_hint,
             capability_dependencies,
         },
     }
+}
+
+fn prepared_result_from_portable_callable(
+    value: &EvalValue,
+    plan: &SemanticPlan,
+    portable: &PortableCallableValue,
+) -> PreparedResult {
+    let mut result = prepared_result_from_eval_value(value, plan);
+    result.result_class = PreparedResultClass::Scalar;
+    result.structure_class = PreparedStructureClass::DirectScalar;
+    result.payload_summary = format!("Callable({})", portable.binding.summary);
+    result.blankness_class = PreparedBlanknessClass::NonBlank;
+    result.reference_target = None;
+    result.callable_carrier = Some(portable.binding.carrier.clone());
+    result.callable_profile = Some(portable.binding.summary.clone());
+    result.callable_profile_detail = Some(portable.binding.profile.clone());
+    result
 }
 
 fn blankness_class_for_eval_value(value: &EvalValue) -> PreparedBlanknessClass {
@@ -5652,50 +5796,29 @@ fn callable_profile_detail_from_summary(summary: &str) -> Option<CallableValuePr
     })
 }
 
-fn callable_profile_detail_from_lambda_value(
-    lambda: &OxLambdaValue,
+fn callable_profile_detail_from_callable_value(
+    callable: &OxCallableValue,
 ) -> Option<CallableValueProfile> {
-    callable_profile_detail_from_summary(lambda_summary(lambda))
+    callable_profile_detail_from_summary(&callable.summary)
 }
 
-fn callable_carrier_from_lambda_value(lambda: &OxLambdaValue) -> Option<CallableValueCarrier> {
+fn callable_carrier_from_callable_value(
+    callable: &OxCallableValue,
+) -> Option<CallableValueCarrier> {
+    let profile = callable_profile_detail_from_callable_value(callable);
     Some(CallableValueCarrier {
-        origin_kind: callable_origin_kind_from_oxfunc(lambda.origin_kind),
+        origin_kind: CallableOriginKind::HelperLambda,
         invocation_model: CallableInvocationModel::TypedInvocationOnly,
-        capture_mode: callable_capture_mode_from_oxfunc(lambda.capture_mode),
-        arity: lambda.arity_shape.max,
+        capture_mode: if profile
+            .as_ref()
+            .is_some_and(|profile| !profile.capture_names.is_empty())
+        {
+            CallableCaptureMode::LexicalCapture
+        } else {
+            CallableCaptureMode::NoCapture
+        },
+        arity: callable.arity.max,
     })
-}
-
-fn callable_origin_kind_from_oxfunc(origin_kind: OxCallableOriginKind) -> CallableOriginKind {
-    match origin_kind {
-        OxCallableOriginKind::HelperLambda => CallableOriginKind::HelperLambda,
-        OxCallableOriginKind::DefinedNameCallable => CallableOriginKind::DefinedNameCallable,
-        OxCallableOriginKind::BuiltInCallable
-        | OxCallableOriginKind::ExternalRegisteredCallable => CallableOriginKind::HelperLambda,
-    }
-}
-
-fn callable_capture_mode_from_oxfunc(capture_mode: OxCallableCaptureMode) -> CallableCaptureMode {
-    match capture_mode {
-        OxCallableCaptureMode::NoCapture => CallableCaptureMode::NoCapture,
-        OxCallableCaptureMode::LexicalCapture => CallableCaptureMode::LexicalCapture,
-    }
-}
-
-fn oxfunc_origin_kind_from_local(origin_kind: CallableOriginKind) -> OxCallableOriginKind {
-    match origin_kind {
-        CallableOriginKind::HelperLambda => OxCallableOriginKind::HelperLambda,
-        CallableOriginKind::DefinedNameCallable => OxCallableOriginKind::DefinedNameCallable,
-    }
-}
-
-fn lambda_summary(lambda: &OxLambdaValue) -> &str {
-    lambda
-        .callable_token
-        .split_once("::")
-        .map(|(_, summary)| summary)
-        .unwrap_or(lambda.callable_token.as_str())
 }
 
 fn split_profile_list(value: &str) -> Vec<String> {
@@ -5846,9 +5969,7 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
                 .borrow()
                 .builtin_call_target(&callable_token)
                 .ok_or_else(|| {
-                    CallableInvocationError::UnsupportedCallableToken(
-                        callable_token.clone(),
-                    )
+                    CallableInvocationError::UnsupportedCallableToken(callable_token.clone())
                 })?;
             let call_args = args
                 .iter()
@@ -5863,7 +5984,8 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
             fec.callable_invoker = Some(self);
             fec.rtd_provider = self.context.rtd_provider;
             fec.registered_external_provider = self.context.registered_external_provider;
-            let calc_args = calc_values_from_call_args(&call_args);
+            let calc_args =
+                calc_values_from_call_args_with_registry(&call_args, self.callable_registry);
             let value = call_target
                 .invoke(&calc_args, &mut fec)
                 .map_err(|_| CallableInvocationError::Worksheet(WorksheetErrorCode::Value))?;
@@ -5872,14 +5994,7 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
             )));
         }
 
-        let binding = self
-            .callable_registry
-            .borrow()
-            .get(&callable_token)
-            .cloned()
-            .ok_or_else(|| {
-                CallableInvocationError::UnsupportedCallableToken(callable_token.clone())
-            })?;
+        let binding = registered_callable_binding_for_callable(callable, self.callable_registry)?;
         let local_slot_count = lambda_slot_count(&binding.lambda.params, &binding.lambda.body);
         let mut local_bindings = binding.lambda.closure.with_min_slot_count(local_slot_count);
         for (param, arg) in binding.lambda.params.iter().zip(args.iter()) {
@@ -5947,14 +6062,7 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
             return self.invoke_many_builtin_callable(callable, batch);
         }
 
-        let binding = self
-            .callable_registry
-            .borrow()
-            .get(&callable_token)
-            .cloned()
-            .ok_or_else(|| {
-                CallableInvocationError::UnsupportedCallableToken(callable_token.clone())
-            })?;
+        let binding = registered_callable_binding_for_callable(callable, self.callable_registry)?;
         let param_names = binding
             .lambda
             .params
@@ -6023,6 +6131,31 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
     }
 }
 
+fn registered_callable_binding_for_callable(
+    callable: &OxCallableValue,
+    callable_registry: &RefCell<CallableRegistry>,
+) -> Result<RegisteredCallableBinding, CallableInvocationError> {
+    let callable_token = callable_token_from_oxfunc_callable(callable);
+    if let Some(binding) = callable_registry.borrow().get(&callable_token).cloned() {
+        return Ok(binding);
+    }
+
+    if let Some(binding) = callable
+        .handle
+        .as_any()
+        .downcast_ref::<OxFmlCallableBinding>()
+    {
+        return Ok(RegisteredCallableBinding {
+            value: callable.clone(),
+            lambda: lambda_binding_from_defined_name_binding(&binding.binding, callable_registry),
+        });
+    }
+
+    Err(CallableInvocationError::UnsupportedCallableToken(
+        callable_token,
+    ))
+}
+
 impl OxFmlCallableInvoker<'_, '_> {
     fn invoke_many_builtin_callable(
         &self,
@@ -6081,7 +6214,10 @@ fn build_scratch_from_prepared_args(
     scratch.clear();
     for arg in args {
         let call_arg = call_arg_from_prepared(arg, callable_registry);
-        scratch.push_arg(calc_value_from_call_arg(&call_arg));
+        scratch.push_arg(calc_value_from_call_arg_with_registry(
+            &call_arg,
+            callable_registry,
+        ));
     }
 }
 
@@ -6110,7 +6246,7 @@ fn set_local_callable_arg_slots(
     let mut lambda_arg_count = 0usize;
     for ((param, param_key), arg) in params.iter().zip(param_keys.iter()).zip(args.iter()) {
         let call_arg = call_arg_from_prepared(arg, callable_registry);
-        if matches!(call_arg, CallArgValue::Eval(EvalValue::Lambda(_))) {
+        if call_arg_callable_value(&call_arg, callable_registry).is_some() {
             lambda_arg_count += 1;
         }
         let binding = HelperBinding::Arg(call_arg);
@@ -6149,10 +6285,11 @@ fn prepared_arg_contains_lambda(
     prepared: &PreparedArgValue,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> bool {
-    matches!(
-        call_arg_from_prepared(prepared, callable_registry),
-        CallArgValue::Eval(EvalValue::Lambda(_))
+    call_arg_callable_value(
+        &call_arg_from_prepared(prepared, callable_registry),
+        callable_registry,
     )
+    .is_some()
 }
 
 fn prepared_arg_from_eval_value(value: EvalValue) -> PreparedArgValue {
@@ -6160,12 +6297,7 @@ fn prepared_arg_from_eval_value(value: EvalValue) -> PreparedArgValue {
 }
 
 fn encode_callable_array_transport_value(value: EvalValue) -> EvalValue {
-    match value {
-        EvalValue::Lambda(lambda) => {
-            EvalValue::Text(callable_array_carrier_text(&lambda.callable_token))
-        }
-        other => other,
-    }
+    value
 }
 
 fn decode_callable_carrier_function_result(
@@ -6185,7 +6317,11 @@ fn decode_callable_carrier_scalar(
 ) -> EvalValue {
     match value {
         EvalValue::Text(text) => {
-            decode_callable_carrier_text(&text, callable_registry).unwrap_or(EvalValue::Text(text))
+            if decode_callable_carrier_text(&text, callable_registry).is_some() {
+                EvalValue::Text(text)
+            } else {
+                EvalValue::Text(text)
+            }
         }
         other => other,
     }
@@ -6196,9 +6332,7 @@ fn sanitize_final_output_value(
     callable_registry: &RefCell<CallableRegistry>,
 ) -> EvalValue {
     match value {
-        EvalValue::Text(text) => {
-            decode_callable_carrier_text(&text, callable_registry).unwrap_or(EvalValue::Text(text))
-        }
+        EvalValue::Text(text) => EvalValue::Text(text),
         EvalValue::Array(array) => {
             let shape = array.shape();
             let mut cells = Vec::with_capacity(shape.rows * shape.cols);
@@ -6228,18 +6362,44 @@ fn callable_array_carrier_text(token: &str) -> ExcelText {
     ExcelText::from_interop_assignment(&format!("{}{}", CALLABLE_ARRAY_CARRIER_PREFIX, token))
 }
 
+fn eval_value_from_callable_value(callable: &OxCallableValue) -> EvalValue {
+    EvalValue::Text(callable_array_carrier_text(
+        &callable_token_from_oxfunc_callable(callable),
+    ))
+}
+
+fn callable_value_from_carrier_eval_value(
+    value: &EvalValue,
+    callable_registry: &RefCell<CallableRegistry>,
+) -> Option<OxCallableValue> {
+    let EvalValue::Text(text) = value else {
+        return None;
+    };
+    decode_callable_carrier_text(text, callable_registry)
+}
+
+fn call_arg_callable_value(
+    call_arg: &CallArgValue,
+    callable_registry: &RefCell<CallableRegistry>,
+) -> Option<OxCallableValue> {
+    let CallArgValue::Eval(value) = call_arg else {
+        return None;
+    };
+    callable_value_from_carrier_eval_value(value, callable_registry)
+}
+
 fn decode_callable_carrier_text(
     text: &ExcelText,
     callable_registry: &RefCell<CallableRegistry>,
-) -> Option<EvalValue> {
+) -> Option<OxCallableValue> {
     let token = text
         .to_string_lossy()
         .strip_prefix(CALLABLE_ARRAY_CARRIER_PREFIX)?
         .to_string();
-    callable_registry
-        .borrow()
+    let registry = callable_registry.borrow();
+    registry
         .value(&token)
-        .map(EvalValue::Lambda)
+        .or_else(|| registry.builtin_value(&token))
 }
 
 fn array_cell_value_from_eval_value(value: Option<EvalValue>) -> ArrayCellValue {
@@ -6248,12 +6408,10 @@ fn array_cell_value_from_eval_value(value: Option<EvalValue>) -> ArrayCellValue 
         Some(EvalValue::Text(text)) => ArrayCellValue::Text(text),
         Some(EvalValue::Logical(value)) => ArrayCellValue::Logical(value),
         Some(EvalValue::Error(code)) => ArrayCellValue::Error(code),
-        Some(EvalValue::Lambda(lambda)) => {
-            ArrayCellValue::Text(callable_array_carrier_text(&lambda.callable_token))
-        }
         Some(EvalValue::Array(_)) | Some(EvalValue::Reference(_)) => {
             ArrayCellValue::Error(WorksheetErrorCode::Value)
         }
+        Some(_) => ArrayCellValue::Error(WorksheetErrorCode::Calc),
         None => ArrayCellValue::EmptyCell,
     }
 }
@@ -6277,8 +6435,47 @@ fn is_scalar_empty_cell_array(value: &EvalValue) -> bool {
 
 const CALLABLE_ARRAY_CARRIER_PREFIX: &str = "oxfml.callable-array::";
 
-fn callable_token(id: usize, summary: &str) -> String {
-    format!("oxfml.callable.{id}::{summary}")
+pub(crate) fn eval_value_is_callable_transport(value: &EvalValue) -> bool {
+    matches!(
+        value,
+        EvalValue::Text(text) if text.to_string_lossy().starts_with(CALLABLE_ARRAY_CARRIER_PREFIX)
+    )
+}
+
+pub(crate) fn eval_value_callable_transport_summary(value: &EvalValue) -> Option<String> {
+    let EvalValue::Text(text) = value else {
+        return None;
+    };
+    text.to_string_lossy()
+        .strip_prefix(CALLABLE_ARRAY_CARRIER_PREFIX)
+        .map(|token| token.to_string())
+}
+
+fn callable_summary_from_transport_token(token: &str) -> Option<String> {
+    token
+        .split_once("::")
+        .map(|(_, summary)| summary.to_string())
+        .or_else(|| Some(token.to_string()))
+}
+
+fn callable_origin_kind_from_transport_token(token: &str) -> CallableOriginKind {
+    if token
+        .split_once("::")
+        .map(|(prefix, _)| prefix.ends_with(".defined"))
+        .unwrap_or(false)
+    {
+        CallableOriginKind::DefinedNameCallable
+    } else {
+        CallableOriginKind::HelperLambda
+    }
+}
+
+fn callable_token(id: usize, origin_kind: CallableOriginKind, summary: &str) -> String {
+    let origin = match origin_kind {
+        CallableOriginKind::HelperLambda => "helper",
+        CallableOriginKind::DefinedNameCallable => "defined",
+    };
+    format!("oxfml.callable.{id}.{origin}::{summary}")
 }
 
 #[cfg(test)]

@@ -2025,14 +2025,13 @@ fn evaluator_executes_helper_bound_returned_lambda_invocation() {
 }
 
 #[test]
-fn evaluator_returns_lambda_value_from_helper_bound_returned_lambda() {
+fn evaluator_surfaces_callable_metadata_from_helper_bound_returned_callable() {
     let output = evaluate(
         "=LET(adder,LAMBDA(n,LAMBDA(x,x+n)),adder(5))",
         None,
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert!(matches!(output.oxfunc_value, EvalValue::Lambda(_)));
     assert_eq!(
         output
             .result
@@ -2832,7 +2831,7 @@ fn eval_value_summary(value: &EvalValue) -> String {
             format!("Array({cells})")
         }
         EvalValue::Reference(reference) => format!("Reference({})", reference.target),
-        EvalValue::Lambda(lambda) => format!("Lambda({})", lambda.callable_token),
+        other => format!("Unsupported({other:?})"),
     }
 }
 

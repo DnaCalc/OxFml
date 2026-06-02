@@ -16,6 +16,7 @@ use crate::binding::{
 use crate::consumer::ConsumerLibraryContextState;
 use crate::eval::{
     DefinedNameBinding, EvaluationBackend, EvaluationOutput, EvaluationTraceMode, PreparedCall,
+    eval_value_callable_transport_summary, eval_value_is_callable_transport,
 };
 use crate::host::{ArtifactReuseReport, FirstHostReplayCapturePacket};
 pub use crate::host::{HostRecalcOutput, SingleFormulaHost};
@@ -2141,6 +2142,18 @@ fn error_for_value(
 }
 
 fn value_preview(value: &EvalValue) -> Option<FormulaDrillValuePreview> {
+    if eval_value_is_callable_transport(value) {
+        return Some(FormulaDrillValuePreview {
+            value_kind: "callable".to_string(),
+            array_shape: None,
+            preview: vec![format!(
+                "callable:{}",
+                eval_value_callable_transport_summary(value).unwrap_or_default()
+            )],
+            truncated: false,
+            rich_value_type_name: None,
+        });
+    }
     match value {
         EvalValue::Array(array) => {
             let shape = array.shape();
@@ -2160,16 +2173,6 @@ fn value_preview(value: &EvalValue) -> Option<FormulaDrillValuePreview> {
                 rich_value_type_name: None,
             })
         }
-        EvalValue::Lambda(lambda) => Some(FormulaDrillValuePreview {
-            value_kind: "lambda".to_string(),
-            array_shape: None,
-            preview: vec![format!(
-                "callable:{}:{}",
-                lambda.callable_token, lambda.invocation_contract_ref
-            )],
-            truncated: false,
-            rich_value_type_name: None,
-        }),
         _ => None,
     }
 }
@@ -2185,6 +2188,12 @@ fn array_cell_label(value: &ArrayCellValue) -> String {
 }
 
 fn eval_value_label(value: &EvalValue) -> String {
+    if eval_value_is_callable_transport(value) {
+        return format!(
+            "Callable({})",
+            eval_value_callable_transport_summary(value).unwrap_or_default()
+        );
+    }
     match value {
         EvalValue::Number(number) => format_number(*number),
         EvalValue::Text(text) => text.to_string_lossy(),
@@ -2195,7 +2204,7 @@ fn eval_value_label(value: &EvalValue) -> String {
             format!("Array({}x{})", shape.rows, shape.cols)
         }
         EvalValue::Reference(reference) => reference.target.clone(),
-        EvalValue::Lambda(lambda) => format!("Lambda({})", lambda.callable_token),
+        other => format!("{other:?}"),
     }
 }
 

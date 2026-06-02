@@ -1,7 +1,15 @@
 use oxfunc_core::locale_format::FormatProfile;
 use oxfunc_core::value::{ArrayCellValue, EvalValue, WorksheetErrorCode};
 
+use crate::eval::{eval_value_callable_transport_summary, eval_value_is_callable_transport};
+
 pub fn render_visible_value_text(value: &EvalValue) -> String {
+    if eval_value_is_callable_transport(value) {
+        return format!(
+            "Callable({})",
+            eval_value_callable_transport_summary(value).unwrap_or_default()
+        );
+    }
     match value {
         EvalValue::Number(number) => render_visible_number(*number),
         EvalValue::Text(text) => text.to_string_lossy(),
@@ -18,7 +26,7 @@ pub fn render_visible_value_text(value: &EvalValue) -> String {
             .map(render_array_cell_text)
             .unwrap_or_default(),
         EvalValue::Reference(reference) => reference.target.clone(),
-        EvalValue::Lambda(lambda) => format!("Lambda({})", lambda.callable_token),
+        other => format!("{other:?}"),
     }
 }
 

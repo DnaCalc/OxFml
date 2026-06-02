@@ -124,6 +124,6 @@ fn summarize_eval_value(value: &EvalValue) -> String {
         EvalValue::Logical(value) => format!("Logical({value})"),
         EvalValue::Error(code) => format!("Error({code:?})"),
         EvalValue::Reference(reference) => format!("Reference({})", reference.target),
-        EvalValue::Lambda(lambda) => format!("Lambda({})", lambda.callable_token),
+        other => format!("Unsupported({other:?})"),
     }
 }

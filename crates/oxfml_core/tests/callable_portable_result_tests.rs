@@ -476,10 +476,11 @@ fn cell_captured_reference_uses_display_identity_and_no_defined_name_binding() {
 // invoke it. fml-ds0.20's round-trip tests above place the re-supplied name in
 // direct *call* position (`=CapFn(99)`), which is served by the defined-name
 // call-position fast path. The bead's distinct scope is the value/deref path: a
-// `DefinedNameBinding::Callable` supplied back as a name first dereferences to an
-// `EvalValue::Lambda` value, and only then is invoked. These tests complete the
-// result -> store -> re-supply -> invoke round-trip for that path and assert that
-// captured refs re-resolve live (not from a baked snapshot).
+// `DefinedNameBinding::Callable` supplied back as a name first dereferences to
+// private callable transport, then rehydrates to `CalcValue::callable` for
+// invocation. These tests complete the result -> store -> re-supply -> invoke
+// round-trip for that path and assert that captured refs re-resolve live (not
+// from a baked snapshot).
 
 /// Produce a portable callable from a top-level LAMBDA that captures the outer
 /// defined name `Cap`, defining `Cap` as `cap` in the producing scope.
@@ -501,8 +502,8 @@ fn produce_capped_callable(cap: f64) -> oxfml_core::eval::CallableDefinedNameBin
 fn resupplied_callable_invokes_from_let_value_position() {
     // Re-supply the callable as a defined name, bind it to a LET-local in *value*
     // position (`LET(g, Capped, ...)`), then invoke that local. The name resolves
-    // to an `EvalValue::Lambda` first (value/deref path), then is invoked — unlike
-    // the fml-ds0.20 direct-call-position round-trip.
+    // through private callable transport first (value/deref path), then rehydrates
+    // for invocation, unlike the fml-ds0.20 direct-call-position round-trip.
     let mut consumer = SingleFormulaHost::new("portable:bf2:let", "=LET(g, Capped, g(99))");
     consumer.set_defined_name_callable("Capped", produce_capped_callable(10.0));
     consumer.set_defined_name_value("Cap", EvalValue::Number(10.0));

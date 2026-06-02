@@ -4,7 +4,8 @@ use oxfunc_core::value::EvalValue;
 
 use crate::binding::BoundFormula;
 use crate::eval::{
-    DefinedNameBinding, EvaluationBackend, EvaluationContext, EvaluationOutput, evaluate_formula,
+    DefinedNameBinding, EvaluationBackend, EvaluationContext, EvaluationOutput,
+    eval_value_is_callable_transport, evaluate_formula,
 };
 use crate::interface::{
     LibraryContextSnapshotRef, TypedContextQueryBundle, TypedContextQueryBundleSpec,
@@ -1358,9 +1359,14 @@ fn value_payload_for_eval_value(
             ValuePayload::Text(format!("Reference({})", reference.target)),
             Some(Extent { rows: 1, cols: 1 }),
         ),
-        EvalValue::Lambda(name) => (
+        other if eval_value_is_callable_transport(other) => (
             WorksheetValueClass::Scalar,
-            ValuePayload::Text(format!("Lambda({})", name.callable_token)),
+            ValuePayload::Text("Callable".to_string()),
+            Some(Extent { rows: 1, cols: 1 }),
+        ),
+        other => (
+            WorksheetValueClass::Scalar,
+            ValuePayload::Text(format!("{other:?}")),
             Some(Extent { rows: 1, cols: 1 }),
         ),
     }

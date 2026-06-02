@@ -368,7 +368,7 @@ fn eval_value_summary(value: &EvalValue) -> String {
             format!("Array({}x{})", shape.rows, shape.cols)
         }
         EvalValue::Reference(reference) => format!("Reference({})", reference.target),
-        EvalValue::Lambda(lambda) => format!("Lambda({})", lambda.callable_token),
+        other => format!("Unsupported({other:?})"),
     }
 }
 

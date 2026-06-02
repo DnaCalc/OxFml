@@ -4,6 +4,7 @@ use oxfunc_core::locale_format::{LocaleFormatContext, WorkbookDateSystem, ymd_fr
 use oxfunc_core::value::{ArrayCellValue, EvalValue, ExcelText, PresentationHint};
 use serde_json::{Value, json};
 
+use crate::eval::{eval_value_callable_transport_summary, eval_value_is_callable_transport};
 use crate::format::number::{
     render_text_with_number_format_code, selected_number_format_section_color,
     selected_text_format_section_color,
@@ -669,6 +670,12 @@ fn published_worksheet_value_class(value: &EvalValue) -> WorksheetValueClass {
 }
 
 fn comparison_value_json(value: &EvalValue) -> Value {
+    if eval_value_is_callable_transport(value) {
+        return json!({
+            "kind": "callable",
+            "summary": eval_value_callable_transport_summary(value).unwrap_or_default()
+        });
+    }
     match value {
         EvalValue::Number(number) => json!({
             "kind": "number",
@@ -703,16 +710,9 @@ fn comparison_value_json(value: &EvalValue) -> Value {
             "reference_kind": format!("{:?}", reference.kind),
             "target": reference.target
         }),
-        EvalValue::Lambda(lambda) => json!({
-            "kind": "lambda",
-            "callable_token": lambda.callable_token,
-            "origin_kind": format!("{:?}", lambda.origin_kind),
-            "arity_shape": {
-                "min": lambda.arity_shape.min,
-                "max": lambda.arity_shape.max
-            },
-            "capture_mode": format!("{:?}", lambda.capture_mode),
-            "invocation_contract_ref": lambda.invocation_contract_ref
+        other => json!({
+            "kind": "unsupported",
+            "summary": format!("{other:?}")
         }),
     }
 }

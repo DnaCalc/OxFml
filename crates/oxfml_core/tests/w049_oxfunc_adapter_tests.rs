@@ -535,7 +535,7 @@ fn adapter_preserves_internal_lambda_but_publishes_calc_for_bare_lambda() {
 
     assert_eq!(
         run.evaluation_artifact.evaluation_result.payload_summary,
-        "Lambda(arity=1;required_arity=1;params=x;optional_params=-;captures=-;body=Binary)"
+        "Callable(arity=1;required_arity=1;params=x;optional_params=-;captures=-;body=Binary)"
     );
     assert_eq!(
         run.evaluation_artifact.worksheet_value,

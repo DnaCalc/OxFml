@@ -13,7 +13,8 @@ use crate::binding::{
 };
 use crate::eval::{
     CallableDefinedNameBinding, DefinedNameBinding, EvaluationBackend, EvaluationContext,
-    EvaluationOutput, EvaluationTraceMode, PortableCallableValue, evaluate_formula,
+    EvaluationOutput, EvaluationTraceMode, PortableCallableValue, eval_value_is_callable_transport,
+    evaluate_formula,
 };
 use crate::format::canonicalize_locale_context;
 use crate::interface::{
@@ -1109,9 +1110,10 @@ fn execution_outcome_surface(commit_decision: &AcceptDecision) -> ExecutionOutco
 }
 
 fn published_worksheet_value(value: &EvalValue) -> EvalValue {
-    match value {
-        EvalValue::Lambda(_) => EvalValue::Error(WorksheetErrorCode::Calc),
-        _ => value.clone(),
+    if eval_value_is_callable_transport(value) {
+        EvalValue::Error(WorksheetErrorCode::Calc)
+    } else {
+        value.clone()
     }
 }
 
@@ -1315,9 +1317,14 @@ fn value_payload_for_eval_value(
             ValuePayload::Text(format!("Reference({})", reference.target)),
             Some(Extent { rows: 1, cols: 1 }),
         ),
-        EvalValue::Lambda(name) => (
+        other if eval_value_is_callable_transport(other) => (
             WorksheetValueClass::Scalar,
-            ValuePayload::Text(format!("Lambda({})", name.callable_token)),
+            ValuePayload::Text("Callable".to_string()),
+            Some(Extent { rows: 1, cols: 1 }),
+        ),
+        other => (
+            WorksheetValueClass::Scalar,
+            ValuePayload::Text(format!("{other:?}")),
             Some(Extent { rows: 1, cols: 1 }),
         ),
     }

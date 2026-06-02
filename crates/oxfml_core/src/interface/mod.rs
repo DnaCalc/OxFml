@@ -14,6 +14,7 @@ use oxfunc_core::value::{
     CalcValue, CoreValue, EvalValue, PresentationHint, RichValue, WorksheetErrorCode,
 };
 
+use crate::eval::{eval_value_callable_transport_summary, eval_value_is_callable_transport};
 use crate::semantics::{LibraryContextSnapshot, LibraryContextSnapshotEntry};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -793,6 +794,12 @@ fn snapshot_entry_matches_surface_key(
 }
 
 fn eval_value_summary(value: &EvalValue) -> String {
+    if eval_value_is_callable_transport(value) {
+        return format!(
+            "Callable({})",
+            eval_value_callable_transport_summary(value).unwrap_or_default()
+        );
+    }
     match value {
         EvalValue::Number(_) => "Number".to_string(),
         EvalValue::Text(_) => "Text".to_string(),
@@ -803,7 +810,7 @@ fn eval_value_summary(value: &EvalValue) -> String {
             format!("Array({}x{})", shape.rows, shape.cols)
         }
         EvalValue::Reference(reference) => format!("Reference({})", reference.target),
-        EvalValue::Lambda(lambda) => format!("Lambda({})", lambda.callable_token),
+        other => format!("{other:?}"),
     }
 }
 
