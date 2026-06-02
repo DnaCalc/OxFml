@@ -728,13 +728,7 @@ fn replay_host_case(fixture: &HostReplayFixture) -> HostRecalcOutput {
             .strip_prefix("Reference(")
             .and_then(|value| value.strip_suffix(')'))
         {
-            host.set_defined_name_reference(
-                name,
-                ReferenceLike {
-                    kind: ReferenceKind::A1,
-                    target: target.to_string(),
-                },
-            );
+            host.set_defined_name_reference(name, ReferenceLike::new(ReferenceKind::A1, target));
         } else {
             host.set_defined_name_value(name, parse_eval_value_wire(wire_value));
         }

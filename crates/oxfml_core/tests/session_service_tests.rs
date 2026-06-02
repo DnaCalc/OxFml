@@ -44,7 +44,6 @@ fn managed_session_happy_path_runs_through_commit() {
             caller_col: 1,
             cell_values: BTreeMap::new(),
             defined_names,
-            sparse_reference_values: BTreeMap::new(),
             typed_query_bundle: session_query_bundle(None),
         })
         .expect("execute should succeed");
@@ -124,7 +123,6 @@ fn managed_session_carries_library_snapshot_ref_and_typed_query_bundle_spec() {
             caller_col: 1,
             cell_values: BTreeMap::new(),
             defined_names: BTreeMap::new(),
-            sparse_reference_values: BTreeMap::new(),
             typed_query_bundle: session_query_bundle(None),
         })
         .expect("execute should succeed");
@@ -141,8 +139,9 @@ fn managed_session_carries_library_snapshot_ref_and_typed_query_bundle_spec() {
         .as_ref()
         .expect("session should record typed bundle spec");
     assert!(
-        spec.families
-            .contains(&TypedContextQueryFamily::ReferenceResolver)
+        !spec
+            .families
+            .contains(&TypedContextQueryFamily::ReferenceSystemProvider)
     );
     assert!(
         spec.families
@@ -185,7 +184,6 @@ fn managed_session_rejects_contention_on_busy_locus_until_release() {
             caller_col: 1,
             cell_values: BTreeMap::new(),
             defined_names: BTreeMap::new(),
-            sparse_reference_values: BTreeMap::new(),
             typed_query_bundle: session_query_bundle(Some(&SessionMockHostInfoProvider)),
         })
         .expect("primary execute should succeed");
@@ -213,7 +211,6 @@ fn managed_session_rejects_contention_on_busy_locus_until_release() {
             caller_col: 1,
             cell_values: BTreeMap::new(),
             defined_names: BTreeMap::new(),
-            sparse_reference_values: BTreeMap::new(),
             typed_query_bundle: session_query_bundle(Some(&SessionMockHostInfoProvider)),
         })
         .expect_err("secondary execute should reject on contention");
@@ -276,7 +273,6 @@ fn managed_session_abort_prevents_execute() {
             caller_col: 1,
             cell_values: BTreeMap::new(),
             defined_names: BTreeMap::new(),
-            sparse_reference_values: BTreeMap::new(),
             typed_query_bundle: session_query_bundle(None),
         })
         .expect_err("execute should reject");
@@ -316,7 +312,6 @@ fn managed_session_rejects_second_execute_as_structural_conflict() {
             caller_col: 1,
             cell_values: BTreeMap::new(),
             defined_names: defined_names.clone(),
-            sparse_reference_values: BTreeMap::new(),
             typed_query_bundle: session_query_bundle(None),
         })
         .expect("first execute should succeed");
@@ -329,7 +324,6 @@ fn managed_session_rejects_second_execute_as_structural_conflict() {
             caller_col: 1,
             cell_values: BTreeMap::new(),
             defined_names,
-            sparse_reference_values: BTreeMap::new(),
             typed_query_bundle: session_query_bundle(None),
         })
         .expect_err("second execute should reject");
@@ -361,7 +355,6 @@ fn managed_session_rejects_commit_on_stale_formula_token_fence() {
             caller_col: 1,
             cell_values: BTreeMap::new(),
             defined_names,
-            sparse_reference_values: BTreeMap::new(),
             typed_query_bundle: session_query_bundle(None),
         })
         .expect("execute should succeed");
@@ -425,7 +418,6 @@ fn managed_session_surfaces_execution_restriction_effects() {
             caller_col: 1,
             cell_values: BTreeMap::new(),
             defined_names: BTreeMap::new(),
-            sparse_reference_values: BTreeMap::new(),
             typed_query_bundle: session_query_bundle(Some(&SessionMockHostInfoProvider)),
         })
         .expect("execute should succeed");
@@ -499,7 +491,6 @@ fn managed_session_external_provider_lane_surfaces_dynamic_reference_and_async_e
             caller_col: 1,
             cell_values: BTreeMap::new(),
             defined_names: BTreeMap::new(),
-            sparse_reference_values: BTreeMap::new(),
             typed_query_bundle: session_query_bundle(None),
         })
         .expect("execute should succeed");

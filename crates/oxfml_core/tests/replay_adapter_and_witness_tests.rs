@@ -905,8 +905,8 @@ fn sample_candidate() -> AcceptedCandidateResult {
         },
         format_delta: None,
         display_delta: None,
-        returned_value_surface: ReturnedValueSurface::from_extended_value(
-            &oxfunc_core::value::ExtendedValue::Core(oxfunc_core::value::EvalValue::Number(42.0)),
+        returned_value_surface: ReturnedValueSurface::from_calc_value(
+            &oxfunc_core::value::CalcValue::number(42.0),
         ),
         spill_events: vec![SpillEvent {
             spill_event_kind: SpillEventKind::SpillTakeover,

@@ -8,7 +8,7 @@ use oxfml_core::{
     build_verification_publication_surface,
 };
 use oxfunc_core::value::{
-    ArrayCellValue, EvalArray, EvalValue, ExcelText, ExtendedValue, WorksheetErrorCode,
+    ArrayCellValue, CalcValue, EvalArray, EvalValue, ExcelText, WorksheetErrorCode,
 };
 
 fn surface_for_array(
@@ -28,7 +28,7 @@ fn surface_for_value(
     let locale = oxfml_en_us_locale_context();
     let source = FormulaSourceRecord::new("cf-array", 1, "=A1#");
     let returned_value_surface =
-        ReturnedValueSurface::from_extended_value(&ExtendedValue::Core(value.clone()));
+        ReturnedValueSurface::from_calc_value(&CalcValue::from(value.clone()));
     let topology_delta = TopologyDelta {
         formula_stable_id: "cf-array".to_string(),
         dependency_additions: Vec::new(),

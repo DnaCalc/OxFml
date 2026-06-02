@@ -6,17 +6,14 @@ use oxfunc_core::functions::call_register_id_family::{
 use oxfunc_core::functions::rtd_fn::RtdProvider;
 use oxfunc_core::host_info::HostInfoProvider;
 use oxfunc_core::locale_format::LocaleFormatContext;
-use oxfunc_core::value::{
-    CalcValue, EvalValue, ExcelText, ExtendedValue, ReferenceLike, WorksheetErrorCode,
-};
+use oxfunc_core::value::{CalcValue, EvalValue, ExcelText, ReferenceLike, WorksheetErrorCode};
 
 use crate::binding::{
     BindContext, BindDiagnostic, BindRequest, BoundFormula, NameKind, bind_formula_incremental,
 };
 use crate::eval::{
     CallableDefinedNameBinding, DefinedNameBinding, EvaluationBackend, EvaluationContext,
-    EvaluationOutput, EvaluationTraceMode, PortableCallableValue, SparseReferenceValuesBinding,
-    evaluate_formula,
+    EvaluationOutput, EvaluationTraceMode, PortableCallableValue, evaluate_formula,
 };
 use crate::format::canonicalize_locale_context;
 use crate::interface::{
@@ -80,7 +77,6 @@ pub struct SingleFormulaHost {
     pub primary_locus: Locus,
     pub defined_names: BTreeMap<String, DefinedNameBinding>,
     pub cell_values: BTreeMap<String, EvalValue>,
-    pub sparse_reference_values: BTreeMap<String, SparseReferenceValuesBinding>,
     pub table_catalog: Vec<TableDescriptor>,
     pub enclosing_table_ref: Option<TableRef>,
     pub caller_table_region: Option<TableCallerRegion>,
@@ -243,7 +239,6 @@ impl SingleFormulaHost {
             },
             defined_names: BTreeMap::new(),
             cell_values: BTreeMap::new(),
-            sparse_reference_values: BTreeMap::new(),
             table_catalog: Vec::new(),
             enclosing_table_ref: None,
             caller_table_region: None,
@@ -559,7 +554,6 @@ impl SingleFormulaHost {
         evaluation_context.caller_col = self.caller_col as usize;
         evaluation_context.cell_values = self.cell_values.clone();
         evaluation_context.defined_names = self.defined_names.clone();
-        evaluation_context.sparse_reference_values = self.sparse_reference_values.clone();
         evaluation_context.apply_typed_context_query_bundle(effective_query_bundle);
         evaluation_context.set_trace_mode(self.trace_mode);
 
@@ -1028,7 +1022,7 @@ fn effective_query_bundle<'a>(
         locale_ctx: query_bundle.locale_ctx,
         now_serial: query_bundle.now_serial.or(host.now_serial),
         random_provider: query_bundle.random_provider,
-        reference_text_resolver: query_bundle.reference_text_resolver,
+        reference_system_provider: query_bundle.reference_system_provider,
     }
 }
 
@@ -1087,8 +1081,8 @@ fn synthetic_bind_mismatch_evaluation(
             capability_dependencies: semantic_plan.capability_requirements.clone(),
         },
         oxfunc_value: EvalValue::Error(WorksheetErrorCode::Value),
-        returned_value_surface: ReturnedValueSurface::from_extended_value(&ExtendedValue::Core(
-            EvalValue::Error(WorksheetErrorCode::Value),
+        returned_value_surface: ReturnedValueSurface::from_calc_value(&CalcValue::error(
+            WorksheetErrorCode::Value,
         )),
         portable_callable: None,
         trace: crate::eval::EvaluationTrace {
@@ -1133,7 +1127,7 @@ fn published_returned_value_surface(
     {
         evaluation.returned_value_surface.clone()
     } else {
-        ReturnedValueSurface::from_extended_value(&ExtendedValue::Core(published_value.clone()))
+        ReturnedValueSurface::from_calc_value(&CalcValue::from(published_value.clone()))
     }
 }
 
@@ -1146,8 +1140,8 @@ mod tests {
     };
     use crate::interface::{ReturnedValueSurface, ReturnedValueSurfaceKind};
     use oxfunc_core::value::{
-        EvalValue, ExcelText, ExtendedValue, RichObjectValue, RichValue, RichValueData,
-        RichValueType, WorksheetErrorCode,
+        CalcValue, CoreValue, EvalValue, ExcelText, RichObjectValue, RichValueData, RichValueType,
+        WorksheetErrorCode,
     };
 
     #[test]
@@ -1168,8 +1162,9 @@ mod tests {
                 capability_dependencies: Vec::new(),
             },
             oxfunc_value: EvalValue::Text(ExcelText::from_interop_assignment("Sphere")),
-            returned_value_surface: ReturnedValueSurface::from_extended_value(
-                &ExtendedValue::RichValue(Box::new(RichValue::Object(RichObjectValue {
+            returned_value_surface: ReturnedValueSurface::from_calc_value(&CalcValue::rich_object(
+                CoreValue::Text(ExcelText::from_interop_assignment("Sphere")),
+                RichObjectValue {
                     value_type: RichValueType {
                         type_name: "_webimage".to_string(),
                         required_keys: vec!["WebImageIdentifier".to_string()],
@@ -1177,8 +1172,8 @@ mod tests {
                     },
                     fallback: RichValueData::Text(ExcelText::from_interop_assignment("Sphere")),
                     kvps: vec![],
-                }))),
-            ),
+                },
+            )),
             portable_callable: None,
             trace: EvaluationTrace {
                 prepared_calls: Vec::new(),

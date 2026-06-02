@@ -194,10 +194,10 @@ fn parse_defined_name_summary(summary: &str) -> DefinedNameBinding {
         .strip_prefix("Reference(")
         .and_then(|rest| rest.strip_suffix(')'))
     {
-        return DefinedNameBinding::Reference(ReferenceLike {
-            kind: oxfunc_core::value::ReferenceKind::A1,
-            target: target.to_string(),
-        });
+        return DefinedNameBinding::Reference(ReferenceLike::new(
+            oxfunc_core::value::ReferenceKind::A1,
+            target,
+        ));
     }
 
     DefinedNameBinding::Value(parse_eval_value_summary(summary))

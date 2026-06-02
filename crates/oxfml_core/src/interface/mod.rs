@@ -9,16 +9,15 @@ use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult};
 use oxfunc_core::host_info::{HostInfoError, HostInfoProvider};
 use oxfunc_core::locale_format::LocaleFormatContext;
 use oxfunc_core::registry::builtin_registry;
-use oxfunc_core::resolver::ReferenceTextResolver;
+use oxfunc_core::resolver::ReferenceSystemProvider;
 use oxfunc_core::value::{
-    EvalValue, ExtendedValue, PresentationHint, RichValue, WorksheetErrorCode,
+    CalcValue, CoreValue, EvalValue, PresentationHint, RichValue, WorksheetErrorCode,
 };
 
 use crate::semantics::{LibraryContextSnapshot, LibraryContextSnapshotEntry};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TypedContextQueryFamily {
-    ReferenceResolver,
     CellInfo,
     Info,
     Image,
@@ -34,7 +33,7 @@ pub enum TypedContextQueryFamily {
     NowSerial,
     RandomProvider,
     LocaleFormatContext,
-    ReferenceTextResolver,
+    ReferenceSystemProvider,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -94,7 +93,7 @@ pub struct TypedContextQueryBundle<'a> {
     pub locale_ctx: Option<&'a LocaleFormatContext<'a>>,
     pub now_serial: Option<f64>,
     pub random_provider: Option<&'a dyn RandomProvider>,
-    pub reference_text_resolver: Option<&'a dyn ReferenceTextResolver>,
+    pub reference_system_provider: Option<&'a dyn ReferenceSystemProvider>,
 }
 
 impl std::fmt::Debug for TypedContextQueryBundle<'_> {
@@ -114,8 +113,8 @@ impl std::fmt::Debug for TypedContextQueryBundle<'_> {
             .field("now_serial_enabled", &self.now_serial.is_some())
             .field("random_provider_enabled", &self.random_provider.is_some())
             .field(
-                "reference_text_resolver_enabled",
-                &self.reference_text_resolver.is_some(),
+                "reference_system_provider_enabled",
+                &self.reference_system_provider.is_some(),
             )
             .finish()
     }
@@ -131,7 +130,7 @@ impl<'a> Default for TypedContextQueryBundle<'a> {
             locale_ctx: None,
             now_serial: None,
             random_provider: None,
-            reference_text_resolver: None,
+            reference_system_provider: None,
         }
     }
 }
@@ -152,7 +151,7 @@ impl<'a> TypedContextQueryBundle<'a> {
             locale_ctx,
             now_serial,
             random_provider,
-            reference_text_resolver: None,
+            reference_system_provider: None,
         }
     }
 
@@ -172,16 +171,16 @@ impl<'a> TypedContextQueryBundle<'a> {
         self
     }
 
-    pub fn with_reference_text_resolver(
+    pub fn with_reference_system_provider(
         mut self,
-        reference_text_resolver: Option<&'a dyn ReferenceTextResolver>,
+        reference_system_provider: Option<&'a dyn ReferenceSystemProvider>,
     ) -> Self {
-        self.reference_text_resolver = reference_text_resolver;
+        self.reference_system_provider = reference_system_provider;
         self
     }
 
     pub fn freeze_candidate_spec(&self) -> TypedContextQueryBundleSpec {
-        let mut families = BTreeSet::from([TypedContextQueryFamily::ReferenceResolver]);
+        let mut families = BTreeSet::new();
         if self.host_info.is_some() {
             families.extend([
                 TypedContextQueryFamily::CellInfo,
@@ -213,8 +212,8 @@ impl<'a> TypedContextQueryBundle<'a> {
         if self.locale_ctx.is_some() {
             families.insert(TypedContextQueryFamily::LocaleFormatContext);
         }
-        if self.reference_text_resolver.is_some() {
-            families.insert(TypedContextQueryFamily::ReferenceTextResolver);
+        if self.reference_system_provider.is_some() {
+            families.insert(TypedContextQueryFamily::ReferenceSystemProvider);
         }
 
         TypedContextQueryBundleSpec {
@@ -548,40 +547,31 @@ pub struct ReturnedValueSurface {
 }
 
 impl ReturnedValueSurface {
-    pub fn from_extended_value(value: &ExtendedValue) -> Self {
-        match value {
-            ExtendedValue::Core(core) => Self {
-                kind: ReturnedValueSurfaceKind::OrdinaryValue,
-                payload_summary: eval_value_summary(core),
-                rich_value_type_name: None,
-                producer_capability_set_keys: Vec::new(),
-                exercised_capability_keys: Vec::new(),
-                presentation_hint: None,
-                host_provider_outcome: None,
-            },
-            ExtendedValue::RichValue(rich) => Self {
+    pub fn from_calc_value(value: &CalcValue) -> Self {
+        match value.rich() {
+            Some(RichValue::Object(object)) => Self {
                 kind: ReturnedValueSurfaceKind::RichValue,
-                payload_summary: format!("RichValue({})", rich_value_type_name(rich.as_ref())),
-                rich_value_type_name: Some(rich_value_type_name(rich.as_ref()).to_string()),
+                payload_summary: format!("RichValue({})", object.value_type.type_name),
+                rich_value_type_name: Some(object.value_type.type_name.clone()),
                 producer_capability_set_keys: rich_value_producer_capability_set_keys(
-                    rich_value_type_name(rich.as_ref()),
+                    &object.value_type.type_name,
                 ),
                 exercised_capability_keys: Vec::new(),
                 presentation_hint: None,
                 host_provider_outcome: None,
             },
-            ExtendedValue::ValueWithPresentation { value, hint } => Self {
+            Some(RichValue::Presentation(presentation)) => Self {
                 kind: ReturnedValueSurfaceKind::ValueWithPresentation,
-                payload_summary: eval_value_summary(value),
+                payload_summary: core_value_summary(value.core()),
                 rich_value_type_name: None,
                 producer_capability_set_keys: Vec::new(),
                 exercised_capability_keys: Vec::new(),
-                presentation_hint: Some(*hint),
+                presentation_hint: Some(presentation.hint),
                 host_provider_outcome: None,
             },
-            ExtendedValue::ErrorWithMetadata { code, .. } => Self {
+            Some(RichValue::ErrorMetadata(_)) | Some(RichValue::Callable(_)) | None => Self {
                 kind: ReturnedValueSurfaceKind::OrdinaryValue,
-                payload_summary: format!("Error({code:?})"),
+                payload_summary: core_value_summary(value.core()),
                 rich_value_type_name: None,
                 producer_capability_set_keys: Vec::new(),
                 exercised_capability_keys: Vec::new(),
@@ -591,12 +581,12 @@ impl ReturnedValueSurface {
         }
     }
 
-    pub fn from_extended_value_with_capability_keys(
-        value: &ExtendedValue,
+    pub fn from_calc_value_with_capability_keys(
+        value: &CalcValue,
         producer_capability_set_keys: Vec<String>,
         exercised_capability_keys: Vec<String>,
     ) -> Self {
-        let mut surface = Self::from_extended_value(value);
+        let mut surface = Self::from_calc_value(value);
         surface.producer_capability_set_keys = producer_capability_set_keys;
         surface.exercised_capability_keys = exercised_capability_keys;
         surface
@@ -777,15 +767,6 @@ impl ReturnedValueSurface {
     }
 }
 
-fn rich_value_type_name(value: &RichValue) -> &str {
-    match value {
-        RichValue::Object(object) => &object.value_type.type_name,
-        RichValue::Callable(_) => "callable",
-        RichValue::Presentation(_) => "presentation",
-        RichValue::ErrorMetadata(_) => "error_metadata",
-    }
-}
-
 fn rich_value_producer_capability_set_keys(type_name: &str) -> Vec<String> {
     match type_name {
         "_webimage" => builtin_registry()
@@ -823,5 +804,21 @@ fn eval_value_summary(value: &EvalValue) -> String {
         }
         EvalValue::Reference(reference) => format!("Reference({})", reference.target),
         EvalValue::Lambda(lambda) => format!("Lambda({})", lambda.callable_token),
+    }
+}
+
+fn core_value_summary(value: &CoreValue) -> String {
+    match value {
+        CoreValue::Number(_) => "Number".to_string(),
+        CoreValue::Text(_) => "Text".to_string(),
+        CoreValue::Logical(_) => "Logical".to_string(),
+        CoreValue::Error(code) => format!("Error({code:?})"),
+        CoreValue::Empty => "Empty".to_string(),
+        CoreValue::Missing => "Missing".to_string(),
+        CoreValue::Array(array) => {
+            let shape = array.shape();
+            format!("Array({}x{})", shape.rows, shape.cols)
+        }
+        CoreValue::Reference(reference) => format!("Reference({})", reference.target),
     }
 }

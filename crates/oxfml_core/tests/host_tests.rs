@@ -73,10 +73,7 @@ fn single_formula_host_invalidates_bind_reuse_when_name_kind_changes() {
 
     host.set_defined_name_reference(
         "InputValue",
-        ReferenceLike {
-            kind: oxfunc_core::value::ReferenceKind::A1,
-            target: "A1".to_string(),
-        },
+        ReferenceLike::new(oxfunc_core::value::ReferenceKind::A1, "A1"),
     );
     host.set_cell_value("A1", EvalValue::Number(5.0));
     let run = host

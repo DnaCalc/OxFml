@@ -10,6 +10,46 @@ pub struct ParseRequest {
     pub source: FormulaSourceRecord,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct HostReferenceSyntaxProfile {
+    pub collection_members: Vec<HostReferenceCollectionSyntax>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostReferenceCollectionSyntax {
+    pub token_text: String,
+    pub collection_family: String,
+}
+
+impl HostReferenceSyntaxProfile {
+    pub fn with_collection_members(
+        collection_members: impl IntoIterator<Item = HostReferenceCollectionSyntax>,
+    ) -> Self {
+        Self {
+            collection_members: collection_members.into_iter().collect(),
+        }
+    }
+
+    pub fn collection_family_for(&self, token_text: &str) -> Option<&str> {
+        let normalized = normalize_host_reference_collection_token(token_text);
+        self.collection_members
+            .iter()
+            .find(|member| {
+                normalize_host_reference_collection_token(&member.token_text) == normalized
+            })
+            .map(|member| member.collection_family.as_str())
+    }
+}
+
+impl HostReferenceCollectionSyntax {
+    pub fn new(token_text: impl Into<String>, collection_family: impl Into<String>) -> Self {
+        Self {
+            token_text: token_text.into(),
+            collection_family: collection_family.into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseResult {
     pub green_tree: GreenTreeRoot,
@@ -22,6 +62,13 @@ pub struct IncrementalParseResult {
 }
 
 pub fn parse_formula(request: ParseRequest) -> ParseResult {
+    parse_formula_with_host_reference_syntax(request, &HostReferenceSyntaxProfile::default())
+}
+
+pub fn parse_formula_with_host_reference_syntax(
+    request: ParseRequest,
+    host_reference_syntax: &HostReferenceSyntaxProfile,
+) -> ParseResult {
     let full_tokens = lex(&request.source.entered_formula_text);
     if let Some(root) = worksheet_cell_entry_literal_root(&request.source, &full_tokens) {
         return ParseResult {
@@ -29,7 +76,7 @@ pub fn parse_formula(request: ParseRequest) -> ParseResult {
         };
     }
 
-    let mut parser = Parser::new(full_tokens.clone());
+    let mut parser = Parser::new(full_tokens.clone(), host_reference_syntax.clone());
     let root = attach_trivia_to_green_tree(parser.parse_formula_root(), &full_tokens);
     ParseResult {
         green_tree: GreenTreeRoot::from_parts(root, full_tokens, parser.diagnostics),
@@ -157,14 +204,16 @@ struct Parser {
     tokens: Vec<Token>,
     index: usize,
     diagnostics: Vec<SyntaxDiagnostic>,
+    host_reference_syntax: HostReferenceSyntaxProfile,
 }
 
 impl Parser {
-    fn new(tokens: Vec<Token>) -> Self {
+    fn new(tokens: Vec<Token>, host_reference_syntax: HostReferenceSyntaxProfile) -> Self {
         Self {
             tokens,
             index: 0,
             diagnostics: Vec::new(),
+            host_reference_syntax,
         }
     }
 
@@ -345,11 +394,57 @@ impl Parser {
         self.skip_whitespace();
         if self.at(TokenKind::At) {
             let at = self.bump();
+            self.skip_whitespace();
+            if self.at(TokenKind::Identifier) || self.at(TokenKind::Star) {
+                let member = self.bump();
+                if self
+                    .host_reference_syntax
+                    .collection_family_for(&member.text)
+                    .is_some()
+                {
+                    return GreenNode::new(
+                        SyntaxKind::HostReferenceCollectionExpr,
+                        vec![GreenChild::Token(at), GreenChild::Token(member)],
+                    );
+                }
+                let expr =
+                    GreenNode::new(SyntaxKind::IdentifierExpr, vec![GreenChild::Token(member)]);
+                return GreenNode::new(
+                    SyntaxKind::PrefixExpr,
+                    vec![GreenChild::Token(at), GreenChild::Node(Box::new(expr))],
+                );
+            }
             let expr = self.parse_range(allow_union_comma);
             return GreenNode::new(
                 SyntaxKind::PrefixExpr,
                 vec![GreenChild::Token(at), GreenChild::Node(Box::new(expr))],
             );
+        }
+        if self.at(TokenKind::Dot) {
+            let dot = self.bump();
+            self.skip_whitespace();
+            let at = self.at(TokenKind::At).then(|| self.bump());
+            self.skip_whitespace();
+            if self.at(TokenKind::Identifier) || self.at(TokenKind::Star) {
+                let member = self.bump();
+                if self
+                    .host_reference_syntax
+                    .collection_family_for(&member.text)
+                    .is_some()
+                {
+                    let mut children = vec![GreenChild::Token(dot)];
+                    if let Some(at) = at {
+                        children.push(GreenChild::Token(at));
+                    }
+                    children.push(GreenChild::Token(member));
+                    return GreenNode::new(SyntaxKind::HostReferenceCollectionExpr, children);
+                }
+            }
+            self.diagnostics.push(SyntaxDiagnostic {
+                message: "expected host reference collection selector".to_string(),
+                span: dot.span,
+            });
+            return GreenNode::new(SyntaxKind::MissingExpr, vec![GreenChild::Token(dot)]);
         }
 
         let mut left = self.parse_postfix();
@@ -583,6 +678,7 @@ impl Parser {
                 | TokenKind::BracketedQualifier
                 | TokenKind::Number
                 | TokenKind::At
+                | TokenKind::Dot
                 | TokenKind::LParen
                 | TokenKind::LBrace
         )
@@ -612,6 +708,10 @@ impl Parser {
             Token::new(kind, String::new(), token.span)
         }
     }
+}
+
+fn normalize_host_reference_collection_token(text: &str) -> String {
+    text.trim_start_matches('@').to_ascii_uppercase()
 }
 
 fn attach_trivia_to_green_tree(root: GreenNode, full_tokens: &[Token]) -> GreenNode {

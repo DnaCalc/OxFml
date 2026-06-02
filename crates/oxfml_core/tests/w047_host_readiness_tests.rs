@@ -216,7 +216,6 @@ fn first_host_replay_capture_packet_preserves_snapshot_and_provider_outcomes() {
     assert_eq!(
         info_packet.typed_query_bundle_spec.families,
         vec![
-            oxfml_core::TypedContextQueryFamily::ReferenceResolver,
             oxfml_core::TypedContextQueryFamily::CellInfo,
             oxfml_core::TypedContextQueryFamily::Info,
             oxfml_core::TypedContextQueryFamily::Image,

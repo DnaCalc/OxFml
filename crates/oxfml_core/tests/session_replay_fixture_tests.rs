@@ -81,7 +81,6 @@ fn session_lifecycle_replay_fixtures_match_expected_snapshots() {
                         caller_col: 1,
                         cell_values: BTreeMap::new(),
                         defined_names,
-                        sparse_reference_values: BTreeMap::new(),
                         typed_query_bundle: session_query_bundle(None),
                     })
                     .expect("execute should succeed");
@@ -196,7 +195,6 @@ fn session_lifecycle_replay_fixtures_match_expected_snapshots() {
                         caller_col: 1,
                         cell_values: BTreeMap::new(),
                         defined_names,
-                        sparse_reference_values: BTreeMap::new(),
                         typed_query_bundle: session_query_bundle(None),
                     })
                     .expect("execute should succeed");
@@ -270,7 +268,6 @@ fn session_lifecycle_replay_fixtures_match_expected_snapshots() {
                         caller_col: 1,
                         cell_values: BTreeMap::new(),
                         defined_names: defined_names.clone(),
-                        sparse_reference_values: BTreeMap::new(),
                         typed_query_bundle: session_query_bundle(None),
                     })
                     .expect("first execute should succeed");
@@ -282,7 +279,6 @@ fn session_lifecycle_replay_fixtures_match_expected_snapshots() {
                         caller_col: 1,
                         cell_values: BTreeMap::new(),
                         defined_names,
-                        sparse_reference_values: BTreeMap::new(),
                         typed_query_bundle: session_query_bundle(None),
                     })
                     .expect_err("second execute should reject");
@@ -340,7 +336,6 @@ fn session_lifecycle_replay_fixtures_match_expected_snapshots() {
                         caller_col: 1,
                         cell_values: BTreeMap::new(),
                         defined_names: BTreeMap::new(),
-                        sparse_reference_values: BTreeMap::new(),
                         typed_query_bundle: session_query_bundle(Some(&ReplayHostInfoProvider)),
                     })
                     .expect("primary execute should succeed");
@@ -364,7 +359,6 @@ fn session_lifecycle_replay_fixtures_match_expected_snapshots() {
                         caller_col: 1,
                         cell_values: BTreeMap::new(),
                         defined_names: BTreeMap::new(),
-                        sparse_reference_values: BTreeMap::new(),
                         typed_query_bundle: session_query_bundle(Some(&ReplayHostInfoProvider)),
                     })
                     .expect_err("second execute should reject");

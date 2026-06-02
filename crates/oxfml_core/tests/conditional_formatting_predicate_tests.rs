@@ -4,7 +4,7 @@ use oxfml_core::{
     VerificationConditionalFormattingRule, VerificationPublicationContext,
     VerificationPublicationSurface, build_verification_publication_surface,
 };
-use oxfunc_core::value::{EvalValue, ExcelText, ExtendedValue, WorksheetErrorCode};
+use oxfunc_core::value::{CalcValue, EvalValue, ExcelText, WorksheetErrorCode};
 
 fn surface_for(
     value: EvalValue,
@@ -14,7 +14,7 @@ fn surface_for(
     let locale = oxfml_en_us_locale_context();
     let source = FormulaSourceRecord::new("cf-predicate", 1, "=A1");
     let returned_value_surface =
-        ReturnedValueSurface::from_extended_value(&ExtendedValue::Core(value.clone()));
+        ReturnedValueSurface::from_calc_value(&CalcValue::from(value.clone()));
     let topology_delta = TopologyDelta {
         formula_stable_id: "cf-predicate".to_string(),
         dependency_additions: Vec::new(),

@@ -10,8 +10,7 @@ use oxfml_core::consumer::runtime::{
     RuntimeEnvironment, RuntimeFormalInputBinding, RuntimeFormulaRequest,
     RuntimeHostFormulaContext, RuntimeHostNameBindResult, RuntimeHostNameBinding,
     RuntimeHostReferenceBindResult, RuntimeManagedSessionError, RuntimeManagedSessionPhase,
-    RuntimeOxFuncBridgeMetadata, RuntimeSessionFacade, RuntimeSparseReferenceCell,
-    RuntimeSparseReferenceValuesBinding,
+    RuntimeOxFuncBridgeMetadata, RuntimeSessionFacade,
 };
 use oxfml_core::format::{
     oxfml_en_us_format_profile, oxfml_en_us_locale_context, worksheet_error_text,
@@ -53,8 +52,12 @@ use oxfunc_core::locale_format::{
 };
 use oxfunc_core::registry::{
     ArgAdmissionMetadata, CapabilityOverlay, FunctionEntry, FunctionRegistryMetadata,
-    FunctionSource, ParameterDescriptor, RegistryFunctionMeta, SemanticKernelMetadata,
-    SignatureForm, builtin_registry,
+    FunctionSource, ParameterDescriptor, RegistryFunctionMeta, RichValueUsage,
+    SemanticKernelMetadata, SignatureForm, builtin_registry,
+};
+use oxfunc_core::resolver::{
+    ReferenceEnumerationRequest, ReferenceResolutionError, ReferenceSystemProvider,
+    ResolvedReferenceCell, ResolvedReferenceExtent, ResolvedReferenceValues,
 };
 use oxfunc_core::value::{
     ArrayCellValue, ArrayShape, EvalArray, EvalValue, ReferenceKind, ReferenceLike,
@@ -472,8 +475,32 @@ fn runtime_result_exposes_prepared_formula_identity_for_direct_execution() {
     );
 }
 
+struct RuntimeTestReferenceSystemProvider {
+    reference: ReferenceLike,
+    values: ResolvedReferenceValues,
+}
+
+impl RuntimeTestReferenceSystemProvider {
+    fn new(reference: ReferenceLike, values: ResolvedReferenceValues) -> Self {
+        Self { reference, values }
+    }
+}
+
+impl ReferenceSystemProvider for RuntimeTestReferenceSystemProvider {
+    fn enumerate_values(
+        &self,
+        request: &ReferenceEnumerationRequest,
+    ) -> Result<Option<ResolvedReferenceValues>, ReferenceResolutionError> {
+        if request.reference == self.reference {
+            Ok(Some(self.values.clone()))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
 #[test]
-fn runtime_sparse_reference_bindings_feed_first_aggregate_group() {
+fn runtime_reference_system_provider_feeds_first_aggregate_group() {
     let cases = [
         ("=SUM(InputRef)", EvalValue::Number(2.0)),
         ("=COUNT(InputRef)", EvalValue::Number(1.0)),
@@ -483,29 +510,18 @@ fn runtime_sparse_reference_bindings_feed_first_aggregate_group() {
 
     for (formula, expected) in cases {
         let reference = ReferenceLike::new(ReferenceKind::Area, "host:sparse:A1:A5");
-        let request = RuntimeFormulaRequest::new(
-            FormulaSourceRecord::new("runtime:w051-sparse", 1, formula),
-            TypedContextQueryBundle::default(),
-        );
-
-        let result = RuntimeEnvironment::new()
-            .with_formal_input_bindings(vec![RuntimeFormalInputBinding {
-                reference_handle: None,
-                reference_descriptor: "name:InputRef".to_string(),
-                binding: oxfml_core::DefinedNameBinding::Reference(reference.clone()),
-            }])
-            .with_sparse_reference_value_bindings(vec![RuntimeSparseReferenceValuesBinding {
-                reference,
-                declared_rows: 5,
-                declared_cols: 1,
-                defined_cells: vec![
-                    RuntimeSparseReferenceCell::new(1, 1, ArrayCellValue::Number(2.0)),
-                    RuntimeSparseReferenceCell::new(
+        let provider = RuntimeTestReferenceSystemProvider::new(
+            reference.clone(),
+            ResolvedReferenceValues::new(
+                ResolvedReferenceExtent::new(5, 1),
+                vec![
+                    ResolvedReferenceCell::new(1, 1, ArrayCellValue::Number(2.0)),
+                    ResolvedReferenceCell::new(
                         2,
                         1,
                         ArrayCellValue::Text(ExcelText::from_utf16_code_units(Vec::new())),
                     ),
-                    RuntimeSparseReferenceCell::new(
+                    ResolvedReferenceCell::new(
                         3,
                         1,
                         ArrayCellValue::Text(ExcelText::from_utf16_code_units(
@@ -513,7 +529,19 @@ fn runtime_sparse_reference_bindings_feed_first_aggregate_group() {
                         )),
                     ),
                 ],
-                reader_identity: Some("reader:w051:sparse:A1:A5".to_string()),
+                Some("reader:w051:sparse:A1:A5".to_string()),
+            ),
+        );
+        let request = RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new("runtime:w051-sparse", 1, formula),
+            TypedContextQueryBundle::default().with_reference_system_provider(Some(&provider)),
+        );
+
+        let result = RuntimeEnvironment::new()
+            .with_formal_input_bindings(vec![RuntimeFormalInputBinding {
+                reference_handle: None,
+                reference_descriptor: "name:InputRef".to_string(),
+                binding: oxfml_core::DefinedNameBinding::Reference(reference.clone()),
             }])
             .execute(request)
             .expect("sparse reference aggregate should execute");
@@ -533,25 +561,26 @@ fn runtime_structured_references_use_sparse_values_when_available() {
 
     for (formula, expected) in cases {
         let reference = ReferenceLike::new(ReferenceKind::Area, "B2:B4");
-        let result = RuntimeEnvironment::new()
-            .with_table_context(vec![runtime_w074_table("B2:B4")], None, None)
-            .with_sparse_reference_value_bindings(vec![RuntimeSparseReferenceValuesBinding {
-                reference,
-                declared_rows: 3,
-                declared_cols: 1,
-                defined_cells: vec![
-                    RuntimeSparseReferenceCell::new(1, 1, ArrayCellValue::Number(2.0)),
-                    RuntimeSparseReferenceCell::new(
+        let provider = RuntimeTestReferenceSystemProvider::new(
+            reference.clone(),
+            ResolvedReferenceValues::new(
+                ResolvedReferenceExtent::new(3, 1),
+                vec![
+                    ResolvedReferenceCell::new(1, 1, ArrayCellValue::Number(2.0)),
+                    ResolvedReferenceCell::new(
                         2,
                         1,
                         ArrayCellValue::Text(ExcelText::from_utf16_code_units(Vec::new())),
                     ),
                 ],
-                reader_identity: Some("reader:w056:table:B2:B4".to_string()),
-            }])
+                Some("reader:w056:table:B2:B4".to_string()),
+            ),
+        );
+        let result = RuntimeEnvironment::new()
+            .with_table_context(vec![runtime_w074_table("B2:B4")], None, None)
             .execute(RuntimeFormulaRequest::new(
                 FormulaSourceRecord::new("runtime:w056-structured-sparse", 1, formula),
-                TypedContextQueryBundle::default(),
+                TypedContextQueryBundle::default().with_reference_system_provider(Some(&provider)),
             ))
             .expect("structured sparse reference aggregate should execute");
 
@@ -3900,6 +3929,7 @@ fn runtime_test_udf_entry() -> FunctionEntry {
             arg_admission_metadata_version:
                 "arg_admission_metadata.v1;existing_arg_preparation=values_only_pre_adapter"
                     .to_string(),
+            rich_value_usage: RichValueUsage::RichBlind,
             producer_capability_set_keys: Vec::new(),
         },
         surface_name: "MYFUNC".to_string(),

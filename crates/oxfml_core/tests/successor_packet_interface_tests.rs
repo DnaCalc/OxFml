@@ -20,8 +20,8 @@ use oxfunc_core::host_info::{
     ResolvedWebImage,
 };
 use oxfunc_core::value::{
-    EvalValue, ExcelText, ExtendedValue, NumberFormatHint, PresentationHint, ReferenceLike,
-    RichObjectValue, RichValue, RichValueData, RichValueType,
+    CalcValue, CoreValue, EvalValue, ExcelText, NumberFormatHint, PresentationHint, ReferenceLike,
+    RichObjectValue, RichValueData, RichValueType,
 };
 
 mod common;
@@ -42,7 +42,6 @@ fn typed_context_query_bundle_freeze_candidate_stays_capability_scoped() {
     assert_eq!(
         spec.families,
         vec![
-            TypedContextQueryFamily::ReferenceResolver,
             TypedContextQueryFamily::CellInfo,
             TypedContextQueryFamily::Info,
             TypedContextQueryFamily::Image,
@@ -90,17 +89,15 @@ fn evaluation_context_round_trips_typed_context_query_bundle() {
 
 #[test]
 fn returned_value_surface_keeps_three_way_split() {
-    let ordinary =
-        ReturnedValueSurface::from_extended_value(&ExtendedValue::Core(EvalValue::Number(42.0)));
+    let ordinary = ReturnedValueSurface::from_calc_value(&CalcValue::number(42.0));
     assert_eq!(ordinary.kind, ReturnedValueSurfaceKind::OrdinaryValue);
     assert_eq!(ordinary.payload_summary, "Number");
     assert_eq!(ordinary.rich_value_type_name, None);
 
-    let with_presentation =
-        ReturnedValueSurface::from_extended_value(&ExtendedValue::ValueWithPresentation {
-            value: EvalValue::Number(42.0),
-            hint: PresentationHint::number_format(NumberFormatHint::Currency),
-        });
+    let with_presentation = ReturnedValueSurface::from_calc_value(&CalcValue::with_presentation(
+        CoreValue::Number(42.0),
+        PresentationHint::number_format(NumberFormatHint::Currency),
+    ));
     assert_eq!(
         with_presentation.kind,
         ReturnedValueSurfaceKind::ValueWithPresentation
@@ -125,8 +122,9 @@ fn returned_value_surface_keeps_three_way_split() {
 
 #[test]
 fn returned_value_surface_preserves_image_rich_value_class() {
-    let rich_value = ReturnedValueSurface::from_extended_value(&ExtendedValue::RichValue(
-        Box::new(RichValue::Object(RichObjectValue {
+    let rich_value = ReturnedValueSurface::from_calc_value(&CalcValue::rich_object(
+        CoreValue::Text(ExcelText::from_interop_assignment("Sphere")),
+        RichObjectValue {
             value_type: RichValueType {
                 type_name: "_webimage".to_string(),
                 required_keys: vec!["WebImageIdentifier".to_string()],
@@ -134,7 +132,7 @@ fn returned_value_surface_preserves_image_rich_value_class() {
             },
             fallback: RichValueData::Text(ExcelText::from_interop_assignment("Sphere")),
             kvps: vec![],
-        })),
+        },
     ));
     assert_eq!(rich_value.kind, ReturnedValueSurfaceKind::RichValue);
     assert_eq!(rich_value.payload_summary, "RichValue(_webimage)");

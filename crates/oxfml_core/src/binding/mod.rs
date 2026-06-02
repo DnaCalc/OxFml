@@ -22,6 +22,7 @@ use crate::source::{
     FormulaChannelKind, FormulaSourceRecord, FormulaToken, StructureContextVersion,
 };
 use crate::syntax::green::{GreenChild, GreenNode, GreenTreeRoot, SyntaxKind};
+use crate::syntax::parser::HostReferenceSyntaxProfile;
 use crate::syntax::token::TextSpan;
 use oxfunc_core::function::{ArgPreparationProfile, FecDependencyProfile, FunctionMeta};
 
@@ -100,12 +101,35 @@ pub struct HostNameResolveResult {
 pub trait HostNameResolver {
     fn resolve_host_name(&self, request: &HostNameResolveRequest) -> Option<HostNameResolveResult>;
 
+    fn resolve_host_reference_collection(
+        &self,
+        _request: &HostReferenceCollectionResolveRequest,
+    ) -> Option<HostReferenceCollectionResolveResult> {
+        None
+    }
+
     fn resolve_host_structural_selector(
         &self,
         _request: &HostStructuralSelectorResolveRequest,
     ) -> Option<HostStructuralSelectorResolveResult> {
         None
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostReferenceCollectionResolveRequest {
+    pub source: FormulaSourceRecord,
+    pub collection_handle: String,
+    pub collection_family: String,
+    pub base: Option<BoundExpr>,
+    pub source_span: TextSpan,
+    pub source_token_text: String,
+    pub member_token_text: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostReferenceCollectionResolveResult {
+    pub collection: BoundHostReferenceCollection,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -231,6 +255,7 @@ pub struct BindContext {
     pub table_catalog: Vec<TableDescriptor>,
     pub enclosing_table_ref: Option<TableRef>,
     pub caller_table_region: Option<TableCallerRegion>,
+    pub host_reference_syntax: HostReferenceSyntaxProfile,
 }
 
 impl Default for BindContext {
@@ -249,6 +274,7 @@ impl Default for BindContext {
             table_catalog: Vec::new(),
             enclosing_table_ref: None,
             caller_table_region: None,
+            host_reference_syntax: HostReferenceSyntaxProfile::default(),
         }
     }
 }
@@ -419,6 +445,7 @@ impl Binder<'_> {
             }
             SyntaxKind::QualifiedReferenceExpr => self.bind_qualified_reference(node),
             SyntaxKind::HostMemberReferenceExpr => self.bind_host_member_reference(node),
+            SyntaxKind::HostReferenceCollectionExpr => self.bind_host_reference_collection(node),
             SyntaxKind::RangeExpr => self.bind_range(node),
             SyntaxKind::UnionExpr => self.bind_union(node),
             SyntaxKind::IntersectionExpr => self.bind_intersection(node),
@@ -652,8 +679,8 @@ impl Binder<'_> {
                 _ => None,
             })
             .unwrap_or_default();
-        let selector_family = host_member_selector_family(&member);
-        let selector_handle = format!("host-member-selector:{}:{}", node.span.start, node.span.len);
+        let selector_family = self.host_reference_collection_family(&member);
+        let selector_handle = format!("hostref_selector_{}_{}", node.span.start, node.span.len);
         let source_token_text = node_source_text(node);
         if let Some(resolver) = self.host_name_resolver
             && let Some(result) =
@@ -667,8 +694,16 @@ impl Binder<'_> {
                     member_token_text: member.clone(),
                 })
         {
+            self.push_reference_seed(&host_reference_handle_normalized_reference(
+                &result.selector.selector_handle,
+                result.selector.caller_context_dependent,
+            ));
             return BoundExpr::HostStructuralSelector(result.selector);
         }
+        self.push_reference_seed(&host_reference_handle_normalized_reference(
+            &selector_handle,
+            true,
+        ));
         BoundExpr::HostStructuralSelector(BoundHostStructuralSelector {
             selector_handle,
             selector_family,
@@ -685,6 +720,75 @@ impl Binder<'_> {
                 node.span.start, node.span.len
             ),
         })
+    }
+
+    fn bind_host_reference_collection(&mut self, node: &GreenNode) -> BoundExpr {
+        let member = node
+            .children
+            .iter()
+            .rev()
+            .find_map(|child| match child {
+                GreenChild::Token(token)
+                    if matches!(
+                        token.kind,
+                        crate::syntax::token::TokenKind::Identifier
+                            | crate::syntax::token::TokenKind::Star
+                    ) =>
+                {
+                    Some(token.text.clone())
+                }
+                _ => None,
+            })
+            .unwrap_or_default();
+        let collection_family = self.host_reference_collection_family(&member);
+        let collection_handle = format!("hostref_collection_{}_{}", node.span.start, node.span.len);
+        let source_token_text = node_source_text(node);
+        if let Some(resolver) = self.host_name_resolver
+            && let Some(result) =
+                resolver.resolve_host_reference_collection(&HostReferenceCollectionResolveRequest {
+                    source: self.source.clone(),
+                    collection_handle: collection_handle.clone(),
+                    collection_family: collection_family.clone(),
+                    base: None,
+                    source_span: node.span,
+                    source_token_text: source_token_text.clone(),
+                    member_token_text: member.clone(),
+                })
+        {
+            self.push_reference_seed(&host_reference_handle_normalized_reference(
+                &result.collection.collection_handle,
+                result.collection.caller_context_dependent,
+            ));
+            return BoundExpr::HostReferenceCollection(result.collection);
+        }
+        self.push_reference_seed(&host_reference_handle_normalized_reference(
+            &collection_handle,
+            true,
+        ));
+        BoundExpr::HostReferenceCollection(BoundHostReferenceCollection {
+            collection_handle,
+            collection_family,
+            base: None,
+            members: Vec::new(),
+            source_span: node.span,
+            source_token_text,
+            resolution_layer: "host_reference_collection_syntax".to_string(),
+            shape_hint: Some("host_reference_collection".to_string()),
+            caller_context_dependent: true,
+            diagnostics: Vec::new(),
+            replay_identity_contribution: format!(
+                "host-reference-collection:v1:span={}:{};member={member}",
+                node.span.start, node.span.len
+            ),
+        })
+    }
+
+    fn host_reference_collection_family(&self, member: &str) -> String {
+        self.context
+            .host_reference_syntax
+            .collection_family_for(member)
+            .unwrap_or(member)
+            .to_ascii_lowercase()
     }
 
     fn bind_array_literal(&mut self, node: &GreenNode) -> BoundExpr {
@@ -1421,17 +1525,6 @@ fn builtin_function_call_authoring_diagnostic(
     None
 }
 
-fn host_member_selector_family(member: &str) -> String {
-    match member.trim_start_matches('@').to_ascii_uppercase().as_str() {
-        "CHILDREN" | "*" => "children".to_string(),
-        "PRECEDING" => "preceding".to_string(),
-        "FOLLOWING" => "following".to_string(),
-        "ANCESTORS" => "ancestors".to_string(),
-        "DESCENDANTS" | "**" => "recursive-descent".to_string(),
-        other => other.to_ascii_lowercase(),
-    }
-}
-
 fn builtin_function_arity_authoring_diagnostic(
     builtin_name: &str,
     min_arity: usize,
@@ -1556,6 +1649,19 @@ fn append_node_source_text(node: &GreenNode, text: &mut String) {
             GreenChild::Token(token) => text.push_str(&token.text),
         }
     }
+}
+
+fn host_reference_handle_normalized_reference(
+    handle: &str,
+    caller_context_dependent: bool,
+) -> NormalizedReference {
+    NormalizedReference::Name(NameRef {
+        name: handle.to_string(),
+        workbook_id: String::new(),
+        sheet_id: String::new(),
+        kind: NameKind::ReferenceLike,
+        caller_context_dependent,
+    })
 }
 
 #[derive(Debug, Clone)]

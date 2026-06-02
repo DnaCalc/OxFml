@@ -68,7 +68,6 @@ fn host_executes_register_id_and_call_through_registered_external_provider() {
         register_output.typed_query_bundle_spec,
         TypedContextQueryBundleSpec {
             families: vec![
-                TypedContextQueryFamily::ReferenceResolver,
                 TypedContextQueryFamily::RegisteredExternal,
                 TypedContextQueryFamily::NowSerial,
             ],
@@ -185,10 +184,10 @@ fn host_preserves_reference_visible_call_argument_for_registered_external_invoca
     let (_, args) = provider.last_invoke.borrow().clone().expect("invoke");
     assert_eq!(
         args,
-        vec![CallArgValue::Reference(ReferenceLike {
-            kind: ReferenceKind::A1,
-            target: "A1".to_string(),
-        })]
+        vec![CallArgValue::Reference(ReferenceLike::new(
+            ReferenceKind::A1,
+            "A1"
+        ))]
     );
 }
 

@@ -871,8 +871,8 @@ fn sample_candidate() -> AcceptedCandidateResult {
         },
         format_delta: None,
         display_delta: None,
-        returned_value_surface: ReturnedValueSurface::from_extended_value(
-            &oxfunc_core::value::ExtendedValue::Core(oxfunc_core::value::EvalValue::Number(42.0)),
+        returned_value_surface: ReturnedValueSurface::from_calc_value(
+            &oxfunc_core::value::CalcValue::number(42.0),
         ),
         spill_events: vec![SpillEvent {
             spill_event_kind: SpillEventKind::SpillTakeover,
@@ -1165,10 +1165,10 @@ fn parse_defined_name_summary(summary: &str) -> DefinedNameBinding {
         .strip_prefix("Reference(")
         .and_then(|rest| rest.strip_suffix(')'))
     {
-        return DefinedNameBinding::Reference(ReferenceLike {
-            kind: oxfunc_core::value::ReferenceKind::A1,
-            target: target.to_string(),
-        });
+        return DefinedNameBinding::Reference(ReferenceLike::new(
+            oxfunc_core::value::ReferenceKind::A1,
+            target,
+        ));
     }
 
     DefinedNameBinding::Value(parse_eval_value_summary(summary))

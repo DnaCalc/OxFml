@@ -59,6 +59,7 @@ pub use oxfunc_core::functions::call_register_id_family::{
 pub use binding::{
     BindContext, BindDiagnostic, BindRequest, BindResult, BoundExpr, BoundFormula,
     BoundHostReferenceCollection, BoundHostStructuralSelector, HostNameBindRecord,
+    HostReferenceCollectionResolveRequest, HostReferenceCollectionResolveResult,
     HostStructuralSelectorResolveRequest, HostStructuralSelectorResolveResult,
     IncrementalBindResult, NormalizedReference, ReferenceExpr,
     StructuredReferenceBindDiagnosticLink, StructuredReferenceBindRecord,
@@ -130,5 +131,7 @@ pub use source::{
 };
 pub use syntax::green::{GreenTreeRoot, SyntaxKind};
 pub use syntax::parser::{
-    IncrementalParseResult, ParseRequest, ParseResult, parse_formula, parse_formula_incremental,
+    HostReferenceCollectionSyntax, HostReferenceSyntaxProfile, IncrementalParseResult,
+    ParseRequest, ParseResult, parse_formula, parse_formula_incremental,
+    parse_formula_with_host_reference_syntax,
 };

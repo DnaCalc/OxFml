@@ -22,7 +22,7 @@ use oxfunc_core::function::{
 use oxfunc_core::registry::{
     ArgAdmissionMetadata, CapabilityOverlay, FunctionAvailability, FunctionEntry,
     FunctionRegistryMetadata, FunctionSource, ParameterDescriptor, RegistryFunctionMeta,
-    SemanticKernelMetadata, SignatureForm, builtin_registry,
+    RichValueUsage, SemanticKernelMetadata, SignatureForm, builtin_registry,
 };
 
 #[test]
@@ -1216,6 +1216,7 @@ fn test_udf_entry() -> FunctionEntry {
             arg_admission_metadata_version:
                 "arg_admission_metadata.v1;existing_arg_preparation=values_only_pre_adapter"
                     .to_string(),
+            rich_value_usage: RichValueUsage::RichBlind,
             producer_capability_set_keys: Vec::new(),
         },
         surface_name: "MYFUNC".to_string(),

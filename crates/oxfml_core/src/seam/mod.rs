@@ -497,7 +497,7 @@ mod tests {
     use crate::interface::ReturnedValueSurface;
     use crate::interface::ReturnedValueSurfaceKind;
     use oxfunc_core::value::{
-        ExcelText, ExtendedValue, RichObjectValue, RichValue, RichValueData, RichValueType,
+        CalcValue, CoreValue, ExcelText, RichObjectValue, RichValueData, RichValueType,
     };
 
     #[test]
@@ -558,8 +558,9 @@ mod tests {
             },
             format_delta: None,
             display_delta: None,
-            returned_value_surface: ReturnedValueSurface::from_extended_value(
-                &ExtendedValue::RichValue(Box::new(RichValue::Object(RichObjectValue {
+            returned_value_surface: ReturnedValueSurface::from_calc_value(&CalcValue::rich_object(
+                CoreValue::Text(ExcelText::from_interop_assignment("Sphere")),
+                RichObjectValue {
                     value_type: RichValueType {
                         type_name: "_webimage".to_string(),
                         required_keys: vec!["WebImageIdentifier".to_string()],
@@ -567,8 +568,8 @@ mod tests {
                     },
                     fallback: RichValueData::Text(ExcelText::from_interop_assignment("Sphere")),
                     kvps: Vec::new(),
-                }))),
-            ),
+                },
+            )),
             spill_events: Vec::<SpillEvent>::new(),
             execution_profile: None,
             trace_correlation_id: "trace:image".to_string(),

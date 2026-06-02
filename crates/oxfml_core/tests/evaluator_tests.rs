@@ -13,8 +13,8 @@ use oxfunc_core::host_info::{
 };
 use oxfunc_core::locale_format::LocaleFormatContext;
 use oxfunc_core::resolver::{
-    ReferenceTextResolutionError, ReferenceTextResolutionMode, ReferenceTextResolutionRequest,
-    ReferenceTextResolver,
+    CallerContext, ReferenceDereferenceRequest, ReferenceResolutionError, ReferenceSystemError,
+    ReferenceSystemProvider, ReferenceTextResolutionMode, ReferenceTextResolveRequest,
 };
 use oxfunc_core::value::{
     ArrayCellValue, CellStyleHint, EvalValue, ExcelText, NumberFormatHint, PresentationHint,
@@ -1184,23 +1184,21 @@ fn evaluator_runs_indirect_offset_and_iferror() {
 
 #[test]
 fn evaluator_threads_indirect_reference_text_resolution_to_oxfunc_fec() {
-    let resolver = RecordingReferenceTextResolver::new(ReferenceLike {
-        kind: ReferenceKind::A1,
-        target: "A2".to_string(),
-    });
-
     let mut cells = BTreeMap::new();
     cells.insert("A2".to_string(), EvalValue::Number(11.0));
+    let resolver =
+        RecordingReferenceSystemProvider::new(ReferenceLike::new(ReferenceKind::A1, "A2"))
+            .with_values(cells.clone());
     let output =
-        evaluate_with_reference_text_resolver("=INDIRECT(\"Tree.Node\")", &resolver, cells);
+        evaluate_with_reference_system_provider("=INDIRECT(\"Tree.Node\")", &resolver, cells);
 
     assert_eq!(output.oxfunc_value, EvalValue::Number(11.0));
     assert_eq!(
         output.trace.prepared_calls[0].returned_value,
-        Some(EvalValue::Reference(ReferenceLike {
-            kind: ReferenceKind::A1,
-            target: "A2".to_string(),
-        }))
+        Some(EvalValue::Reference(ReferenceLike::new(
+            ReferenceKind::A1,
+            "A2"
+        )))
     );
     let requests = resolver.requests.borrow();
     assert_eq!(requests.len(), 1);
@@ -1294,10 +1292,7 @@ fn evaluator_uses_defined_name_reference_for_cell_contents() {
     let mut bindings = BTreeMap::new();
     bindings.insert(
         "InputRef".to_string(),
-        DefinedNameBinding::Reference(ReferenceLike {
-            kind: ReferenceKind::A1,
-            target: "A1".to_string(),
-        }),
+        DefinedNameBinding::Reference(ReferenceLike::new(ReferenceKind::A1, "A1")),
     );
 
     let output = evaluate(
@@ -2559,33 +2554,60 @@ fn evaluate(
         .expect("evaluation should succeed")
 }
 
-struct RecordingReferenceTextResolver {
+struct RecordingReferenceSystemProvider {
     reference: ReferenceLike,
-    requests: RefCell<Vec<ReferenceTextResolutionRequest>>,
+    values: BTreeMap<String, EvalValue>,
+    requests: RefCell<Vec<ReferenceTextResolveRequest>>,
 }
 
-impl RecordingReferenceTextResolver {
+impl RecordingReferenceSystemProvider {
     fn new(reference: ReferenceLike) -> Self {
         Self {
             reference,
+            values: BTreeMap::new(),
             requests: RefCell::new(Vec::new()),
         }
     }
-}
 
-impl ReferenceTextResolver for RecordingReferenceTextResolver {
-    fn resolve_reference_text(
-        &self,
-        request: &ReferenceTextResolutionRequest,
-    ) -> Result<ReferenceLike, ReferenceTextResolutionError> {
-        self.requests.borrow_mut().push(request.clone());
-        Ok(self.reference.clone())
+    fn with_values(mut self, values: BTreeMap<String, EvalValue>) -> Self {
+        self.values = values;
+        self
     }
 }
 
-fn evaluate_with_reference_text_resolver(
+impl ReferenceSystemProvider for RecordingReferenceSystemProvider {
+    fn dereference(
+        &self,
+        request: &ReferenceDereferenceRequest,
+    ) -> Result<EvalValue, ReferenceResolutionError> {
+        self.values
+            .get(&request.reference.target)
+            .cloned()
+            .ok_or_else(|| ReferenceResolutionError::ProviderFailure {
+                detail: format!("unmapped reference {}", request.reference.target),
+            })
+    }
+
+    fn resolve_text(
+        &self,
+        request: &ReferenceTextResolveRequest,
+    ) -> Result<ReferenceLike, ReferenceSystemError> {
+        self.requests.borrow_mut().push(request.clone());
+        Ok(self.reference.clone())
+    }
+
+    fn caller_context(&self) -> Option<CallerContext> {
+        Some(CallerContext {
+            prefix: None,
+            row: 1,
+            col: 1,
+        })
+    }
+}
+
+fn evaluate_with_reference_system_provider(
     formula: &str,
-    reference_text_resolver: &dyn ReferenceTextResolver,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     cell_values: BTreeMap<String, EvalValue>,
 ) -> oxfml_core::EvaluationOutput {
     let compiled = common::compile_formula(
@@ -2597,7 +2619,7 @@ fn evaluate_with_reference_text_resolver(
     );
 
     let mut context = EvaluationContext::new(&compiled.bound_formula, &compiled.semantic_plan);
-    context.cell_values.extend(cell_values);
+    context.cell_values.extend(cell_values.clone());
     let locale = oxfml_en_us_locale_context();
     context.apply_typed_context_query_bundle(
         TypedContextQueryBundle::new(
@@ -2607,7 +2629,7 @@ fn evaluate_with_reference_text_resolver(
             Some(46000.0),
             Some(&oxfml_core::test_support::random::FIXED_RANDOM_PROVIDER_025),
         )
-        .with_reference_text_resolver(Some(reference_text_resolver)),
+        .with_reference_system_provider(Some(reference_system_provider)),
     );
     context.set_trace_mode(EvaluationTraceMode::PreparedCalls);
 

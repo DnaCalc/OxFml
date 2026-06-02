@@ -19,7 +19,7 @@ use oxfunc_core::functions::callable_helpers::{
 use oxfunc_core::functions::cell::{CellEvalError, eval_cell_surface};
 use oxfunc_core::functions::if_fn::{eval_if_surface, map_if_error_to_ws};
 use oxfunc_core::functions::iferror::{eval_iferror_surface, map_iferror_error_to_ws};
-use oxfunc_core::functions::image_fn::eval_image_surface_extended_with_capabilities;
+use oxfunc_core::functions::image_fn::eval_image_surface_rich_with_capabilities;
 use oxfunc_core::functions::info_fn::{InfoEvalError, eval_info_surface};
 use oxfunc_core::functions::rand_fn::RandomProvider;
 use oxfunc_core::functions::rtd_fn::RtdProvider;
@@ -31,19 +31,18 @@ use oxfunc_core::functions::surface_dispatch::{
     FUNC_ID_OP_LESS_THAN, FUNC_ID_OP_MULTIPLY, FUNC_ID_OP_NEGATE, FUNC_ID_OP_NOT_EQUAL,
     FUNC_ID_OP_PERCENT, FUNC_ID_OP_POWER, FUNC_ID_OP_RANGE_REF, FUNC_ID_OP_SPILL_REF,
     FUNC_ID_OP_SUBTRACT, FUNC_ID_OP_UNARY_PLUS, FUNC_ID_OP_UNION_REF, FUNC_ID_REGISTER_ID,
-    FUNC_ID_RTD, FUNC_ID_TAKE, FUNC_ID_TODAY, FUNC_ID_XLOOKUP, eval_surface_extended_call,
+    FUNC_ID_RTD, FUNC_ID_TAKE, FUNC_ID_TODAY, FUNC_ID_XLOOKUP, eval_surface_rich_value_call,
 };
 use oxfunc_core::host_info::HostInfoProvider;
 use oxfunc_core::locale_format::LocaleFormatContext;
 use oxfunc_core::resolver::resolve_eval_value as resolve_oxfunc_eval_value;
 use oxfunc_core::resolver::{
-    CallerContext as OxFuncCallerContext, RefResolutionError, ReferenceResolver,
-    ReferenceTextResolver, ResolvedReferenceValues, ResolverCapabilities,
+    NULL_REFERENCE_SYSTEM_PROVIDER, ReferenceResolutionError, ReferenceSystemProvider,
 };
 use oxfunc_core::value::{
     ArrayCellValue, CalcValue, CallArgValue, CallableArityShape as OxCallableArityShape,
     CallableCaptureMode as OxCallableCaptureMode, CallableOriginKind as OxCallableOriginKind,
-    CallableValue as OxCallableValue, EvalArray, EvalValue, ExcelText, ExtendedValue,
+    CallableValue as OxCallableValue, CoreValue, EvalArray, EvalValue, ExcelText,
     LambdaValue as OxLambdaValue, OpaqueCallable, ReferenceKind, ReferenceLike, WorksheetErrorCode,
 };
 use stacker::maybe_grow;
@@ -524,12 +523,6 @@ pub enum DefinedNameBinding {
     Value(EvalValue),
     Reference(ReferenceLike),
     Callable(CallableDefinedNameBinding),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct SparseReferenceValuesBinding {
-    pub reference: ReferenceLike,
-    pub values: ResolvedReferenceValues,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1609,26 +1602,31 @@ fn legacy_call_args_from_calc_values(args: &[CalcValue]) -> Vec<CallArgValue> {
     args.iter().cloned().map(CallArgValue::value).collect()
 }
 
+fn eval_value_from_calc_value(value: CalcValue) -> EvalValue {
+    if let Some(callable) = value.callable_value() {
+        return EvalValue::Text(callable_array_carrier_text(&callable.summary));
+    }
+
+    match value.core {
+        CoreValue::Number(n) => EvalValue::Number(n),
+        CoreValue::Text(t) => EvalValue::Text(t),
+        CoreValue::Logical(b) => EvalValue::Logical(b),
+        CoreValue::Error(code) => EvalValue::Error(code),
+        CoreValue::Empty | CoreValue::Missing => EvalValue::Error(WorksheetErrorCode::Value),
+        CoreValue::Array(array) => EvalValue::Array(array.to_legacy_eval_array_lossy()),
+        CoreValue::Reference(reference) => EvalValue::Reference(reference),
+    }
+}
+
 fn invoke_context_free_function_call(
     call_target: &FunctionCallTarget,
     args: &[CallArgValue],
 ) -> EvalValue {
-    let cell_values = BTreeMap::new();
-    let defined_names = BTreeMap::new();
-    let sparse_reference_values = BTreeMap::new();
-    let callable_registry = RefCell::new(CallableRegistry::default());
-    let resolver = LocalReferenceResolver {
-        cell_values: &cell_values,
-        defined_names: &defined_names,
-        sparse_reference_values: &sparse_reference_values,
-        caller_row: 1,
-        caller_col: 1,
-        callable_registry: &callable_registry,
-    };
-    let mut fec = FunctionExecutionContextBundle::new(&resolver);
+    let reference_system_provider = &NULL_REFERENCE_SYSTEM_PROVIDER;
+    let mut fec = FunctionExecutionContextBundle::new(&reference_system_provider);
     let calc_args = calc_values_from_call_args(args);
     match call_target.invoke(&calc_args, &mut fec) {
-        Ok(value) => value,
+        Ok(value) => eval_value_from_calc_value(value),
         Err(code) => EvalValue::Error(code),
     }
 }
@@ -1666,7 +1664,6 @@ pub struct EvaluationContext<'a> {
     pub caller_col: usize,
     pub cell_values: BTreeMap<String, EvalValue>,
     pub defined_names: BTreeMap<String, DefinedNameBinding>,
-    pub sparse_reference_values: BTreeMap<String, SparseReferenceValuesBinding>,
     pub locale_ctx: Option<&'a LocaleFormatContext<'a>>,
     pub host_info: Option<&'a dyn HostInfoProvider>,
     pub rtd_provider: Option<&'a dyn RtdProvider>,
@@ -1674,7 +1671,7 @@ pub struct EvaluationContext<'a> {
     pub host_function_provider: Option<&'a dyn HostFunctionProvider>,
     pub now_serial: Option<f64>,
     pub random_provider: Option<&'a dyn RandomProvider>,
-    pub reference_text_resolver: Option<&'a dyn ReferenceTextResolver>,
+    pub reference_system_provider: Option<&'a dyn ReferenceSystemProvider>,
     pub trace_mode: EvaluationTraceMode,
     frame_state: Rc<EvaluationFrameState>,
 }
@@ -1690,7 +1687,6 @@ impl<'a> EvaluationContext<'a> {
             caller_col: 1,
             cell_values: BTreeMap::new(),
             defined_names: BTreeMap::new(),
-            sparse_reference_values: BTreeMap::new(),
             locale_ctx: None,
             host_info: None,
             rtd_provider: None,
@@ -1698,7 +1694,7 @@ impl<'a> EvaluationContext<'a> {
             host_function_provider: None,
             now_serial: None,
             random_provider: None,
-            reference_text_resolver: None,
+            reference_system_provider: None,
             trace_mode: EvaluationTraceMode::default(),
             frame_state: Rc::new(EvaluationFrameState::default()),
         }
@@ -1714,7 +1710,7 @@ impl<'a> EvaluationContext<'a> {
         )
         .with_registered_external_provider(self.registered_external_provider)
         .with_host_function_provider(self.host_function_provider)
-        .with_reference_text_resolver(self.reference_text_resolver)
+        .with_reference_system_provider(self.reference_system_provider)
     }
 
     pub fn apply_typed_context_query_bundle(&mut self, bundle: TypedContextQueryBundle<'a>) {
@@ -1725,13 +1721,12 @@ impl<'a> EvaluationContext<'a> {
         self.locale_ctx = bundle.locale_ctx;
         self.now_serial = bundle.now_serial;
         self.random_provider = bundle.random_provider;
-        self.reference_text_resolver = bundle.reference_text_resolver;
+        self.reference_system_provider = bundle.reference_system_provider;
     }
 
-    fn has_sparse_reference_values(&self, reference: &ReferenceLike) -> bool {
-        self.sparse_reference_values
-            .get(&reference.target)
-            .is_some_and(|binding| binding.reference == *reference)
+    fn reference_system_provider(&self) -> &dyn ReferenceSystemProvider {
+        self.reference_system_provider
+            .unwrap_or(&NULL_REFERENCE_SYSTEM_PROVIDER)
     }
 
     pub fn with_trace_mode(mut self, trace_mode: EvaluationTraceMode) -> Self {
@@ -1806,24 +1801,17 @@ pub fn evaluate_formula(
 ) -> Result<EvaluationOutput, EvaluationError> {
     let mut frame = EvaluationFrame::new(&context.compiled_plan);
     let context = context.with_frame_state(frame.state.clone());
-    let mut resolver = LocalReferenceResolver {
-        cell_values: &context.cell_values,
-        defined_names: &context.defined_names,
-        sparse_reference_values: &context.sparse_reference_values,
-        caller_row: context.caller_row,
-        caller_col: context.caller_col,
-        callable_registry: &frame.callable_registry,
-    };
+    let reference_system_provider = context.reference_system_provider();
 
     let value = evaluate_root_expr_value(
         &context.compiled_plan.root,
         &context,
-        &mut resolver,
+        reference_system_provider,
         &frame.root_helper_bindings,
         &frame.callable_registry,
         &mut frame.trace,
     )?;
-    let value = dereference_final_output_value(value, &mut resolver)?;
+    let value = dereference_final_output_value(value, reference_system_provider)?;
     let output_value = sanitize_final_output_value(value, &frame.callable_registry);
     let portable_callable = portable_callable_for_top_level_result(
         &output_value,
@@ -2185,16 +2173,17 @@ fn returned_value_surface_for_output(
         return surface;
     }
 
-    ReturnedValueSurface::from_extended_value(&ExtendedValue::Core(value.clone()))
+    ReturnedValueSurface::from_calc_value(&CalcValue::from(value.clone()))
 }
 
 fn dereference_final_output_value(
     value: EvalValue,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
 ) -> Result<EvalValue, EvaluationError> {
     match value {
         EvalValue::Reference(reference) => {
-            resolve_oxfunc_eval_value(resolver, &reference).map_err(map_resolution_error)
+            resolve_oxfunc_eval_value(reference_system_provider, &reference)
+                .map_err(map_resolution_error)
         }
         other => Ok(other),
     }
@@ -2212,18 +2201,9 @@ fn typed_surface_for_top_level_host_or_provider_call(
             call_target, args, ..
         } if call_target.function_id() == Some(FUNC_ID_RTD) && context.rtd_provider.is_some() => {
             let call_args = build_top_level_call_args(args, context, true).ok()?;
-            let callable_registry = RefCell::new(CallableRegistry::default());
-            let resolver = LocalReferenceResolver {
-                cell_values: &context.cell_values,
-                defined_names: &context.defined_names,
-                sparse_reference_values: &context.sparse_reference_values,
-                caller_row: context.caller_row,
-                caller_col: context.caller_col,
-                callable_registry: &callable_registry,
-            };
             match oxfunc_core::functions::rtd_fn::eval_rtd_surface(
                 &call_args,
-                &resolver,
+                context.reference_system_provider(),
                 context.rtd_provider,
             ) {
                 Ok(value) => Some(ReturnedValueSurface::from_rtd_eval_value(&value)),
@@ -2237,16 +2217,11 @@ fn typed_surface_for_top_level_host_or_provider_call(
             call_target, args, ..
         } if call_target.function_id() == Some(FUNC_ID_INFO) && context.host_info.is_some() => {
             let call_args = build_top_level_call_args(args, context, true).ok()?;
-            let callable_registry = RefCell::new(CallableRegistry::default());
-            let resolver = LocalReferenceResolver {
-                cell_values: &context.cell_values,
-                defined_names: &context.defined_names,
-                sparse_reference_values: &context.sparse_reference_values,
-                caller_row: context.caller_row,
-                caller_col: context.caller_col,
-                callable_registry: &callable_registry,
-            };
-            match eval_info_surface(&call_args, &resolver, context.host_info) {
+            match eval_info_surface(
+                &call_args,
+                context.reference_system_provider(),
+                context.host_info,
+            ) {
                 Err(InfoEvalError::HostInfo(error)) => {
                     Some(ReturnedValueSurface::from_host_info_error(&error))
                 }
@@ -2260,16 +2235,11 @@ fn typed_surface_for_top_level_host_or_provider_call(
             call_target, args, ..
         } if call_target.function_id() == Some(FUNC_ID_CELL) && context.host_info.is_some() => {
             let call_args = build_top_level_call_args(args, context, true).ok()?;
-            let callable_registry = RefCell::new(CallableRegistry::default());
-            let resolver = LocalReferenceResolver {
-                cell_values: &context.cell_values,
-                defined_names: &context.defined_names,
-                sparse_reference_values: &context.sparse_reference_values,
-                caller_row: context.caller_row,
-                caller_col: context.caller_col,
-                callable_registry: &callable_registry,
-            };
-            match eval_cell_surface(&call_args, &resolver, context.host_info) {
+            match eval_cell_surface(
+                &call_args,
+                context.reference_system_provider(),
+                context.host_info,
+            ) {
                 Err(CellEvalError::HostInfo(error)) => {
                     Some(ReturnedValueSurface::from_host_info_error(&error))
                 }
@@ -2293,44 +2263,33 @@ fn extended_surface_for_top_level_function_call(
         } => {
             let function_id = call_target.function_id()?;
             let call_args = build_top_level_call_args(args, context, true).ok()?;
-            let callable_registry = RefCell::new(CallableRegistry::default());
-            let resolver = LocalReferenceResolver {
-                cell_values: &context.cell_values,
-                defined_names: &context.defined_names,
-                sparse_reference_values: &context.sparse_reference_values,
-                caller_row: context.caller_row,
-                caller_col: context.caller_col,
-                callable_registry: &callable_registry,
-            };
             if function_id == FUNC_ID_IMAGE {
-                let image_result = eval_image_surface_extended_with_capabilities(
+                let image_result = eval_image_surface_rich_with_capabilities(
                     &call_args,
-                    &resolver,
+                    context.reference_system_provider(),
                     context.host_info,
                 )
                 .ok()?;
-                return Some(
-                    ReturnedValueSurface::from_extended_value_with_capability_keys(
-                        &image_result.value,
-                        image_result.producer_capability_set_keys,
-                        image_result.exercised_capability_keys,
-                    ),
-                );
+                return Some(ReturnedValueSurface::from_calc_value_with_capability_keys(
+                    &image_result.value,
+                    image_result.producer_capability_set_keys,
+                    image_result.exercised_capability_keys,
+                ));
             }
             if !matches!(function_id, FUNC_ID_HYPERLINK | FUNC_ID_NOW | FUNC_ID_TODAY) {
                 return None;
             }
-            let extended = eval_surface_extended_call(
+            let rich = eval_surface_rich_value_call(
                 function_id,
                 &call_args,
-                &resolver,
+                context.reference_system_provider(),
                 context.now_serial,
                 context.random_provider,
                 context.locale_ctx,
                 context.host_info,
             )
             .ok()?;
-            Some(ReturnedValueSurface::from_extended_value(&extended))
+            Some(ReturnedValueSurface::from_calc_value(&rich))
         }
         _ => None,
     }
@@ -2342,14 +2301,7 @@ fn build_top_level_call_args(
     preserve_reference: bool,
 ) -> Result<Vec<CallArgValue>, EvaluationError> {
     let callable_registry = RefCell::new(CallableRegistry::default());
-    let mut resolver = LocalReferenceResolver {
-        cell_values: &context.cell_values,
-        defined_names: &context.defined_names,
-        sparse_reference_values: &context.sparse_reference_values,
-        caller_row: context.caller_row,
-        caller_col: context.caller_col,
-        callable_registry: &callable_registry,
-    };
+    let reference_system_provider = context.reference_system_provider();
     let helper_bindings = HelperBindingFrame::default();
     let mut trace = EvaluationTrace {
         prepared_calls: Vec::new(),
@@ -2360,7 +2312,7 @@ fn build_top_level_call_args(
             evaluate_expr_as_call_arg(
                 arg,
                 context,
-                &mut resolver,
+                reference_system_provider,
                 &helper_bindings,
                 &callable_registry,
                 preserve_reference,
@@ -2374,7 +2326,7 @@ fn build_top_level_call_args(
 fn evaluate_root_expr_value(
     expr: &CompiledExpr,
     context: &EvaluationContext<'_>,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
@@ -2394,7 +2346,7 @@ fn evaluate_root_expr_value(
                     left,
                     right,
                     context,
-                    resolver,
+                    reference_system_provider,
                     helper_bindings,
                     callable_registry,
                     trace,
@@ -2412,7 +2364,7 @@ fn evaluate_root_expr_value(
     evaluate_expr_value(
         expr,
         context,
-        resolver,
+        reference_system_provider,
         helper_bindings,
         callable_registry,
         trace,
@@ -2422,7 +2374,7 @@ fn evaluate_root_expr_value(
 fn evaluate_expr_value(
     expr: &CompiledExpr,
     context: &EvaluationContext<'_>,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
@@ -2440,7 +2392,7 @@ fn evaluate_expr_value(
                 evaluate_expr_value(
                     source,
                     context,
-                    resolver,
+                    reference_system_provider,
                     helper_bindings,
                     callable_registry,
                     trace,
@@ -2452,7 +2404,7 @@ fn evaluate_expr_value(
         CompiledExpr::ArrayLiteral(rows) => evaluate_array_literal(
             rows,
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             trace,
@@ -2475,7 +2427,7 @@ fn evaluate_expr_value(
             left,
             right,
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             trace,
@@ -2489,7 +2441,7 @@ fn evaluate_expr_value(
             call_target,
             expr,
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             trace,
@@ -2503,7 +2455,7 @@ fn evaluate_expr_value(
             call_target,
             args,
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             trace,
@@ -2517,7 +2469,7 @@ fn evaluate_expr_value(
             call_target,
             args,
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             trace,
@@ -2526,7 +2478,7 @@ fn evaluate_expr_value(
             args,
             *slot_only,
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             trace,
@@ -2537,7 +2489,7 @@ fn evaluate_expr_value(
         CompiledExpr::If { args } => evaluate_if_call(
             args,
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             trace,
@@ -2545,7 +2497,7 @@ fn evaluate_expr_value(
         CompiledExpr::IfError { args } => evaluate_iferror_call(
             args,
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             trace,
@@ -2557,7 +2509,7 @@ fn evaluate_expr_value(
             callee,
             args,
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             trace,
@@ -2566,20 +2518,20 @@ fn evaluate_expr_value(
             let arg = evaluate_reference_as_call_arg(
                 reference,
                 context,
-                resolver,
+                reference_system_provider,
                 helper_bindings,
                 callable_registry,
                 false,
                 false,
                 trace,
             )?;
-            materialize_call_arg(arg, resolver)
+            materialize_call_arg(arg, reference_system_provider)
         }
         CompiledExpr::ImplicitIntersection { call_target, expr } => {
             let arg = evaluate_expr_as_call_arg(
                 expr,
                 context,
-                resolver,
+                reference_system_provider,
                 helper_bindings,
                 callable_registry,
                 true,
@@ -2591,7 +2543,7 @@ fn evaluate_expr_value(
                 call_target,
                 &args,
                 context,
-                resolver,
+                reference_system_provider,
                 callable_registry,
             ))
         }
@@ -2603,7 +2555,7 @@ fn evaluate_function_call(
     call_target: &CompiledFunctionCallTarget,
     args: &[CompiledExpr],
     context: &EvaluationContext<'_>,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
@@ -2614,7 +2566,7 @@ fn evaluate_function_call(
                 args,
                 false,
                 context,
-                resolver,
+                reference_system_provider,
                 helper_bindings,
                 callable_registry,
                 trace,
@@ -2627,7 +2579,7 @@ fn evaluate_function_call(
             return evaluate_if_call(
                 args,
                 context,
-                resolver,
+                reference_system_provider,
                 helper_bindings,
                 callable_registry,
                 trace,
@@ -2637,7 +2589,7 @@ fn evaluate_function_call(
             return evaluate_iferror_call(
                 args,
                 context,
-                resolver,
+                reference_system_provider,
                 helper_bindings,
                 callable_registry,
                 trace,
@@ -2653,7 +2605,7 @@ fn evaluate_function_call(
                 special_operator_call_target,
                 args,
                 context,
-                resolver,
+                reference_system_provider,
                 helper_bindings,
                 callable_registry,
                 trace,
@@ -2667,7 +2619,7 @@ fn evaluate_function_call(
         call_target,
         args,
         context,
-        resolver,
+        reference_system_provider,
         helper_bindings,
         callable_registry,
         trace,
@@ -2679,7 +2631,7 @@ fn evaluate_ordinary_function_call(
     call_target: &CompiledFunctionCallTarget,
     args: &[CompiledExpr],
     context: &EvaluationContext<'_>,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
@@ -2697,7 +2649,7 @@ fn evaluate_ordinary_function_call(
                 args,
                 host_function_provider,
                 context,
-                resolver,
+                reference_system_provider,
                 helper_bindings,
                 callable_registry,
                 trace,
@@ -2729,7 +2681,7 @@ fn evaluate_ordinary_function_call(
         let call_arg = evaluate_expr_as_call_arg(
             arg,
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             preserve_reference,
@@ -2778,12 +2730,12 @@ fn evaluate_ordinary_function_call(
     let prepared_call_index = if records_prepared_calls {
         let legacy_call_args = legacy_call_args_from_calc_values(scratch.call_args());
         let register_id_request = if meta.function_id == FUNC_ID_REGISTER_ID {
-            parse_register_id_request(&legacy_call_args, resolver).ok()
+            parse_register_id_request(&legacy_call_args, reference_system_provider).ok()
         } else {
             None
         };
         let registered_external_call_request = if meta.function_id == FUNC_ID_CALL {
-            parse_call_request(&legacy_call_args, resolver).ok()
+            parse_call_request(&legacy_call_args, reference_system_provider).ok()
         } else {
             None
         };
@@ -2817,7 +2769,7 @@ fn evaluate_ordinary_function_call(
             function_call_target,
             &scratch,
             context,
-            resolver,
+            reference_system_provider,
             callable_registry,
         ) {
             Ok(value) => {
@@ -2827,7 +2779,7 @@ fn evaluate_ordinary_function_call(
                 if allow_host_query_worksheet_error_fallback(
                     meta.function_id,
                     &legacy_call_args_from_calc_values(scratch.call_args()),
-                    resolver,
+                    reference_system_provider,
                     context.host_info,
                 ) =>
             {
@@ -2867,7 +2819,7 @@ fn evaluate_host_function_call(
     args: &[CompiledExpr],
     host_function_provider: &dyn HostFunctionProvider,
     context: &EvaluationContext<'_>,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
@@ -2891,7 +2843,7 @@ fn evaluate_host_function_call(
         let call_arg = evaluate_expr_as_call_arg(
             arg,
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             false,
@@ -2951,16 +2903,16 @@ fn evaluate_host_function_call(
 fn allow_host_query_worksheet_error_fallback(
     function_id: &str,
     call_args: &[CallArgValue],
-    resolver: &impl ReferenceResolver,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     host_info: Option<&dyn HostInfoProvider>,
 ) -> bool {
     match function_id {
         FUNC_ID_INFO => matches!(
-            eval_info_surface(call_args, resolver, host_info),
+            eval_info_surface(call_args, reference_system_provider, host_info),
             Err(InfoEvalError::HostInfo(_))
         ),
         FUNC_ID_CELL => matches!(
-            eval_cell_surface(call_args, resolver, host_info),
+            eval_cell_surface(call_args, reference_system_provider, host_info),
             Err(CellEvalError::HostInfo(_))
         ),
         _ => false,
@@ -2971,14 +2923,14 @@ fn evaluate_function_call_target(
     call_target: &FunctionCallTarget,
     args: &[CallArgValue],
     context: &EvaluationContext<'_>,
-    resolver: &LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> Result<EvalValue, WorksheetErrorCode> {
     let callable_invoker = OxFmlCallableInvoker {
         context,
         callable_registry,
     };
-    let mut fec = FunctionExecutionContextBundle::new(resolver);
+    let mut fec = FunctionExecutionContextBundle::new(&reference_system_provider);
     fec.now_serial = context.now_serial;
     fec.random_provider = context.random_provider;
     fec.locale_ctx = context.locale_ctx;
@@ -2986,23 +2938,24 @@ fn evaluate_function_call_target(
     fec.callable_invoker = Some(&callable_invoker);
     fec.rtd_provider = context.rtd_provider;
     fec.registered_external_provider = context.registered_external_provider;
-    fec.reference_text_resolver = context.reference_text_resolver;
     let calc_args = calc_values_from_call_args(args);
-    call_target.invoke(&calc_args, &mut fec)
+    call_target
+        .invoke(&calc_args, &mut fec)
+        .map(eval_value_from_calc_value)
 }
 
 fn evaluate_function_call_target_scratch(
     call_target: &FunctionCallTarget,
     scratch: &FunctionCallScratch,
     context: &EvaluationContext<'_>,
-    resolver: &LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> Result<EvalValue, WorksheetErrorCode> {
     let callable_invoker = OxFmlCallableInvoker {
         context,
         callable_registry,
     };
-    let mut fec = FunctionExecutionContextBundle::new(resolver);
+    let mut fec = FunctionExecutionContextBundle::new(&reference_system_provider);
     fec.now_serial = context.now_serial;
     fec.random_provider = context.random_provider;
     fec.locale_ctx = context.locale_ctx;
@@ -3010,18 +2963,25 @@ fn evaluate_function_call_target_scratch(
     fec.callable_invoker = Some(&callable_invoker);
     fec.rtd_provider = context.rtd_provider;
     fec.registered_external_provider = context.registered_external_provider;
-    fec.reference_text_resolver = context.reference_text_resolver;
-    call_target.invoke_scratch(scratch, &mut fec)
+    call_target
+        .invoke_scratch(scratch, &mut fec)
+        .map(eval_value_from_calc_value)
 }
 
 fn evaluate_function_call_target_value(
     call_target: &FunctionCallTarget,
     args: &[CallArgValue],
     context: &EvaluationContext<'_>,
-    resolver: &LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> EvalValue {
-    match evaluate_function_call_target(call_target, args, context, resolver, callable_registry) {
+    match evaluate_function_call_target(
+        call_target,
+        args,
+        context,
+        reference_system_provider,
+        callable_registry,
+    ) {
         Ok(value) => value,
         Err(code) => EvalValue::Error(code),
     }
@@ -3100,7 +3060,7 @@ fn numeric_literal_underflows_excel_admission_floor(raw: &str) -> bool {
 fn evaluate_expr_as_call_arg(
     expr: &CompiledExpr,
     context: &EvaluationContext<'_>,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     preserve_reference: bool,
@@ -3120,7 +3080,7 @@ fn evaluate_expr_as_call_arg(
         CompiledExpr::Reference(reference) => evaluate_reference_as_call_arg(
             reference,
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             preserve_reference,
@@ -3131,7 +3091,7 @@ fn evaluate_expr_as_call_arg(
             let arg = evaluate_expr_as_call_arg(
                 expr,
                 context,
-                resolver,
+                reference_system_provider,
                 helper_bindings,
                 callable_registry,
                 true,
@@ -3143,14 +3103,14 @@ fn evaluate_expr_as_call_arg(
                 call_target,
                 &args,
                 context,
-                resolver,
+                reference_system_provider,
                 callable_registry,
             )))
         }
         _ => Ok(CallArgValue::Eval(evaluate_expr_value(
             expr,
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             trace,
@@ -3187,7 +3147,7 @@ fn built_in_callable_arg_for_expr(
 fn evaluate_reference_as_call_arg(
     reference: &CompiledReferenceExpr,
     context: &EvaluationContext<'_>,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     preserve_reference: bool,
@@ -3200,7 +3160,7 @@ fn evaluate_reference_as_call_arg(
                 reference_like_for_cell(cell),
                 preserve_reference,
                 context,
-                resolver,
+                reference_system_provider,
             )
         }
         CompiledReferenceExpr::Atom(NormalizedReference::Area(area)) => {
@@ -3208,7 +3168,7 @@ fn evaluate_reference_as_call_arg(
                 reference_like_for_area(area),
                 preserve_reference,
                 context,
-                resolver,
+                reference_system_provider,
             )
         }
         CompiledReferenceExpr::Atom(NormalizedReference::WholeRow(rows)) => {
@@ -3216,7 +3176,7 @@ fn evaluate_reference_as_call_arg(
                 ReferenceLike::new(ReferenceKind::Area, whole_row_target(rows)),
                 preserve_reference,
                 context,
-                resolver,
+                reference_system_provider,
             )
         }
         CompiledReferenceExpr::Atom(NormalizedReference::WholeColumn(columns)) => {
@@ -3224,7 +3184,7 @@ fn evaluate_reference_as_call_arg(
                 ReferenceLike::new(ReferenceKind::Area, whole_column_target(columns)),
                 preserve_reference,
                 context,
-                resolver,
+                reference_system_provider,
             )
         }
         CompiledReferenceExpr::Atom(NormalizedReference::Name(name)) => call_arg_for_name(
@@ -3232,7 +3192,7 @@ fn evaluate_reference_as_call_arg(
             preserve_reference,
             callable_slot,
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
         ),
@@ -3241,7 +3201,7 @@ fn evaluate_reference_as_call_arg(
                 helper_bindings,
                 *slot,
                 preserve_reference,
-                resolver,
+                reference_system_provider,
                 callable_registry,
             ) {
                 call_arg
@@ -3251,7 +3211,7 @@ fn evaluate_reference_as_call_arg(
                     preserve_reference,
                     callable_slot,
                     context,
-                    resolver,
+                    reference_system_provider,
                     helper_bindings,
                     callable_registry,
                 )
@@ -3262,7 +3222,7 @@ fn evaluate_reference_as_call_arg(
                 reference_like_for_structured(structured),
                 preserve_reference,
                 context,
-                resolver,
+                reference_system_provider,
             )
         }
         CompiledReferenceExpr::Atom(NormalizedReference::External(external)) => {
@@ -3303,7 +3263,7 @@ fn evaluate_reference_as_call_arg(
             call_target,
             vec![anchor.as_ref()],
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             preserve_reference,
@@ -3318,7 +3278,7 @@ fn evaluate_reference_as_call_arg(
             call_target,
             vec![start.as_ref(), end.as_ref()],
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             preserve_reference,
@@ -3333,7 +3293,7 @@ fn evaluate_reference_as_call_arg(
             call_target,
             vec![left.as_ref(), right.as_ref()],
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             preserve_reference,
@@ -3348,7 +3308,7 @@ fn evaluate_reference_as_call_arg(
             call_target,
             vec![left.as_ref(), right.as_ref()],
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             preserve_reference,
@@ -3362,7 +3322,7 @@ fn evaluate_reference_operator_call(
     call_target: &FunctionCallTarget,
     operands: Vec<&CompiledReferenceExpr>,
     context: &EvaluationContext<'_>,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     preserve_reference: bool,
@@ -3380,7 +3340,7 @@ fn evaluate_reference_operator_call(
         let arg = evaluate_reference_as_call_arg(
             operand,
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             true,
@@ -3403,28 +3363,35 @@ fn evaluate_reference_operator_call(
         context,
     );
 
-    let result =
-        evaluate_function_call_target(call_target, &args, context, resolver, callable_registry);
+    let result = evaluate_function_call_target(
+        call_target,
+        &args,
+        context,
+        reference_system_provider,
+        callable_registry,
+    );
     let value = match result {
         Ok(value) => value,
         Err(code) => EvalValue::Error(code),
     };
     record_prepared_call_returned_value(trace, prepared_call_index, &value);
-    call_arg_from_reference_operator_value(value, preserve_reference, resolver)
+    call_arg_from_reference_operator_value(value, preserve_reference, reference_system_provider)
 }
 
 fn call_arg_from_reference_operator_value(
     value: EvalValue,
     preserve_reference: bool,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
 ) -> Result<CallArgValue, EvaluationError> {
     match value {
         EvalValue::Reference(reference) if preserve_reference => {
             Ok(CallArgValue::Reference(reference))
         }
-        EvalValue::Reference(reference) => resolve_oxfunc_eval_value(resolver, &reference)
-            .map(call_arg_from_resolved_reference_value)
-            .map_err(map_resolution_error),
+        EvalValue::Reference(reference) => {
+            resolve_oxfunc_eval_value(reference_system_provider, &reference)
+                .map(call_arg_from_resolved_reference_value)
+                .map_err(map_resolution_error)
+        }
         other => Ok(CallArgValue::Eval(other)),
     }
 }
@@ -3433,12 +3400,12 @@ fn call_arg_for_reference_like(
     reference: ReferenceLike,
     preserve_reference: bool,
     context: &EvaluationContext<'_>,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
 ) -> Result<CallArgValue, EvaluationError> {
-    if preserve_reference || context.has_sparse_reference_values(&reference) {
+    if preserve_reference || context.reference_system_provider.is_some() {
         Ok(CallArgValue::Reference(reference))
     } else {
-        resolve_oxfunc_eval_value(resolver, &reference)
+        resolve_oxfunc_eval_value(reference_system_provider, &reference)
             .map(call_arg_from_resolved_reference_value)
             .map_err(map_resolution_error)
     }
@@ -3447,7 +3414,7 @@ fn call_arg_for_reference_like(
 fn evaluate_array_literal(
     rows: &[Vec<CompiledExpr>],
     context: &EvaluationContext<'_>,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
@@ -3461,7 +3428,7 @@ fn evaluate_array_literal(
             let value = evaluate_expr_value(
                 expr,
                 context,
-                resolver,
+                reference_system_provider,
                 helper_bindings,
                 callable_registry,
                 trace,
@@ -3486,7 +3453,7 @@ fn evaluate_binary_operator_call(
     left: &CompiledExpr,
     right: &CompiledExpr,
     context: &EvaluationContext<'_>,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
@@ -3497,7 +3464,7 @@ fn evaluate_binary_operator_call(
         left,
         right,
         context,
-        resolver,
+        reference_system_provider,
         helper_bindings,
         callable_registry,
         trace,
@@ -3569,7 +3536,7 @@ fn evaluate_binary_operator_call_evaluation(
     left: &CompiledExpr,
     right: &CompiledExpr,
     context: &EvaluationContext<'_>,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
@@ -3578,7 +3545,7 @@ fn evaluate_binary_operator_call_evaluation(
     let lhs = evaluate_expr_as_call_arg(
         left,
         context,
-        resolver,
+        reference_system_provider,
         helper_bindings,
         callable_registry,
         false,
@@ -3588,7 +3555,7 @@ fn evaluate_binary_operator_call_evaluation(
     let rhs = evaluate_expr_as_call_arg(
         right,
         context,
-        resolver,
+        reference_system_provider,
         helper_bindings,
         callable_registry,
         false,
@@ -3613,8 +3580,13 @@ fn evaluate_binary_operator_call_evaluation(
     );
 
     let args = [lhs.clone(), rhs.clone()];
-    let result =
-        evaluate_function_call_target(call_target, &args, context, resolver, callable_registry);
+    let result = evaluate_function_call_target(
+        call_target,
+        &args,
+        context,
+        reference_system_provider,
+        callable_registry,
+    );
     let value = match result {
         Ok(value) => value,
         Err(code) => EvalValue::Error(code),
@@ -3628,7 +3600,7 @@ fn evaluate_unary_operator_call(
     call_target: &FunctionCallTarget,
     expr: &CompiledExpr,
     context: &EvaluationContext<'_>,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
@@ -3637,7 +3609,7 @@ fn evaluate_unary_operator_call(
     let arg = evaluate_expr_as_call_arg(
         expr,
         context,
-        resolver,
+        reference_system_provider,
         helper_bindings,
         callable_registry,
         false,
@@ -3659,8 +3631,13 @@ fn evaluate_unary_operator_call(
     );
 
     let args = [arg];
-    let result =
-        evaluate_function_call_target(call_target, &args, context, resolver, callable_registry);
+    let result = evaluate_function_call_target(
+        call_target,
+        &args,
+        context,
+        reference_system_provider,
+        callable_registry,
+    );
     let value = match result {
         Ok(value) => value,
         Err(code) => EvalValue::Error(code),
@@ -3699,7 +3676,7 @@ fn call_arg_for_name(
     preserve_reference: bool,
     callable_slot: bool,
     context: &EvaluationContext<'_>,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> Result<CallArgValue, EvaluationError> {
@@ -3707,7 +3684,7 @@ fn call_arg_for_name(
         return call_arg_for_helper_binding(
             binding,
             preserve_reference,
-            resolver,
+            reference_system_provider,
             callable_registry,
         );
     }
@@ -3726,11 +3703,10 @@ fn call_arg_for_name(
     match binding {
         DefinedNameBinding::Value(value) => Ok(CallArgValue::Eval(value.clone())),
         DefinedNameBinding::Reference(reference) => {
-            if preserve_reference || context.has_sparse_reference_values(reference) {
+            if preserve_reference || context.reference_system_provider.is_some() {
                 Ok(CallArgValue::Reference(reference.clone()))
             } else {
-                resolver
-                    .resolve_reference(reference)
+                resolve_oxfunc_eval_value(reference_system_provider, reference)
                     .map(CallArgValue::Eval)
                     .map_err(map_resolution_error)
             }
@@ -3748,7 +3724,7 @@ fn call_arg_for_helper_slot(
     helper_bindings: &HelperBindingFrame,
     slot: usize,
     preserve_reference: bool,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> Option<Result<CallArgValue, EvaluationError>> {
     let slot_cell = helper_bindings.slots.get(slot)?;
@@ -3757,7 +3733,7 @@ fn call_arg_for_helper_slot(
     Some(call_arg_for_helper_binding(
         binding,
         preserve_reference,
-        resolver,
+        reference_system_provider,
         callable_registry,
     ))
 }
@@ -3765,7 +3741,7 @@ fn call_arg_for_helper_slot(
 fn call_arg_for_helper_binding(
     binding: &HelperBinding,
     preserve_reference: bool,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> Result<CallArgValue, EvaluationError> {
     match binding {
@@ -3774,8 +3750,7 @@ fn call_arg_for_helper_binding(
             if preserve_reference {
                 Ok(CallArgValue::Reference(reference.clone()))
             } else {
-                resolver
-                    .resolve_reference(reference)
+                resolve_oxfunc_eval_value(reference_system_provider, reference)
                     .map(call_arg_from_resolved_reference_value)
                     .map_err(map_resolution_error)
             }
@@ -3818,7 +3793,7 @@ fn evaluate_let_call(
     args: &[CompiledExpr],
     slot_only: bool,
     context: &EvaluationContext<'_>,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
@@ -3833,7 +3808,7 @@ fn evaluate_let_call(
         return evaluate_slot_only_let_call(
             args,
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             trace,
@@ -3876,7 +3851,7 @@ fn evaluate_let_call(
         let binding_arg = evaluate_expr_as_call_arg(
             &args[index + 1],
             context,
-            resolver,
+            reference_system_provider,
             &local_bindings,
             callable_registry,
             true,
@@ -3903,7 +3878,7 @@ fn evaluate_let_call(
     let body_arg = evaluate_expr_as_call_arg(
         &args[last_index],
         context,
-        resolver,
+        reference_system_provider,
         &local_bindings,
         callable_registry,
         false,
@@ -3927,7 +3902,7 @@ fn evaluate_let_call(
         context,
     );
 
-    let value = materialize_call_arg(body_arg, resolver)?;
+    let value = materialize_call_arg(body_arg, reference_system_provider)?;
     record_prepared_call_returned_value(trace, prepared_call_index, &value);
     Ok(value)
 }
@@ -3935,7 +3910,7 @@ fn evaluate_let_call(
 fn evaluate_slot_only_let_call(
     args: &[CompiledExpr],
     context: &EvaluationContext<'_>,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
@@ -3980,7 +3955,7 @@ fn evaluate_slot_only_let_call(
         let binding_arg = evaluate_expr_as_call_arg(
             &args[index + 1],
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             true,
@@ -4007,7 +3982,7 @@ fn evaluate_slot_only_let_call(
     let body_arg = evaluate_expr_as_call_arg(
         &args[last_index],
         context,
-        resolver,
+        reference_system_provider,
         helper_bindings,
         callable_registry,
         false,
@@ -4031,14 +4006,14 @@ fn evaluate_slot_only_let_call(
         context,
     );
 
-    let value = materialize_call_arg(body_arg, resolver)?;
+    let value = materialize_call_arg(body_arg, reference_system_provider)?;
     record_prepared_call_returned_value(trace, prepared_call_index, &value);
     Ok(value)
 }
 
 fn coerce_excel_if_text_condition(
     condition: &CallArgValue,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
 ) -> Result<Option<bool>, EvaluationError> {
     match condition {
         CallArgValue::Eval(EvalValue::Text(text)) => {
@@ -4049,9 +4024,16 @@ fn coerce_excel_if_text_condition(
                 _ => Ok(None),
             }
         }
-        CallArgValue::Reference(reference) => resolve_oxfunc_eval_value(resolver, reference)
-            .map_err(map_resolution_error)
-            .and_then(|value| coerce_excel_if_text_condition(&CallArgValue::Eval(value), resolver)),
+        CallArgValue::Reference(reference) => {
+            resolve_oxfunc_eval_value(reference_system_provider, reference)
+                .map_err(map_resolution_error)
+                .and_then(|value| {
+                    coerce_excel_if_text_condition(
+                        &CallArgValue::Eval(value),
+                        reference_system_provider,
+                    )
+                })
+        }
         _ => Ok(None),
     }
 }
@@ -4059,7 +4041,7 @@ fn coerce_excel_if_text_condition(
 fn evaluate_if_call(
     args: &[CompiledExpr],
     context: &EvaluationContext<'_>,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
@@ -4071,7 +4053,7 @@ fn evaluate_if_call(
     let condition = evaluate_expr_as_call_arg(
         &args[0],
         context,
-        resolver,
+        reference_system_provider,
         helper_bindings,
         callable_registry,
         true,
@@ -4086,18 +4068,19 @@ fn evaluate_if_call(
     } else {
         Vec::new()
     };
-    let normalized_condition =
-        if let Some(value) = coerce_excel_if_text_condition(&condition, resolver)? {
-            CallArgValue::Eval(EvalValue::Logical(value))
-        } else {
-            condition.clone()
-        };
+    let normalized_condition = if let Some(value) =
+        coerce_excel_if_text_condition(&condition, reference_system_provider)?
+    {
+        CallArgValue::Eval(EvalValue::Logical(value))
+    } else {
+        condition.clone()
+    };
 
-    if if_condition_resolves_to_array(&normalized_condition, resolver) {
+    if if_condition_resolves_to_array(&normalized_condition, reference_system_provider) {
         let true_arg = evaluate_expr_as_call_arg(
             &args[1],
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             true,
@@ -4111,7 +4094,7 @@ fn evaluate_if_call(
             let false_arg = evaluate_expr_as_call_arg(
                 &args[2],
                 context,
-                resolver,
+                reference_system_provider,
                 helper_bindings,
                 callable_registry,
                 true,
@@ -4138,7 +4121,7 @@ fn evaluate_if_call(
         );
         let value = eval_if_surface(
             &[normalized_condition.clone(), true_arg, false_arg],
-            resolver,
+            reference_system_provider,
         )
         .unwrap_or_else(|error| EvalValue::Error(map_if_error_to_ws(&error)));
         record_prepared_call_returned_value(trace, prepared_call_index, &value);
@@ -4151,7 +4134,7 @@ fn evaluate_if_call(
             CallArgValue::Eval(EvalValue::Number(1.0)),
             CallArgValue::Eval(EvalValue::Number(0.0)),
         ],
-        resolver,
+        reference_system_provider,
     ) {
         Ok(EvalValue::Number(n)) => n != 0.0,
         Ok(EvalValue::Logical(b)) => b,
@@ -4190,7 +4173,7 @@ fn evaluate_if_call(
         let true_arg = evaluate_expr_as_call_arg(
             &args[1],
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             true,
@@ -4224,7 +4207,7 @@ fn evaluate_if_call(
             let false_arg = evaluate_expr_as_call_arg(
                 &args[2],
                 context,
-                resolver,
+                reference_system_provider,
                 helper_bindings,
                 callable_registry,
                 true,
@@ -4248,7 +4231,7 @@ fn evaluate_if_call(
         prepared_arguments,
         context,
     );
-    let value = eval_if_surface(&call_args, resolver)
+    let value = eval_if_surface(&call_args, reference_system_provider)
         .unwrap_or_else(|error| EvalValue::Error(map_if_error_to_ws(&error)));
     record_prepared_call_returned_value(trace, prepared_call_index, &value);
     Ok(value)
@@ -4256,10 +4239,10 @@ fn evaluate_if_call(
 
 fn if_condition_resolves_to_array(
     condition: &CallArgValue,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
 ) -> bool {
     matches!(
-        prepare_arg_values_only(condition, resolver),
+        prepare_arg_values_only(condition, reference_system_provider),
         Ok(PreparedArgValue::Eval(EvalValue::Array(_)))
     )
 }
@@ -4267,7 +4250,7 @@ fn if_condition_resolves_to_array(
 fn evaluate_iferror_call(
     args: &[CompiledExpr],
     context: &EvaluationContext<'_>,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
@@ -4279,7 +4262,7 @@ fn evaluate_iferror_call(
     let primary = evaluate_expr_as_call_arg(
         &args[0],
         context,
-        resolver,
+        reference_system_provider,
         helper_bindings,
         callable_registry,
         true,
@@ -4288,7 +4271,7 @@ fn evaluate_iferror_call(
     )?;
 
     let primary_is_error = matches!(
-        prepare_arg_values_only(&primary, resolver),
+        prepare_arg_values_only(&primary, reference_system_provider),
         Ok(PreparedArgValue::Eval(EvalValue::Error(_)))
     );
 
@@ -4303,7 +4286,7 @@ fn evaluate_iferror_call(
         let fallback = evaluate_expr_as_call_arg(
             &args[1],
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             true,
@@ -4333,7 +4316,7 @@ fn evaluate_iferror_call(
         prepared_arguments,
         context,
     );
-    let value = eval_iferror_surface(&call_args, resolver)
+    let value = eval_iferror_surface(&call_args, reference_system_provider)
         .unwrap_or_else(|error| EvalValue::Error(map_iferror_error_to_ws(&error)));
     record_prepared_call_returned_value(trace, prepared_call_index, &value);
     Ok(value)
@@ -4420,7 +4403,7 @@ fn evaluate_legacy_single_call(
     call_target: &FunctionCallTarget,
     args: &[CompiledExpr],
     context: &EvaluationContext<'_>,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
@@ -4434,7 +4417,7 @@ fn evaluate_legacy_single_call(
     let prepared = evaluate_expr_as_call_arg(
         arg,
         context,
-        resolver,
+        reference_system_provider,
         helper_bindings,
         callable_registry,
         true,
@@ -4458,7 +4441,7 @@ fn evaluate_legacy_single_call(
         call_target,
         &args,
         context,
-        resolver,
+        reference_system_provider,
         callable_registry,
     );
     record_prepared_call_returned_value(trace, prepared_call_index, &value);
@@ -4469,7 +4452,7 @@ fn evaluate_invocation(
     callee: &CompiledExpr,
     args: &[CompiledExpr],
     context: &EvaluationContext<'_>,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
@@ -4480,7 +4463,7 @@ fn evaluate_invocation(
     let lambda = resolve_callable(
         callee,
         context,
-        resolver,
+        reference_system_provider,
         helper_bindings,
         callable_registry,
         trace,
@@ -4511,7 +4494,7 @@ fn evaluate_invocation(
         let prepared = evaluate_expr_as_call_arg(
             arg,
             context,
-            resolver,
+            reference_system_provider,
             helper_bindings,
             callable_registry,
             true,
@@ -4559,7 +4542,7 @@ fn evaluate_invocation(
         evaluate_expr_value(
             &lambda.body,
             context,
-            resolver,
+            reference_system_provider,
             &local_bindings,
             callable_registry,
             trace,
@@ -4580,7 +4563,7 @@ fn evaluate_invocation(
 fn resolve_callable(
     callee: &CompiledExpr,
     context: &EvaluationContext<'_>,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
@@ -4596,7 +4579,7 @@ fn resolve_callable(
     lambda_binding_for_evaluated_callee(
         callee,
         context,
-        resolver,
+        reference_system_provider,
         helper_bindings,
         callable_registry,
         trace,
@@ -4622,7 +4605,7 @@ fn is_missing_helper_local_callee_name(
 fn lambda_binding_for_evaluated_callee(
     callee: &CompiledExpr,
     context: &EvaluationContext<'_>,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
@@ -4630,7 +4613,7 @@ fn lambda_binding_for_evaluated_callee(
     let value = evaluate_expr_value(
         callee,
         context,
-        resolver,
+        reference_system_provider,
         helper_bindings,
         callable_registry,
         trace,
@@ -5245,14 +5228,15 @@ fn helper_closure_from_names(
 
 fn materialize_call_arg(
     arg: CallArgValue,
-    resolver: &mut LocalReferenceResolver<'_>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
 ) -> Result<EvalValue, EvaluationError> {
     match arg {
         CallArgValue::Eval(value) => Ok(value),
         CallArgValue::MissingArg => Ok(EvalValue::Error(WorksheetErrorCode::Value)),
         CallArgValue::EmptyCell => Ok(EvalValue::Number(0.0)),
         CallArgValue::Reference(reference) => {
-            resolve_oxfunc_eval_value(resolver, &reference).map_err(map_resolution_error)
+            resolve_oxfunc_eval_value(reference_system_provider, &reference)
+                .map_err(map_resolution_error)
         }
     }
 }
@@ -5719,7 +5703,7 @@ fn decode_string_literal(text: &str) -> String {
     text.trim_matches('"').replace("\"\"", "\"")
 }
 
-fn map_resolution_error(error: RefResolutionError) -> EvaluationError {
+fn map_resolution_error(error: ReferenceResolutionError) -> EvaluationError {
     EvaluationError {
         message: format!("reference resolution failed: {error:?}"),
     }
@@ -5830,77 +5814,6 @@ fn should_emit_sheet_prefix(sheet_id: &str) -> bool {
     !(sheet_id.is_empty() || sheet_id.starts_with("sheet:"))
 }
 
-struct LocalReferenceResolver<'a> {
-    cell_values: &'a BTreeMap<String, EvalValue>,
-    defined_names: &'a BTreeMap<String, DefinedNameBinding>,
-    sparse_reference_values: &'a BTreeMap<String, SparseReferenceValuesBinding>,
-    caller_row: usize,
-    caller_col: usize,
-    callable_registry: &'a RefCell<CallableRegistry>,
-}
-
-impl ReferenceResolver for LocalReferenceResolver<'_> {
-    fn capabilities(&self) -> ResolverCapabilities {
-        ResolverCapabilities::permissive_local()
-    }
-
-    fn resolve_reference(
-        &self,
-        reference: &ReferenceLike,
-    ) -> Result<EvalValue, RefResolutionError> {
-        if let Some(value) = self.cell_values.get(&reference.target) {
-            return Ok(value.clone());
-        }
-
-        if let Some(array) = resolve_local_area_reference(self.cell_values, reference) {
-            return Ok(EvalValue::Array(array));
-        }
-
-        if let Some(binding) = self.defined_names.get(&reference.target) {
-            return match binding {
-                DefinedNameBinding::Value(value) => Ok(value.clone()),
-                DefinedNameBinding::Reference(reference_like) => {
-                    self.resolve_reference(reference_like)
-                }
-                DefinedNameBinding::Callable(binding) => {
-                    let lambda =
-                        lambda_binding_from_defined_name_binding(binding, self.callable_registry);
-                    Ok(EvalValue::Lambda(
-                        self.callable_registry.borrow_mut().register(lambda),
-                    ))
-                }
-            };
-        }
-
-        if is_absent_single_cell_reference(reference) {
-            return Ok(blank_single_cell_eval_value());
-        }
-
-        Err(RefResolutionError::UnresolvedReference {
-            target: reference.target.clone(),
-        })
-    }
-
-    fn resolve_reference_values(
-        &self,
-        reference: &ReferenceLike,
-    ) -> Result<Option<ResolvedReferenceValues>, RefResolutionError> {
-        Ok(self
-            .sparse_reference_values
-            .get(&reference.target)
-            .filter(|binding| binding.reference == *reference)
-            .map(|binding| binding.values.clone()))
-    }
-
-    fn caller_context(&self) -> Option<OxFuncCallerContext> {
-        Some(OxFuncCallerContext {
-            prefix: None,
-            row: self.caller_row,
-            col: self.caller_col,
-        })
-    }
-}
-
 struct OxFmlCallableInvoker<'a, 'b> {
     context: &'a EvaluationContext<'b>,
     callable_registry: &'a RefCell<CallableRegistry>,
@@ -5926,15 +5839,8 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
                 .iter()
                 .map(|arg| call_arg_from_prepared(arg, self.callable_registry))
                 .collect::<Vec<_>>();
-            let resolver = LocalReferenceResolver {
-                cell_values: &self.context.cell_values,
-                defined_names: &self.context.defined_names,
-                sparse_reference_values: &self.context.sparse_reference_values,
-                caller_row: self.context.caller_row,
-                caller_col: self.context.caller_col,
-                callable_registry: self.callable_registry,
-            };
-            let mut fec = FunctionExecutionContextBundle::new(&resolver);
+            let reference_system_provider = self.context.reference_system_provider();
+            let mut fec = FunctionExecutionContextBundle::new(&reference_system_provider);
             fec.now_serial = self.context.now_serial;
             fec.random_provider = self.context.random_provider;
             fec.locale_ctx = self.context.locale_ctx;
@@ -5942,12 +5848,13 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
             fec.callable_invoker = Some(self);
             fec.rtd_provider = self.context.rtd_provider;
             fec.registered_external_provider = self.context.registered_external_provider;
-            fec.reference_text_resolver = self.context.reference_text_resolver;
             let calc_args = calc_values_from_call_args(&call_args);
             let value = call_target
                 .invoke(&calc_args, &mut fec)
                 .map_err(|_| CallableInvocationError::Worksheet(WorksheetErrorCode::Value))?;
-            return Ok(prepared_arg_from_eval_value(value));
+            return Ok(prepared_arg_from_eval_value(eval_value_from_calc_value(
+                value,
+            )));
         }
 
         let binding = self
@@ -5994,19 +5901,12 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
         let mut trace = EvaluationTrace {
             prepared_calls: Vec::new(),
         };
-        let mut resolver = LocalReferenceResolver {
-            cell_values: &self.context.cell_values,
-            defined_names: &self.context.defined_names,
-            sparse_reference_values: &self.context.sparse_reference_values,
-            caller_row: self.context.caller_row,
-            caller_col: self.context.caller_col,
-            callable_registry: self.callable_registry,
-        };
+        let reference_system_provider = self.context.reference_system_provider();
         let value = with_callable_stack_guard(self.context, || {
             evaluate_expr_value(
                 &binding.lambda.body,
                 self.context,
-                &mut resolver,
+                reference_system_provider,
                 &local_bindings,
                 self.callable_registry,
                 &mut trace,
@@ -6050,14 +5950,7 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
         let mut trace = EvaluationTrace {
             prepared_calls: Vec::new(),
         };
-        let mut resolver = LocalReferenceResolver {
-            cell_values: &self.context.cell_values,
-            defined_names: &self.context.defined_names,
-            sparse_reference_values: &self.context.sparse_reference_values,
-            caller_row: self.context.caller_row,
-            caller_col: self.context.caller_col,
-            callable_registry: self.callable_registry,
-        };
+        let reference_system_provider = self.context.reference_system_provider();
         let mut args = Vec::new();
 
         with_callable_stack_guard(self.context, || {
@@ -6096,7 +5989,7 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
                 let value = evaluate_expr_value(
                     &binding.lambda.body,
                     self.context,
-                    &mut resolver,
+                    reference_system_provider,
                     &local_bindings,
                     self.callable_registry,
                     &mut trace,
@@ -6122,15 +6015,8 @@ impl OxFmlCallableInvoker<'_, '_> {
             .ok_or_else(|| {
                 CallableInvocationError::UnsupportedCallableToken(callable.callable_token.clone())
             })?;
-        let resolver = LocalReferenceResolver {
-            cell_values: &self.context.cell_values,
-            defined_names: &self.context.defined_names,
-            sparse_reference_values: &self.context.sparse_reference_values,
-            caller_row: self.context.caller_row,
-            caller_col: self.context.caller_col,
-            callable_registry: self.callable_registry,
-        };
-        let mut fec = FunctionExecutionContextBundle::new(&resolver);
+        let reference_system_provider = self.context.reference_system_provider();
+        let mut fec = FunctionExecutionContextBundle::new(&reference_system_provider);
         fec.now_serial = self.context.now_serial;
         fec.random_provider = self.context.random_provider;
         fec.locale_ctx = self.context.locale_ctx;
@@ -6138,7 +6024,6 @@ impl OxFmlCallableInvoker<'_, '_> {
         fec.callable_invoker = Some(self);
         fec.rtd_provider = self.context.rtd_provider;
         fec.registered_external_provider = self.context.registered_external_provider;
-        fec.reference_text_resolver = self.context.reference_text_resolver;
 
         let mut scratch = call_target.new_scratch();
         let mut args = Vec::new();
@@ -6158,7 +6043,9 @@ impl OxFmlCallableInvoker<'_, '_> {
             let value = call_target
                 .invoke_scratch(&scratch, &mut fec)
                 .map_err(|_| CallableInvocationError::Worksheet(WorksheetErrorCode::Value))?;
-            batch.accept_result(prepared_arg_from_eval_value(value))?;
+            batch.accept_result(prepared_arg_from_eval_value(eval_value_from_calc_value(
+                value,
+            )))?;
         }
         Ok(())
     }
@@ -6333,43 +6220,6 @@ fn decode_callable_carrier_text(
         .map(EvalValue::Lambda)
 }
 
-fn resolve_local_area_reference(
-    cell_values: &BTreeMap<String, EvalValue>,
-    reference: &ReferenceLike,
-) -> Option<EvalArray> {
-    if !matches!(reference.kind, ReferenceKind::Area) {
-        return None;
-    }
-
-    let (start, end) = reference.target.split_once(':')?;
-    let (start_sheet, start_row, start_col) = parse_a1_target(start)?;
-    let (end_sheet, end_row, end_col) =
-        parse_a1_target_with_default_sheet(end, start_sheet.as_deref())?;
-    if start_sheet != end_sheet {
-        return None;
-    }
-
-    let top = start_row.min(end_row);
-    let bottom = start_row.max(end_row);
-    let left = start_col.min(end_col);
-    let right = start_col.max(end_col);
-    let prefix = start_sheet.as_deref();
-
-    let rows = (top..=bottom)
-        .map(|row| {
-            (left..=right)
-                .map(|col| {
-                    let a1 = format!("{}{}", column_letters(col), row);
-                    let target = prefix.map(|sheet| format!("{sheet}!{a1}")).unwrap_or(a1);
-                    array_cell_value_from_eval_value(cell_values.get(&target).cloned())
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>();
-
-    EvalArray::from_rows(rows)
-}
-
 fn array_cell_value_from_eval_value(value: Option<EvalValue>) -> ArrayCellValue {
     match value {
         Some(EvalValue::Number(number)) => ArrayCellValue::Number(number),
@@ -6401,53 +6251,6 @@ fn is_scalar_empty_cell_array(value: &EvalValue) -> bool {
         }
         _ => false,
     }
-}
-
-fn blank_single_cell_eval_value() -> EvalValue {
-    EvalValue::Array(EvalArray::from_scalar(ArrayCellValue::EmptyCell))
-}
-
-fn is_absent_single_cell_reference(reference: &ReferenceLike) -> bool {
-    matches!(reference.kind, ReferenceKind::A1) && parse_a1_target(&reference.target).is_some()
-}
-
-fn parse_a1_target(text: &str) -> Option<(Option<String>, u32, u32)> {
-    parse_a1_target_with_default_sheet(text, None)
-}
-
-fn parse_a1_target_with_default_sheet(
-    text: &str,
-    default_sheet: Option<&str>,
-) -> Option<(Option<String>, u32, u32)> {
-    let (sheet, address) = match text.rsplit_once('!') {
-        Some((sheet, address)) => (Some(sheet.to_string()), address),
-        None => (default_sheet.map(|sheet| sheet.to_string()), text),
-    };
-
-    let col_len = address
-        .chars()
-        .take_while(|ch| ch.is_ascii_alphabetic())
-        .count();
-    if col_len == 0 || col_len == address.len() {
-        return None;
-    }
-
-    let (col_text, row_text) = address.split_at(col_len);
-    let row = row_text.parse::<u32>().ok()?;
-    let col = column_number(col_text)?;
-    Some((sheet, row, col))
-}
-
-fn column_number(text: &str) -> Option<u32> {
-    let mut value = 0u32;
-    for ch in text.chars() {
-        if !ch.is_ascii_alphabetic() {
-            return None;
-        }
-        value = value.checked_mul(26)?;
-        value = value.checked_add((ch.to_ascii_uppercase() as u32) - ('A' as u32) + 1)?;
-    }
-    Some(value)
 }
 
 const CALLABLE_ARRAY_CARRIER_PREFIX: &str = "oxfml.callable-array::";

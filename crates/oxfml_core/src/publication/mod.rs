@@ -1098,7 +1098,7 @@ fn selected_format_section_font_color(
 
 #[cfg(test)]
 mod tests {
-    use oxfunc_core::value::{EvalValue, ExcelText, ExtendedValue};
+    use oxfunc_core::value::{CalcValue, EvalValue, ExcelText};
 
     use super::{
         VerificationConditionalFormattingRule, VerificationPublicationContext,
@@ -1167,7 +1167,7 @@ mod tests {
         let locale = oxfml_en_us_locale_context();
         let source = FormulaSourceRecord::new("publication:test", 1, "=SUM(1,2,3)");
         let returned_value_surface =
-            ReturnedValueSurface::from_extended_value(&ExtendedValue::Core(EvalValue::Number(6.0)));
+            ReturnedValueSurface::from_calc_value(&CalcValue::from(EvalValue::Number(6.0)));
         let context = VerificationPublicationContext {
             format_profile: Some("excel-spreadsheetml-2003-default".to_string()),
             number_format_code: Some("$#,##0.00".to_string()),
@@ -1253,9 +1253,8 @@ mod tests {
     fn custom_format_colour_token_flows_to_publication_font_color() {
         let locale = oxfml_en_us_locale_context();
         let source = FormulaSourceRecord::new("publication:format-color", 1, "=42");
-        let returned_value_surface = ReturnedValueSurface::from_extended_value(
-            &ExtendedValue::Core(EvalValue::Number(42.0)),
-        );
+        let returned_value_surface =
+            ReturnedValueSurface::from_calc_value(&CalcValue::number(42.0));
         let context = VerificationPublicationContext {
             number_format_code: Some("[Red]#,##0;[Blue]#,##0".to_string()),
             ..Default::default()
@@ -1281,9 +1280,8 @@ mod tests {
     fn custom_format_colour_token_uses_selected_section_and_indexed_palette() {
         let locale = oxfml_en_us_locale_context();
         let source = FormulaSourceRecord::new("publication:format-color-index", 1, "=-42");
-        let returned_value_surface = ReturnedValueSurface::from_extended_value(
-            &ExtendedValue::Core(EvalValue::Number(-42.0)),
-        );
+        let returned_value_surface =
+            ReturnedValueSurface::from_calc_value(&CalcValue::number(-42.0));
         let context = VerificationPublicationContext {
             number_format_code: Some("[Red]#,##0;[Color3]#,##0;0".to_string()),
             ..Default::default()
@@ -1309,9 +1307,8 @@ mod tests {
     fn custom_format_colour_token_respects_condition_order_and_cf_precedence() {
         let locale = oxfml_en_us_locale_context();
         let source = FormulaSourceRecord::new("publication:format-color-cf", 1, "=5000");
-        let returned_value_surface = ReturnedValueSurface::from_extended_value(
-            &ExtendedValue::Core(EvalValue::Number(5000.0)),
-        );
+        let returned_value_surface =
+            ReturnedValueSurface::from_calc_value(&CalcValue::number(5000.0));
         let context = VerificationPublicationContext {
             number_format_code: Some("[Green][>=1000]#,##0;[Red][<0](#,##0);0".to_string()),
             conditional_formatting_rules: vec![VerificationConditionalFormattingRule {
@@ -1348,7 +1345,7 @@ mod tests {
         let source = FormulaSourceRecord::new("publication:text-section", 1, "=\"x\"");
         let value = EvalValue::Text(excel_text("x"));
         let returned_value_surface =
-            ReturnedValueSurface::from_extended_value(&ExtendedValue::Core(value.clone()));
+            ReturnedValueSurface::from_calc_value(&CalcValue::from(value.clone()));
         let context = VerificationPublicationContext {
             number_format_code: Some("0.00;-0.00;\"-\";\"prefix-\"@\"-suffix\"".to_string()),
             ..Default::default()
@@ -1375,7 +1372,7 @@ mod tests {
         let source = FormulaSourceRecord::new("publication:text-section-fallback", 1, "=\"hello\"");
         let value = EvalValue::Text(excel_text("hello"));
         let returned_value_surface =
-            ReturnedValueSurface::from_extended_value(&ExtendedValue::Core(value.clone()));
+            ReturnedValueSurface::from_calc_value(&CalcValue::from(value.clone()));
         let context = VerificationPublicationContext {
             number_format_code: Some("0.00;-0.00;\"-\"".to_string()),
             ..Default::default()

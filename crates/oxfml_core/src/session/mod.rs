@@ -4,8 +4,7 @@ use oxfunc_core::value::EvalValue;
 
 use crate::binding::BoundFormula;
 use crate::eval::{
-    DefinedNameBinding, EvaluationBackend, EvaluationContext, EvaluationOutput,
-    SparseReferenceValuesBinding, evaluate_formula,
+    DefinedNameBinding, EvaluationBackend, EvaluationContext, EvaluationOutput, evaluate_formula,
 };
 use crate::interface::{
     LibraryContextSnapshotRef, TypedContextQueryBundle, TypedContextQueryBundleSpec,
@@ -110,7 +109,6 @@ pub struct ExecuteRequest<'a> {
     pub caller_col: usize,
     pub cell_values: BTreeMap<String, EvalValue>,
     pub defined_names: BTreeMap<String, DefinedNameBinding>,
-    pub sparse_reference_values: BTreeMap<String, SparseReferenceValuesBinding>,
     pub typed_query_bundle: TypedContextQueryBundle<'a>,
 }
 
@@ -419,7 +417,6 @@ impl SessionService {
             evaluation_context.caller_col = request.caller_col;
             evaluation_context.cell_values = request.cell_values;
             evaluation_context.defined_names = request.defined_names;
-            evaluation_context.sparse_reference_values = request.sparse_reference_values;
             evaluation_context.apply_typed_context_query_bundle(request.typed_query_bundle);
 
             let evaluation = match evaluate_formula(evaluation_context) {

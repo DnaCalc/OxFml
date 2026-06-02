@@ -7,12 +7,7 @@ use oxfunc_core::registry::{
     CapabilityOverlay, FunctionAvailability, FunctionEntry, FunctionRegistry, FunctionSource,
     builtin_registry,
 };
-use oxfunc_core::resolver::{
-    ResolvedReferenceCell, ResolvedReferenceExtent, ResolvedReferenceValues,
-};
-use oxfunc_core::value::{
-    ArrayCellValue, CalcValue, EvalValue, ExcelText, ReferenceLike, WorksheetErrorCode,
-};
+use oxfunc_core::value::{ArrayCellValue, CalcValue, EvalValue, ExcelText, WorksheetErrorCode};
 
 use crate::binding::{
     BindContext, BindDiagnostic, BindFunctionSurfaceKind, BoundFormula, HostNameBindRecord,
@@ -21,7 +16,6 @@ use crate::binding::{
 use crate::consumer::ConsumerLibraryContextState;
 use crate::eval::{
     DefinedNameBinding, EvaluationBackend, EvaluationOutput, EvaluationTraceMode, PreparedCall,
-    SparseReferenceValuesBinding,
 };
 use crate::host::{ArtifactReuseReport, FirstHostReplayCapturePacket};
 pub use crate::host::{HostRecalcOutput, SingleFormulaHost};
@@ -51,7 +45,9 @@ use crate::session::{
     SessionService,
 };
 use crate::source::{FormulaSourceRecord, StructureContextVersion};
-use crate::syntax::parser::{ParseRequest, parse_formula};
+use crate::syntax::parser::{
+    HostReferenceSyntaxProfile, ParseRequest, parse_formula_with_host_reference_syntax,
+};
 use crate::syntax::token::{SyntaxDiagnostic, TextSpan};
 use oxfunc_core::functions::call_register_id_family::RegisteredExternalProviderError;
 use oxfunc_core::functions::surface_dispatch::FUNC_ID_OP_DIVIDE;
@@ -60,8 +56,14 @@ pub use crate::binding::{
     HostNameResolveRequest as RuntimeHostNameResolveRequest,
     HostNameResolveResult as RuntimeHostNameResolveResult,
     HostNameResolver as RuntimeHostNameResolver,
+    HostReferenceCollectionResolveRequest as RuntimeHostReferenceCollectionResolveRequest,
+    HostReferenceCollectionResolveResult as RuntimeHostReferenceCollectionResolveResult,
     HostStructuralSelectorResolveRequest as RuntimeHostStructuralSelectorResolveRequest,
     HostStructuralSelectorResolveResult as RuntimeHostStructuralSelectorResolveResult,
+};
+pub use crate::syntax::parser::{
+    HostReferenceCollectionSyntax as RuntimeHostReferenceCollectionSyntax,
+    HostReferenceSyntaxProfile as RuntimeHostReferenceSyntaxProfile,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -85,7 +87,6 @@ pub struct RuntimeEnvironment<'a> {
     defined_names: BTreeMap<String, DefinedNameBinding>,
     cell_values: BTreeMap<String, EvalValue>,
     formal_input_bindings: Vec<RuntimeFormalInputBinding>,
-    sparse_reference_value_bindings: Vec<RuntimeSparseReferenceValuesBinding>,
     host_formula_context: Option<RuntimeHostFormulaContext>,
     host_name_bindings: Vec<RuntimeHostNameBinding>,
     host_name_resolver: Option<&'a dyn HostNameResolver>,
@@ -98,6 +99,7 @@ pub struct RuntimeEnvironment<'a> {
     function_registry: &'a FunctionRegistry,
     function_registry_explicit: bool,
     capability_overlay: Option<&'a CapabilityOverlay>,
+    host_reference_syntax: HostReferenceSyntaxProfile,
 }
 
 impl<'a> RuntimeEnvironment<'a> {
@@ -114,7 +116,6 @@ impl<'a> RuntimeEnvironment<'a> {
             defined_names: BTreeMap::new(),
             cell_values: BTreeMap::new(),
             formal_input_bindings: Vec::new(),
-            sparse_reference_value_bindings: Vec::new(),
             host_formula_context: None,
             host_name_bindings: Vec::new(),
             host_name_resolver: None,
@@ -127,6 +128,7 @@ impl<'a> RuntimeEnvironment<'a> {
             function_registry: builtin_registry(),
             function_registry_explicit: false,
             capability_overlay: None,
+            host_reference_syntax: HostReferenceSyntaxProfile::default(),
         }
     }
 
@@ -139,9 +141,12 @@ impl<'a> RuntimeEnvironment<'a> {
     }
 
     pub fn formula_drill_trace_for_source(&self, source: FormulaSourceRecord) -> FormulaDrillTrace {
-        let parse = parse_formula(ParseRequest {
-            source: source.clone(),
-        });
+        let parse = parse_formula_with_host_reference_syntax(
+            ParseRequest {
+                source: source.clone(),
+            },
+            &self.host_reference_syntax,
+        );
         build_formula_drill_trace(
             &source,
             &parse.green_tree.diagnostics,
@@ -160,9 +165,12 @@ impl<'a> RuntimeEnvironment<'a> {
             ));
         }
 
-        let parse = parse_formula(ParseRequest {
-            source: source.clone(),
-        });
+        let parse = parse_formula_with_host_reference_syntax(
+            ParseRequest {
+                source: source.clone(),
+            },
+            &self.host_reference_syntax,
+        );
         let syntax_diagnostics = parse.green_tree.diagnostics.clone();
         if !syntax_diagnostics.is_empty() {
             return RuntimeAuthoredInputResult::Diagnostics(RuntimeAuthoredInputDiagnostics {
@@ -234,14 +242,6 @@ impl<'a> RuntimeEnvironment<'a> {
         self
     }
 
-    pub fn with_sparse_reference_value_bindings(
-        mut self,
-        sparse_reference_value_bindings: Vec<RuntimeSparseReferenceValuesBinding>,
-    ) -> Self {
-        self.sparse_reference_value_bindings = sparse_reference_value_bindings;
-        self
-    }
-
     pub fn with_host_formula_context(
         mut self,
         host_formula_context: RuntimeHostFormulaContext,
@@ -260,6 +260,14 @@ impl<'a> RuntimeEnvironment<'a> {
 
     pub fn with_host_name_resolver(mut self, host_name_resolver: &'a dyn HostNameResolver) -> Self {
         self.host_name_resolver = Some(host_name_resolver);
+        self
+    }
+
+    pub fn with_host_reference_syntax(
+        mut self,
+        host_reference_syntax: HostReferenceSyntaxProfile,
+    ) -> Self {
+        self.host_reference_syntax = host_reference_syntax;
         self
     }
 
@@ -454,6 +462,7 @@ impl<'a> RuntimeEnvironment<'a> {
             table_catalog: self.table_catalog.clone(),
             enclosing_table_ref: self.enclosing_table_ref.clone(),
             caller_table_region: self.caller_table_region.clone(),
+            host_reference_syntax: self.host_reference_syntax.clone(),
             ..BindContext::default()
         }
     }
@@ -477,8 +486,6 @@ impl<'a> RuntimeEnvironment<'a> {
         host.defined_names
             .extend(host_name_defined_names(&self.host_name_bindings));
         host.cell_values = self.cell_values.clone();
-        host.sparse_reference_values =
-            sparse_reference_values_map(&self.sparse_reference_value_bindings);
         host.table_catalog = self.table_catalog.clone();
         host.enclosing_table_ref = self.enclosing_table_ref.clone();
         host.caller_table_region = self.caller_table_region.clone();
@@ -695,23 +702,6 @@ fn formal_input_binding_name(reference_descriptor: &str) -> String {
         .strip_prefix("name:")
         .unwrap_or(reference_descriptor)
         .to_string()
-}
-
-fn sparse_reference_values_map(
-    bindings: &[RuntimeSparseReferenceValuesBinding],
-) -> BTreeMap<String, SparseReferenceValuesBinding> {
-    bindings
-        .iter()
-        .map(|binding| {
-            (
-                binding.reference.target.clone(),
-                SparseReferenceValuesBinding {
-                    reference: binding.reference.clone(),
-                    values: binding.resolved_values(),
-                },
-            )
-        })
-        .collect()
 }
 
 fn apply_formal_input_bindings_to_host(
@@ -2377,43 +2367,6 @@ pub struct RuntimeHostReferenceBindResult {
     pub replay_identity_contribution: String,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct RuntimeSparseReferenceCell {
-    pub row: usize,
-    pub col: usize,
-    pub value: ArrayCellValue,
-}
-
-impl RuntimeSparseReferenceCell {
-    #[must_use]
-    pub fn new(row: usize, col: usize, value: ArrayCellValue) -> Self {
-        Self { row, col, value }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct RuntimeSparseReferenceValuesBinding {
-    pub reference: ReferenceLike,
-    pub declared_rows: usize,
-    pub declared_cols: usize,
-    pub defined_cells: Vec<RuntimeSparseReferenceCell>,
-    pub reader_identity: Option<String>,
-}
-
-impl RuntimeSparseReferenceValuesBinding {
-    #[must_use]
-    pub fn resolved_values(&self) -> ResolvedReferenceValues {
-        ResolvedReferenceValues::new(
-            ResolvedReferenceExtent::new(self.declared_rows, self.declared_cols),
-            self.defined_cells
-                .iter()
-                .map(|cell| ResolvedReferenceCell::new(cell.row, cell.col, cell.value.clone()))
-                .collect(),
-            self.reader_identity.clone(),
-        )
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimePlanTemplateIdentity {
     pub shape_key: Option<String>,
@@ -2645,8 +2598,6 @@ impl<'a> RuntimeSessionFacade<'a> {
         defined_names.extend(host_name_defined_names(
             &self.environment.host_name_bindings,
         ));
-        let sparse_reference_values =
-            sparse_reference_values_map(&self.environment.sparse_reference_value_bindings);
         for binding in &self.environment.formal_input_bindings {
             if let Some(reference_handle) = &binding.reference_handle {
                 let formal_reference = snapshot_before_execute
@@ -2678,7 +2629,6 @@ impl<'a> RuntimeSessionFacade<'a> {
             caller_col: self.environment.caller_col as usize,
             cell_values: self.environment.cell_values.clone(),
             defined_names,
-            sparse_reference_values,
             typed_query_bundle: *request.typed_query_bundle(),
         })?;
         let snapshot = self.managed_session_snapshot().ok_or_else(|| {
@@ -3326,9 +3276,12 @@ fn compile_runtime_prepare_request(
     request: &RuntimeFormulaRequest<'_>,
 ) -> Result<CompiledRuntimePrepareRequest, String> {
     let source = request.source().clone();
-    let parse = parse_formula(ParseRequest {
-        source: source.clone(),
-    });
+    let parse = parse_formula_with_host_reference_syntax(
+        ParseRequest {
+            source: source.clone(),
+        },
+        &environment.host_reference_syntax,
+    );
     let syntax_diagnostics = parse.green_tree.diagnostics.clone();
     let red_projection = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
     let bind = bind_formula(crate::binding::BindRequest {
@@ -3725,7 +3678,9 @@ mod tests {
         let resolver = SingleNameResolver;
 
         let bound = bound_formula_from(
-            RuntimeEnvironment::new().with_host_name_resolver(&resolver),
+            RuntimeEnvironment::new()
+                .with_host_name_resolver(&resolver)
+                .with_host_reference_syntax(test_host_reference_syntax()),
             "=SUM(NodeA.@CHILDREN)",
         );
 
@@ -3739,6 +3694,33 @@ mod tests {
                     && matches!(&*selector.base, BoundExpr::HostReference(record)
                         if record.canonical_name == "NodeA")
         ));
+    }
+
+    #[test]
+    fn parser_binds_owner_relative_host_reference_collections() {
+        for source in ["=SUM(@CHILDREN)", "=SUM(.*)"] {
+            let bound = bound_formula_from(
+                RuntimeEnvironment::new().with_host_reference_syntax(test_host_reference_syntax()),
+                source,
+            );
+
+            let BoundExpr::FunctionCall { args, .. } = &bound.root else {
+                panic!("expected SUM call for {source}");
+            };
+            assert!(matches!(
+                args.as_slice(),
+                [BoundExpr::HostReferenceCollection(collection)]
+                    if collection.collection_family == "children"
+                        && collection.base.is_none()
+            ));
+        }
+    }
+
+    fn test_host_reference_syntax() -> HostReferenceSyntaxProfile {
+        HostReferenceSyntaxProfile::with_collection_members([
+            RuntimeHostReferenceCollectionSyntax::new("CHILDREN", "children"),
+            RuntimeHostReferenceCollectionSyntax::new("*", "children"),
+        ])
     }
 
     #[test]

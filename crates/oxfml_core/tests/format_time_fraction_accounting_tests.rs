@@ -5,7 +5,7 @@ use oxfml_core::publication::{
 };
 use oxfml_core::seam::TopologyDelta;
 use oxfml_core::{FormulaSourceRecord, ReturnedValueSurface, TypedContextQueryBundle};
-use oxfunc_core::value::{EvalValue, ExtendedValue, NumberFormatHint, PresentationHint};
+use oxfunc_core::value::{CalcValue, CoreValue, EvalValue, NumberFormatHint, PresentationHint};
 
 #[test]
 fn format_engine_renders_time_tokens_and_ampm_modes() {
@@ -135,10 +135,10 @@ fn publication_surface_respects_user_supplied_time_format_code() {
     let locale = oxfml_en_us_locale_context();
     let source = FormulaSourceRecord::new("publication:time-format", 1, "=NOW()");
     let returned_value_surface =
-        ReturnedValueSurface::from_extended_value(&ExtendedValue::ValueWithPresentation {
-            value: EvalValue::Number(45293.625),
-            hint: PresentationHint::number_format(NumberFormatHint::DateLike),
-        });
+        ReturnedValueSurface::from_calc_value(&CalcValue::with_presentation(
+            CoreValue::Number(45293.625),
+            PresentationHint::number_format(NumberFormatHint::DateLike),
+        ));
     let context = VerificationPublicationContext {
         format_profile: Some("en-US".to_string()),
         number_format_code: Some("HH:mm:ss".to_string()),
