@@ -1347,7 +1347,7 @@ fn evaluator_returns_lambda_value_summary() {
     );
     assert_eq!(
         output.result.payload_summary,
-        "Lambda(arity=1;required_arity=1;params=x;optional_params=-;captures=-;body=Binary)"
+        "Callable(arity=1;required_arity=1;params=x;optional_params=-;captures=-;body=Binary)"
     );
     assert_eq!(
         output.result.callable_profile.as_deref(),
@@ -1394,7 +1394,7 @@ fn evaluator_returns_lambda_value_summary_with_lexical_capture_metadata() {
     );
     assert_eq!(
         output.result.payload_summary,
-        "Lambda(arity=1;required_arity=1;params=y;optional_params=-;captures=x;body=Binary)"
+        "Callable(arity=1;required_arity=1;params=y;optional_params=-;captures=x;body=Binary)"
     );
     assert_eq!(
         output.result.callable_profile.as_deref(),
@@ -1605,7 +1605,7 @@ fn evaluator_preserves_defined_name_callable_as_first_class_value() {
     );
     assert_eq!(
         value_output.result.payload_summary,
-        "Lambda(arity=1;required_arity=1;params=y;optional_params=-;captures=x;body=Binary)"
+        "Callable(arity=1;required_arity=1;params=y;optional_params=-;captures=x;body=Binary)"
     );
     assert_eq!(
         value_output
@@ -1645,7 +1645,7 @@ fn evaluator_lambda_summary_ignores_unused_helper_bindings() {
     );
     assert_eq!(
         output.result.payload_summary,
-        "Lambda(arity=1;required_arity=1;params=y;optional_params=-;captures=x;body=Binary)"
+        "Callable(arity=1;required_arity=1;params=y;optional_params=-;captures=x;body=Binary)"
     );
     let detail = output
         .result
@@ -1665,7 +1665,7 @@ fn evaluator_lambda_summary_respects_parameter_shadowing() {
     );
     assert_eq!(
         output.result.payload_summary,
-        "Lambda(arity=1;required_arity=1;params=x;optional_params=-;captures=-;body=Binary)"
+        "Callable(arity=1;required_arity=1;params=x;optional_params=-;captures=-;body=Binary)"
     );
     let carrier = output
         .result

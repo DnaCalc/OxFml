@@ -10,7 +10,7 @@
       "x": "Number(10)"
     },
     "expected": {
-      "payload_summary": "Lambda(arity=1;required_arity=1;params=y;optional_params=-;captures=x;body=Binary)",
+      "payload_summary": "Callable(arity=1;required_arity=1;params=y;optional_params=-;captures=x;body=Binary)",
       "prepared_call_functions": [],
       "callable_carrier": {
         "origin_kind": "DefinedNameCallable",
@@ -56,7 +56,7 @@
     "callable_params": ["x"],
     "closure_bindings": {},
     "expected": {
-      "payload_summary": "Lambda(arity=1;required_arity=1;params=x;optional_params=-;captures=-;body=Binary)",
+      "payload_summary": "Callable(arity=1;required_arity=1;params=x;optional_params=-;captures=-;body=Binary)",
       "prepared_call_functions": [],
       "callable_carrier": {
         "origin_kind": "DefinedNameCallable",

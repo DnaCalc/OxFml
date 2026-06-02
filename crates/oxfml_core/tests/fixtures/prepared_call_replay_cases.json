@@ -270,7 +270,7 @@
       ],
       "result_class": "Scalar",
       "result_structure_class": "DirectScalar",
-      "payload_summary": "Lambda(arity=1;required_arity=1;params=x;optional_params=-;captures=-;body=Binary)",
+      "payload_summary": "Callable(arity=1;required_arity=1;params=x;optional_params=-;captures=-;body=Binary)",
       "callable_carrier": {
         "origin_kind": "HelperLambda",
         "invocation_model": "TypedInvocationOnly",
@@ -662,7 +662,7 @@
       ],
       "result_class": "Scalar",
       "result_structure_class": "DirectScalar",
-      "payload_summary": "Lambda(arity=1;required_arity=1;params=y;optional_params=-;captures=x;body=Binary)",
+      "payload_summary": "Callable(arity=1;required_arity=1;params=y;optional_params=-;captures=x;body=Binary)",
       "callable_carrier": {
         "origin_kind": "HelperLambda",
         "invocation_model": "TypedInvocationOnly",
@@ -793,7 +793,7 @@
       ],
       "result_class": "Scalar",
       "result_structure_class": "DirectScalar",
-      "payload_summary": "Lambda(arity=1;required_arity=1;params=y;optional_params=-;captures=x;body=Binary)",
+      "payload_summary": "Callable(arity=1;required_arity=1;params=y;optional_params=-;captures=x;body=Binary)",
       "callable_carrier": {
         "origin_kind": "HelperLambda",
         "invocation_model": "TypedInvocationOnly",
@@ -876,7 +876,7 @@
       ],
       "result_class": "Scalar",
       "result_structure_class": "DirectScalar",
-      "payload_summary": "Lambda(arity=1;required_arity=1;params=x;optional_params=-;captures=-;body=Binary)",
+      "payload_summary": "Callable(arity=1;required_arity=1;params=x;optional_params=-;captures=-;body=Binary)",
       "callable_carrier": {
         "origin_kind": "HelperLambda",
         "invocation_model": "TypedInvocationOnly",
@@ -1072,7 +1072,7 @@
       ],
       "result_class": "Scalar",
       "result_structure_class": "DirectScalar",
-      "payload_summary": "Lambda(arity=1;required_arity=1;params=x;optional_params=-;captures=n;body=Binary)",
+      "payload_summary": "Callable(arity=1;required_arity=1;params=x;optional_params=-;captures=n;body=Binary)",
       "blankness_class": "NonBlank",
       "callable_carrier": {
         "origin_kind": "HelperLambda",

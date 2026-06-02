@@ -1642,7 +1642,7 @@ fn calc_value_from_call_arg_with_registry(
 ) -> CalcValue {
     match arg {
         CallArgValue::Eval(value) => {
-            callable_value_from_carrier_eval_value(value, callable_registry)
+            callable_value_from_transport_eval_value(value, callable_registry)
                 .map(CalcValue::callable)
                 .unwrap_or_else(|| CalcValue::from(value.clone()))
         }
@@ -1671,7 +1671,7 @@ fn legacy_call_args_from_calc_values(args: &[CalcValue]) -> Vec<CallArgValue> {
 
 fn eval_value_from_calc_value(value: CalcValue) -> EvalValue {
     if let Some(callable) = value.callable_value() {
-        return eval_value_from_callable_value(callable);
+        return callable_transport_eval_value(callable);
     }
 
     match value.core {
@@ -1957,7 +1957,8 @@ fn portable_callable_for_top_level_result(
     bind_formula: &BoundFormula,
     defined_names: &BTreeMap<String, DefinedNameBinding>,
 ) -> Option<PortableCallableValue> {
-    let runtime_callable = callable_value_from_carrier_eval_value(output_value, callable_registry)?;
+    let runtime_callable =
+        callable_value_from_transport_eval_value(output_value, callable_registry)?;
     let (params, optional_params, body) = lambda_literal_params_and_body(&bind_formula.root)?;
 
     let bound_param_keys = params
@@ -2584,7 +2585,7 @@ fn evaluate_expr_value(
             callable_registry,
             trace,
         ),
-        CompiledExpr::BuiltinCallable(callable) => Ok(eval_value_from_callable_value(
+        CompiledExpr::BuiltinCallable(callable) => Ok(callable_transport_eval_value(
             &built_in_callable_from_call_target(&callable.call_target, callable_registry),
         )),
         CompiledExpr::Invocation { callee, args } => evaluate_invocation(
@@ -2857,9 +2858,11 @@ fn evaluate_ordinary_function_call(
             reference_system_provider,
             callable_registry,
         ) {
-            Ok(value) => {
-                decode_callable_carrier_function_result(meta.function_id, value, callable_registry)
-            }
+            Ok(value) => decode_callable_transport_function_result(
+                meta.function_id,
+                value,
+                callable_registry,
+            ),
             Err(_error)
                 if allow_host_query_worksheet_error_fallback(
                     meta.function_id,
@@ -3799,9 +3802,7 @@ fn call_arg_for_name(
         DefinedNameBinding::Callable(binding) => {
             let lambda = lambda_binding_from_defined_name_binding(binding, callable_registry);
             let callable = callable_registry.borrow_mut().register(lambda);
-            Ok(CallArgValue::Eval(eval_value_from_callable_value(
-                &callable,
-            )))
+            Ok(CallArgValue::Eval(callable_transport_eval_value(&callable)))
         }
     }
 }
@@ -3853,9 +3854,7 @@ fn call_arg_for_helper_binding(
                 body: body.clone(),
                 closure: closure.clone(),
             });
-            Ok(CallArgValue::Eval(eval_value_from_callable_value(
-                &callable,
-            )))
+            Ok(CallArgValue::Eval(callable_transport_eval_value(&callable)))
         }
     }
 }
@@ -3865,9 +3864,7 @@ fn built_in_callable_arg_for_call_target(
     callable_registry: &RefCell<CallableRegistry>,
 ) -> Result<CallArgValue, EvaluationError> {
     let callable = built_in_callable_from_call_target(call_target, callable_registry);
-    Ok(CallArgValue::Eval(eval_value_from_callable_value(
-        &callable,
-    )))
+    Ok(CallArgValue::Eval(callable_transport_eval_value(&callable)))
 }
 
 fn built_in_callable_from_call_target(
@@ -4485,7 +4482,7 @@ fn evaluate_lambda_call(
         body: Rc::new(args[body_index].clone()),
         closure: helper_closure_from_names(helper_bindings, &capture_names),
     });
-    let value = eval_value_from_callable_value(&callable);
+    let value = callable_transport_eval_value(&callable);
     record_prepared_call_returned_value(trace, prepared_call_index, &value);
     Ok(value)
 }
@@ -4592,7 +4589,7 @@ fn evaluate_invocation(
             false,
             trace,
         )?;
-        if call_arg_callable_value(&prepared, callable_registry).is_some() {
+        if call_arg_transport_callable_value(&prepared, callable_registry).is_some() {
             recursion_cost_units += LOCAL_CALLABLE_RECURSION_LAMBDA_ARG_COST_UNITS;
         }
         if records_prepared_calls {
@@ -4709,7 +4706,7 @@ fn lambda_binding_for_evaluated_callee(
         callable_registry,
         trace,
     )?;
-    let Some(callable) = callable_value_from_carrier_eval_value(&value, callable_registry) else {
+    let Some(callable) = callable_value_from_transport_eval_value(&value, callable_registry) else {
         return Err(EvaluationError {
             message: format!(
                 "only immediate, helper-bound, defined-name, or lambda-valued callable invocation is supported; callee evaluated to {}",
@@ -4777,7 +4774,7 @@ fn helper_binding_from_expr(
         _ => {
             if let CallArgValue::Eval(value) = &fallback {
                 if let Some(callable) =
-                    callable_value_from_carrier_eval_value(value, callable_registry)
+                    callable_value_from_transport_eval_value(value, callable_registry)
                 {
                     let callable_token = callable_token_from_oxfunc_callable(&callable);
                     if let Some(binding) = callable_registry.borrow().get(&callable_token) {
@@ -4917,7 +4914,7 @@ fn lambda_binding_for_callee(
                     closure: closure.clone(),
                 }),
                 Some(HelperBinding::Arg(CallArgValue::Eval(value))) => {
-                    callable_value_from_carrier_eval_value(value, callable_registry).and_then(
+                    callable_value_from_transport_eval_value(value, callable_registry).and_then(
                         |callable| {
                             let callable_token = callable_token_from_oxfunc_callable(&callable);
                             callable_registry
@@ -4943,7 +4940,7 @@ fn lambda_binding_for_callee(
                     closure,
                 }),
                 Some(HelperBinding::Arg(CallArgValue::Eval(value))) => {
-                    callable_value_from_carrier_eval_value(&value, callable_registry).and_then(
+                    callable_value_from_transport_eval_value(&value, callable_registry).and_then(
                         |callable| {
                             let callable_token = callable_token_from_oxfunc_callable(&callable);
                             callable_registry
@@ -5025,7 +5022,7 @@ fn lambda_binding_from_defined_name_binding(
                         let nested_binding =
                             lambda_binding_from_defined_name_binding(nested, callable_registry);
                         let callable = callable_registry.borrow_mut().register(nested_binding);
-                        HelperBinding::Arg(CallArgValue::Eval(eval_value_from_callable_value(
+                        HelperBinding::Arg(CallArgValue::Eval(callable_transport_eval_value(
                             &callable,
                         )))
                     }
@@ -5575,7 +5572,7 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
         return PreparedResult {
             result_class: PreparedResultClass::Scalar,
             structure_class: PreparedStructureClass::DirectScalar,
-            payload_summary: format!("Lambda({summary})"),
+            payload_summary: format!("Callable({summary})"),
             blankness_class: PreparedBlanknessClass::NonBlank,
             reference_target: None,
             callable_carrier: profile.as_ref().map(|profile| CallableValueCarrier {
@@ -6017,7 +6014,7 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
         let recursion_cost_units = LOCAL_CALLABLE_RECURSION_BASE_COST_UNITS
             + args
                 .iter()
-                .filter(|arg| prepared_arg_contains_lambda(arg, self.callable_registry))
+                .filter(|arg| prepared_arg_contains_callable(arg, self.callable_registry))
                 .count()
                 * LOCAL_CALLABLE_RECURSION_LAMBDA_ARG_COST_UNITS;
         let Some(_recursion_guard) = try_enter_callable_recursion(
@@ -6247,7 +6244,7 @@ fn set_local_callable_arg_slots(
     let mut lambda_arg_count = 0usize;
     for ((param, param_key), arg) in params.iter().zip(param_keys.iter()).zip(args.iter()) {
         let call_arg = call_arg_from_prepared(arg, callable_registry);
-        if call_arg_callable_value(&call_arg, callable_registry).is_some() {
+        if call_arg_transport_callable_value(&call_arg, callable_registry).is_some() {
             lambda_arg_count += 1;
         }
         let binding = HelperBinding::Arg(call_arg);
@@ -6273,7 +6270,7 @@ fn call_arg_from_prepared(
     callable_registry: &RefCell<CallableRegistry>,
 ) -> CallArgValue {
     match prepared {
-        PreparedArgValue::Eval(value) => CallArgValue::Eval(decode_callable_carrier_scalar(
+        PreparedArgValue::Eval(value) => CallArgValue::Eval(decode_callable_transport_scalar(
             value.clone(),
             callable_registry,
         )),
@@ -6282,11 +6279,11 @@ fn call_arg_from_prepared(
     }
 }
 
-fn prepared_arg_contains_lambda(
+fn prepared_arg_contains_callable(
     prepared: &PreparedArgValue,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> bool {
-    call_arg_callable_value(
+    call_arg_transport_callable_value(
         &call_arg_from_prepared(prepared, callable_registry),
         callable_registry,
     )
@@ -6294,31 +6291,29 @@ fn prepared_arg_contains_lambda(
 }
 
 fn prepared_arg_from_eval_value(value: EvalValue) -> PreparedArgValue {
-    PreparedArgValue::Eval(encode_callable_array_transport_value(value))
+    PreparedArgValue::Eval(value)
 }
 
-fn encode_callable_array_transport_value(value: EvalValue) -> EvalValue {
-    value
-}
-
-fn decode_callable_carrier_function_result(
+fn decode_callable_transport_function_result(
     function_id: &str,
     value: EvalValue,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> EvalValue {
     match function_id {
-        FUNC_ID_INDEX | FUNC_ID_XLOOKUP => decode_callable_carrier_scalar(value, callable_registry),
+        FUNC_ID_INDEX | FUNC_ID_XLOOKUP => {
+            decode_callable_transport_scalar(value, callable_registry)
+        }
         _ => value,
     }
 }
 
-fn decode_callable_carrier_scalar(
+fn decode_callable_transport_scalar(
     value: EvalValue,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> EvalValue {
     match value {
         EvalValue::Text(text) => {
-            if decode_callable_carrier_text(&text, callable_registry).is_some() {
+            if decode_callable_transport_text(&text, callable_registry).is_some() {
                 EvalValue::Text(text)
             } else {
                 EvalValue::Text(text)
@@ -6341,7 +6336,8 @@ fn sanitize_final_output_value(
                 for col in 0..shape.cols {
                     let cell = match array.get(row, col) {
                         Some(ArrayCellValue::Text(text))
-                            if decode_callable_carrier_text(text, callable_registry).is_some() =>
+                            if decode_callable_transport_text(text, callable_registry)
+                                .is_some() =>
                         {
                             ArrayCellValue::Error(WorksheetErrorCode::Calc)
                         }
@@ -6363,33 +6359,33 @@ fn callable_array_carrier_text(token: &str) -> ExcelText {
     ExcelText::from_interop_assignment(&format!("{}{}", CALLABLE_ARRAY_CARRIER_PREFIX, token))
 }
 
-fn eval_value_from_callable_value(callable: &OxCallableValue) -> EvalValue {
+fn callable_transport_eval_value(callable: &OxCallableValue) -> EvalValue {
     EvalValue::Text(callable_array_carrier_text(
         &callable_token_from_oxfunc_callable(callable),
     ))
 }
 
-fn callable_value_from_carrier_eval_value(
+fn callable_value_from_transport_eval_value(
     value: &EvalValue,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> Option<OxCallableValue> {
     let EvalValue::Text(text) = value else {
         return None;
     };
-    decode_callable_carrier_text(text, callable_registry)
+    decode_callable_transport_text(text, callable_registry)
 }
 
-fn call_arg_callable_value(
+fn call_arg_transport_callable_value(
     call_arg: &CallArgValue,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> Option<OxCallableValue> {
     let CallArgValue::Eval(value) = call_arg else {
         return None;
     };
-    callable_value_from_carrier_eval_value(value, callable_registry)
+    callable_value_from_transport_eval_value(value, callable_registry)
 }
 
-fn decode_callable_carrier_text(
+fn decode_callable_transport_text(
     text: &ExcelText,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> Option<OxCallableValue> {
