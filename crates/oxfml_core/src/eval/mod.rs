@@ -31,7 +31,7 @@ use oxfunc_core::functions::surface_dispatch::{
     FUNC_ID_OP_LESS_THAN, FUNC_ID_OP_MULTIPLY, FUNC_ID_OP_NEGATE, FUNC_ID_OP_NOT_EQUAL,
     FUNC_ID_OP_PERCENT, FUNC_ID_OP_POWER, FUNC_ID_OP_RANGE_REF, FUNC_ID_OP_SPILL_REF,
     FUNC_ID_OP_SUBTRACT, FUNC_ID_OP_UNARY_PLUS, FUNC_ID_OP_UNION_REF, FUNC_ID_REGISTER_ID,
-    FUNC_ID_RTD, FUNC_ID_TAKE, FUNC_ID_TODAY, FUNC_ID_XLOOKUP, eval_surface_rich_value_call,
+    FUNC_ID_RTD, FUNC_ID_TAKE, FUNC_ID_TODAY, FUNC_ID_XLOOKUP, eval_surface_value_call,
 };
 use oxfunc_core::host_info::HostInfoProvider;
 use oxfunc_core::locale_format::LocaleFormatContext;
@@ -2360,9 +2360,10 @@ fn extended_surface_for_top_level_function_call(
             if !matches!(function_id, FUNC_ID_HYPERLINK | FUNC_ID_NOW | FUNC_ID_TODAY) {
                 return None;
             }
-            let rich = eval_surface_rich_value_call(
+            let calc_args = calc_values_from_call_args(&call_args);
+            let rich = eval_surface_value_call(
                 function_id,
-                &call_args,
+                &calc_args,
                 context.reference_system_provider(),
                 context.now_serial,
                 context.random_provider,
