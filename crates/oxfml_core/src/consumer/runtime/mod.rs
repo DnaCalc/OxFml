@@ -81,6 +81,7 @@ pub struct RuntimeAuthoredInputDiagnostics {
 }
 
 pub struct RuntimeEnvironment<'a> {
+    workbook_id: String,
     structure_context_version: StructureContextVersion,
     caller_row: u32,
     caller_col: u32,
@@ -106,6 +107,7 @@ pub struct RuntimeEnvironment<'a> {
 impl<'a> RuntimeEnvironment<'a> {
     pub fn new() -> Self {
         Self {
+            workbook_id: "book:default".to_string(),
             structure_context_version: StructureContextVersion("runtime-struct-v1".to_string()),
             caller_row: 1,
             caller_col: 1,
@@ -214,6 +216,16 @@ impl<'a> RuntimeEnvironment<'a> {
     pub fn with_caller_position(mut self, caller_row: u32, caller_col: u32) -> Self {
         self.caller_row = caller_row;
         self.caller_col = caller_col;
+        self
+    }
+
+    pub fn with_formula_scope(
+        mut self,
+        workbook_id: impl Into<String>,
+        sheet_id: impl Into<String>,
+    ) -> Self {
+        self.workbook_id = workbook_id.into();
+        self.primary_locus.sheet_id = sheet_id.into();
         self
     }
 
@@ -437,6 +449,8 @@ impl<'a> RuntimeEnvironment<'a> {
         let name_caller_context_dependencies =
             host_name_caller_context_dependencies(&self.host_name_bindings);
         BindContext {
+            workbook_id: self.workbook_id.clone(),
+            sheet_id: self.primary_locus.sheet_id.clone(),
             structure_context_version: self.structure_context_version.clone(),
             caller_row: self.caller_row,
             caller_col: self.caller_col,
@@ -479,6 +493,7 @@ impl<'a> RuntimeEnvironment<'a> {
 
     fn apply_to_host(&self, host: &mut SingleFormulaHost, source: &FormulaSourceRecord) {
         host.set_formula_source(source);
+        host.workbook_id = self.workbook_id.clone();
         host.structure_context_version = self.structure_context_version.0.clone();
         host.caller_row = self.caller_row;
         host.caller_col = self.caller_col;
@@ -490,6 +505,7 @@ impl<'a> RuntimeEnvironment<'a> {
         host.table_catalog = self.table_catalog.clone();
         host.enclosing_table_ref = self.enclosing_table_ref.clone();
         host.caller_table_region = self.caller_table_region.clone();
+        host.host_reference_syntax = self.host_reference_syntax.clone();
     }
 
     fn has_active_registry_view(&self) -> bool {

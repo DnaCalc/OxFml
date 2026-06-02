@@ -598,6 +598,61 @@ fn runtime_structured_references_use_sparse_values_when_available() {
 }
 
 #[test]
+fn runtime_structured_reference_uses_formula_scope_sheet_for_sparse_values() {
+    let reference = ReferenceLike::new(ReferenceKind::Area, "Sheet1!A2:A3");
+    let provider = RuntimeTestReferenceSystemProvider::new(
+        reference,
+        ResolvedReferenceValues::new(
+            ResolvedReferenceExtent::new(2, 1),
+            vec![
+                ResolvedReferenceCell::new(1, 1, ArrayCellValue::Number(10.0)),
+                ResolvedReferenceCell::new(2, 1, ArrayCellValue::Number(20.0)),
+            ],
+            Some("reader:treecalc:SalesTable:Amount".to_string()),
+        ),
+    );
+    let table = TableDescriptor {
+        table_id: "table:sales".to_string(),
+        table_name: "SalesTable".to_string(),
+        workbook_scope_ref: "Book1".to_string(),
+        sheet_scope_ref: "Sheet1".to_string(),
+        table_range_ref: "A1:A3".to_string(),
+        row_membership_identity: Some("table:sales:rows:v1".to_string()),
+        row_order_identity: Some("table:sales:row-order:v1".to_string()),
+        header_region_ref: Some("A1:A1".to_string()),
+        totals_region_ref: None,
+        header_row_present: true,
+        totals_row_present: false,
+        columns: vec![TableColumnDescriptor {
+            column_id: "table:sales:col:amount".to_string(),
+            column_name: "Amount".to_string(),
+            ordinal: 1,
+            column_range_ref: "A2:A3".to_string(),
+        }],
+    };
+
+    let result = RuntimeEnvironment::new()
+        .with_formula_scope("Book1", "Sheet1")
+        .with_table_context(vec![table], None, None)
+        .execute(
+            RuntimeFormulaRequest::new(
+                FormulaSourceRecord::new("runtime:treecalc-structured-scope", 1, "=SUM(SalesTable[Amount])"),
+                TypedContextQueryBundle::default().with_reference_system_provider(Some(&provider)),
+            )
+            .with_trace_mode(EvaluationTraceMode::PreparedCalls),
+        )
+        .expect("structured sparse reference should execute");
+
+    assert_eq!(result.evaluation.oxfunc_value, EvalValue::Number(30.0));
+    assert_eq!(
+        result.evaluation.trace.prepared_calls[0].prepared_arguments[0]
+            .reference_target
+            .as_deref(),
+        Some("Sheet1!A2:A3")
+    );
+}
+
+#[test]
 fn runtime_carries_host_reference_context_without_treecalc_semantics() {
     let host_context = RuntimeHostFormulaContext {
         dialect_id: "generic-host-v1".to_string(),

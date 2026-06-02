@@ -42,7 +42,10 @@ use crate::seam::{
 use crate::semantics::{CompileSemanticPlanRequest, SemanticPlan, compile_semantic_plan};
 use crate::source::{FormulaSourceRecord, StructureContextVersion};
 use crate::syntax::green::GreenTreeRoot;
-use crate::syntax::parser::{ParseRequest, parse_formula_incremental};
+use crate::syntax::parser::{
+    HostReferenceSyntaxProfile, ParseRequest, parse_formula_incremental,
+    parse_formula_with_host_reference_syntax,
+};
 use crate::syntax::token::SyntaxDiagnostic;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -72,6 +75,7 @@ pub struct SingleFormulaHost {
     pub stored_formula_text: Option<String>,
     pub formula_channel_kind: crate::source::FormulaChannelKind,
     pub formula_text_version: u64,
+    pub workbook_id: String,
     pub structure_context_version: String,
     pub caller_row: u32,
     pub caller_col: u32,
@@ -81,6 +85,7 @@ pub struct SingleFormulaHost {
     pub table_catalog: Vec<TableDescriptor>,
     pub enclosing_table_ref: Option<TableRef>,
     pub caller_table_region: Option<TableCallerRegion>,
+    pub host_reference_syntax: HostReferenceSyntaxProfile,
     pub now_serial: Option<f64>,
     pub trace_mode: EvaluationTraceMode,
     next_session_id: u64,
@@ -230,6 +235,7 @@ impl SingleFormulaHost {
             stored_formula_text: None,
             formula_channel_kind: crate::source::FormulaChannelKind::WorksheetA1,
             formula_text_version: 1,
+            workbook_id: "book:default".to_string(),
             structure_context_version: "host-struct-v1".to_string(),
             caller_row: 1,
             caller_col: 1,
@@ -243,6 +249,7 @@ impl SingleFormulaHost {
             table_catalog: Vec::new(),
             enclosing_table_ref: None,
             caller_table_region: None,
+            host_reference_syntax: HostReferenceSyntaxProfile::default(),
             now_serial: Some(46000.0),
             trace_mode: EvaluationTraceMode::default(),
             next_session_id: 1,
@@ -420,27 +427,41 @@ impl SingleFormulaHost {
             source = source.with_stored_formula_text(stored_formula_text.clone());
         }
         let cached_artifacts = self.cached_artifacts.as_ref();
-        let parse = parse_formula_incremental(
-            ParseRequest {
-                source: source.clone(),
-            },
-            cached_artifacts.map(|artifacts| &artifacts.green_tree),
-        );
+        let (green_tree, green_tree_reused) =
+            if self.host_reference_syntax == HostReferenceSyntaxProfile::default() {
+                let parse = parse_formula_incremental(
+                    ParseRequest {
+                        source: source.clone(),
+                    },
+                    cached_artifacts.map(|artifacts| &artifacts.green_tree),
+                );
+                (parse.green_tree, parse.reused_green_tree)
+            } else {
+                let parse = parse_formula_with_host_reference_syntax(
+                    ParseRequest {
+                        source: source.clone(),
+                    },
+                    &self.host_reference_syntax,
+                );
+                (parse.green_tree, false)
+            };
         let red = project_red_view_incremental(
             source.formula_stable_id.clone(),
-            &parse.green_tree,
+            &green_tree,
             cached_artifacts.map(|artifacts| &artifacts.red_projection),
         );
-        let syntax_diagnostics = parse.green_tree.diagnostics.clone();
+        let syntax_diagnostics = green_tree.diagnostics.clone();
         if !syntax_diagnostics.is_empty() {
             return Err(syntax_diagnostic_execution_error(&syntax_diagnostics));
         }
         let bind = bind_formula_incremental(
             BindRequest {
                 source: source.clone(),
-                green_tree: parse.green_tree.clone(),
+                green_tree: green_tree.clone(),
                 red_projection: red.red_projection.clone(),
                 context: BindContext {
+                    workbook_id: self.workbook_id.clone(),
+                    sheet_id: self.primary_locus.sheet_id.clone(),
                     structure_context_version: StructureContextVersion(
                         self.structure_context_version.clone(),
                     ),
@@ -531,13 +552,13 @@ impl SingleFormulaHost {
             )
         };
         let artifact_reuse = ArtifactReuseReport {
-            green_tree_reused: parse.reused_green_tree,
+            green_tree_reused,
             red_projection_reused: red.reused_red_projection,
             bound_formula_reused: bind.reused_bound_formula,
             semantic_plan_reused,
         };
         self.cached_artifacts = Some(CachedHostArtifacts {
-            green_tree: parse.green_tree,
+            green_tree,
             red_projection: red.red_projection,
             bound_formula: bind.bound_formula.clone(),
             semantic_plan: semantic_plan.clone(),
