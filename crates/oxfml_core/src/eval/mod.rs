@@ -513,6 +513,15 @@ impl OpaqueCallable for OxFmlCallableBinding {
     }
 }
 
+fn callable_token_from_oxfunc_callable(callable: &OxCallableValue) -> String {
+    callable
+        .handle
+        .as_any()
+        .downcast_ref::<OxFmlCallableBinding>()
+        .map(|binding| binding.callable_token.clone())
+        .unwrap_or_else(|| callable.summary.clone())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EvaluationError {
     pub message: String,
@@ -5822,17 +5831,23 @@ struct OxFmlCallableInvoker<'a, 'b> {
 impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
     fn invoke(
         &self,
-        callable: &OxLambdaValue,
+        callable: &OxCallableValue,
         args: &[PreparedArgValue],
     ) -> Result<PreparedArgValue, CallableInvocationError> {
-        if callable.origin_kind == OxCallableOriginKind::BuiltInCallable {
+        let callable_token = callable_token_from_oxfunc_callable(callable);
+        if self
+            .callable_registry
+            .borrow()
+            .builtin_call_target(&callable_token)
+            .is_some()
+        {
             let call_target = self
                 .callable_registry
                 .borrow()
-                .builtin_call_target(&callable.callable_token)
+                .builtin_call_target(&callable_token)
                 .ok_or_else(|| {
                     CallableInvocationError::UnsupportedCallableToken(
-                        callable.callable_token.clone(),
+                        callable_token.clone(),
                     )
                 })?;
             let call_args = args
@@ -5860,10 +5875,10 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
         let binding = self
             .callable_registry
             .borrow()
-            .get(&callable.callable_token)
+            .get(&callable_token)
             .cloned()
             .ok_or_else(|| {
-                CallableInvocationError::UnsupportedCallableToken(callable.callable_token.clone())
+                CallableInvocationError::UnsupportedCallableToken(callable_token.clone())
             })?;
         let local_slot_count = lambda_slot_count(&binding.lambda.params, &binding.lambda.body);
         let mut local_bindings = binding.lambda.closure.with_min_slot_count(local_slot_count);
@@ -5918,21 +5933,27 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
 
     fn invoke_many(
         &self,
-        callable: &OxLambdaValue,
+        callable: &OxCallableValue,
         batch: &mut dyn CallableInvocationBatch,
     ) -> Result<(), CallableInvocationError> {
         let _mode = batch.mode();
-        if callable.origin_kind == OxCallableOriginKind::BuiltInCallable {
+        let callable_token = callable_token_from_oxfunc_callable(callable);
+        if self
+            .callable_registry
+            .borrow()
+            .builtin_call_target(&callable_token)
+            .is_some()
+        {
             return self.invoke_many_builtin_callable(callable, batch);
         }
 
         let binding = self
             .callable_registry
             .borrow()
-            .get(&callable.callable_token)
+            .get(&callable_token)
             .cloned()
             .ok_or_else(|| {
-                CallableInvocationError::UnsupportedCallableToken(callable.callable_token.clone())
+                CallableInvocationError::UnsupportedCallableToken(callable_token.clone())
             })?;
         let param_names = binding
             .lambda
@@ -5959,10 +5980,10 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
                 batch.prepare_next_args(&mut args)
             } {
                 let argc = args.len();
-                if !callable.arity_shape.accepts(argc) {
+                if !callable.arity.accepts(argc) {
                     return Err(CallableInvocationError::ArityMismatch {
-                        expected_min: callable.arity_shape.min,
-                        expected_max: callable.arity_shape.max,
+                        expected_min: callable.arity.min,
+                        expected_max: callable.arity.max,
                         actual: argc,
                     });
                 }
@@ -6005,15 +6026,16 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
 impl OxFmlCallableInvoker<'_, '_> {
     fn invoke_many_builtin_callable(
         &self,
-        callable: &OxLambdaValue,
+        callable: &OxCallableValue,
         batch: &mut dyn CallableInvocationBatch,
     ) -> Result<(), CallableInvocationError> {
+        let callable_token = callable_token_from_oxfunc_callable(callable);
         let call_target = self
             .callable_registry
             .borrow()
-            .builtin_call_target(&callable.callable_token)
+            .builtin_call_target(&callable_token)
             .ok_or_else(|| {
-                CallableInvocationError::UnsupportedCallableToken(callable.callable_token.clone())
+                CallableInvocationError::UnsupportedCallableToken(callable_token.clone())
             })?;
         let reference_system_provider = self.context.reference_system_provider();
         let mut fec = FunctionExecutionContextBundle::new(&reference_system_provider);
@@ -6032,10 +6054,10 @@ impl OxFmlCallableInvoker<'_, '_> {
             batch.prepare_next_args(&mut args)
         } {
             let argc = args.len();
-            if !callable.arity_shape.accepts(argc) {
+            if !callable.arity.accepts(argc) {
                 return Err(CallableInvocationError::ArityMismatch {
-                    expected_min: callable.arity_shape.min,
-                    expected_max: callable.arity_shape.max,
+                    expected_min: callable.arity.min,
+                    expected_max: callable.arity.max,
                     actual: argc,
                 });
             }
