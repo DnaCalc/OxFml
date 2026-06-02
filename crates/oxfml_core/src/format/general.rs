@@ -1,9 +1,9 @@
 use oxfunc_core::locale_format::FormatProfile;
-use oxfunc_core::value::{ArrayCellValue, EvalValue, WorksheetErrorCode};
+use oxfunc_core::value::{FunctionArrayCell, FunctionValue, WorksheetErrorCode};
 
 use crate::eval::{eval_value_callable_transport_summary, eval_value_is_callable_transport};
 
-pub fn render_visible_value_text(value: &EvalValue) -> String {
+pub fn render_visible_value_text(value: &FunctionValue) -> String {
     if eval_value_is_callable_transport(value) {
         return format!(
             "Callable({})",
@@ -11,21 +11,21 @@ pub fn render_visible_value_text(value: &EvalValue) -> String {
         );
     }
     match value {
-        EvalValue::Number(number) => render_visible_number(*number),
-        EvalValue::Text(text) => text.to_string_lossy(),
-        EvalValue::Logical(value) => {
+        FunctionValue::Number(number) => render_visible_number(*number),
+        FunctionValue::Text(text) => text.to_string_lossy(),
+        FunctionValue::Logical(value) => {
             if *value {
                 "TRUE".to_string()
             } else {
                 "FALSE".to_string()
             }
         }
-        EvalValue::Error(code) => worksheet_error_text(*code).to_string(),
-        EvalValue::Array(array) => array
+        FunctionValue::Error(code) => worksheet_error_text(*code).to_string(),
+        FunctionValue::Array(array) => array
             .get(0, 0)
             .map(render_array_cell_text)
             .unwrap_or_default(),
-        EvalValue::Reference(reference) => reference.target.clone(),
+        FunctionValue::Reference(reference) => reference.target().to_string(),
         other => format!("{other:?}"),
     }
 }
@@ -66,18 +66,18 @@ pub fn worksheet_error_text(code: WorksheetErrorCode) -> &'static str {
     }
 }
 
-fn render_array_cell_text(value: &ArrayCellValue) -> String {
+fn render_array_cell_text(value: &FunctionArrayCell) -> String {
     match value {
-        ArrayCellValue::Number(number) => render_visible_number(*number),
-        ArrayCellValue::Text(text) => text.to_string_lossy(),
-        ArrayCellValue::Logical(value) => {
+        FunctionArrayCell::Number(number) => render_visible_number(*number),
+        FunctionArrayCell::Text(text) => text.to_string_lossy(),
+        FunctionArrayCell::Logical(value) => {
             if *value {
                 "TRUE".to_string()
             } else {
                 "FALSE".to_string()
             }
         }
-        ArrayCellValue::Error(code) => worksheet_error_text(*code).to_string(),
-        ArrayCellValue::EmptyCell => String::new(),
+        FunctionArrayCell::Error(code) => worksheet_error_text(*code).to_string(),
+        FunctionArrayCell::EmptyCell => String::new(),
     }
 }

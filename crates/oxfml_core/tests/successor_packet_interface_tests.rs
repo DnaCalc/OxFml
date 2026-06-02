@@ -20,8 +20,8 @@ use oxfunc_core::host_info::{
     ResolvedWebImage,
 };
 use oxfunc_core::value::{
-    CalcValue, CoreValue, EvalValue, ExcelText, NumberFormatHint, PresentationHint, ReferenceLike,
-    RichObjectValue, RichValueData, RichValueType,
+    CalcValue, CoreValue, ExcelText, FunctionValue, NumberFormatHint, PresentationHint,
+    ReferenceLike, RichObjectValue, RichValueData, RichValueType,
 };
 
 mod common;
@@ -376,18 +376,18 @@ impl HostInfoProvider for MockHostInfoProvider {
         &self,
         query: CellInfoQuery,
         _reference: Option<&ReferenceLike>,
-    ) -> Result<EvalValue, HostInfoError> {
+    ) -> Result<FunctionValue, HostInfoError> {
         match query {
-            CellInfoQuery::Filename => Ok(EvalValue::Text(ExcelText::from_utf16_code_units(
+            CellInfoQuery::Filename => Ok(FunctionValue::Text(ExcelText::from_utf16_code_units(
                 "[Book1]Sheet1".encode_utf16().collect(),
             ))),
             _ => Err(HostInfoError::UnsupportedCellInfoQuery(query)),
         }
     }
 
-    fn query_info(&self, query: InfoQuery) -> Result<EvalValue, HostInfoError> {
+    fn query_info(&self, query: InfoQuery) -> Result<FunctionValue, HostInfoError> {
         match query {
-            InfoQuery::System => Ok(EvalValue::Text(ExcelText::from_utf16_code_units(
+            InfoQuery::System => Ok(FunctionValue::Text(ExcelText::from_utf16_code_units(
                 "pcdos".encode_utf16().collect(),
             ))),
             _ => Err(HostInfoError::UnsupportedInfoQuery(query)),
@@ -409,7 +409,7 @@ impl HostInfoProvider for FailingHostInfoProvider {
         &self,
         query: CellInfoQuery,
         _reference: Option<&ReferenceLike>,
-    ) -> Result<EvalValue, HostInfoError> {
+    ) -> Result<FunctionValue, HostInfoError> {
         match query {
             CellInfoQuery::Filename => Err(HostInfoError::ProviderFailure {
                 detail: "host offline".to_string(),
@@ -418,7 +418,7 @@ impl HostInfoProvider for FailingHostInfoProvider {
         }
     }
 
-    fn query_info(&self, query: InfoQuery) -> Result<EvalValue, HostInfoError> {
+    fn query_info(&self, query: InfoQuery) -> Result<FunctionValue, HostInfoError> {
         Err(HostInfoError::UnsupportedInfoQuery(query))
     }
 }
@@ -430,7 +430,7 @@ impl RtdProvider for MockRtdProvider {
         &self,
         _request: &oxfunc_core::functions::rtd_fn::RtdRequest,
     ) -> RtdProviderResult {
-        RtdProviderResult::Value(EvalValue::Number(7.0))
+        RtdProviderResult::Value(FunctionValue::Number(7.0))
     }
 }
 

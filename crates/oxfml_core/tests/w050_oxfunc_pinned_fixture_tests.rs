@@ -11,7 +11,7 @@ use oxfml_core::semantics::{
 use oxfml_core::test_support::oxfunc_adapter::{
     OxFuncAdapterRequest, run_oxfunc_preparation_adapter,
 };
-use oxfunc_core::value::{EvalValue, ExcelText, WorksheetErrorCode};
+use oxfunc_core::value::{ExcelText, FunctionValue, WorksheetErrorCode};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -318,18 +318,18 @@ fn fixture_dir() -> PathBuf {
         .join("fixtures")
 }
 
-fn parse_eval_value_summary(summary: &str) -> EvalValue {
+fn parse_eval_value_summary(summary: &str) -> FunctionValue {
     if let Some(number) = summary
         .strip_prefix("Number(")
         .and_then(|rest| rest.strip_suffix(')'))
     {
-        return EvalValue::Number(number.parse().expect("numeric summary should parse"));
+        return FunctionValue::Number(number.parse().expect("numeric summary should parse"));
     }
     if let Some(text) = summary
         .strip_prefix("Text(")
         .and_then(|rest| rest.strip_suffix(')'))
     {
-        return EvalValue::Text(ExcelText::from_utf16_code_units(
+        return FunctionValue::Text(ExcelText::from_utf16_code_units(
             text.encode_utf16().collect(),
         ));
     }
@@ -337,7 +337,7 @@ fn parse_eval_value_summary(summary: &str) -> EvalValue {
         .strip_prefix("Logical(")
         .and_then(|rest| rest.strip_suffix(')'))
     {
-        return EvalValue::Logical(matches!(logical, "TRUE" | "True" | "true"));
+        return FunctionValue::Logical(matches!(logical, "TRUE" | "True" | "true"));
     }
     if let Some(code) = summary
         .strip_prefix("Error(")
@@ -351,23 +351,23 @@ fn parse_eval_value_summary(summary: &str) -> EvalValue {
             "#REF!" => WorksheetErrorCode::Ref,
             other => panic!("unsupported error summary {other}"),
         };
-        return EvalValue::Error(code);
+        return FunctionValue::Error(code);
     }
 
     panic!("unsupported cell summary {summary}");
 }
 
-fn eval_value_summary(value: &EvalValue) -> String {
+fn eval_value_summary(value: &FunctionValue) -> String {
     match value {
-        EvalValue::Number(number) => format!("Number({number})"),
-        EvalValue::Text(text) => format!("Text({})", text.to_string_lossy()),
-        EvalValue::Logical(value) => format!("Logical({value})"),
-        EvalValue::Error(code) => format!("Error({code:?})"),
-        EvalValue::Array(array) => {
+        FunctionValue::Number(number) => format!("Number({number})"),
+        FunctionValue::Text(text) => format!("Text({})", text.to_string_lossy()),
+        FunctionValue::Logical(value) => format!("Logical({value})"),
+        FunctionValue::Error(code) => format!("Error({code:?})"),
+        FunctionValue::Array(array) => {
             let shape = array.shape();
             format!("Array({}x{})", shape.rows, shape.cols)
         }
-        EvalValue::Reference(reference) => format!("Reference({})", reference.target),
+        FunctionValue::Reference(reference) => format!("Reference({})", reference.target()),
         other => format!("Unsupported({other:?})"),
     }
 }

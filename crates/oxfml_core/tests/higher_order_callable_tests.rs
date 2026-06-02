@@ -12,7 +12,7 @@ use oxfml_core::red::project_red_view;
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
 use oxfml_core::test_support::host::SingleFormulaHost;
-use oxfunc_core::value::{ArrayCellValue, EvalValue, ExcelText, ReferenceLike};
+use oxfunc_core::value::{ExcelText, FunctionArrayCell, FunctionValue, ReferenceLike};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -203,19 +203,19 @@ fn parse_defined_name_summary(summary: &str) -> DefinedNameBinding {
     DefinedNameBinding::Value(parse_eval_value_summary(summary))
 }
 
-fn parse_eval_value_summary(summary: &str) -> EvalValue {
+fn parse_eval_value_summary(summary: &str) -> FunctionValue {
     if let Some(number) = summary
         .strip_prefix("Number(")
         .and_then(|rest| rest.strip_suffix(')'))
     {
-        return EvalValue::Number(number.parse::<f64>().expect("numeric fixture binding"));
+        return FunctionValue::Number(number.parse::<f64>().expect("numeric fixture binding"));
     }
 
     if let Some(text) = summary
         .strip_prefix("Text(")
         .and_then(|rest| rest.strip_suffix(')'))
     {
-        return EvalValue::Text(ExcelText::from_utf16_code_units(
+        return FunctionValue::Text(ExcelText::from_utf16_code_units(
             text.encode_utf16().collect(),
         ));
     }
@@ -225,8 +225,8 @@ fn parse_eval_value_summary(summary: &str) -> EvalValue {
         .and_then(|rest| rest.strip_suffix(')'))
     {
         return match logical {
-            "true" | "True" | "TRUE" => EvalValue::Logical(true),
-            "false" | "False" | "FALSE" => EvalValue::Logical(false),
+            "true" | "True" | "TRUE" => FunctionValue::Logical(true),
+            "false" | "False" | "FALSE" => FunctionValue::Logical(false),
             _ => panic!("unsupported logical fixture binding {summary}"),
         };
     }
@@ -284,27 +284,27 @@ fn split_profile_list(value: &str) -> Vec<String> {
     }
 }
 
-fn array_numbers(value: &EvalValue) -> Vec<f64> {
-    let EvalValue::Array(array) = value else {
+fn array_numbers(value: &FunctionValue) -> Vec<f64> {
+    let FunctionValue::Array(array) = value else {
         panic!("expected array result, got {value:?}");
     };
     array
         .iter_row_major()
         .map(|cell| match cell {
-            ArrayCellValue::Number(number) => *number,
+            FunctionArrayCell::Number(number) => *number,
             other => panic!("expected numeric array cell, got {other:?}"),
         })
         .collect()
 }
 
-fn array_logicals(value: &EvalValue) -> Vec<bool> {
-    let EvalValue::Array(array) = value else {
+fn array_logicals(value: &FunctionValue) -> Vec<bool> {
+    let FunctionValue::Array(array) = value else {
         panic!("expected array result, got {value:?}");
     };
     array
         .iter_row_major()
         .map(|cell| match cell {
-            ArrayCellValue::Logical(value) => *value,
+            FunctionArrayCell::Logical(value) => *value,
             other => panic!("expected logical array cell, got {other:?}"),
         })
         .collect()

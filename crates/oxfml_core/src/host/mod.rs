@@ -6,7 +6,7 @@ use oxfunc_core::functions::call_register_id_family::{
 use oxfunc_core::functions::rtd_fn::RtdProvider;
 use oxfunc_core::host_info::HostInfoProvider;
 use oxfunc_core::locale_format::LocaleFormatContext;
-use oxfunc_core::value::{CalcValue, EvalValue, ExcelText, ReferenceLike, WorksheetErrorCode};
+use oxfunc_core::value::{CalcValue, ExcelText, FunctionValue, ReferenceLike, WorksheetErrorCode};
 
 use crate::binding::{
     BindContext, BindDiagnostic, BindRequest, BoundFormula, NameKind, bind_formula_incremental,
@@ -81,7 +81,7 @@ pub struct SingleFormulaHost {
     pub caller_col: u32,
     pub primary_locus: Locus,
     pub defined_names: BTreeMap<String, DefinedNameBinding>,
-    pub cell_values: BTreeMap<String, EvalValue>,
+    pub cell_values: BTreeMap<String, FunctionValue>,
     pub table_catalog: Vec<TableDescriptor>,
     pub enclosing_table_ref: Option<TableRef>,
     pub caller_table_region: Option<TableCallerRegion>,
@@ -103,7 +103,7 @@ pub struct HostRecalcOutput {
     pub execution_contract: ExecutionContract,
     pub typed_query_bundle_spec: TypedContextQueryBundleSpec,
     pub evaluation: EvaluationOutput,
-    pub published_worksheet_value: EvalValue,
+    pub published_worksheet_value: FunctionValue,
     /// Portable callable payload when the formula's top-level result is a
     /// callable. The host stores this opaquely and re-supplies it later via
     /// `set_defined_name_callable`; `captured_refs` carry the invalidation facts.
@@ -305,7 +305,7 @@ impl SingleFormulaHost {
         self.cached_artifacts = None;
     }
 
-    pub fn set_defined_name_value(&mut self, name: impl Into<String>, value: EvalValue) {
+    pub fn set_defined_name_value(&mut self, name: impl Into<String>, value: FunctionValue) {
         self.defined_names
             .insert(name.into(), DefinedNameBinding::Value(value));
     }
@@ -328,7 +328,7 @@ impl SingleFormulaHost {
             .insert(name.into(), DefinedNameBinding::Callable(callable));
     }
 
-    pub fn set_cell_value(&mut self, target: impl Into<String>, value: EvalValue) {
+    pub fn set_cell_value(&mut self, target: impl Into<String>, value: FunctionValue) {
         self.cell_values.insert(target.into(), value);
     }
 
@@ -740,7 +740,7 @@ fn build_candidate_result(
     source: &FormulaSourceRecord,
     semantic_plan: &SemanticPlan,
     evaluation: &EvaluationOutput,
-    published_worksheet_value: &EvalValue,
+    published_worksheet_value: &FunctionValue,
     returned_value_surface: &ReturnedValueSurface,
     primary_locus: &Locus,
     session_id: &str,
@@ -977,7 +977,7 @@ fn parse_empirical_defined_name_binding(summary: &str) -> Result<DefinedNameBind
     )?))
 }
 
-fn parse_empirical_eval_value(summary: &str) -> Result<EvalValue, String> {
+fn parse_empirical_eval_value(summary: &str) -> Result<FunctionValue, String> {
     if let Some(number) = summary
         .strip_prefix("Number(")
         .and_then(|rest| rest.strip_suffix(')'))
@@ -985,14 +985,14 @@ fn parse_empirical_eval_value(summary: &str) -> Result<EvalValue, String> {
         let parsed = number
             .parse::<f64>()
             .map_err(|_| format!("invalid numeric empirical binding {summary}"))?;
-        return Ok(EvalValue::Number(parsed));
+        return Ok(FunctionValue::Number(parsed));
     }
 
     if let Some(text) = summary
         .strip_prefix("Text(")
         .and_then(|rest| rest.strip_suffix(')'))
     {
-        return Ok(EvalValue::Text(ExcelText::from_utf16_code_units(
+        return Ok(FunctionValue::Text(ExcelText::from_utf16_code_units(
             text.encode_utf16().collect(),
         )));
     }
@@ -1002,8 +1002,8 @@ fn parse_empirical_eval_value(summary: &str) -> Result<EvalValue, String> {
         .and_then(|rest| rest.strip_suffix(')'))
     {
         return match logical {
-            "true" | "True" | "TRUE" => Ok(EvalValue::Logical(true)),
-            "false" | "False" | "FALSE" => Ok(EvalValue::Logical(false)),
+            "true" | "True" | "TRUE" => Ok(FunctionValue::Logical(true)),
+            "false" | "False" | "FALSE" => Ok(FunctionValue::Logical(false)),
             _ => Err(format!("invalid logical empirical binding {summary}")),
         };
     }
@@ -1026,7 +1026,7 @@ fn parse_empirical_eval_value(summary: &str) -> Result<EvalValue, String> {
                 ));
             }
         };
-        return Ok(EvalValue::Error(error));
+        return Ok(FunctionValue::Error(error));
     }
 
     Err(format!("unsupported empirical binding summary: {summary}"))
@@ -1102,7 +1102,7 @@ fn synthetic_bind_mismatch_evaluation(
             },
             capability_dependencies: semantic_plan.capability_requirements.clone(),
         },
-        oxfunc_value: EvalValue::Error(WorksheetErrorCode::Value),
+        oxfunc_value: FunctionValue::Error(WorksheetErrorCode::Value),
         returned_value_surface: ReturnedValueSurface::from_calc_value(&CalcValue::error(
             WorksheetErrorCode::Value,
         )),
@@ -1130,9 +1130,9 @@ fn execution_outcome_surface(commit_decision: &AcceptDecision) -> ExecutionOutco
     }
 }
 
-fn published_worksheet_value(value: &EvalValue) -> EvalValue {
+fn published_worksheet_value(value: &FunctionValue) -> FunctionValue {
     if eval_value_is_callable_transport(value) {
-        EvalValue::Error(WorksheetErrorCode::Calc)
+        FunctionValue::Error(WorksheetErrorCode::Calc)
     } else {
         value.clone()
     }
@@ -1140,7 +1140,7 @@ fn published_worksheet_value(value: &EvalValue) -> EvalValue {
 
 fn published_returned_value_surface(
     evaluation: &EvaluationOutput,
-    published_value: &EvalValue,
+    published_value: &FunctionValue,
 ) -> ReturnedValueSurface {
     if published_value == &evaluation.oxfunc_value
         || !matches!(
@@ -1163,8 +1163,8 @@ mod tests {
     };
     use crate::interface::{ReturnedValueSurface, ReturnedValueSurfaceKind};
     use oxfunc_core::value::{
-        CalcValue, CoreValue, EvalValue, ExcelText, RichObjectValue, RichValueData, RichValueType,
-        WorksheetErrorCode,
+        CalcValue, CoreValue, ExcelText, FunctionValue, RichObjectValue, RichValueData,
+        RichValueType, WorksheetErrorCode,
     };
 
     #[test]
@@ -1184,7 +1184,7 @@ mod tests {
                 publication_hint: None,
                 capability_dependencies: Vec::new(),
             },
-            oxfunc_value: EvalValue::Text(ExcelText::from_interop_assignment("Sphere")),
+            oxfunc_value: FunctionValue::Text(ExcelText::from_interop_assignment("Sphere")),
             returned_value_surface: ReturnedValueSurface::from_calc_value(&CalcValue::rich_object(
                 CoreValue::Text(ExcelText::from_interop_assignment("Sphere")),
                 RichObjectValue {
@@ -1203,7 +1203,7 @@ mod tests {
             },
         };
 
-        let published = EvalValue::Error(WorksheetErrorCode::Connect);
+        let published = FunctionValue::Error(WorksheetErrorCode::Connect);
         let surface = published_returned_value_surface(&evaluation, &published);
 
         assert_eq!(surface.kind, ReturnedValueSurfaceKind::RichValue);
@@ -1298,30 +1298,30 @@ fn build_trace_events(
 }
 
 fn value_payload_for_eval_value(
-    value: &EvalValue,
+    value: &FunctionValue,
 ) -> (WorksheetValueClass, ValuePayload, Option<Extent>) {
     match value {
-        EvalValue::Number(number) => (
+        FunctionValue::Number(number) => (
             WorksheetValueClass::Scalar,
             ValuePayload::Number(format!("{number}")),
             Some(Extent { rows: 1, cols: 1 }),
         ),
-        EvalValue::Text(text) => (
+        FunctionValue::Text(text) => (
             WorksheetValueClass::Scalar,
             ValuePayload::Text(text.to_string_lossy()),
             Some(Extent { rows: 1, cols: 1 }),
         ),
-        EvalValue::Logical(value) => (
+        FunctionValue::Logical(value) => (
             WorksheetValueClass::Scalar,
             ValuePayload::Logical(*value),
             Some(Extent { rows: 1, cols: 1 }),
         ),
-        EvalValue::Error(code) => (
+        FunctionValue::Error(code) => (
             WorksheetValueClass::Error,
             ValuePayload::ErrorCode(format!("{code:?}")),
             Some(Extent { rows: 1, cols: 1 }),
         ),
-        EvalValue::Array(array) => (
+        FunctionValue::Array(array) => (
             WorksheetValueClass::ArrayAnchor,
             ValuePayload::Text(format!(
                 "Array({}x{})",
@@ -1333,9 +1333,9 @@ fn value_payload_for_eval_value(
                 cols: array.shape().cols as u32,
             }),
         ),
-        EvalValue::Reference(reference) => (
+        FunctionValue::Reference(reference) => (
             WorksheetValueClass::Scalar,
-            ValuePayload::Text(format!("Reference({})", reference.target)),
+            ValuePayload::Text(format!("Reference({})", reference.target())),
             Some(Extent { rows: 1, cols: 1 }),
         ),
         other if eval_value_is_callable_transport(other) => (

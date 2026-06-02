@@ -7,7 +7,7 @@ use oxfml_core::red::project_red_view;
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
 use oxfml_core::{ExecutionOutcomeKind, ExecutionOutcomeStage, TypedContextQueryBundle};
-use oxfunc_core::value::{EvalValue, ExcelText, WorksheetErrorCode};
+use oxfunc_core::value::{ExcelText, FunctionValue, WorksheetErrorCode};
 
 fn bind_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::binding::BindResult {
     let source = FormulaSourceRecord::new(formula_stable_id, 1, formula);
@@ -117,7 +117,7 @@ fn runtime_rejects_colliding_row_callable_shapes_at_bind_boundary() {
         );
         assert_eq!(
             result.published_worksheet_value,
-            EvalValue::Error(WorksheetErrorCode::Value),
+            FunctionValue::Error(WorksheetErrorCode::Value),
             "{case_id} worksheet value"
         );
         assert!(result.bind_diagnostics.iter().any(|diagnostic| {
@@ -134,37 +134,37 @@ fn runtime_preserves_alias_escape_hatch_for_colliding_row_callables() {
         (
             "colliding-row-reference",
             "=LET(row,LAMBDA(n,n),row(A1))",
-            EvalValue::Number(1.0),
+            FunctionValue::Number(1.0),
             "1",
         ),
         (
             "colliding-row-aliased-scalar",
             "=LET(row,LAMBDA(n,n),g,row,g(7))",
-            EvalValue::Number(7.0),
+            FunctionValue::Number(7.0),
             "7",
         ),
         (
             "colliding-row-self-aliased-outer-only",
             "=LET(row,LAMBDA(self,LAMBDA(n,n)),g,row,g(row)(7))",
-            EvalValue::Number(7.0),
+            FunctionValue::Number(7.0),
             "7",
         ),
         (
             "colliding-t-direct",
             "=LET(t,LAMBDA(x,x+1),t(7))",
-            EvalValue::Text(ExcelText::from_interop_assignment("")),
+            FunctionValue::Text(ExcelText::from_interop_assignment("")),
             "",
         ),
         (
             "colliding-sum-direct",
             "=LET(sum,LAMBDA(x,x+1),sum(7))",
-            EvalValue::Number(7.0),
+            FunctionValue::Number(7.0),
             "7",
         ),
         (
             "colliding-gcd-direct",
             "=LET(gcd,LAMBDA(a,b,a+b),gcd(8,4))",
-            EvalValue::Number(4.0),
+            FunctionValue::Number(4.0),
             "4",
         ),
     ];

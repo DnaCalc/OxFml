@@ -3,10 +3,10 @@ use oxfml_core::seam::{Locus, RejectCode};
 use oxfml_core::test_support::oxfunc_adapter::{
     OxFuncAdapterRequest, run_oxfunc_preparation_adapter,
 };
-use oxfunc_core::value::{ArrayCellValue, EvalArray, EvalValue, ExcelText};
+use oxfunc_core::value::{ExcelText, FunctionArray, FunctionArrayCell, FunctionValue};
 
-fn text_cell(value: &str) -> ArrayCellValue {
-    ArrayCellValue::Text(ExcelText::from_interop_assignment(value))
+fn text_cell(value: &str) -> FunctionArrayCell {
+    FunctionArrayCell::Text(ExcelText::from_interop_assignment(value))
 }
 
 fn locus(row: u32, col: u32) -> Locus {
@@ -28,16 +28,16 @@ fn adapter_executes_groupby_default_callable_lane() {
     ))
     .expect("groupby adapter run");
 
-    let expected = EvalArray::from_rows(vec![
-        vec![text_cell("2024"), ArrayCellValue::Number(30.0)],
-        vec![text_cell("2025"), ArrayCellValue::Number(70.0)],
-        vec![text_cell("Total"), ArrayCellValue::Number(100.0)],
+    let expected = FunctionArray::from_rows(vec![
+        vec![text_cell("2024"), FunctionArrayCell::Number(30.0)],
+        vec![text_cell("2025"), FunctionArrayCell::Number(70.0)],
+        vec![text_cell("Total"), FunctionArrayCell::Number(100.0)],
     ])
     .expect("expected array");
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Array(expected)
+        FunctionValue::Array(expected)
     );
 }
 
@@ -52,16 +52,16 @@ fn adapter_executes_groupby_builtin_sum_callable_lane() {
     ))
     .expect("groupby builtin callable adapter run");
 
-    let expected = EvalArray::from_rows(vec![
-        vec![text_cell("2024"), ArrayCellValue::Number(30.0)],
-        vec![text_cell("2025"), ArrayCellValue::Number(70.0)],
-        vec![text_cell("Total"), ArrayCellValue::Number(100.0)],
+    let expected = FunctionArray::from_rows(vec![
+        vec![text_cell("2024"), FunctionArrayCell::Number(30.0)],
+        vec![text_cell("2025"), FunctionArrayCell::Number(70.0)],
+        vec![text_cell("Total"), FunctionArrayCell::Number(100.0)],
     ])
     .expect("expected array");
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Array(expected)
+        FunctionValue::Array(expected)
     );
 }
 
@@ -76,16 +76,16 @@ fn adapter_executes_groupby_sort_sensitive_lane() {
     ))
     .expect("groupby sort adapter run");
 
-    let expected = EvalArray::from_rows(vec![
-        vec![text_cell("2025"), ArrayCellValue::Number(70.0)],
-        vec![text_cell("2024"), ArrayCellValue::Number(30.0)],
-        vec![text_cell("Total"), ArrayCellValue::Number(100.0)],
+    let expected = FunctionArray::from_rows(vec![
+        vec![text_cell("2025"), FunctionArrayCell::Number(70.0)],
+        vec![text_cell("2024"), FunctionArrayCell::Number(30.0)],
+        vec![text_cell("Total"), FunctionArrayCell::Number(100.0)],
     ])
     .expect("expected array");
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Array(expected)
+        FunctionValue::Array(expected)
     );
 }
 
@@ -100,16 +100,16 @@ fn adapter_executes_groupby_builtin_sum_sort_sensitive_lane() {
     ))
     .expect("groupby builtin sort adapter run");
 
-    let expected = EvalArray::from_rows(vec![
-        vec![text_cell("2025"), ArrayCellValue::Number(70.0)],
-        vec![text_cell("2024"), ArrayCellValue::Number(30.0)],
-        vec![text_cell("Total"), ArrayCellValue::Number(100.0)],
+    let expected = FunctionArray::from_rows(vec![
+        vec![text_cell("2025"), FunctionArrayCell::Number(70.0)],
+        vec![text_cell("2024"), FunctionArrayCell::Number(30.0)],
+        vec![text_cell("Total"), FunctionArrayCell::Number(100.0)],
     ])
     .expect("expected array");
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Array(expected)
+        FunctionValue::Array(expected)
     );
 }
 
@@ -124,48 +124,48 @@ fn adapter_executes_groupby_builtin_sum_hierarchical_subtotal_lane() {
     ))
     .expect("groupby builtin hierarchical subtotal adapter run");
 
-    let expected = EvalArray::from_rows(vec![
+    let expected = FunctionArray::from_rows(vec![
         vec![
             text_cell("East"),
             text_cell("A"),
-            ArrayCellValue::Number(40.0),
+            FunctionArrayCell::Number(40.0),
         ],
         vec![
             text_cell("East"),
             text_cell("B"),
-            ArrayCellValue::Number(20.0),
+            FunctionArrayCell::Number(20.0),
         ],
         vec![
             text_cell("East"),
-            ArrayCellValue::EmptyCell,
-            ArrayCellValue::Number(60.0),
+            FunctionArrayCell::EmptyCell,
+            FunctionArrayCell::Number(60.0),
         ],
         vec![
             text_cell("West"),
             text_cell("A"),
-            ArrayCellValue::Number(40.0),
+            FunctionArrayCell::Number(40.0),
         ],
         vec![
             text_cell("West"),
             text_cell("B"),
-            ArrayCellValue::Number(50.0),
+            FunctionArrayCell::Number(50.0),
         ],
         vec![
             text_cell("West"),
-            ArrayCellValue::EmptyCell,
-            ArrayCellValue::Number(90.0),
+            FunctionArrayCell::EmptyCell,
+            FunctionArrayCell::Number(90.0),
         ],
         vec![
             text_cell("Grand Total"),
-            ArrayCellValue::EmptyCell,
-            ArrayCellValue::Number(150.0),
+            FunctionArrayCell::EmptyCell,
+            FunctionArrayCell::Number(150.0),
         ],
     ])
     .expect("expected array");
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Array(expected)
+        FunctionValue::Array(expected)
     );
 }
 
@@ -180,7 +180,7 @@ fn adapter_executes_groupby_builtin_sum_visible_headers_lane() {
     ))
     .expect("groupby builtin visible headers adapter run");
 
-    let expected = EvalArray::from_rows(vec![
+    let expected = FunctionArray::from_rows(vec![
         vec![
             text_cell("Region"),
             text_cell("Product"),
@@ -189,24 +189,24 @@ fn adapter_executes_groupby_builtin_sum_visible_headers_lane() {
         vec![
             text_cell("East"),
             text_cell("A"),
-            ArrayCellValue::Number(10.0),
+            FunctionArrayCell::Number(10.0),
         ],
         vec![
             text_cell("East"),
             text_cell("B"),
-            ArrayCellValue::Number(20.0),
+            FunctionArrayCell::Number(20.0),
         ],
         vec![
             text_cell("Total"),
-            ArrayCellValue::EmptyCell,
-            ArrayCellValue::Number(30.0),
+            FunctionArrayCell::EmptyCell,
+            FunctionArrayCell::Number(30.0),
         ],
     ])
     .expect("expected array");
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Array(expected)
+        FunctionValue::Array(expected)
     );
 }
 
@@ -221,15 +221,15 @@ fn adapter_executes_groupby_filter_and_descending_value_sort_lane() {
     ))
     .expect("groupby filter/sort adapter run");
 
-    let expected = EvalArray::from_rows(vec![
-        vec![text_cell("A"), ArrayCellValue::Number(50.0)],
-        vec![text_cell("Total"), ArrayCellValue::Number(50.0)],
+    let expected = FunctionArray::from_rows(vec![
+        vec![text_cell("A"), FunctionArrayCell::Number(50.0)],
+        vec![text_cell("Total"), FunctionArrayCell::Number(50.0)],
     ])
     .expect("expected array");
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Array(expected)
+        FunctionValue::Array(expected)
     );
 }
 
@@ -246,7 +246,7 @@ fn adapter_rejects_groupby_tabular_subtotals_as_value_error() {
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Value)
+        FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Value)
     );
     assert_eq!(run.evaluation_artifact.commit_decision_kind, "accepted");
 }
@@ -262,37 +262,37 @@ fn adapter_executes_pivotby_default_callable_lane() {
     ))
     .expect("pivotby adapter run");
 
-    let expected = EvalArray::from_rows(vec![
+    let expected = FunctionArray::from_rows(vec![
         vec![
-            ArrayCellValue::EmptyCell,
+            FunctionArrayCell::EmptyCell,
             text_cell("A"),
             text_cell("B"),
             text_cell("Total"),
         ],
         vec![
             text_cell("East"),
-            ArrayCellValue::Number(10.0),
-            ArrayCellValue::Number(20.0),
-            ArrayCellValue::Number(30.0),
+            FunctionArrayCell::Number(10.0),
+            FunctionArrayCell::Number(20.0),
+            FunctionArrayCell::Number(30.0),
         ],
         vec![
             text_cell("West"),
-            ArrayCellValue::Number(40.0),
-            ArrayCellValue::Number(50.0),
-            ArrayCellValue::Number(90.0),
+            FunctionArrayCell::Number(40.0),
+            FunctionArrayCell::Number(50.0),
+            FunctionArrayCell::Number(90.0),
         ],
         vec![
             text_cell("Total"),
-            ArrayCellValue::Number(50.0),
-            ArrayCellValue::Number(70.0),
-            ArrayCellValue::Number(120.0),
+            FunctionArrayCell::Number(50.0),
+            FunctionArrayCell::Number(70.0),
+            FunctionArrayCell::Number(120.0),
         ],
     ])
     .expect("expected array");
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Array(expected)
+        FunctionValue::Array(expected)
     );
 }
 
@@ -307,37 +307,37 @@ fn adapter_executes_pivotby_builtin_sum_callable_lane() {
     ))
     .expect("pivotby builtin adapter run");
 
-    let expected = EvalArray::from_rows(vec![
+    let expected = FunctionArray::from_rows(vec![
         vec![
-            ArrayCellValue::EmptyCell,
+            FunctionArrayCell::EmptyCell,
             text_cell("A"),
             text_cell("B"),
             text_cell("Total"),
         ],
         vec![
             text_cell("East"),
-            ArrayCellValue::Number(10.0),
-            ArrayCellValue::Number(20.0),
-            ArrayCellValue::Number(30.0),
+            FunctionArrayCell::Number(10.0),
+            FunctionArrayCell::Number(20.0),
+            FunctionArrayCell::Number(30.0),
         ],
         vec![
             text_cell("West"),
-            ArrayCellValue::Number(40.0),
-            ArrayCellValue::Number(50.0),
-            ArrayCellValue::Number(90.0),
+            FunctionArrayCell::Number(40.0),
+            FunctionArrayCell::Number(50.0),
+            FunctionArrayCell::Number(90.0),
         ],
         vec![
             text_cell("Total"),
-            ArrayCellValue::Number(50.0),
-            ArrayCellValue::Number(70.0),
-            ArrayCellValue::Number(120.0),
+            FunctionArrayCell::Number(50.0),
+            FunctionArrayCell::Number(70.0),
+            FunctionArrayCell::Number(120.0),
         ],
     ])
     .expect("expected array");
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Array(expected)
+        FunctionValue::Array(expected)
     );
 }
 
@@ -352,16 +352,16 @@ fn adapter_executes_pivotby_filter_and_totals_sensitive_lane() {
     ))
     .expect("pivotby filter adapter run");
 
-    let expected = EvalArray::from_rows(vec![
-        vec![ArrayCellValue::EmptyCell, text_cell("A")],
-        vec![text_cell("East"), ArrayCellValue::Number(10.0)],
-        vec![text_cell("West"), ArrayCellValue::Number(40.0)],
+    let expected = FunctionArray::from_rows(vec![
+        vec![FunctionArrayCell::EmptyCell, text_cell("A")],
+        vec![text_cell("East"), FunctionArrayCell::Number(10.0)],
+        vec![text_cell("West"), FunctionArrayCell::Number(40.0)],
     ])
     .expect("expected array");
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Array(expected)
+        FunctionValue::Array(expected)
     );
 }
 
@@ -376,16 +376,16 @@ fn adapter_executes_pivotby_builtin_sum_filter_and_totals_sensitive_lane() {
     ))
     .expect("pivotby builtin filter adapter run");
 
-    let expected = EvalArray::from_rows(vec![
-        vec![ArrayCellValue::EmptyCell, text_cell("A")],
-        vec![text_cell("East"), ArrayCellValue::Number(10.0)],
-        vec![text_cell("West"), ArrayCellValue::Number(40.0)],
+    let expected = FunctionArray::from_rows(vec![
+        vec![FunctionArrayCell::EmptyCell, text_cell("A")],
+        vec![text_cell("East"), FunctionArrayCell::Number(10.0)],
+        vec![text_cell("West"), FunctionArrayCell::Number(40.0)],
     ])
     .expect("expected array");
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Array(expected)
+        FunctionValue::Array(expected)
     );
 }
 
@@ -400,37 +400,37 @@ fn adapter_executes_pivotby_builtin_sum_row_and_column_total_sort_lane() {
     ))
     .expect("pivotby builtin row/column total sort adapter run");
 
-    let expected = EvalArray::from_rows(vec![
+    let expected = FunctionArray::from_rows(vec![
         vec![
-            ArrayCellValue::EmptyCell,
+            FunctionArrayCell::EmptyCell,
             text_cell("B"),
             text_cell("A"),
             text_cell("Total"),
         ],
         vec![
             text_cell("West"),
-            ArrayCellValue::Number(50.0),
-            ArrayCellValue::Number(40.0),
-            ArrayCellValue::Number(90.0),
+            FunctionArrayCell::Number(50.0),
+            FunctionArrayCell::Number(40.0),
+            FunctionArrayCell::Number(90.0),
         ],
         vec![
             text_cell("East"),
-            ArrayCellValue::Number(20.0),
-            ArrayCellValue::Number(10.0),
-            ArrayCellValue::Number(30.0),
+            FunctionArrayCell::Number(20.0),
+            FunctionArrayCell::Number(10.0),
+            FunctionArrayCell::Number(30.0),
         ],
         vec![
             text_cell("Total"),
-            ArrayCellValue::Number(70.0),
-            ArrayCellValue::Number(50.0),
-            ArrayCellValue::Number(120.0),
+            FunctionArrayCell::Number(70.0),
+            FunctionArrayCell::Number(50.0),
+            FunctionArrayCell::Number(120.0),
         ],
     ])
     .expect("expected array");
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Array(expected)
+        FunctionValue::Array(expected)
     );
 }
 
@@ -445,15 +445,15 @@ fn adapter_executes_pivotby_builtin_sum_visible_headers_lane() {
     ))
     .expect("pivotby builtin visible headers adapter run");
 
-    let expected = EvalArray::from_rows(vec![
+    let expected = FunctionArray::from_rows(vec![
         vec![
-            ArrayCellValue::EmptyCell,
+            FunctionArrayCell::EmptyCell,
             text_cell("Product"),
-            ArrayCellValue::EmptyCell,
-            ArrayCellValue::EmptyCell,
+            FunctionArrayCell::EmptyCell,
+            FunctionArrayCell::EmptyCell,
         ],
         vec![
-            ArrayCellValue::EmptyCell,
+            FunctionArrayCell::EmptyCell,
             text_cell("A"),
             text_cell("B"),
             text_cell("Total"),
@@ -466,28 +466,28 @@ fn adapter_executes_pivotby_builtin_sum_visible_headers_lane() {
         ],
         vec![
             text_cell("East"),
-            ArrayCellValue::Number(40.0),
-            ArrayCellValue::Number(0.0),
-            ArrayCellValue::Number(40.0),
+            FunctionArrayCell::Number(40.0),
+            FunctionArrayCell::Number(0.0),
+            FunctionArrayCell::Number(40.0),
         ],
         vec![
             text_cell("West"),
-            ArrayCellValue::Number(0.0),
-            ArrayCellValue::Number(50.0),
-            ArrayCellValue::Number(50.0),
+            FunctionArrayCell::Number(0.0),
+            FunctionArrayCell::Number(50.0),
+            FunctionArrayCell::Number(50.0),
         ],
         vec![
             text_cell("Total"),
-            ArrayCellValue::Number(40.0),
-            ArrayCellValue::Number(50.0),
-            ArrayCellValue::Number(90.0),
+            FunctionArrayCell::Number(40.0),
+            FunctionArrayCell::Number(50.0),
+            FunctionArrayCell::Number(90.0),
         ],
     ])
     .expect("expected array");
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Array(expected)
+        FunctionValue::Array(expected)
     );
 }
 

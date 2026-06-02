@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
-use oxfunc_core::value::{EvalValue, ExcelText, ReferenceLike};
+use oxfunc_core::value::{ExcelText, FunctionValue, ReferenceLike};
 
 use oxfml_core::binding::{BindContext, BindRequest, NameKind, bind_formula};
 use oxfml_core::interface::{
@@ -33,7 +33,7 @@ fn managed_session_happy_path_runs_through_commit() {
     let mut defined_names = BTreeMap::new();
     defined_names.insert(
         "InputValue".to_string(),
-        DefinedNameBinding::Value(EvalValue::Number(5.0)),
+        DefinedNameBinding::Value(FunctionValue::Number(5.0)),
     );
 
     let candidate = service
@@ -301,7 +301,7 @@ fn managed_session_rejects_second_execute_as_structural_conflict() {
     let mut defined_names = BTreeMap::new();
     defined_names.insert(
         "InputValue".to_string(),
-        DefinedNameBinding::Value(EvalValue::Number(5.0)),
+        DefinedNameBinding::Value(FunctionValue::Number(5.0)),
     );
 
     service
@@ -344,7 +344,7 @@ fn managed_session_rejects_commit_on_stale_formula_token_fence() {
     let mut defined_names = BTreeMap::new();
     defined_names.insert(
         "InputValue".to_string(),
-        DefinedNameBinding::Value(EvalValue::Number(5.0)),
+        DefinedNameBinding::Value(FunctionValue::Number(5.0)),
     );
 
     let candidate = service
@@ -654,18 +654,18 @@ impl HostInfoProvider for SessionMockHostInfoProvider {
         &self,
         query: CellInfoQuery,
         _reference: Option<&ReferenceLike>,
-    ) -> Result<EvalValue, HostInfoError> {
+    ) -> Result<FunctionValue, HostInfoError> {
         match query {
-            CellInfoQuery::Filename => Ok(EvalValue::Text(ExcelText::from_utf16_code_units(
+            CellInfoQuery::Filename => Ok(FunctionValue::Text(ExcelText::from_utf16_code_units(
                 "[Book1]Sheet1".encode_utf16().collect(),
             ))),
             _ => Err(HostInfoError::UnsupportedCellInfoQuery(query)),
         }
     }
 
-    fn query_info(&self, query: InfoQuery) -> Result<EvalValue, HostInfoError> {
+    fn query_info(&self, query: InfoQuery) -> Result<FunctionValue, HostInfoError> {
         match query {
-            InfoQuery::Directory => Ok(EvalValue::Text(ExcelText::from_utf16_code_units(
+            InfoQuery::Directory => Ok(FunctionValue::Text(ExcelText::from_utf16_code_units(
                 "C:\\Work".encode_utf16().collect(),
             ))),
             _ => Err(HostInfoError::UnsupportedInfoQuery(query)),

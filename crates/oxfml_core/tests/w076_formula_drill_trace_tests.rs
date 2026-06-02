@@ -5,7 +5,7 @@ use oxfml_core::consumer::runtime::{
 };
 use oxfml_core::syntax::token::TextSpan;
 use oxfml_core::{EvaluationTraceMode, FormulaSourceRecord, TypedContextQueryBundle};
-use oxfunc_core::value::{EvalValue, WorksheetErrorCode};
+use oxfunc_core::value::{FunctionValue, WorksheetErrorCode};
 
 fn execute(formula: &str) -> FormulaDrillTrace {
     RuntimeEnvironment::new()
@@ -63,14 +63,14 @@ fn argument_node<'a>(
 fn w076_sum_trace_has_root_call_named_arguments_and_value() {
     let trace = execute("=SUM(1,2,3)");
     assert_eq!(trace.schema_id, "oxfml.formula_drill_trace.v1");
-    assert_eq!(trace.final_value, EvalValue::Number(6.0));
+    assert_eq!(trace.final_value, FunctionValue::Number(6.0));
 
     let root = node(&trace, &trace.root_node_id);
     let sum_id = root.child_node_ids.first().expect("root child").clone();
     let sum = node(&trace, &sum_id);
     assert_eq!(sum.kind, FormulaDrillNodeKind::FunctionCall);
     assert_eq!(sum.function_surface_name.as_deref(), Some("SUM"));
-    assert_eq!(sum.returned_value, Some(EvalValue::Number(6.0)));
+    assert_eq!(sum.returned_value, Some(FunctionValue::Number(6.0)));
     assert_eq!(sum.source_span, Some(TextSpan::new(1, 10)));
 
     let arg_names = sum
@@ -95,7 +95,7 @@ fn w076_nested_if_stays_under_sum_argument_and_false_branch_is_skipped() {
         .expect("IF should be nested under SUM argument");
     let nested_if = node(&trace, nested_if_id);
     assert_eq!(nested_if.function_surface_name.as_deref(), Some("IF"));
-    assert_eq!(nested_if.returned_value, Some(EvalValue::Number(2.0)));
+    assert_eq!(nested_if.returned_value, Some(FunctionValue::Number(2.0)));
 
     let false_arg = argument_node(&trace, &nested_if.node_id, "value_if_false");
     assert_eq!(
@@ -129,7 +129,7 @@ fn w076_same_named_nested_calls_keep_post_order_prepared_values() {
         root.child_node_ids.first().expect("outer SUM child"),
     );
     assert_eq!(outer_sum.function_surface_name.as_deref(), Some("SUM"));
-    assert_eq!(outer_sum.returned_value, Some(EvalValue::Number(10.0)));
+    assert_eq!(outer_sum.returned_value, Some(FunctionValue::Number(10.0)));
 
     let first_inner = node(
         &trace,
@@ -145,8 +145,11 @@ fn w076_same_named_nested_calls_keep_post_order_prepared_values() {
             .first()
             .expect("second inner SUM"),
     );
-    assert_eq!(first_inner.returned_value, Some(EvalValue::Number(3.0)));
-    assert_eq!(second_inner.returned_value, Some(EvalValue::Number(7.0)));
+    assert_eq!(first_inner.returned_value, Some(FunctionValue::Number(3.0)));
+    assert_eq!(
+        second_inner.returned_value,
+        Some(FunctionValue::Number(7.0))
+    );
 }
 
 #[test]
@@ -171,7 +174,7 @@ fn w076_if_false_skips_true_branch_and_evaluates_false_sum() {
             .expect("false branch SUM child"),
     );
     assert_eq!(false_sum.function_surface_name.as_deref(), Some("SUM"));
-    assert_eq!(false_sum.returned_value, Some(EvalValue::Number(7.0)));
+    assert_eq!(false_sum.returned_value, Some(FunctionValue::Number(7.0)));
 }
 
 #[test]
@@ -195,14 +198,14 @@ fn w076_let_trace_exposes_bindings_body_and_name_reference_values() {
             .expect("LET body should contain SUM"),
     );
     assert_eq!(sum.function_surface_name.as_deref(), Some("SUM"));
-    assert_eq!(sum.returned_value, Some(EvalValue::Number(3.0)));
+    assert_eq!(sum.returned_value, Some(FunctionValue::Number(3.0)));
     assert_eq!(
         argument_node(&trace, &sum.node_id, "number1").expression_text,
         Some("x".to_string())
     );
     assert_eq!(
         argument_node(&trace, &sum.node_id, "number1").value_after_coercion,
-        Some(EvalValue::Number(1.0))
+        Some(FunctionValue::Number(1.0))
     );
     assert_eq!(
         argument_node(&trace, &sum.node_id, "number2").expression_text,
@@ -210,7 +213,7 @@ fn w076_let_trace_exposes_bindings_body_and_name_reference_values() {
     );
     assert_eq!(
         argument_node(&trace, &sum.node_id, "number2").value_after_coercion,
-        Some(EvalValue::Number(2.0))
+        Some(FunctionValue::Number(2.0))
     );
 }
 
@@ -219,7 +222,7 @@ fn w076_divide_by_zero_trace_links_error_to_divide_node() {
     let trace = execute("=1/0");
     assert_eq!(
         trace.final_value,
-        EvalValue::Error(WorksheetErrorCode::Div0)
+        FunctionValue::Error(WorksheetErrorCode::Div0)
     );
     let divide = trace
         .nodes

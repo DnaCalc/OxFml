@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use oxfunc_core::locale_format::{LocaleFormatContext, WorkbookDateSystem, ymd_from_excel_serial};
-use oxfunc_core::value::{ArrayCellValue, EvalValue, ExcelText, PresentationHint};
+use oxfunc_core::value::{ExcelText, FunctionArrayCell, FunctionValue, PresentationHint};
 use serde_json::{Value, json};
 
 use crate::eval::{eval_value_callable_transport_summary, eval_value_is_callable_transport};
@@ -211,7 +211,7 @@ impl LocaleFormatContextSurface {
 pub struct VerificationPublicationSurface {
     pub has_publication_context: bool,
     pub entered_cell_text: String,
-    pub published_value: EvalValue,
+    pub published_value: FunctionValue,
     pub published_value_class: WorksheetValueClass,
     pub visible_value_text: String,
     pub effective_display_text: String,
@@ -250,7 +250,7 @@ pub struct VerificationComparisonView {
 
 pub fn build_verification_publication_surface(
     source: &FormulaSourceRecord,
-    published_worksheet_value: &EvalValue,
+    published_worksheet_value: &FunctionValue,
     returned_value_surface: &ReturnedValueSurface,
     topology_delta: &TopologyDelta,
     format_delta: Option<&FormatDelta>,
@@ -390,8 +390,8 @@ pub fn build_verification_publication_surface(
     }
 }
 
-fn conditional_evaluation_value(value: &EvalValue) -> EvalValue {
-    let EvalValue::Array(array) = value else {
+fn conditional_evaluation_value(value: &FunctionValue) -> FunctionValue {
+    let FunctionValue::Array(array) = value else {
         return value.clone();
     };
     if array.shape().rows == 1 && array.shape().cols == 1 {
@@ -404,13 +404,13 @@ fn conditional_evaluation_value(value: &EvalValue) -> EvalValue {
 }
 
 fn build_conditional_cell_format_grid(
-    value: &EvalValue,
+    value: &FunctionValue,
     presentation_hint: Option<&PresentationHint>,
     locale_ctx: Option<&LocaleFormatContext<'_>>,
     now_serial: Option<f64>,
     context: &VerificationPublicationContext,
 ) -> Option<ArrayCellFormatGrid> {
-    if let EvalValue::Array(array) = value {
+    if let FunctionValue::Array(array) = value {
         let aggregate_context = AggregateConditionalFormattingContext::from_array(array);
         let shape = array.shape();
         let mut rows = Vec::with_capacity(shape.rows);
@@ -455,7 +455,7 @@ fn build_conditional_cell_format_grid(
 }
 
 fn build_array_cell_format(
-    cell: &ArrayCellValue,
+    cell: &FunctionArrayCell,
     presentation_hint: Option<&PresentationHint>,
     locale_ctx: Option<&LocaleFormatContext<'_>>,
     now_serial: Option<f64>,
@@ -474,7 +474,7 @@ fn build_array_cell_format(
 }
 
 fn build_eval_cell_format(
-    value: EvalValue,
+    value: FunctionValue,
     presentation_hint: Option<&PresentationHint>,
     locale_ctx: Option<&LocaleFormatContext<'_>>,
     now_serial: Option<f64>,
@@ -556,13 +556,13 @@ fn is_aggregate_or_visualization_rule(rule: &VerificationConditionalFormattingRu
     )
 }
 
-fn array_cell_to_eval_value(cell: &ArrayCellValue) -> EvalValue {
+fn array_cell_to_eval_value(cell: &FunctionArrayCell) -> FunctionValue {
     cell.to_eval_value()
-        .unwrap_or_else(|| EvalValue::Text(ExcelText::from_interop_assignment("")))
+        .unwrap_or_else(|| FunctionValue::Text(ExcelText::from_interop_assignment("")))
 }
 
 impl AggregateConditionalFormattingContext {
-    fn from_array(array: &oxfunc_core::value::EvalArray) -> Self {
+    fn from_array(array: &oxfunc_core::value::FunctionArray) -> Self {
         Self::from_values(
             array
                 .iter_row_major()
@@ -571,11 +571,11 @@ impl AggregateConditionalFormattingContext {
         )
     }
 
-    fn from_values(values: impl IntoIterator<Item = EvalValue>) -> Self {
+    fn from_values(values: impl IntoIterator<Item = FunctionValue>) -> Self {
         let mut numeric_values = Vec::new();
         let mut value_counts = BTreeMap::new();
         for value in values {
-            if let EvalValue::Number(number) = &value
+            if let FunctionValue::Number(number) = &value
                 && number.is_finite()
             {
                 numeric_values.push(*number);
@@ -661,15 +661,15 @@ pub fn build_verification_comparison_views(
     views
 }
 
-fn published_worksheet_value_class(value: &EvalValue) -> WorksheetValueClass {
+fn published_worksheet_value_class(value: &FunctionValue) -> WorksheetValueClass {
     match value {
-        EvalValue::Error(_) => WorksheetValueClass::Error,
-        EvalValue::Array(_) => WorksheetValueClass::ArrayAnchor,
+        FunctionValue::Error(_) => WorksheetValueClass::Error,
+        FunctionValue::Array(_) => WorksheetValueClass::ArrayAnchor,
         _ => WorksheetValueClass::Scalar,
     }
 }
 
-fn comparison_value_json(value: &EvalValue) -> Value {
+fn comparison_value_json(value: &FunctionValue) -> Value {
     if eval_value_is_callable_transport(value) {
         return json!({
             "kind": "callable",
@@ -677,24 +677,24 @@ fn comparison_value_json(value: &EvalValue) -> Value {
         });
     }
     match value {
-        EvalValue::Number(number) => json!({
+        FunctionValue::Number(number) => json!({
             "kind": "number",
             "value": number
         }),
-        EvalValue::Text(text) => json!({
+        FunctionValue::Text(text) => json!({
             "kind": "text",
             "value": text.to_string_lossy()
         }),
-        EvalValue::Logical(value) => json!({
+        FunctionValue::Logical(value) => json!({
             "kind": "logical",
             "value": value
         }),
-        EvalValue::Error(code) => json!({
+        FunctionValue::Error(code) => json!({
             "kind": "error",
             "code": format!("{code:?}"),
             "display": worksheet_error_text(*code)
         }),
-        EvalValue::Array(array) => json!({
+        FunctionValue::Array(array) => json!({
             "kind": "array",
             "shape": {
                 "rows": array.shape().rows,
@@ -705,10 +705,10 @@ fn comparison_value_json(value: &EvalValue) -> Value {
                 .map(array_cell_json)
                 .collect::<Vec<_>>()
         }),
-        EvalValue::Reference(reference) => json!({
+        FunctionValue::Reference(reference) => json!({
             "kind": "reference",
-            "reference_kind": format!("{:?}", reference.kind),
-            "target": reference.target
+            "reference_kind": format!("{:?}", reference.kind()),
+            "target": reference.target()
         }),
         other => json!({
             "kind": "unsupported",
@@ -717,26 +717,26 @@ fn comparison_value_json(value: &EvalValue) -> Value {
     }
 }
 
-fn array_cell_json(value: &ArrayCellValue) -> Value {
+fn array_cell_json(value: &FunctionArrayCell) -> Value {
     match value {
-        ArrayCellValue::Number(number) => json!({
+        FunctionArrayCell::Number(number) => json!({
             "kind": "number",
             "value": number
         }),
-        ArrayCellValue::Text(text) => json!({
+        FunctionArrayCell::Text(text) => json!({
             "kind": "text",
             "value": text.to_string_lossy()
         }),
-        ArrayCellValue::Logical(value) => json!({
+        FunctionArrayCell::Logical(value) => json!({
             "kind": "logical",
             "value": value
         }),
-        ArrayCellValue::Error(code) => json!({
+        FunctionArrayCell::Error(code) => json!({
             "kind": "error",
             "code": format!("{code:?}"),
             "display": worksheet_error_text(*code)
         }),
-        ArrayCellValue::EmptyCell => json!({
+        FunctionArrayCell::EmptyCell => json!({
             "kind": "empty_cell"
         }),
     }
@@ -1030,19 +1030,19 @@ fn spreadsheetml_conditional_formatting_rule_json(
 }
 
 fn render_effective_display_text(
-    value: &EvalValue,
+    value: &FunctionValue,
     presentation_hint: Option<&PresentationHint>,
     locale_ctx: Option<&LocaleFormatContext<'_>>,
     number_format_code: Option<&str>,
 ) -> Option<String> {
-    if let EvalValue::Text(text) = value
+    if let FunctionValue::Text(text) = value
         && let Some(code) = number_format_code
         && let Some(rendered) = render_text_with_number_format_code(&text.to_string_lossy(), code)
     {
         return Some(rendered);
     }
 
-    let EvalValue::Number(number) = value else {
+    let FunctionValue::Number(number) = value else {
         return Some(render_visible_value_text(value));
     };
 
@@ -1084,21 +1084,21 @@ fn render_effective_display_text(
 }
 
 fn selected_format_section_font_color(
-    value: &EvalValue,
+    value: &FunctionValue,
     number_format_code: &str,
 ) -> Option<String> {
     match value {
-        EvalValue::Number(number) => {
+        FunctionValue::Number(number) => {
             selected_number_format_section_color(number_format_code, *number)
         }
-        EvalValue::Text(_) => selected_text_format_section_color(number_format_code),
+        FunctionValue::Text(_) => selected_text_format_section_color(number_format_code),
         _ => None,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use oxfunc_core::value::{CalcValue, EvalValue, ExcelText};
+    use oxfunc_core::value::{CalcValue, ExcelText, FunctionValue};
 
     use super::{
         VerificationConditionalFormattingRule, VerificationPublicationContext,
@@ -1167,7 +1167,7 @@ mod tests {
         let locale = oxfml_en_us_locale_context();
         let source = FormulaSourceRecord::new("publication:test", 1, "=SUM(1,2,3)");
         let returned_value_surface =
-            ReturnedValueSurface::from_calc_value(&CalcValue::from(EvalValue::Number(6.0)));
+            ReturnedValueSurface::from_calc_value(&CalcValue::from(FunctionValue::Number(6.0)));
         let context = VerificationPublicationContext {
             format_profile: Some("excel-spreadsheetml-2003-default".to_string()),
             number_format_code: Some("$#,##0.00".to_string()),
@@ -1207,7 +1207,7 @@ mod tests {
 
         let surface = build_verification_publication_surface(
             &source,
-            &EvalValue::Number(6.0),
+            &FunctionValue::Number(6.0),
             &returned_value_surface,
             &TopologyDelta {
                 formula_stable_id: "publication:test".to_string(),
@@ -1262,7 +1262,7 @@ mod tests {
 
         let surface = build_verification_publication_surface(
             &source,
-            &EvalValue::Number(42.0),
+            &FunctionValue::Number(42.0),
             &returned_value_surface,
             &empty_topology_delta("publication:format-color"),
             None,
@@ -1289,7 +1289,7 @@ mod tests {
 
         let surface = build_verification_publication_surface(
             &source,
-            &EvalValue::Number(-42.0),
+            &FunctionValue::Number(-42.0),
             &returned_value_surface,
             &empty_topology_delta("publication:format-color-index"),
             None,
@@ -1324,7 +1324,7 @@ mod tests {
 
         let surface = build_verification_publication_surface(
             &source,
-            &EvalValue::Number(5000.0),
+            &FunctionValue::Number(5000.0),
             &returned_value_surface,
             &empty_topology_delta("publication:format-color-cf"),
             None,
@@ -1343,7 +1343,7 @@ mod tests {
     fn custom_format_text_fourth_section_renders_at_placeholder() {
         let locale = oxfml_en_us_locale_context();
         let source = FormulaSourceRecord::new("publication:text-section", 1, "=\"x\"");
-        let value = EvalValue::Text(excel_text("x"));
+        let value = FunctionValue::Text(excel_text("x"));
         let returned_value_surface =
             ReturnedValueSurface::from_calc_value(&CalcValue::from(value.clone()));
         let context = VerificationPublicationContext {
@@ -1370,7 +1370,7 @@ mod tests {
     fn custom_format_text_without_fourth_section_falls_back_to_verbatim_text() {
         let locale = oxfml_en_us_locale_context();
         let source = FormulaSourceRecord::new("publication:text-section-fallback", 1, "=\"hello\"");
-        let value = EvalValue::Text(excel_text("hello"));
+        let value = FunctionValue::Text(excel_text("hello"));
         let returned_value_surface =
             ReturnedValueSurface::from_calc_value(&CalcValue::from(value.clone()));
         let context = VerificationPublicationContext {
@@ -1396,7 +1396,7 @@ mod tests {
 
 fn evaluate_conditional_formatting_rule(
     rule: &VerificationConditionalFormattingRule,
-    value: &EvalValue,
+    value: &FunctionValue,
     visible_value_text: &str,
     effective_display_text: &str,
     locale_ctx: Option<&LocaleFormatContext<'_>>,
@@ -1430,7 +1430,7 @@ fn evaluate_conditional_formatting_rule(
 
 fn evaluate_array_conditional_formatting_rule(
     rule: &VerificationConditionalFormattingRule,
-    value: &EvalValue,
+    value: &FunctionValue,
     visible_value_text: &str,
     effective_display_text: &str,
     locale_ctx: Option<&LocaleFormatContext<'_>>,
@@ -1455,7 +1455,7 @@ fn evaluate_array_conditional_formatting_rule(
 
 fn evaluate_array_visualization_rule(
     rule: &VerificationConditionalFormattingRule,
-    value: &EvalValue,
+    value: &FunctionValue,
     aggregate_context: &AggregateConditionalFormattingContext,
 ) -> Option<ArrayVisualizationOutcome> {
     match normalized_token(&rule.rule_kind).as_str() {
@@ -1468,10 +1468,10 @@ fn evaluate_array_visualization_rule(
 
 fn evaluate_color_scale_rule(
     rule: &VerificationConditionalFormattingRule,
-    value: &EvalValue,
+    value: &FunctionValue,
     aggregate_context: &AggregateConditionalFormattingContext,
 ) -> Option<ArrayVisualizationOutcome> {
-    let EvalValue::Number(number) = value else {
+    let FunctionValue::Number(number) = value else {
         return None;
     };
     if !number.is_finite() {
@@ -1490,10 +1490,10 @@ fn evaluate_color_scale_rule(
 
 fn evaluate_data_bar_rule(
     rule: &VerificationConditionalFormattingRule,
-    value: &EvalValue,
+    value: &FunctionValue,
     aggregate_context: &AggregateConditionalFormattingContext,
 ) -> Option<ArrayVisualizationOutcome> {
-    let EvalValue::Number(number) = value else {
+    let FunctionValue::Number(number) = value else {
         return None;
     };
     if !number.is_finite() {
@@ -1554,10 +1554,10 @@ fn data_bar_ratio(
 
 fn evaluate_icon_set_rule(
     rule: &VerificationConditionalFormattingRule,
-    value: &EvalValue,
+    value: &FunctionValue,
     aggregate_context: &AggregateConditionalFormattingContext,
 ) -> Option<ArrayVisualizationOutcome> {
-    let EvalValue::Number(number) = value else {
+    let FunctionValue::Number(number) = value else {
         return None;
     };
     if !number.is_finite() {
@@ -1798,19 +1798,19 @@ fn evaluated_conditional_formatting_rule(
 
 fn evaluate_aggregate_rule(
     rule: &VerificationConditionalFormattingRule,
-    value: &EvalValue,
+    value: &FunctionValue,
     visible_value_text: &str,
     aggregate_context: &AggregateConditionalFormattingContext,
 ) -> Option<bool> {
     match normalized_token(&rule.rule_kind).as_str() {
         "aboveaverage" => {
-            let EvalValue::Number(number) = value else {
+            let FunctionValue::Number(number) = value else {
                 return Some(false);
             };
             evaluate_average_rule(rule, *number, aggregate_context, true)
         }
         "belowaverage" => {
-            let EvalValue::Number(number) = value else {
+            let FunctionValue::Number(number) = value else {
                 return Some(false);
             };
             evaluate_average_rule(rule, *number, aggregate_context, false)
@@ -1862,11 +1862,11 @@ fn evaluate_average_rule(
 
 fn evaluate_top_bottom_rule(
     rule: &VerificationConditionalFormattingRule,
-    value: &EvalValue,
+    value: &FunctionValue,
     aggregate_context: &AggregateConditionalFormattingContext,
     top: bool,
 ) -> Option<bool> {
-    let EvalValue::Number(number) = value else {
+    let FunctionValue::Number(number) = value else {
         return Some(false);
     };
     let count = aggregate_rank_count(rule, aggregate_context.numeric_values.len())?;
@@ -1917,15 +1917,15 @@ fn aggregate_rank_count(
 
 fn evaluate_predicate_rule(
     rule: &VerificationConditionalFormattingRule,
-    value: &EvalValue,
+    value: &FunctionValue,
     now_serial: Option<f64>,
     date_system: WorkbookDateSystem,
 ) -> Option<bool> {
     match normalized_token(&rule.rule_kind).as_str() {
         "blanks" => Some(is_blank_value(value)),
         "noblanks" => Some(!is_blank_value(value)),
-        "errors" => Some(matches!(value, EvalValue::Error(_))),
-        "noerrors" => Some(!matches!(value, EvalValue::Error(_))),
+        "errors" => Some(matches!(value, FunctionValue::Error(_))),
+        "noerrors" => Some(!matches!(value, FunctionValue::Error(_))),
         "dates" => {
             evaluate_relative_date_rule(rule.thresholds.first()?, value, now_serial?, date_system)
         }
@@ -1941,17 +1941,17 @@ fn normalized_token(value: &str) -> String {
         .to_ascii_lowercase()
 }
 
-fn is_blank_value(value: &EvalValue) -> bool {
-    matches!(value, EvalValue::Text(text) if text.to_string_lossy().is_empty())
+fn is_blank_value(value: &FunctionValue) -> bool {
+    matches!(value, FunctionValue::Text(text) if text.to_string_lossy().is_empty())
 }
 
 fn evaluate_relative_date_rule(
     kind: &str,
-    value: &EvalValue,
+    value: &FunctionValue,
     now_serial: f64,
     date_system: WorkbookDateSystem,
 ) -> Option<bool> {
-    let EvalValue::Number(value_serial) = value else {
+    let FunctionValue::Number(value_serial) = value else {
         return Some(false);
     };
     if !value_serial.is_finite() || !now_serial.is_finite() {
@@ -2013,7 +2013,7 @@ fn add_months(year: i64, month: i64, month_offset: i64) -> (i64, i64) {
 fn evaluate_operator_rule(
     operator: &str,
     thresholds: &[String],
-    value: &EvalValue,
+    value: &FunctionValue,
     visible_value_text: &str,
     locale_ctx: Option<&LocaleFormatContext<'_>>,
 ) -> Option<bool> {
@@ -2079,7 +2079,7 @@ fn evaluate_operator_rule(
 
 fn evaluate_expression_rule(
     formula: &str,
-    value: &EvalValue,
+    value: &FunctionValue,
     visible_value_text: &str,
     locale_ctx: Option<&LocaleFormatContext<'_>>,
 ) -> Option<bool> {
@@ -2176,26 +2176,26 @@ fn is_current_cell_reference(token: &str) -> bool {
 }
 
 fn compare_threshold(
-    value: &EvalValue,
+    value: &FunctionValue,
     visible_value_text: &str,
     threshold: &str,
     locale_ctx: Option<&LocaleFormatContext<'_>>,
 ) -> Option<std::cmp::Ordering> {
     match value {
-        EvalValue::Number(number) => {
+        FunctionValue::Number(number) => {
             let threshold_value = parse_threshold_number(threshold, locale_ctx)?;
             number.partial_cmp(&threshold_value)
         }
-        EvalValue::Text(text) => Some(
+        FunctionValue::Text(text) => Some(
             text.to_string_lossy()
                 .to_ascii_lowercase()
                 .cmp(&strip_threshold_quotes(threshold).to_ascii_lowercase()),
         ),
-        EvalValue::Logical(logical) => {
+        FunctionValue::Logical(logical) => {
             let threshold_value = parse_threshold_bool(threshold)?;
             Some(logical.cmp(&threshold_value))
         }
-        EvalValue::Error(code) => {
+        FunctionValue::Error(code) => {
             Some(worksheet_error_text(*code).cmp(strip_threshold_quotes(threshold)))
         }
         _ => Some(visible_value_text.cmp(strip_threshold_quotes(threshold))),

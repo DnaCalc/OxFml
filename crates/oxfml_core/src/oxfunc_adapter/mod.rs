@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use oxfunc_core::value::EvalValue;
+use oxfunc_core::value::FunctionValue;
 
 use crate::binding::BindDiagnostic;
 use crate::eval::{
@@ -25,7 +25,7 @@ pub struct OxFuncAdapterRequest<'a> {
     pub caller_anchor: Locus,
     pub active_selection_anchor: Option<Locus>,
     pub structure_context_version: String,
-    pub cell_fixture: BTreeMap<String, EvalValue>,
+    pub cell_fixture: BTreeMap<String, FunctionValue>,
     pub defined_name_bindings: BTreeMap<String, DefinedNameBinding>,
     pub table_catalog: Vec<TableDescriptor>,
     pub enclosing_table_ref: Option<TableRef>,
@@ -92,7 +92,7 @@ pub struct OxFuncEvaluationArtifact {
     pub fixture_case_id: String,
     pub library_context_snapshot_ref: Option<LibraryContextSnapshotRef>,
     pub evaluation_result: PreparedResult,
-    pub worksheet_value: EvalValue,
+    pub worksheet_value: FunctionValue,
     pub returned_value_surface: ReturnedValueSurface,
     pub execution_outcome_surface: ExecutionOutcomeSurface,
     pub candidate_result_id: String,

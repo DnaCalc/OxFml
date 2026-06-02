@@ -7,7 +7,7 @@ use oxfml_core::eval::{EvaluationContext, evaluate_formula};
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::test_support::host::SingleFormulaHost;
 use oxfml_core::{FormulaSourceRecord, TypedContextQueryBundle};
-use oxfunc_core::value::{ArrayCellValue, EvalArray, EvalValue, WorksheetErrorCode};
+use oxfunc_core::value::{FunctionArray, FunctionArrayCell, FunctionValue, WorksheetErrorCode};
 
 fn evaluate_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::EvaluationOutput {
     let compiled = common::compile_formula(
@@ -21,10 +21,10 @@ fn evaluate_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::
     evaluate_formula(context).expect("evaluation should succeed")
 }
 
-fn calc_error_row(width: usize) -> EvalValue {
-    EvalValue::Array(
-        EvalArray::from_rows(vec![vec![
-            ArrayCellValue::Error(WorksheetErrorCode::Calc);
+fn calc_error_row(width: usize) -> FunctionValue {
+    FunctionValue::Array(
+        FunctionArray::from_rows(vec![vec![
+            FunctionArrayCell::Error(WorksheetErrorCode::Calc);
             width
         ]])
         .expect("row array"),
@@ -78,7 +78,7 @@ fn lambda_array_selector_control_remains_green_ftc_0999() {
     let locale = oxfml_en_us_locale_context();
 
     let eval = evaluate_formula_text("ftc-0999:control:evaluator", formula);
-    assert_eq!(eval.oxfunc_value, EvalValue::Number(10.0));
+    assert_eq!(eval.oxfunc_value, FunctionValue::Number(10.0));
 
     let runtime = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
@@ -86,7 +86,10 @@ fn lambda_array_selector_control_remains_green_ftc_0999() {
             TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
         ))
         .expect("runtime execution should succeed");
-    assert_eq!(runtime.published_worksheet_value, EvalValue::Number(10.0));
+    assert_eq!(
+        runtime.published_worksheet_value,
+        FunctionValue::Number(10.0)
+    );
     assert_eq!(
         runtime.verification_publication_surface.visible_value_text,
         "10"

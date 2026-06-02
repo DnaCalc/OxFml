@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
-use oxfunc_core::value::{EvalValue, ExcelText, ReferenceLike};
+use oxfunc_core::value::{ExcelText, FunctionValue, ReferenceLike};
 use serde::Deserialize;
 
 use oxfml_core::binding::{BindContext, BindRequest, bind_formula};
@@ -1139,13 +1139,13 @@ fn evaluate_fixture_formula(
     context.defined_names = binding_map;
     context
         .cell_values
-        .insert("A1".to_string(), EvalValue::Number(7.0));
+        .insert("A1".to_string(), FunctionValue::Number(7.0));
     context
         .cell_values
-        .insert("A2".to_string(), EvalValue::Number(11.0));
+        .insert("A2".to_string(), FunctionValue::Number(11.0));
     context
         .cell_values
-        .insert("B2".to_string(), EvalValue::Number(13.0));
+        .insert("B2".to_string(), FunctionValue::Number(13.0));
     context.apply_typed_context_query_bundle(TypedContextQueryBundle::new(
         host_query_profile
             .is_some()
@@ -1174,19 +1174,19 @@ fn parse_defined_name_summary(summary: &str) -> DefinedNameBinding {
     DefinedNameBinding::Value(parse_eval_value_summary(summary))
 }
 
-fn parse_eval_value_summary(summary: &str) -> EvalValue {
+fn parse_eval_value_summary(summary: &str) -> FunctionValue {
     if let Some(number) = summary
         .strip_prefix("Number(")
         .and_then(|rest| rest.strip_suffix(')'))
     {
-        return EvalValue::Number(number.parse::<f64>().expect("numeric fixture binding"));
+        return FunctionValue::Number(number.parse::<f64>().expect("numeric fixture binding"));
     }
 
     if let Some(text) = summary
         .strip_prefix("Text(")
         .and_then(|rest| rest.strip_suffix(')'))
     {
-        return EvalValue::Text(ExcelText::from_utf16_code_units(
+        return FunctionValue::Text(ExcelText::from_utf16_code_units(
             text.encode_utf16().collect(),
         ));
     }
@@ -1196,8 +1196,8 @@ fn parse_eval_value_summary(summary: &str) -> EvalValue {
         .and_then(|rest| rest.strip_suffix(')'))
     {
         return match logical {
-            "true" | "True" | "TRUE" => EvalValue::Logical(true),
-            "false" | "False" | "FALSE" => EvalValue::Logical(false),
+            "true" | "True" | "TRUE" => FunctionValue::Logical(true),
+            "false" | "False" | "FALSE" => FunctionValue::Logical(false),
             _ => panic!("unsupported logical fixture binding {summary}"),
         };
     }
@@ -1222,18 +1222,18 @@ impl HostInfoProvider for ReplayHostInfoProvider {
         &self,
         query: CellInfoQuery,
         _reference: Option<&ReferenceLike>,
-    ) -> Result<EvalValue, HostInfoError> {
+    ) -> Result<FunctionValue, HostInfoError> {
         match query {
-            CellInfoQuery::Filename => Ok(EvalValue::Text(ExcelText::from_utf16_code_units(
+            CellInfoQuery::Filename => Ok(FunctionValue::Text(ExcelText::from_utf16_code_units(
                 "[Book1]Sheet1".encode_utf16().collect(),
             ))),
             _ => Err(HostInfoError::UnsupportedCellInfoQuery(query)),
         }
     }
 
-    fn query_info(&self, query: InfoQuery) -> Result<EvalValue, HostInfoError> {
+    fn query_info(&self, query: InfoQuery) -> Result<FunctionValue, HostInfoError> {
         match query {
-            InfoQuery::Directory => Ok(EvalValue::Text(ExcelText::from_utf16_code_units(
+            InfoQuery::Directory => Ok(FunctionValue::Text(ExcelText::from_utf16_code_units(
                 "C:\\Work".encode_utf16().collect(),
             ))),
             _ => Err(HostInfoError::UnsupportedInfoQuery(query)),

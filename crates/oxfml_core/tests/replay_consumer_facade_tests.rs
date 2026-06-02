@@ -37,7 +37,7 @@ use oxfml_core::{
 use oxfunc_core::host_info::{
     HostInfoError, HostInfoProvider, ImageProviderResult, ImageRequest, ResolvedWebImage,
 };
-use oxfunc_core::value::{ArrayCellValue, EvalArray, EvalValue, ExcelText};
+use oxfunc_core::value::{ExcelText, FunctionArray, FunctionArrayCell, FunctionValue};
 use serde_json::Value;
 
 #[test]
@@ -248,7 +248,7 @@ fn replay_projection_service_projects_runtime_and_host_outputs() {
             .verification_publication_surface
             .as_ref()
             .map(|surface| surface.published_value.clone()),
-        Some(EvalValue::Number(6.0))
+        Some(FunctionValue::Number(6.0))
     );
     assert_eq!(
         runtime_projection
@@ -560,7 +560,7 @@ fn replay_projection_service_prefers_first_host_capture_publication_surface_for_
         .verification_publication_surface
         .locale_format_context = None;
     mutated.verification_publication_surface.published_value =
-        EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Value);
+        FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Value);
     mutated.verification_publication_surface.visible_value_text = "#VALUE!".to_string();
     mutated
         .verification_publication_surface
@@ -929,13 +929,13 @@ fn load_expected_comparison_views_fixture() -> Value {
     fixture["comparison_views"].clone()
 }
 
-fn expected_programmatic_comparison_value(value: &EvalValue) -> Value {
+fn expected_programmatic_comparison_value(value: &FunctionValue) -> Value {
     match value {
-        EvalValue::Number(number) => serde_json::json!({
+        FunctionValue::Number(number) => serde_json::json!({
             "kind": "number",
             "value": number
         }),
-        EvalValue::Error(code) => serde_json::json!({
+        FunctionValue::Error(code) => serde_json::json!({
             "kind": "error",
             "code": format!("{code:?}"),
             "display": worksheet_error_text(*code)
@@ -1255,11 +1255,11 @@ fn replay_projection_carries_w074_structured_table_identity() {
         .with_table_context(vec![replay_w074_table("B2:B4")], None, None)
         .with_cell_values(BTreeMap::from([(
             "B2:B4".to_string(),
-            EvalValue::Array(
-                EvalArray::from_rows(vec![vec![
-                    ArrayCellValue::Number(3.0),
-                    ArrayCellValue::Number(4.0),
-                    ArrayCellValue::Number(5.0),
+            FunctionValue::Array(
+                FunctionArray::from_rows(vec![vec![
+                    FunctionArrayCell::Number(3.0),
+                    FunctionArrayCell::Number(4.0),
+                    FunctionArrayCell::Number(5.0),
                 ]])
                 .expect("array fixture should be valid"),
             ),
@@ -1311,11 +1311,11 @@ fn replay_projection_carries_escaped_structured_column_bind_packet() {
         .with_table_context(vec![replay_w074_escaped_table()], None, None)
         .with_cell_values(BTreeMap::from([(
             "B2:B4".to_string(),
-            EvalValue::Array(
-                EvalArray::from_rows(vec![vec![
-                    ArrayCellValue::Number(2.0),
-                    ArrayCellValue::Number(3.0),
-                    ArrayCellValue::Number(5.0),
+            FunctionValue::Array(
+                FunctionArray::from_rows(vec![vec![
+                    FunctionArrayCell::Number(2.0),
+                    FunctionArrayCell::Number(3.0),
+                    FunctionArrayCell::Number(5.0),
                 ]])
                 .expect("array fixture should be valid"),
             ),
@@ -1339,7 +1339,7 @@ fn replay_projection_carries_escaped_structured_column_bind_packet() {
 
     assert_eq!(
         runtime_result.evaluation.oxfunc_value,
-        EvalValue::Number(10.0)
+        FunctionValue::Number(10.0)
     );
     assert_eq!(record.source_token_text, "Table1[['#Data]]");
     assert_eq!(
@@ -1377,7 +1377,7 @@ fn replay_projection_carries_zero_row_structured_table_packet() {
 
     assert_eq!(
         runtime_result.evaluation.oxfunc_value,
-        EvalValue::Number(0.0)
+        FunctionValue::Number(0.0)
     );
     assert_eq!(
         identity.structured_reference_bind_records,
@@ -1419,7 +1419,7 @@ fn replay_projection_preserves_no_host_namespace_lexical_guardrail() {
 
     assert_eq!(
         runtime_result.evaluation.oxfunc_value,
-        EvalValue::Number(115.0)
+        FunctionValue::Number(115.0)
     );
     let projection =
         ReplayProjectionService::project(ReplayProjectionRequest::runtime_result(&runtime_result));

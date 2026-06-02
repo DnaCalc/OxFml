@@ -5,7 +5,7 @@ mod common;
 use oxfml_core::consumer::runtime::{RuntimeEnvironment, RuntimeFormulaRequest};
 use oxfml_core::eval::{EvaluationContext, evaluate_formula};
 use oxfml_core::{FormulaSourceRecord, TypedContextQueryBundle};
-use oxfunc_core::value::{ArrayCellValue, EvalArray, EvalValue};
+use oxfunc_core::value::{FunctionArray, FunctionArrayCell, FunctionValue};
 
 fn evaluate_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::EvaluationOutput {
     let compiled = common::compile_formula(
@@ -19,25 +19,25 @@ fn evaluate_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::
     evaluate_formula(context).expect("evaluation should succeed")
 }
 
-fn array_numbers(values: &[f64]) -> EvalValue {
-    EvalValue::Array(
-        EvalArray::from_rows(vec![
+fn array_numbers(values: &[f64]) -> FunctionValue {
+    FunctionValue::Array(
+        FunctionArray::from_rows(vec![
             values
                 .iter()
                 .copied()
-                .map(ArrayCellValue::Number)
+                .map(FunctionArrayCell::Number)
                 .collect::<Vec<_>>(),
         ])
         .expect("row array"),
     )
 }
 
-fn array_number_false_number(lhs: f64, rhs: f64) -> EvalValue {
-    EvalValue::Array(
-        EvalArray::from_rows(vec![vec![
-            ArrayCellValue::Number(lhs),
-            ArrayCellValue::Logical(false),
-            ArrayCellValue::Number(rhs),
+fn array_number_false_number(lhs: f64, rhs: f64) -> FunctionValue {
+    FunctionValue::Array(
+        FunctionArray::from_rows(vec![vec![
+            FunctionArrayCell::Number(lhs),
+            FunctionArrayCell::Logical(false),
+            FunctionArrayCell::Number(rhs),
         ]])
         .expect("row array"),
     )
@@ -49,7 +49,7 @@ fn evaluator_characterizes_ftc_0176_if_array_condition_family() {
         (
             "FTC-0176",
             "=SUM(IF({TRUE,FALSE,TRUE},{10,20,30},0))",
-            EvalValue::Number(40.0),
+            FunctionValue::Number(40.0),
         ),
         (
             "if-array-cond-scalars",
@@ -74,17 +74,17 @@ fn evaluator_characterizes_ftc_0176_if_array_condition_family() {
         (
             "sum-if-array-cond-scalars",
             "=SUM(IF({TRUE,FALSE,TRUE},1,0))",
-            EvalValue::Number(2.0),
+            FunctionValue::Number(2.0),
         ),
         (
             "FTC-0878",
             "=SUM(IF({TRUE,FALSE,TRUE},{10,20,30}))",
-            EvalValue::Number(40.0),
+            FunctionValue::Number(40.0),
         ),
         (
             "sum-if-scalar-cond-array-values",
             "=SUM(IF(TRUE,{10,20,30},0))",
-            EvalValue::Number(60.0),
+            FunctionValue::Number(60.0),
         ),
     ];
 
@@ -100,7 +100,7 @@ fn runtime_characterizes_ftc_0176_if_array_condition_family() {
         (
             "FTC-0176",
             "=SUM(IF({TRUE,FALSE,TRUE},{10,20,30},0))",
-            EvalValue::Number(40.0),
+            FunctionValue::Number(40.0),
         ),
         (
             "if-array-cond-scalars",
@@ -125,17 +125,17 @@ fn runtime_characterizes_ftc_0176_if_array_condition_family() {
         (
             "sum-if-array-cond-scalars",
             "=SUM(IF({TRUE,FALSE,TRUE},1,0))",
-            EvalValue::Number(2.0),
+            FunctionValue::Number(2.0),
         ),
         (
             "FTC-0878",
             "=SUM(IF({TRUE,FALSE,TRUE},{10,20,30}))",
-            EvalValue::Number(40.0),
+            FunctionValue::Number(40.0),
         ),
         (
             "sum-if-scalar-cond-array-values",
             "=SUM(IF(TRUE,{10,20,30},0))",
-            EvalValue::Number(60.0),
+            FunctionValue::Number(60.0),
         ),
     ];
 

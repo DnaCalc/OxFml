@@ -4,10 +4,10 @@ use oxfml_core::{
     VerificationConditionalFormattingRule, VerificationPublicationContext,
     VerificationPublicationSurface, build_verification_publication_surface,
 };
-use oxfunc_core::value::{CalcValue, EvalValue, ExcelText, WorksheetErrorCode};
+use oxfunc_core::value::{CalcValue, ExcelText, FunctionValue, WorksheetErrorCode};
 
 fn surface_for(
-    value: EvalValue,
+    value: FunctionValue,
     rules: Vec<VerificationConditionalFormattingRule>,
     now_serial: Option<f64>,
 ) -> VerificationPublicationSurface {
@@ -72,7 +72,7 @@ fn predicate_rule(kind: &str, thresholds: Vec<&str>) -> VerificationConditionalF
 #[test]
 fn conditional_formatting_blank_and_error_predicates_publish_applies() {
     let blank_surface = surface_for(
-        EvalValue::Text(ExcelText::from_interop_assignment("")),
+        FunctionValue::Text(ExcelText::from_interop_assignment("")),
         vec![predicate_rule("blanks", Vec::new())],
         None,
     );
@@ -86,7 +86,7 @@ fn conditional_formatting_blank_and_error_predicates_publish_applies() {
     );
 
     let nonblank_surface = surface_for(
-        EvalValue::Number(1.0),
+        FunctionValue::Number(1.0),
         vec![predicate_rule("noBlanks", Vec::new())],
         None,
     );
@@ -96,7 +96,7 @@ fn conditional_formatting_blank_and_error_predicates_publish_applies() {
     );
 
     let error_surface = surface_for(
-        EvalValue::Error(WorksheetErrorCode::Div0),
+        FunctionValue::Error(WorksheetErrorCode::Div0),
         vec![predicate_rule("errors", Vec::new())],
         None,
     );
@@ -106,7 +106,7 @@ fn conditional_formatting_blank_and_error_predicates_publish_applies() {
     );
 
     let no_error_surface = surface_for(
-        EvalValue::Number(1.0),
+        FunctionValue::Number(1.0),
         vec![predicate_rule("noErrors", Vec::new())],
         None,
     );
@@ -120,7 +120,7 @@ fn conditional_formatting_blank_and_error_predicates_publish_applies() {
 fn conditional_formatting_relative_date_predicates_use_runtime_now_serial() {
     let now_serial = 46045.5;
     let surface = surface_for(
-        EvalValue::Number(46045.25),
+        FunctionValue::Number(46045.25),
         vec![
             predicate_rule("dates", vec!["today"]),
             predicate_rule("dates", vec!["yesterday"]),
@@ -139,7 +139,7 @@ fn conditional_formatting_relative_date_predicates_use_runtime_now_serial() {
 #[test]
 fn conditional_formatting_relative_date_predicates_remain_unknown_without_now_serial() {
     let surface = surface_for(
-        EvalValue::Number(46045.0),
+        FunctionValue::Number(46045.0),
         vec![predicate_rule("dates", vec!["today"])],
         None,
     );
@@ -150,7 +150,7 @@ fn conditional_formatting_relative_date_predicates_remain_unknown_without_now_se
 #[test]
 fn unknown_conditional_formatting_predicates_stay_unevaluated() {
     let surface = surface_for(
-        EvalValue::Number(1.0),
+        FunctionValue::Number(1.0),
         vec![predicate_rule("containsBlanks", Vec::new())],
         None,
     );

@@ -10,7 +10,7 @@ use oxfml_core::format::{
 use oxfml_core::publication::VerificationPublicationContext;
 use oxfml_core::{FormulaChannelKind, FormulaSourceRecord, TypedContextQueryBundle};
 use oxfunc_core::locale_format::{FormatCodeTokenPolicy, FormatProfile, LocaleFormatContext};
-use oxfunc_core::value::{EvalValue, ExcelText};
+use oxfunc_core::value::{ExcelText, FunctionValue};
 
 fn en_us_profile_with_separators(
     decimal_separator: &'static str,
@@ -66,8 +66,8 @@ fn evaluate_formula_with_locale(
     evaluate_formula(context).expect("evaluation should succeed")
 }
 
-fn text_eval_value(text: &str) -> EvalValue {
-    EvalValue::Text(ExcelText::from_interop_assignment(text))
+fn text_eval_value(text: &str) -> FunctionValue {
+    FunctionValue::Text(ExcelText::from_interop_assignment(text))
 }
 
 #[test]

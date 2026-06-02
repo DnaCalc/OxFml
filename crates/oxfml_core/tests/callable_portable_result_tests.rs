@@ -8,12 +8,12 @@ use oxfml_core::eval::{
 };
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::test_support::host::SingleFormulaHost;
-use oxfunc_core::value::{CoreValue, EvalValue, RichValue, WorksheetErrorCode};
+use oxfunc_core::value::{CoreValue, FunctionValue, RichValue, WorksheetErrorCode};
 
 #[test]
 fn top_level_lambda_with_capture_surfaces_portable_callable_payload() {
     let mut host = SingleFormulaHost::new("portable:capture", "=LAMBDA(x,MIN(x,Cap))");
-    host.set_defined_name_value("Cap", EvalValue::Number(10.0));
+    host.set_defined_name_value("Cap", FunctionValue::Number(10.0));
 
     let output = host
         .recalc(None, Some(&oxfml_en_us_locale_context()))
@@ -22,7 +22,7 @@ fn top_level_lambda_with_capture_surfaces_portable_callable_payload() {
     // Display stays oracle-consistent: a bare top-level LAMBDA still shows #CALC!.
     assert_eq!(
         output.published_worksheet_value,
-        EvalValue::Error(WorksheetErrorCode::Calc),
+        FunctionValue::Error(WorksheetErrorCode::Calc),
         "top-level callable display must remain #CALC! (Excel oracle)"
     );
 
@@ -96,7 +96,7 @@ fn top_level_lambda_with_capture_surfaces_portable_callable_payload() {
     assert_eq!(captured.identity, "name:Cap");
     assert_eq!(
         captured.binding,
-        Some(DefinedNameBinding::Value(EvalValue::Number(10.0)))
+        Some(DefinedNameBinding::Value(FunctionValue::Number(10.0)))
     );
 
     // The closure is intentionally empty: top-level defined-name captures are
@@ -171,7 +171,7 @@ fn ordinary_top_level_result_has_no_portable_callable() {
     let output = host
         .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("recalc should succeed");
-    assert_eq!(output.published_worksheet_value, EvalValue::Number(3.0));
+    assert_eq!(output.published_worksheet_value, FunctionValue::Number(3.0));
     assert!(output.portable_callable.is_none());
 }
 
@@ -179,7 +179,7 @@ fn ordinary_top_level_result_has_no_portable_callable() {
 fn portable_callable_round_trips_through_defined_name_supply_and_invokes() {
     // First host: produce a portable callable from a top-level LAMBDA result.
     let mut producer = SingleFormulaHost::new("portable:rt:producer", "=LAMBDA(x,MIN(x,Cap))");
-    producer.set_defined_name_value("Cap", EvalValue::Number(10.0));
+    producer.set_defined_name_value("Cap", FunctionValue::Number(10.0));
     let produced = producer
         .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("producer recalc should succeed")
@@ -198,13 +198,16 @@ fn portable_callable_round_trips_through_defined_name_supply_and_invokes() {
     // by the captured-ref dependency facts). Invocation resolves `Cap` live.
     let mut consumer = SingleFormulaHost::new("portable:rt:consumer", "=CapFn(99)");
     consumer.set_defined_name_callable("CapFn", produced.binding.clone());
-    consumer.set_defined_name_value("Cap", EvalValue::Number(10.0));
+    consumer.set_defined_name_value("Cap", FunctionValue::Number(10.0));
     let output = consumer
         .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("consumer recalc should succeed");
 
     // `Cap=10` resolves live in the consumer, so MIN(99,10)=10.
-    assert_eq!(output.published_worksheet_value, EvalValue::Number(10.0));
+    assert_eq!(
+        output.published_worksheet_value,
+        FunctionValue::Number(10.0)
+    );
 }
 
 #[test]
@@ -215,7 +218,7 @@ fn portable_callable_round_trip_resolves_capture_live_in_consuming_scope() {
     // consumer's live value), NOT the producer's stale 5. This is the contract
     // that makes the captured-ref invalidation edges meaningful.
     let mut producer = SingleFormulaHost::new("portable:rt2:producer", "=LAMBDA(x,MIN(x,Cap))");
-    producer.set_defined_name_value("Cap", EvalValue::Number(5.0));
+    producer.set_defined_name_value("Cap", FunctionValue::Number(5.0));
     let produced = producer
         .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("producer recalc should succeed")
@@ -230,13 +233,13 @@ fn portable_callable_round_trip_resolves_capture_live_in_consuming_scope() {
     // Consumer defines a *different* live Cap; the callable must observe it.
     let mut consumer = SingleFormulaHost::new("portable:rt2:consumer", "=Capped(99)");
     consumer.set_defined_name_callable("Capped", produced.binding.clone());
-    consumer.set_defined_name_value("Cap", EvalValue::Number(100.0));
+    consumer.set_defined_name_value("Cap", FunctionValue::Number(100.0));
     let output = consumer
         .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("consumer recalc should succeed");
     assert_eq!(
         output.published_worksheet_value,
-        EvalValue::Number(99.0),
+        FunctionValue::Number(99.0),
         "Cap resolves live to the consumer's 100, so MIN(99,100)=99 (not stale 5)"
     );
 }
@@ -327,7 +330,7 @@ fn let_returned_callable_has_no_portable_payload_narrowed_ac() {
     );
     assert_eq!(
         output.published_worksheet_value,
-        EvalValue::Error(WorksheetErrorCode::Calc)
+        FunctionValue::Error(WorksheetErrorCode::Calc)
     );
 }
 
@@ -336,7 +339,7 @@ fn let_bodied_top_level_lambda_captures_outer_defined_name() {
     // Finding #5: a LET-bodied LAMBDA capturing an outer defined name. The LET-bound
     // local `y` is NOT a captured ref; the outer `Cap` is the only dependency fact.
     let mut host = SingleFormulaHost::new("portable:let-body", "=LAMBDA(x,LET(y,x,MIN(y,Cap)))");
-    host.set_defined_name_value("Cap", EvalValue::Number(7.0));
+    host.set_defined_name_value("Cap", FunctionValue::Number(7.0));
     let output = host
         .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("recalc should succeed");
@@ -365,7 +368,7 @@ fn nested_lambda_shadows_outer_param_and_captures_outer_defined_name() {
     // shadowed `x` must NOT appear as a captured ref; `Cap` must.
     let mut host =
         SingleFormulaHost::new("portable:nested-shadow", "=LAMBDA(x,LAMBDA(x,MIN(x,Cap)))");
-    host.set_defined_name_value("Cap", EvalValue::Number(3.0));
+    host.set_defined_name_value("Cap", FunctionValue::Number(3.0));
     let output = host
         .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("recalc should succeed");
@@ -419,7 +422,7 @@ fn optional_parameter_lambda_reports_arity_and_optional_names() {
 fn array_literal_bodied_lambda_with_capture_surfaces_payload() {
     // Finding #5: array-literal body capturing an outer defined name.
     let mut host = SingleFormulaHost::new("portable:array-body", "=LAMBDA(x,{1,2,Cap})");
-    host.set_defined_name_value("Cap", EvalValue::Number(9.0));
+    host.set_defined_name_value("Cap", FunctionValue::Number(9.0));
     let output = host
         .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("recalc should succeed");
@@ -486,7 +489,7 @@ fn cell_captured_reference_uses_display_identity_and_no_defined_name_binding() {
 /// defined name `Cap`, defining `Cap` as `cap` in the producing scope.
 fn produce_capped_callable(cap: f64) -> oxfml_core::eval::CallableDefinedNameBinding {
     let mut producer = SingleFormulaHost::new("portable:bf2:producer", "=LAMBDA(x,MIN(x,Cap))");
-    producer.set_defined_name_value("Cap", EvalValue::Number(cap));
+    producer.set_defined_name_value("Cap", FunctionValue::Number(cap));
     let produced = producer
         .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("producer recalc should succeed")
@@ -506,12 +509,15 @@ fn resupplied_callable_invokes_from_let_value_position() {
     // for invocation, unlike the fml-ds0.20 direct-call-position round-trip.
     let mut consumer = SingleFormulaHost::new("portable:bf2:let", "=LET(g, Capped, g(99))");
     consumer.set_defined_name_callable("Capped", produce_capped_callable(10.0));
-    consumer.set_defined_name_value("Cap", EvalValue::Number(10.0));
+    consumer.set_defined_name_value("Cap", FunctionValue::Number(10.0));
     let output = consumer
         .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("consumer recalc should succeed");
     // Cap=10 resolves live in the consumer, so MIN(99,10)=10.
-    assert_eq!(output.published_worksheet_value, EvalValue::Number(10.0));
+    assert_eq!(
+        output.published_worksheet_value,
+        FunctionValue::Number(10.0)
+    );
 }
 
 #[test]
@@ -525,11 +531,14 @@ fn resupplied_callable_invokes_when_passed_as_argument() {
         "=LET(apply, LAMBDA(f, f(99)), apply(Capped))",
     );
     consumer.set_defined_name_callable("Capped", produce_capped_callable(10.0));
-    consumer.set_defined_name_value("Cap", EvalValue::Number(10.0));
+    consumer.set_defined_name_value("Cap", FunctionValue::Number(10.0));
     let output = consumer
         .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("consumer recalc should succeed");
-    assert_eq!(output.published_worksheet_value, EvalValue::Number(10.0));
+    assert_eq!(
+        output.published_worksheet_value,
+        FunctionValue::Number(10.0)
+    );
 }
 
 #[test]
@@ -541,13 +550,13 @@ fn resupplied_callable_resolves_capture_live_through_value_position() {
     // captured-ref invalidation edges meaningful on the value/deref path too.
     let mut consumer = SingleFormulaHost::new("portable:bf2:live", "=LET(g, Capped, g(99))");
     consumer.set_defined_name_callable("Capped", produce_capped_callable(5.0));
-    consumer.set_defined_name_value("Cap", EvalValue::Number(100.0));
+    consumer.set_defined_name_value("Cap", FunctionValue::Number(100.0));
     let output = consumer
         .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("consumer recalc should succeed");
     assert_eq!(
         output.published_worksheet_value,
-        EvalValue::Number(99.0),
+        FunctionValue::Number(99.0),
         "Cap resolves live to the consumer's 100 through the value/deref path"
     );
 }
@@ -566,13 +575,13 @@ fn resupplied_callable_in_bare_value_position_displays_calc_like_top_level_lambd
     // (exercised by the sibling tests), not store -> re-supply -> re-export.
     let mut consumer = SingleFormulaHost::new("portable:bf2:bare", "=Capped");
     consumer.set_defined_name_callable("Capped", produce_capped_callable(10.0));
-    consumer.set_defined_name_value("Cap", EvalValue::Number(10.0));
+    consumer.set_defined_name_value("Cap", FunctionValue::Number(10.0));
     let output = consumer
         .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("consumer recalc should succeed");
     assert_eq!(
         output.published_worksheet_value,
-        EvalValue::Error(WorksheetErrorCode::Calc),
+        FunctionValue::Error(WorksheetErrorCode::Calc),
         "a bare re-supplied callable displays #CALC! (Excel oracle)"
     );
     assert!(
@@ -588,7 +597,7 @@ fn resupplied_callable_under_arity_errors_no_partial_application() {
     // arity error, not a curried partial.
     let mut consumer = SingleFormulaHost::new("portable:bf2:arity", "=LET(g, Capped, g())");
     consumer.set_defined_name_callable("Capped", produce_capped_callable(10.0));
-    consumer.set_defined_name_value("Cap", EvalValue::Number(10.0));
+    consumer.set_defined_name_value("Cap", FunctionValue::Number(10.0));
     let result = consumer.recalc(None, Some(&oxfml_en_us_locale_context()));
     let error = result.expect_err("under-arity invocation must surface an evaluation error");
     assert!(

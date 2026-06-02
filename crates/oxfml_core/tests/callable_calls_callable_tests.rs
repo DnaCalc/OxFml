@@ -16,7 +16,7 @@ use oxfml_core::red::project_red_view;
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
 use oxfml_core::test_support::host::SingleFormulaHost;
-use oxfunc_core::value::EvalValue;
+use oxfunc_core::value::FunctionValue;
 
 #[test]
 fn callable_can_invoke_another_callable_captured_in_its_closure() {
@@ -55,7 +55,7 @@ fn callable_can_invoke_another_callable_captured_in_its_closure() {
 
     assert_eq!(
         output.evaluation.oxfunc_value,
-        EvalValue::Number(55.0),
+        FunctionValue::Number(55.0),
         "captured callable should be invoked: Inner(5) + 5 = 55"
     );
 }

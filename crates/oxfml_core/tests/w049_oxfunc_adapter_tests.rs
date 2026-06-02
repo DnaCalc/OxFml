@@ -25,7 +25,8 @@ use oxfunc_core::host_info::{
     HostInfoError, HostInfoProvider, ImageProviderResult, ImageRequest, ResolvedWebImage,
 };
 use oxfunc_core::value::{
-    ArrayCellValue, ArrayShape, CallArgValue, CellStyleHint, EvalValue, ExcelText, PresentationHint,
+    ArrayShape, CellStyleHint, ExcelText, FunctionArg, FunctionArrayCell, FunctionValue,
+    PresentationHint,
 };
 
 struct SequenceRandomProvider {
@@ -97,10 +98,10 @@ fn adapter_projects_direct_scalar_and_array_like_preparation_artifacts() {
     );
     array_like_request
         .cell_fixture
-        .insert("A1".to_string(), EvalValue::Number(10.0));
+        .insert("A1".to_string(), FunctionValue::Number(10.0));
     array_like_request
         .cell_fixture
-        .insert("A2".to_string(), EvalValue::Number(20.0));
+        .insert("A2".to_string(), FunctionValue::Number(20.0));
     let array_like_run =
         run_oxfunc_preparation_adapter(array_like_request).expect("array-like adapter run");
 
@@ -137,7 +138,7 @@ fn adapter_executes_text_with_scientific_format_pattern_ftc_0655() {
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Text(ExcelText::from_interop_assignment("1.23E+04"))
+        FunctionValue::Text(ExcelText::from_interop_assignment("1.23E+04"))
     );
     assert_eq!(
         run.evaluation_artifact.evaluation_result.payload_summary,
@@ -172,7 +173,7 @@ fn adapter_preserves_randarray_width_for_columns_ftc_0505_with_random_provider()
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Number(3.0)
+        FunctionValue::Number(3.0)
     );
     assert_eq!(
         run.evaluation_artifact.evaluation_result.payload_summary,
@@ -203,14 +204,14 @@ fn adapter_randarray_consumes_distinct_provider_draws() {
     ))
     .expect("RANDARRAY adapter run should succeed");
 
-    let EvalValue::Array(array) = run.evaluation_artifact.worksheet_value else {
+    let FunctionValue::Array(array) = run.evaluation_artifact.worksheet_value else {
         panic!("expected array result");
     };
     assert_eq!(array.shape(), ArrayShape { rows: 5, cols: 5 });
     let values = array.iter_row_major().cloned().collect::<Vec<_>>();
-    assert_eq!(values.first(), Some(&ArrayCellValue::Number(0.01)));
-    assert_eq!(values.get(12), Some(&ArrayCellValue::Number(0.13)));
-    assert_eq!(values.last(), Some(&ArrayCellValue::Number(0.25)));
+    assert_eq!(values.first(), Some(&FunctionArrayCell::Number(0.01)));
+    assert_eq!(values.get(12), Some(&FunctionArrayCell::Number(0.13)));
+    assert_eq!(values.last(), Some(&FunctionArrayCell::Number(0.25)));
     assert_eq!(random_provider.next.get(), 26);
 }
 
@@ -227,7 +228,7 @@ fn adapter_handles_unary_negative_literals_in_ordinary_calls() {
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Number(-1.0)
+        FunctionValue::Number(-1.0)
     );
 }
 
@@ -244,7 +245,7 @@ fn adapter_treats_absent_single_cell_reference_as_blank_stand_in() {
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Logical(true)
+        FunctionValue::Logical(true)
     );
 }
 
@@ -285,7 +286,7 @@ fn adapter_respects_requested_snapshot_and_caller_anchor() {
     );
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Number(7.0)
+        FunctionValue::Number(7.0)
     );
 }
 
@@ -340,7 +341,7 @@ fn adapter_preserves_hyperlink_publication_intent() {
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Text(ExcelText::from_interop_assignment("Go"))
+        FunctionValue::Text(ExcelText::from_interop_assignment("Go"))
     );
     assert_eq!(
         run.evaluation_artifact.returned_value_surface.kind,
@@ -373,7 +374,7 @@ fn adapter_preserves_image_rich_value_surface() {
     );
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Text(ExcelText::from_interop_assignment("-2146826273"))
+        FunctionValue::Text(ExcelText::from_interop_assignment("-2146826273"))
     );
     assert_eq!(
         run.evaluation_artifact.returned_value_surface.kind,
@@ -417,7 +418,7 @@ fn adapter_projects_image_capability_denied_as_blocked_error() {
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Blocked)
+        FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Blocked)
     );
     assert_eq!(
         run.evaluation_artifact.returned_value_surface.kind,
@@ -479,9 +480,9 @@ fn adapter_projects_registered_external_requests_for_register_id_and_call() {
             assert_eq!(
                 invocation_args,
                 &vec![
-                    CallArgValue::Eval(EvalValue::Number(6.0)),
-                    CallArgValue::Eval(EvalValue::Number(7.0)),
-                    CallArgValue::Eval(EvalValue::Number(3.0)),
+                    FunctionArg::Eval(FunctionValue::Number(6.0)),
+                    FunctionArg::Eval(FunctionValue::Number(7.0)),
+                    FunctionArg::Eval(FunctionValue::Number(3.0)),
                 ]
             );
         }
@@ -539,7 +540,7 @@ fn adapter_preserves_internal_lambda_but_publishes_calc_for_bare_lambda() {
     );
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Calc)
+        FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Calc)
     );
     assert_eq!(
         run.evaluation_artifact.returned_value_surface.kind,
@@ -570,7 +571,7 @@ fn adapter_preserves_internal_lambda_but_publishes_calc_for_helper_bound_returne
     );
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Calc)
+        FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Calc)
     );
     assert_eq!(
         run.evaluation_artifact.returned_value_surface.kind,
@@ -614,7 +615,7 @@ fn adapter_executes_helper_bound_returned_lambda_invocation() {
     );
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Number(15.0)
+        FunctionValue::Number(15.0)
     );
     assert_eq!(
         run.preparation_artifact
@@ -674,7 +675,7 @@ fn adapter_rejects_duplicate_let_binding_names_as_bind_mismatch() {
     );
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Value)
+        FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Value)
     );
     assert!(
         run.preparation_artifact
@@ -725,7 +726,7 @@ fn adapter_rejects_builtin_collision_arity_helper_local_call_as_bind_mismatch_ft
     );
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Value)
+        FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Value)
     );
     assert!(
         run.preparation_artifact
@@ -813,12 +814,12 @@ fn adapter_executes_colliding_let_calls_when_builtin_frontier_accepts_shape() {
         (
             "collision-t-accepted-shape",
             "=LET(t,LAMBDA(42),t(\"x\"))",
-            EvalValue::Text(ExcelText::from_interop_assignment("x")),
+            FunctionValue::Text(ExcelText::from_interop_assignment("x")),
         ),
         (
             "collision-gcd-accepted-shape",
             "=LET(gcd,LAMBDA(42),gcd(48,36))",
-            EvalValue::Number(12.0),
+            FunctionValue::Number(12.0),
         ),
     ];
 
@@ -887,7 +888,7 @@ fn adapter_rejects_lambda_array_constant_authoring_frontier_cases_as_bind_mismat
         );
         assert_eq!(
             run.evaluation_artifact.worksheet_value,
-            EvalValue::Error(oxfunc_core::value::WorksheetErrorCode::Value),
+            FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Value),
             "{case_id} worksheet value"
         );
         assert!(
@@ -1016,18 +1017,18 @@ impl RegisteredExternalProvider for RecordingRegisteredExternalProvider {
     fn invoke_registered_external(
         &self,
         descriptor: &oxfml_core::RegisteredExternalDescriptor,
-        args: &[CallArgValue],
-    ) -> Result<EvalValue, RegisteredExternalProviderError> {
+        args: &[FunctionArg],
+    ) -> Result<FunctionValue, RegisteredExternalProviderError> {
         match (&descriptor.procedure, args) {
             (
                 RegisteredProcedureSpec::Name(name),
                 [
-                    CallArgValue::Eval(EvalValue::Number(a)),
-                    CallArgValue::Eval(EvalValue::Number(b)),
-                    CallArgValue::Eval(EvalValue::Number(c)),
+                    FunctionArg::Eval(FunctionValue::Number(a)),
+                    FunctionArg::Eval(FunctionValue::Number(b)),
+                    FunctionArg::Eval(FunctionValue::Number(c)),
                 ],
-            ) if name.to_string_lossy() == "MulDiv" => Ok(EvalValue::Number((a * b) / c)),
-            _ => Ok(EvalValue::Number(descriptor.register_id)),
+            ) if name.to_string_lossy() == "MulDiv" => Ok(FunctionValue::Number((a * b) / c)),
+            _ => Ok(FunctionValue::Number(descriptor.register_id)),
         }
     }
 }

@@ -5,7 +5,7 @@ use oxfml_core::publication::{
 };
 use oxfml_core::seam::TopologyDelta;
 use oxfml_core::{FormulaSourceRecord, ReturnedValueSurface, TypedContextQueryBundle};
-use oxfunc_core::value::{CalcValue, CoreValue, EvalValue, NumberFormatHint, PresentationHint};
+use oxfunc_core::value::{CalcValue, CoreValue, FunctionValue, NumberFormatHint, PresentationHint};
 
 #[test]
 fn format_engine_renders_time_tokens_and_ampm_modes() {
@@ -151,7 +151,7 @@ fn publication_surface_respects_user_supplied_time_format_code() {
 
     let surface = build_verification_publication_surface(
         &source,
-        &EvalValue::Number(45293.625),
+        &FunctionValue::Number(45293.625),
         &returned_value_surface,
         &TopologyDelta {
             formula_stable_id: "publication:time-format".to_string(),
@@ -187,7 +187,7 @@ fn runtime_text_uses_fraction_format_code() {
 
     assert_eq!(
         result.published_worksheet_value,
-        EvalValue::Text(oxfunc_core::value::ExcelText::from_interop_assignment(
+        FunctionValue::Text(oxfunc_core::value::ExcelText::from_interop_assignment(
             " 1/4"
         ))
     );

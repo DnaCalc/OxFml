@@ -1,4 +1,4 @@
-use oxfunc_core::value::{ArrayCellValue, EvalArray, EvalValue, ExcelText};
+use oxfunc_core::value::{ExcelText, FunctionArray, FunctionArrayCell, FunctionValue};
 
 use oxfml_core::EvaluationBackend;
 use oxfml_core::binding::{
@@ -611,7 +611,7 @@ fn host_evaluates_current_row_structured_reference_lane() {
         region_kind: TableRegionKind::Data,
         data_row_offset: Some(1),
     }));
-    host.set_cell_value("B3", EvalValue::Number(7.0));
+    host.set_cell_value("B3", FunctionValue::Number(7.0));
 
     let output = host
         .recalc_with_interfaces(
@@ -622,7 +622,7 @@ fn host_evaluates_current_row_structured_reference_lane() {
         .expect("structured current-row host recalculation should succeed");
 
     assert_eq!(output.evaluation.result.payload_summary, "Number(9)");
-    assert_eq!(output.evaluation.oxfunc_value, EvalValue::Number(9.0));
+    assert_eq!(output.evaluation.oxfunc_value, FunctionValue::Number(9.0));
 }
 
 #[test]
@@ -631,11 +631,11 @@ fn host_evaluates_sum_over_explicit_structured_column_reference() {
     host.set_table_catalog(vec![sample_table()]);
     host.set_cell_value(
         "B2:B4",
-        EvalValue::Array(
-            EvalArray::from_rows(vec![vec![
-                ArrayCellValue::Number(3.0),
-                ArrayCellValue::Number(4.0),
-                ArrayCellValue::Number(5.0),
+        FunctionValue::Array(
+            FunctionArray::from_rows(vec![vec![
+                FunctionArrayCell::Number(3.0),
+                FunctionArrayCell::Number(4.0),
+                FunctionArrayCell::Number(5.0),
             ]])
             .expect("array fixture should be valid"),
         ),
@@ -650,7 +650,7 @@ fn host_evaluates_sum_over_explicit_structured_column_reference() {
         .expect("structured explicit-column host recalculation should succeed");
 
     assert_eq!(output.evaluation.result.payload_summary, "Number(12)");
-    assert_eq!(output.evaluation.oxfunc_value, EvalValue::Number(12.0));
+    assert_eq!(output.evaluation.oxfunc_value, FunctionValue::Number(12.0));
 }
 
 #[test]
@@ -662,11 +662,20 @@ fn host_evaluates_sum_over_data_qualified_multi_column_structured_reference() {
     host.set_table_catalog(vec![sample_table()]);
     host.set_cell_value(
         "B2:C4",
-        EvalValue::Array(
-            EvalArray::from_rows(vec![
-                vec![ArrayCellValue::Number(3.0), ArrayCellValue::Number(1.0)],
-                vec![ArrayCellValue::Number(4.0), ArrayCellValue::Number(2.0)],
-                vec![ArrayCellValue::Number(5.0), ArrayCellValue::Number(3.0)],
+        FunctionValue::Array(
+            FunctionArray::from_rows(vec![
+                vec![
+                    FunctionArrayCell::Number(3.0),
+                    FunctionArrayCell::Number(1.0),
+                ],
+                vec![
+                    FunctionArrayCell::Number(4.0),
+                    FunctionArrayCell::Number(2.0),
+                ],
+                vec![
+                    FunctionArrayCell::Number(5.0),
+                    FunctionArrayCell::Number(3.0),
+                ],
             ])
             .expect("array fixture should be valid"),
         ),
@@ -681,7 +690,7 @@ fn host_evaluates_sum_over_data_qualified_multi_column_structured_reference() {
         .expect("structured data multi-column host recalculation should succeed");
 
     assert_eq!(output.evaluation.result.payload_summary, "Number(18)");
-    assert_eq!(output.evaluation.oxfunc_value, EvalValue::Number(18.0));
+    assert_eq!(output.evaluation.oxfunc_value, FunctionValue::Number(18.0));
 }
 
 #[test]
@@ -690,11 +699,11 @@ fn host_evaluates_sum_over_escaped_structured_column_reference() {
     host.set_table_catalog(vec![sample_table_with_escaped_columns()]);
     host.set_cell_value(
         "B2:B4",
-        EvalValue::Array(
-            EvalArray::from_rows(vec![vec![
-                ArrayCellValue::Number(3.0),
-                ArrayCellValue::Number(4.0),
-                ArrayCellValue::Number(5.0),
+        FunctionValue::Array(
+            FunctionArray::from_rows(vec![vec![
+                FunctionArrayCell::Number(3.0),
+                FunctionArrayCell::Number(4.0),
+                FunctionArrayCell::Number(5.0),
             ]])
             .expect("array fixture should be valid"),
         ),
@@ -709,7 +718,7 @@ fn host_evaluates_sum_over_escaped_structured_column_reference() {
         .expect("escaped structured column host recalculation should succeed");
 
     assert_eq!(output.evaluation.result.payload_summary, "Number(12)");
-    assert_eq!(output.evaluation.oxfunc_value, EvalValue::Number(12.0));
+    assert_eq!(output.evaluation.oxfunc_value, FunctionValue::Number(12.0));
 }
 
 #[test]
@@ -718,11 +727,11 @@ fn host_evaluates_headers_section_only_structured_reference() {
     host.set_table_catalog(vec![sample_table()]);
     host.set_cell_value(
         "A1:C1",
-        EvalValue::Array(
-            EvalArray::from_rows(vec![vec![
-                ArrayCellValue::Text(ExcelText::from_interop_assignment("Label")),
-                ArrayCellValue::Text(ExcelText::from_interop_assignment("Amount")),
-                ArrayCellValue::Text(ExcelText::from_interop_assignment("Tax")),
+        FunctionValue::Array(
+            FunctionArray::from_rows(vec![vec![
+                FunctionArrayCell::Text(ExcelText::from_interop_assignment("Label")),
+                FunctionArrayCell::Text(ExcelText::from_interop_assignment("Amount")),
+                FunctionArrayCell::Text(ExcelText::from_interop_assignment("Tax")),
             ]])
             .expect("array fixture should be valid"),
         ),
@@ -737,7 +746,7 @@ fn host_evaluates_headers_section_only_structured_reference() {
         .expect("structured headers host recalculation should succeed");
 
     assert_eq!(output.evaluation.result.payload_summary, "Array(1x3)");
-    let EvalValue::Array(result) = &output.evaluation.oxfunc_value else {
+    let FunctionValue::Array(result) = &output.evaluation.oxfunc_value else {
         panic!("expected header row array");
     };
     assert_eq!(result.shape().rows, 1);
@@ -750,11 +759,11 @@ fn host_evaluates_totals_section_only_structured_reference() {
     host.set_table_catalog(vec![sample_table()]);
     host.set_cell_value(
         "A5:C5",
-        EvalValue::Array(
-            EvalArray::from_rows(vec![vec![
-                ArrayCellValue::Text(ExcelText::from_interop_assignment("Total")),
-                ArrayCellValue::Number(12.0),
-                ArrayCellValue::Number(6.0),
+        FunctionValue::Array(
+            FunctionArray::from_rows(vec![vec![
+                FunctionArrayCell::Text(ExcelText::from_interop_assignment("Total")),
+                FunctionArrayCell::Number(12.0),
+                FunctionArrayCell::Number(6.0),
             ]])
             .expect("array fixture should be valid"),
         ),
@@ -769,7 +778,7 @@ fn host_evaluates_totals_section_only_structured_reference() {
         .expect("structured totals host recalculation should succeed");
 
     assert_eq!(output.evaluation.result.payload_summary, "Array(1x3)");
-    let EvalValue::Array(result) = &output.evaluation.oxfunc_value else {
+    let FunctionValue::Array(result) = &output.evaluation.oxfunc_value else {
         panic!("expected totals row array");
     };
     assert_eq!(result.shape().rows, 1);

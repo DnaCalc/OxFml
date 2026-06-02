@@ -9,7 +9,7 @@ use oxfml_core::test_support::host::{
     EmpiricalOracleScenario, HostRecalcOutput, SingleFormulaHost,
 };
 use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
-use oxfunc_core::value::{EvalValue, ExcelText, ReferenceKind, ReferenceLike};
+use oxfunc_core::value::{ExcelText, FunctionValue, ReferenceKind, ReferenceLike};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -829,19 +829,19 @@ fn assert_commit_accepted(decision: &AcceptDecision) {
     }
 }
 
-fn parse_eval_value_wire(wire_value: &str) -> EvalValue {
+fn parse_eval_value_wire(wire_value: &str) -> FunctionValue {
     if let Some(inner) = wire_value
         .strip_prefix("Number(")
         .and_then(|value| value.strip_suffix(')'))
     {
-        return EvalValue::Number(inner.parse::<f64>().expect("number should parse"));
+        return FunctionValue::Number(inner.parse::<f64>().expect("number should parse"));
     }
 
     if let Some(inner) = wire_value
         .strip_prefix("Text(")
         .and_then(|value| value.strip_suffix(')'))
     {
-        return EvalValue::Text(ExcelText::from_utf16_code_units(
+        return FunctionValue::Text(ExcelText::from_utf16_code_units(
             inner.encode_utf16().collect(),
         ));
     }
@@ -900,18 +900,18 @@ impl HostInfoProvider for ReplayHostInfoProvider {
         &self,
         query: CellInfoQuery,
         _reference: Option<&ReferenceLike>,
-    ) -> Result<EvalValue, HostInfoError> {
+    ) -> Result<FunctionValue, HostInfoError> {
         match query {
-            CellInfoQuery::Filename => Ok(EvalValue::Text(ExcelText::from_utf16_code_units(
+            CellInfoQuery::Filename => Ok(FunctionValue::Text(ExcelText::from_utf16_code_units(
                 "[Book1]Sheet1".encode_utf16().collect(),
             ))),
             _ => Err(HostInfoError::UnsupportedCellInfoQuery(query)),
         }
     }
 
-    fn query_info(&self, query: InfoQuery) -> Result<EvalValue, HostInfoError> {
+    fn query_info(&self, query: InfoQuery) -> Result<FunctionValue, HostInfoError> {
         match query {
-            InfoQuery::Directory => Ok(EvalValue::Text(ExcelText::from_utf16_code_units(
+            InfoQuery::Directory => Ok(FunctionValue::Text(ExcelText::from_utf16_code_units(
                 "C:\\Work".encode_utf16().collect(),
             ))),
             _ => Err(HostInfoError::UnsupportedInfoQuery(query)),

@@ -5,7 +5,7 @@ mod common;
 use oxfml_core::consumer::runtime::{RuntimeEnvironment, RuntimeFormulaRequest};
 use oxfml_core::eval::{EvaluationContext, evaluate_formula};
 use oxfml_core::{FormulaSourceRecord, TypedContextQueryBundle};
-use oxfunc_core::value::{ArrayCellValue, EvalArray, EvalValue, WorksheetErrorCode};
+use oxfunc_core::value::{FunctionArray, FunctionArrayCell, FunctionValue, WorksheetErrorCode};
 
 fn evaluate_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::EvaluationOutput {
     let compiled = common::compile_formula(
@@ -19,25 +19,25 @@ fn evaluate_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::
     evaluate_formula(context).expect("evaluation should succeed")
 }
 
-fn array_numbers(values: &[f64]) -> EvalValue {
-    EvalValue::Array(
-        EvalArray::from_rows(
+fn array_numbers(values: &[f64]) -> FunctionValue {
+    FunctionValue::Array(
+        FunctionArray::from_rows(
             values
                 .iter()
-                .map(|value| vec![ArrayCellValue::Number(*value)])
+                .map(|value| vec![FunctionArrayCell::Number(*value)])
                 .collect::<Vec<_>>(),
         )
         .expect("column array"),
     )
 }
 
-fn array_shadow_expected() -> EvalValue {
-    EvalValue::Array(
-        EvalArray::from_rows(vec![
-            vec![ArrayCellValue::Error(WorksheetErrorCode::Div0)],
-            vec![ArrayCellValue::Number(1.0)],
-            vec![ArrayCellValue::Number(0.5)],
-            vec![ArrayCellValue::Number(1.0 / 3.0)],
+fn array_shadow_expected() -> FunctionValue {
+    FunctionValue::Array(
+        FunctionArray::from_rows(vec![
+            vec![FunctionArrayCell::Error(WorksheetErrorCode::Div0)],
+            vec![FunctionArrayCell::Number(1.0)],
+            vec![FunctionArrayCell::Number(0.5)],
+            vec![FunctionArrayCell::Number(1.0 / 3.0)],
         ])
         .expect("column array"),
     )
@@ -61,12 +61,12 @@ fn evaluator_respects_case_insensitive_lambda_parameter_shadowing_ftc_1013() {
 #[test]
 fn evaluator_respects_case_insensitive_lambda_parameter_shadowing_simple_invocation() {
     let hit = evaluate_formula_text("ftc-1013:simple-hit", "=LET(N,4,LAMBDA(n,1/N)(2))");
-    assert_eq!(hit.oxfunc_value, EvalValue::Number(0.5));
+    assert_eq!(hit.oxfunc_value, FunctionValue::Number(0.5));
 
     let zero = evaluate_formula_text("ftc-1013:simple-zero", "=LET(N,4,LAMBDA(n,1/N)(0))");
     assert_eq!(
         zero.oxfunc_value,
-        EvalValue::Error(WorksheetErrorCode::Div0)
+        FunctionValue::Error(WorksheetErrorCode::Div0)
     );
 }
 

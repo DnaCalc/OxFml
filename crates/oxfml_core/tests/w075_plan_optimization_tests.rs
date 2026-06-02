@@ -3,7 +3,7 @@ mod common;
 use std::collections::BTreeMap;
 
 use oxfml_core::eval::{EvaluationContext, EvaluationTraceMode, evaluate_formula};
-use oxfunc_core::value::EvalValue;
+use oxfunc_core::value::FunctionValue;
 
 #[test]
 fn w075_context_free_precompute_preserves_prepared_call_trace() {
@@ -19,7 +19,7 @@ fn w075_context_free_precompute_preserves_prepared_call_trace() {
     context.set_trace_mode(EvaluationTraceMode::PreparedCalls);
     let output = evaluate_formula(context).expect("evaluation should succeed");
 
-    assert_eq!(output.oxfunc_value, EvalValue::Number(0.0));
+    assert_eq!(output.oxfunc_value, FunctionValue::Number(0.0));
     let function_names = output
         .trace
         .prepared_calls
@@ -48,8 +48,8 @@ fn w075_context_free_precompute_keeps_runtime_context_sensitive_calls_dynamic() 
     second.now_serial = Some(456.0);
     let second = evaluate_formula(second).expect("second evaluation should succeed");
 
-    assert_eq!(first.oxfunc_value, EvalValue::Number(123.0));
-    assert_eq!(second.oxfunc_value, EvalValue::Number(456.0));
+    assert_eq!(first.oxfunc_value, FunctionValue::Number(123.0));
+    assert_eq!(second.oxfunc_value, FunctionValue::Number(456.0));
 }
 
 #[test]
@@ -67,7 +67,7 @@ fn w075_value_only_hot_helpers_emit_no_prepared_call_records() {
 
     assert!(output.trace.prepared_calls.is_empty());
     match output.oxfunc_value {
-        EvalValue::Array(array) => {
+        FunctionValue::Array(array) => {
             let shape = array.shape();
             assert_eq!(shape.rows, 10);
             assert_eq!(shape.cols, 10);
@@ -90,14 +90,14 @@ fn w075_prepared_call_trace_covers_slot_only_let_path() {
     context.set_trace_mode(EvaluationTraceMode::PreparedCalls);
     let output = evaluate_formula(context).expect("evaluation should succeed");
 
-    assert_eq!(output.oxfunc_value, EvalValue::Number(3.0));
+    assert_eq!(output.oxfunc_value, FunctionValue::Number(3.0));
     assert!(
         output
             .trace
             .prepared_calls
             .iter()
             .any(|call| call.function_name == "LET"
-                && call.returned_value == Some(EvalValue::Number(3.0)))
+                && call.returned_value == Some(FunctionValue::Number(3.0)))
     );
 }
 
@@ -114,7 +114,7 @@ fn w075_slot_only_let_preserves_lexical_shadowing() {
     let context = EvaluationContext::new(&compiled.bound_formula, &compiled.semantic_plan);
     let output = evaluate_formula(context).expect("evaluation should succeed");
 
-    assert_eq!(output.oxfunc_value, EvalValue::Number(3.0));
+    assert_eq!(output.oxfunc_value, FunctionValue::Number(3.0));
 }
 
 #[test]
@@ -130,5 +130,5 @@ fn w075_narrowed_lambda_closure_preserves_named_capture() {
     let context = EvaluationContext::new(&compiled.bound_formula, &compiled.semantic_plan);
     let output = evaluate_formula(context).expect("evaluation should succeed");
 
-    assert_eq!(output.oxfunc_value, EvalValue::Number(15.0));
+    assert_eq!(output.oxfunc_value, FunctionValue::Number(15.0));
 }

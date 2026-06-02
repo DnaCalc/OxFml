@@ -7,7 +7,9 @@ use oxfunc_core::registry::{
     CapabilityOverlay, FunctionAvailability, FunctionEntry, FunctionRegistry, FunctionSource,
     builtin_registry,
 };
-use oxfunc_core::value::{ArrayCellValue, CalcValue, EvalValue, ExcelText, WorksheetErrorCode};
+use oxfunc_core::value::{
+    CalcValue, ExcelText, FunctionArrayCell, FunctionValue, WorksheetErrorCode,
+};
 
 use crate::binding::{
     BindContext, BindDiagnostic, BindFunctionSurfaceKind, BoundFormula, HostNameBindRecord,
@@ -87,7 +89,7 @@ pub struct RuntimeEnvironment<'a> {
     caller_col: u32,
     primary_locus: Locus,
     defined_names: BTreeMap<String, DefinedNameBinding>,
-    cell_values: BTreeMap<String, EvalValue>,
+    cell_values: BTreeMap<String, FunctionValue>,
     formal_input_bindings: Vec<RuntimeFormalInputBinding>,
     host_formula_context: Option<RuntimeHostFormulaContext>,
     host_name_bindings: Vec<RuntimeHostNameBinding>,
@@ -154,7 +156,7 @@ impl<'a> RuntimeEnvironment<'a> {
             &source,
             &parse.green_tree.diagnostics,
             &[],
-            &EvalValue::Error(WorksheetErrorCode::Value),
+            &FunctionValue::Error(WorksheetErrorCode::Value),
         )
     }
 
@@ -242,7 +244,7 @@ impl<'a> RuntimeEnvironment<'a> {
         self
     }
 
-    pub fn with_cell_values(mut self, cell_values: BTreeMap<String, EvalValue>) -> Self {
+    pub fn with_cell_values(mut self, cell_values: BTreeMap<String, FunctionValue>) -> Self {
         self.cell_values = cell_values;
         self
     }
@@ -832,7 +834,7 @@ pub struct RuntimeFormulaResult {
     pub execution_contract: ExecutionContract,
     pub typed_query_bundle_spec: TypedContextQueryBundleSpec,
     pub evaluation: EvaluationOutput,
-    pub published_worksheet_value: EvalValue,
+    pub published_worksheet_value: FunctionValue,
     pub returned_value_surface: ReturnedValueSurface,
     pub execution_outcome_surface: ExecutionOutcomeSurface,
     pub comparison_views: Vec<VerificationComparisonView>,
@@ -925,7 +927,7 @@ pub struct FormulaDrillTrace {
     pub nodes: Vec<FormulaDrillTraceNode>,
     pub evaluation_order: Vec<FormulaDrillNodeId>,
     pub diagnostics: Vec<FormulaDrillDiagnosticLink>,
-    pub final_value: EvalValue,
+    pub final_value: FunctionValue,
     pub projection_losses: Vec<FormulaDrillProjectionLoss>,
 }
 
@@ -950,10 +952,10 @@ pub struct FormulaDrillTraceNode {
     pub label_developer: String,
     pub evaluation_state: FormulaDrillEvaluationState,
     pub branch_disposition: Option<FormulaDrillBranchDisposition>,
-    pub value_before_coercion: Option<EvalValue>,
-    pub value_after_coercion: Option<EvalValue>,
-    pub returned_value: Option<EvalValue>,
-    pub published_value: Option<EvalValue>,
+    pub value_before_coercion: Option<FunctionValue>,
+    pub value_after_coercion: Option<FunctionValue>,
+    pub returned_value: Option<FunctionValue>,
+    pub published_value: Option<FunctionValue>,
     pub value_preview: Option<FormulaDrillValuePreview>,
     pub error: Option<FormulaDrillError>,
     pub child_node_ids: Vec<FormulaDrillNodeId>,
@@ -1065,7 +1067,7 @@ fn build_formula_drill_trace(
     source: &FormulaSourceRecord,
     syntax_diagnostics: &[SyntaxDiagnostic],
     prepared_calls: &[PreparedCall],
-    final_value: &EvalValue,
+    final_value: &FunctionValue,
 ) -> FormulaDrillTrace {
     let source_text = source.entered_formula_text.clone();
     let parsed = parse_drill_expression_source(&source_text);
@@ -1135,7 +1137,7 @@ fn build_formula_drill_trace(
 
 struct FormulaDrillTraceBuilder<'a> {
     prepared_calls: &'a [PreparedCall],
-    root_fallback_value: &'a EvalValue,
+    root_fallback_value: &'a FunctionValue,
     nodes: Vec<FormulaDrillTraceNode>,
     evaluation_order: Vec<FormulaDrillNodeId>,
     projection_losses: Vec<FormulaDrillProjectionLoss>,
@@ -1144,7 +1146,7 @@ struct FormulaDrillTraceBuilder<'a> {
 }
 
 impl<'a> FormulaDrillTraceBuilder<'a> {
-    fn new(prepared_calls: &'a [PreparedCall], root_fallback_value: &'a EvalValue) -> Self {
+    fn new(prepared_calls: &'a [PreparedCall], root_fallback_value: &'a FunctionValue) -> Self {
         Self {
             prepared_calls,
             root_fallback_value,
@@ -1195,7 +1197,7 @@ impl<'a> FormulaDrillTraceBuilder<'a> {
         label: &str,
         prepared: Option<&(usize, PreparedCall)>,
         skipped: bool,
-        fallback_value: Option<EvalValue>,
+        fallback_value: Option<FunctionValue>,
     ) {
         let returned_value = prepared
             .and_then(|(_, call)| call.returned_value.clone())
@@ -1640,7 +1642,7 @@ impl<'a> FormulaDrillTraceBuilder<'a> {
         parent: FormulaDrillNodeId,
         skipped: bool,
         branch_disposition: Option<FormulaDrillBranchDisposition>,
-        prepared_argument_value: Option<EvalValue>,
+        prepared_argument_value: Option<FunctionValue>,
     ) {
         let metadata = argument_metadata(function_name, ordinal);
         let arg_id = self.push_argument_shell(
@@ -1669,7 +1671,7 @@ impl<'a> FormulaDrillTraceBuilder<'a> {
         role: Option<FormulaArgumentRole>,
         name_source: FormulaArgumentNameSource,
         branch_disposition: Option<FormulaDrillBranchDisposition>,
-        prepared_argument_value: Option<EvalValue>,
+        prepared_argument_value: Option<FunctionValue>,
     ) {
         let arg_id = self.push_argument_shell(
             name.to_string(),
@@ -1723,7 +1725,7 @@ impl<'a> FormulaDrillTraceBuilder<'a> {
         role: Option<FormulaArgumentRole>,
         name_source: FormulaArgumentNameSource,
         branch_disposition: Option<FormulaDrillBranchDisposition>,
-        prepared_argument_value: Option<EvalValue>,
+        prepared_argument_value: Option<FunctionValue>,
     ) -> FormulaDrillNodeId {
         let value_preview = prepared_argument_value.as_ref().and_then(value_preview);
         self.push_node(FormulaDrillTraceNode {
@@ -1822,7 +1824,7 @@ impl<'a> FormulaDrillTraceBuilder<'a> {
     }
 }
 
-fn prepared_argument_value(call: &PreparedCall, ordinal: usize) -> Option<EvalValue> {
+fn prepared_argument_value(call: &PreparedCall, ordinal: usize) -> Option<FunctionValue> {
     call.prepared_arguments
         .iter()
         .find(|argument| argument.ordinal == ordinal)
@@ -2107,13 +2109,13 @@ fn argument_role_for_name(name: &str) -> Option<FormulaArgumentRole> {
     }
 }
 
-fn literal_eval_value(expr: &DrillParsedExpr) -> Option<EvalValue> {
+fn literal_eval_value(expr: &DrillParsedExpr) -> Option<FunctionValue> {
     match &expr.kind {
-        DrillParsedExprKind::Number => expr.text.parse::<f64>().ok().map(EvalValue::Number),
-        DrillParsedExprKind::String => Some(EvalValue::Text(
+        DrillParsedExprKind::Number => expr.text.parse::<f64>().ok().map(FunctionValue::Number),
+        DrillParsedExprKind::String => Some(FunctionValue::Text(
             oxfunc_core::value::ExcelText::from_interop_assignment(expr.text.trim_matches('"')),
         )),
-        DrillParsedExprKind::Logical(value) => Some(EvalValue::Logical(*value)),
+        DrillParsedExprKind::Logical(value) => Some(FunctionValue::Logical(*value)),
         DrillParsedExprKind::Name | DrillParsedExprKind::Missing => None,
         DrillParsedExprKind::Function { .. } | DrillParsedExprKind::Binary { .. } => None,
     }
@@ -2126,7 +2128,7 @@ fn drill_literal_truth(expr: &DrillParsedExpr) -> Option<bool> {
     }
 }
 
-fn drill_call_label(name: &str, value: Option<&EvalValue>, skipped: bool) -> String {
+fn drill_call_label(name: &str, value: Option<&FunctionValue>, skipped: bool) -> String {
     if skipped {
         format!("{name} skipped")
     } else if let Some(value) = value {
@@ -2136,19 +2138,19 @@ fn drill_call_label(name: &str, value: Option<&EvalValue>, skipped: bool) -> Str
     }
 }
 
-fn evaluation_state_for_value(value: &EvalValue) -> FormulaDrillEvaluationState {
+fn evaluation_state_for_value(value: &FunctionValue) -> FormulaDrillEvaluationState {
     match value {
-        EvalValue::Error(_) => FormulaDrillEvaluationState::Error,
+        FunctionValue::Error(_) => FormulaDrillEvaluationState::Error,
         _ => FormulaDrillEvaluationState::Evaluated,
     }
 }
 
 fn error_for_value(
-    value: &EvalValue,
+    value: &FunctionValue,
     causal_node_id: Option<FormulaDrillNodeId>,
 ) -> Option<FormulaDrillError> {
     match value {
-        EvalValue::Error(code) => Some(FormulaDrillError {
+        FunctionValue::Error(code) => Some(FormulaDrillError {
             code: Some(worksheet_error_code_text(*code).to_string()),
             message: worksheet_error_message(*code).to_string(),
             causal_node_id,
@@ -2157,7 +2159,7 @@ fn error_for_value(
     }
 }
 
-fn value_preview(value: &EvalValue) -> Option<FormulaDrillValuePreview> {
+fn value_preview(value: &FunctionValue) -> Option<FormulaDrillValuePreview> {
     if eval_value_is_callable_transport(value) {
         return Some(FormulaDrillValuePreview {
             value_kind: "callable".to_string(),
@@ -2171,7 +2173,7 @@ fn value_preview(value: &EvalValue) -> Option<FormulaDrillValuePreview> {
         });
     }
     match value {
-        EvalValue::Array(array) => {
+        FunctionValue::Array(array) => {
             let shape = array.shape();
             let preview = array
                 .iter_row_major()
@@ -2193,17 +2195,17 @@ fn value_preview(value: &EvalValue) -> Option<FormulaDrillValuePreview> {
     }
 }
 
-fn array_cell_label(value: &ArrayCellValue) -> String {
+fn array_cell_label(value: &FunctionArrayCell) -> String {
     match value {
-        ArrayCellValue::Number(number) => format_number(*number),
-        ArrayCellValue::Text(text) => text.to_string_lossy(),
-        ArrayCellValue::Logical(value) => value.to_string().to_ascii_uppercase(),
-        ArrayCellValue::Error(code) => worksheet_error_code_text(*code).to_string(),
-        ArrayCellValue::EmptyCell => String::new(),
+        FunctionArrayCell::Number(number) => format_number(*number),
+        FunctionArrayCell::Text(text) => text.to_string_lossy(),
+        FunctionArrayCell::Logical(value) => value.to_string().to_ascii_uppercase(),
+        FunctionArrayCell::Error(code) => worksheet_error_code_text(*code).to_string(),
+        FunctionArrayCell::EmptyCell => String::new(),
     }
 }
 
-fn eval_value_label(value: &EvalValue) -> String {
+fn eval_value_label(value: &FunctionValue) -> String {
     if eval_value_is_callable_transport(value) {
         return format!(
             "Callable({})",
@@ -2211,15 +2213,15 @@ fn eval_value_label(value: &EvalValue) -> String {
         );
     }
     match value {
-        EvalValue::Number(number) => format_number(*number),
-        EvalValue::Text(text) => text.to_string_lossy(),
-        EvalValue::Logical(value) => value.to_string().to_ascii_uppercase(),
-        EvalValue::Error(code) => worksheet_error_code_text(*code).to_string(),
-        EvalValue::Array(array) => {
+        FunctionValue::Number(number) => format_number(*number),
+        FunctionValue::Text(text) => text.to_string_lossy(),
+        FunctionValue::Logical(value) => value.to_string().to_ascii_uppercase(),
+        FunctionValue::Error(code) => worksheet_error_code_text(*code).to_string(),
+        FunctionValue::Array(array) => {
             let shape = array.shape();
             format!("Array({}x{})", shape.rows, shape.cols)
         }
-        EvalValue::Reference(reference) => reference.target.clone(),
+        FunctionValue::Reference(reference) => reference.target().to_string(),
         other => format!("{other:?}"),
     }
 }
@@ -3502,7 +3504,7 @@ mod tests {
         UdfRegistrationRequest, UdfRegistrationResult, UdfReplacementPolicy, UdfSourceKind,
         builtin_registry,
     };
-    use oxfunc_core::value::EvalValue;
+    use oxfunc_core::value::FunctionValue;
     use std::collections::BTreeMap;
 
     fn formula(text: &str) -> FormulaSourceRecord {
@@ -3582,7 +3584,7 @@ mod tests {
         let mut defined_names = BTreeMap::new();
         defined_names.insert(
             "SUM".to_string(),
-            DefinedNameBinding::Value(EvalValue::Number(1.0)),
+            DefinedNameBinding::Value(FunctionValue::Number(1.0)),
         );
 
         let bound = bound_formula_from(
@@ -3605,7 +3607,7 @@ mod tests {
         let mut defined_names = BTreeMap::new();
         defined_names.insert(
             "MYNODE".to_string(),
-            DefinedNameBinding::Value(EvalValue::Number(1.0)),
+            DefinedNameBinding::Value(FunctionValue::Number(1.0)),
         );
 
         let bound = bound_formula_from(
@@ -3635,7 +3637,7 @@ mod tests {
                 diagnostics: Vec::new(),
                 replay_identity_contribution: "host-name:node-a:replay".to_string(),
             },
-            binding: DefinedNameBinding::Value(EvalValue::Number(1.0)),
+            binding: DefinedNameBinding::Value(FunctionValue::Number(1.0)),
         };
 
         let bound = bound_formula_from(

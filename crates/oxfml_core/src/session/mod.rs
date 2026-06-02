@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use oxfunc_core::value::EvalValue;
+use oxfunc_core::value::FunctionValue;
 
 use crate::binding::BoundFormula;
 use crate::eval::{
@@ -108,7 +108,7 @@ pub struct ExecuteRequest<'a> {
     pub backend: EvaluationBackend,
     pub caller_row: usize,
     pub caller_col: usize,
-    pub cell_values: BTreeMap<String, EvalValue>,
+    pub cell_values: BTreeMap<String, FunctionValue>,
     pub defined_names: BTreeMap<String, DefinedNameBinding>,
     pub typed_query_bundle: TypedContextQueryBundle<'a>,
 }
@@ -1319,30 +1319,30 @@ fn dependency_reclassifications_for_plan(semantic_plan: &SemanticPlan) -> Vec<St
 }
 
 fn value_payload_for_eval_value(
-    value: &EvalValue,
+    value: &FunctionValue,
 ) -> (WorksheetValueClass, ValuePayload, Option<Extent>) {
     match value {
-        EvalValue::Number(number) => (
+        FunctionValue::Number(number) => (
             WorksheetValueClass::Scalar,
             ValuePayload::Number(format!("{number}")),
             Some(Extent { rows: 1, cols: 1 }),
         ),
-        EvalValue::Text(text) => (
+        FunctionValue::Text(text) => (
             WorksheetValueClass::Scalar,
             ValuePayload::Text(text.to_string_lossy()),
             Some(Extent { rows: 1, cols: 1 }),
         ),
-        EvalValue::Logical(value) => (
+        FunctionValue::Logical(value) => (
             WorksheetValueClass::Scalar,
             ValuePayload::Logical(*value),
             Some(Extent { rows: 1, cols: 1 }),
         ),
-        EvalValue::Error(code) => (
+        FunctionValue::Error(code) => (
             WorksheetValueClass::Error,
             ValuePayload::ErrorCode(format!("{code:?}")),
             Some(Extent { rows: 1, cols: 1 }),
         ),
-        EvalValue::Array(array) => (
+        FunctionValue::Array(array) => (
             WorksheetValueClass::ArrayAnchor,
             ValuePayload::Text(format!(
                 "Array({}x{})",
@@ -1354,9 +1354,9 @@ fn value_payload_for_eval_value(
                 cols: array.shape().cols as u32,
             }),
         ),
-        EvalValue::Reference(reference) => (
+        FunctionValue::Reference(reference) => (
             WorksheetValueClass::Scalar,
-            ValuePayload::Text(format!("Reference({})", reference.target)),
+            ValuePayload::Text(format!("Reference({})", reference.target())),
             Some(Extent { rows: 1, cols: 1 }),
         ),
         other if eval_value_is_callable_transport(other) => (

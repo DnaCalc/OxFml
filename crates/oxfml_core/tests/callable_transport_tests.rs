@@ -12,7 +12,7 @@ use oxfml_core::red::project_red_view;
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
 use oxfml_core::test_support::host::SingleFormulaHost;
-use oxfunc_core::value::{EvalValue, ExcelText, ReferenceLike};
+use oxfunc_core::value::{ExcelText, FunctionValue, ReferenceLike};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -310,19 +310,19 @@ fn parse_defined_name_summary(summary: &str) -> DefinedNameBinding {
     DefinedNameBinding::Value(parse_eval_value_summary(summary))
 }
 
-fn parse_eval_value_summary(summary: &str) -> EvalValue {
+fn parse_eval_value_summary(summary: &str) -> FunctionValue {
     if let Some(number) = summary
         .strip_prefix("Number(")
         .and_then(|rest| rest.strip_suffix(')'))
     {
-        return EvalValue::Number(number.parse::<f64>().expect("numeric fixture binding"));
+        return FunctionValue::Number(number.parse::<f64>().expect("numeric fixture binding"));
     }
 
     if let Some(text) = summary
         .strip_prefix("Text(")
         .and_then(|rest| rest.strip_suffix(')'))
     {
-        return EvalValue::Text(ExcelText::from_utf16_code_units(
+        return FunctionValue::Text(ExcelText::from_utf16_code_units(
             text.encode_utf16().collect(),
         ));
     }
@@ -332,8 +332,8 @@ fn parse_eval_value_summary(summary: &str) -> EvalValue {
         .and_then(|rest| rest.strip_suffix(')'))
     {
         return match logical {
-            "true" | "True" | "TRUE" => EvalValue::Logical(true),
-            "false" | "False" | "FALSE" => EvalValue::Logical(false),
+            "true" | "True" | "TRUE" => FunctionValue::Logical(true),
+            "false" | "False" | "FALSE" => FunctionValue::Logical(false),
             _ => panic!("unsupported logical fixture binding {summary}"),
         };
     }

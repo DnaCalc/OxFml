@@ -7,7 +7,7 @@ use oxfunc_core::host_info::{
     ResolvedWebImage,
 };
 use oxfunc_core::value::{
-    CellStyleHint, EvalValue, ExcelText, NumberFormatHint, PresentationHint, ReferenceLike,
+    CellStyleHint, ExcelText, FunctionValue, NumberFormatHint, PresentationHint, ReferenceLike,
 };
 use serde::Deserialize;
 
@@ -27,7 +27,7 @@ use oxfml_core::{
 #[test]
 fn single_formula_host_recalc_updates_defined_name_inputs() {
     let mut host = SingleFormulaHost::new("host:sum", "=SUM(InputValue,2)");
-    host.set_defined_name_value("InputValue", EvalValue::Number(5.0));
+    host.set_defined_name_value("InputValue", FunctionValue::Number(5.0));
     let first = host
         .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("first recalc");
@@ -45,7 +45,7 @@ fn single_formula_host_recalc_updates_defined_name_inputs() {
         AcceptDecision::Rejected(_) => panic!("expected accepted first recalc"),
     }
 
-    host.set_defined_name_value("InputValue", EvalValue::Number(8.0));
+    host.set_defined_name_value("InputValue", FunctionValue::Number(8.0));
     let second = host
         .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("second recalc");
@@ -67,7 +67,7 @@ fn single_formula_host_recalc_updates_defined_name_inputs() {
 #[test]
 fn single_formula_host_invalidates_bind_reuse_when_name_kind_changes() {
     let mut host = SingleFormulaHost::new("host:reuse-invalidate", "=SUM(InputValue,2)");
-    host.set_defined_name_value("InputValue", EvalValue::Number(5.0));
+    host.set_defined_name_value("InputValue", FunctionValue::Number(5.0));
     host.recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("first recalc should succeed");
 
@@ -75,7 +75,7 @@ fn single_formula_host_invalidates_bind_reuse_when_name_kind_changes() {
         "InputValue",
         ReferenceLike::new(oxfunc_core::value::ReferenceKind::A1, "A1"),
     );
-    host.set_cell_value("A1", EvalValue::Number(5.0));
+    host.set_cell_value("A1", FunctionValue::Number(5.0));
     let run = host
         .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("second recalc should succeed");
@@ -240,7 +240,7 @@ fn single_formula_host_preserves_image_rich_value_surface() {
 #[test]
 fn single_formula_host_supports_local_bootstrap_backend_for_basic_formulae() {
     let mut host = SingleFormulaHost::new("host:bootstrap", "=InputValue+2");
-    host.set_defined_name_value("InputValue", EvalValue::Number(5.0));
+    host.set_defined_name_value("InputValue", FunctionValue::Number(5.0));
     let run = host
         .recalc_with_backend(
             EvaluationBackend::LocalBootstrap,
@@ -273,7 +273,7 @@ fn single_formula_host_rejects_execution_when_syntax_diagnostics_exist() {
 #[test]
 fn single_formula_host_can_capture_commit_reject_trace() {
     let mut host = SingleFormulaHost::new("host:reject", "=SUM(InputValue,2)");
-    host.set_defined_name_value("InputValue", EvalValue::Number(5.0));
+    host.set_defined_name_value("InputValue", FunctionValue::Number(5.0));
     let run = host
         .recalc_with_observed_fence_override(
             None,
@@ -412,7 +412,7 @@ fn empirical_oracle_scenarios_execute_through_single_formula_host() {
 #[test]
 fn locale_sensitive_host_run_surfaces_format_dependency_fact() {
     let mut host = SingleFormulaHost::new("host:locale", "=TEXT(InputValue,\"0.00\")");
-    host.set_defined_name_value("InputValue", EvalValue::Number(12.5));
+    host.set_defined_name_value("InputValue", FunctionValue::Number(12.5));
     let run = host
         .recalc(None, Some(&oxfml_en_us_locale_context()))
         .expect("recalc should succeed");
@@ -445,7 +445,7 @@ fn single_formula_host_executes_text_with_scientific_format_pattern_ftc_0655() {
 
     assert_eq!(
         run.published_worksheet_value,
-        EvalValue::Text(ExcelText::from_interop_assignment("1.23E+04"))
+        FunctionValue::Text(ExcelText::from_interop_assignment("1.23E+04"))
     );
     assert_eq!(run.evaluation.result.payload_summary, "Text(1.23E+04)");
     assert_eq!(run.returned_value_surface.payload_summary, "Text");
@@ -458,32 +458,32 @@ fn first_host_replay_packet_preserves_locale_sensitive_text_date_family_publicat
         (
             "FTC-1021",
             "=LET(yr,2024,m,3,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),testDate,DATE(yr,m,15),TEXT(testDate,\"[<\"&firstDay&\"] ;[>\"&lastDay&\"] ;dd\"))",
-            EvalValue::Text(ExcelText::from_interop_assignment("15")),
+            FunctionValue::Text(ExcelText::from_interop_assignment("15")),
         ),
         (
             "FTC-1022",
             "=LET(yr,2024,m,3,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),testDate,DATE(yr,2,28),result,TEXT(testDate,\"[<\"&firstDay&\"] ;[>\"&lastDay&\"] ;dd\"),LEN(TRIM(result)))",
-            EvalValue::Number(0.0),
+            FunctionValue::Number(0.0),
         ),
         (
             "FTC-1023",
             "=LET(baseSun,DATE(2024,1,7),headers,TEXT(baseSun+SEQUENCE(1,7,,1)-1,\"DDD\"),INDEX(headers,1,1))",
-            EvalValue::Text(ExcelText::from_interop_assignment("Sun")),
+            FunctionValue::Text(ExcelText::from_interop_assignment("Sun")),
         ),
         (
             "FTC-1024",
             "=LET(yr,2024,m,2,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),gridStart,firstDay-WEEKDAY(firstDay,1)+1,dates,gridStart+SEQUENCE(7,,0),dayTexts,MAP(dates,LAMBDA(d,IF(AND(d>=firstDay,d<=lastDay),TEXT(DAY(d),\"00\"),\"  \"))),TEXTJOIN(\",\",FALSE,dayTexts))",
-            EvalValue::Text(ExcelText::from_interop_assignment("  ,  ,  ,  ,01,02,03")),
+            FunctionValue::Text(ExcelText::from_interop_assignment("  ,  ,  ,  ,01,02,03")),
         ),
         (
             "FTC-1028",
             "=TEXT(DATE(2024,7,1),\"MMMM\")",
-            EvalValue::Text(ExcelText::from_interop_assignment("July")),
+            FunctionValue::Text(ExcelText::from_interop_assignment("July")),
         ),
         (
             "FTC-1040",
             "=LET(yr,2024,m,1,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),gridStart,firstDay-WEEKDAY(firstDay,1)+1,dates,gridStart+SEQUENCE(42,,0),dayStrs,MAP(dates,LAMBDA(d,IF(AND(d>=firstDay,d<=lastDay),TEXT(DAY(d),\"00\"),\"  \"))),monthName,TEXT(firstDay,\"MMMM\"),TEXTJOIN(\"|\",FALSE,monthName,INDEX(dayStrs,1),INDEX(dayStrs,2),INDEX(dayStrs,3),INDEX(dayStrs,4),INDEX(dayStrs,5),INDEX(dayStrs,6),INDEX(dayStrs,7)))",
-            EvalValue::Text(ExcelText::from_interop_assignment(
+            FunctionValue::Text(ExcelText::from_interop_assignment(
                 "January|  |01|02|03|04|05|06",
             )),
         ),
@@ -618,18 +618,18 @@ impl HostInfoProvider for MockHostInfoProvider {
         &self,
         query: CellInfoQuery,
         _reference: Option<&ReferenceLike>,
-    ) -> Result<EvalValue, HostInfoError> {
+    ) -> Result<FunctionValue, HostInfoError> {
         match query {
-            CellInfoQuery::Filename => Ok(EvalValue::Text(ExcelText::from_utf16_code_units(
+            CellInfoQuery::Filename => Ok(FunctionValue::Text(ExcelText::from_utf16_code_units(
                 "[Book1]Sheet1".encode_utf16().collect(),
             ))),
             _ => Err(HostInfoError::UnsupportedCellInfoQuery(query)),
         }
     }
 
-    fn query_info(&self, query: InfoQuery) -> Result<EvalValue, HostInfoError> {
+    fn query_info(&self, query: InfoQuery) -> Result<FunctionValue, HostInfoError> {
         match query {
-            InfoQuery::Directory => Ok(EvalValue::Text(ExcelText::from_utf16_code_units(
+            InfoQuery::Directory => Ok(FunctionValue::Text(ExcelText::from_utf16_code_units(
                 "C:\\Work".encode_utf16().collect(),
             ))),
             _ => Err(HostInfoError::UnsupportedInfoQuery(query)),

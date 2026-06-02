@@ -11,7 +11,7 @@ use oxfunc_core::locale_format::LocaleFormatContext;
 use oxfunc_core::registry::builtin_registry;
 use oxfunc_core::resolver::ReferenceSystemProvider;
 use oxfunc_core::value::{
-    CalcValue, CoreValue, EvalValue, PresentationHint, RichValue, WorksheetErrorCode,
+    CalcValue, CoreValue, FunctionValue, PresentationHint, RichValue, WorksheetErrorCode,
 };
 
 use crate::eval::{eval_value_callable_transport_summary, eval_value_is_callable_transport};
@@ -226,7 +226,7 @@ impl<'a> TypedContextQueryBundle<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct HostFunctionInvocation {
     pub function_name: String,
-    pub args: Vec<EvalValue>,
+    pub args: Vec<FunctionValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -246,7 +246,7 @@ pub trait HostFunctionProvider {
     fn invoke_host_function(
         &self,
         invocation: &HostFunctionInvocation,
-    ) -> Result<EvalValue, HostFunctionProviderError>;
+    ) -> Result<FunctionValue, HostFunctionProviderError>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -697,9 +697,9 @@ impl ReturnedValueSurface {
         }
     }
 
-    pub fn from_rtd_eval_value(value: &EvalValue) -> Self {
+    pub fn from_rtd_eval_value(value: &FunctionValue) -> Self {
         match value {
-            EvalValue::Error(WorksheetErrorCode::NA) => Self {
+            FunctionValue::Error(WorksheetErrorCode::NA) => Self {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: "NoValueYet".to_string(),
                 rich_value_type_name: None,
@@ -712,7 +712,7 @@ impl ReturnedValueSurface {
                     detail: None,
                 }),
             },
-            EvalValue::Error(WorksheetErrorCode::Blocked) => Self {
+            FunctionValue::Error(WorksheetErrorCode::Blocked) => Self {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: "CapabilityDenied".to_string(),
                 rich_value_type_name: None,
@@ -725,7 +725,7 @@ impl ReturnedValueSurface {
                     detail: None,
                 }),
             },
-            EvalValue::Error(WorksheetErrorCode::Connect) => Self {
+            FunctionValue::Error(WorksheetErrorCode::Connect) => Self {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: "ConnectionFailed".to_string(),
                 rich_value_type_name: None,
@@ -738,7 +738,7 @@ impl ReturnedValueSurface {
                     detail: None,
                 }),
             },
-            EvalValue::Error(code) => Self {
+            FunctionValue::Error(code) => Self {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: format!("ProviderError({code:?})"),
                 rich_value_type_name: None,
@@ -793,7 +793,7 @@ fn snapshot_entry_matches_surface_key(
             .is_some_and(|stable_id| stable_id == surface_key)
 }
 
-fn eval_value_summary(value: &EvalValue) -> String {
+fn eval_value_summary(value: &FunctionValue) -> String {
     if eval_value_is_callable_transport(value) {
         return format!(
             "Callable({})",
@@ -801,15 +801,15 @@ fn eval_value_summary(value: &EvalValue) -> String {
         );
     }
     match value {
-        EvalValue::Number(_) => "Number".to_string(),
-        EvalValue::Text(_) => "Text".to_string(),
-        EvalValue::Logical(_) => "Logical".to_string(),
-        EvalValue::Error(code) => format!("Error({code:?})"),
-        EvalValue::Array(array) => {
+        FunctionValue::Number(_) => "Number".to_string(),
+        FunctionValue::Text(_) => "Text".to_string(),
+        FunctionValue::Logical(_) => "Logical".to_string(),
+        FunctionValue::Error(code) => format!("Error({code:?})"),
+        FunctionValue::Array(array) => {
             let shape = array.shape();
             format!("Array({}x{})", shape.rows, shape.cols)
         }
-        EvalValue::Reference(reference) => format!("Reference({})", reference.target),
+        FunctionValue::Reference(reference) => format!("Reference({})", reference.target()),
         other => format!("{other:?}"),
     }
 }
@@ -826,6 +826,6 @@ fn core_value_summary(value: &CoreValue) -> String {
             let shape = array.shape();
             format!("Array({}x{})", shape.rows, shape.cols)
         }
-        CoreValue::Reference(reference) => format!("Reference({})", reference.target),
+        CoreValue::Reference(reference) => format!("Reference({})", reference.target()),
     }
 }

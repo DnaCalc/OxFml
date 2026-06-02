@@ -6,7 +6,7 @@ use oxfml_core::consumer::runtime::{RuntimeEnvironment, RuntimeFormulaRequest};
 use oxfml_core::eval::{EvaluationContext, evaluate_formula};
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::{FormulaSourceRecord, TypedContextQueryBundle};
-use oxfunc_core::value::{ArrayCellValue, EvalArray, EvalValue, WorksheetErrorCode};
+use oxfunc_core::value::{FunctionArray, FunctionArrayCell, FunctionValue, WorksheetErrorCode};
 
 fn evaluate_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::EvaluationOutput {
     let compiled = common::compile_formula(
@@ -20,12 +20,12 @@ fn evaluate_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::
     evaluate_formula(context).expect("evaluation should succeed")
 }
 
-fn number_row(values: &[f64]) -> EvalValue {
-    EvalValue::Array(
-        EvalArray::from_rows(vec![
+fn number_row(values: &[f64]) -> FunctionValue {
+    FunctionValue::Array(
+        FunctionArray::from_rows(vec![
             values
                 .iter()
-                .map(|value| ArrayCellValue::Number(*value))
+                .map(|value| FunctionArrayCell::Number(*value))
                 .collect(),
         ])
         .expect("row array"),
@@ -96,7 +96,7 @@ fn nested_callable_map_reuse_projects_calc_ftc_0999() {
     let eval = evaluate_formula_text("ftc-0999:nested", formula);
     assert_eq!(
         eval.oxfunc_value,
-        EvalValue::Error(WorksheetErrorCode::Calc)
+        FunctionValue::Error(WorksheetErrorCode::Calc)
     );
 
     let locale = oxfml_en_us_locale_context();
@@ -108,7 +108,7 @@ fn nested_callable_map_reuse_projects_calc_ftc_0999() {
         .expect("runtime execution should succeed");
     assert_eq!(
         runtime.published_worksheet_value,
-        EvalValue::Error(WorksheetErrorCode::Calc)
+        FunctionValue::Error(WorksheetErrorCode::Calc)
     );
     assert_eq!(
         runtime.verification_publication_surface.visible_value_text,

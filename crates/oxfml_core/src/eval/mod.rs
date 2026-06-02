@@ -8,7 +8,7 @@ use oxfunc_core::function::ArgPreparationProfile;
 use oxfunc_core::function_call::{
     FunctionCallScratch, FunctionCallTarget, FunctionExecutionContextBundle,
 };
-use oxfunc_core::functions::adapters::{PreparedArgValue, prepare_arg_values_only};
+use oxfunc_core::functions::adapters::{PreparedValue, prepare_arg_values_only};
 use oxfunc_core::functions::call_register_id_family::{
     RegisterIdRequest, RegisteredExternalCallRequest, RegisteredExternalProvider,
     parse_call_request, parse_register_id_request,
@@ -40,9 +40,9 @@ use oxfunc_core::resolver::{
     NULL_REFERENCE_SYSTEM_PROVIDER, ReferenceResolutionError, ReferenceSystemProvider,
 };
 use oxfunc_core::value::{
-    ArrayCellValue, CalcValue, CallArgValue, CallableArityShape as OxCallableArityShape,
-    CallableValue as OxCallableValue, CoreValue, EvalArray, EvalValue, ExcelText, OpaqueCallable,
-    ReferenceKind, ReferenceLike, WorksheetErrorCode,
+    CalcValue, CallableArityShape as OxCallableArityShape, CallableValue as OxCallableValue,
+    CoreValue, ExcelText, FunctionArg, FunctionArray, FunctionArrayCell, FunctionValue,
+    OpaqueCallable, ReferenceKind, ReferenceLike, WorksheetErrorCode,
 };
 use stacker::maybe_grow;
 
@@ -111,7 +111,7 @@ pub struct PreparedArgument {
     /// name slots, and lambda-body expression slots where the function
     /// receives the raw expression / reference rather than a resolved
     /// value.
-    pub resolved_value: Option<EvalValue>,
+    pub resolved_value: Option<FunctionValue>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -130,7 +130,7 @@ pub struct PreparedCall {
     /// when the call short-circuited before its trace entry was
     /// finalised (very rare — only LAMBDA carrier construction, which
     /// returns a registry handle rather than a computed value).
-    pub returned_value: Option<EvalValue>,
+    pub returned_value: Option<FunctionValue>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -297,7 +297,7 @@ enum CompiledExpr {
     StringLiteral(ExcelText),
     LogicalLiteral(bool),
     PrecomputedValue {
-        value: EvalValue,
+        value: FunctionValue,
         source: Box<CompiledExpr>,
     },
     ArrayLiteral(Vec<Vec<CompiledExpr>>),
@@ -468,7 +468,7 @@ fn function_call_target_from_function_id(function_id: &'static str) -> FunctionC
 #[derive(Debug, Clone, PartialEq)]
 pub struct EvaluationOutput {
     pub result: PreparedResult,
-    pub oxfunc_value: EvalValue,
+    pub oxfunc_value: FunctionValue,
     pub returned_value_surface: ReturnedValueSurface,
     /// Set when the formula's top-level result is a callable. Carries the
     /// portable callable payload plus captured-ref dependency facts so a host can
@@ -554,15 +554,15 @@ pub struct EvaluationError {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DefinedNameBinding {
-    Value(EvalValue),
+    Value(FunctionValue),
     Reference(ReferenceLike),
     Callable(CallableDefinedNameBinding),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 enum HelperBinding {
-    Arg(CallArgValue),
-    EmptyHstackCarrier(CallArgValue),
+    Arg(FunctionArg),
+    EmptyHstackCarrier(FunctionArg),
     Lambda {
         params: Rc<[LambdaParam]>,
         body: Rc<CompiledExpr>,
@@ -1558,11 +1558,11 @@ fn expr_is_context_free_value(expr: &CompiledExpr) -> bool {
     }
 }
 
-fn context_free_eval_value_for_expr(expr: &CompiledExpr) -> Option<EvalValue> {
+fn context_free_eval_value_for_expr(expr: &CompiledExpr) -> Option<FunctionValue> {
     match expr {
-        CompiledExpr::NumberLiteral { value, .. } => value.map(EvalValue::Number),
-        CompiledExpr::StringLiteral(text) => Some(EvalValue::Text(text.clone())),
-        CompiledExpr::LogicalLiteral(value) => Some(EvalValue::Logical(*value)),
+        CompiledExpr::NumberLiteral { value, .. } => value.map(FunctionValue::Number),
+        CompiledExpr::StringLiteral(text) => Some(FunctionValue::Text(text.clone())),
+        CompiledExpr::LogicalLiteral(value) => Some(FunctionValue::Logical(*value)),
         CompiledExpr::PrecomputedValue { value, .. } => Some(value.clone()),
         CompiledExpr::Binary {
             call_target,
@@ -1599,7 +1599,7 @@ fn context_free_eval_value_for_expr(expr: &CompiledExpr) -> Option<EvalValue> {
                 .take_while(|arg| matches!(arg, CompiledExpr::OmittedArgument))
                 .count();
             for _ in 0..trailing_omitted_count {
-                if !matches!(call_args.last(), Some(CallArgValue::MissingArg)) {
+                if !matches!(call_args.last(), Some(FunctionArg::MissingArg)) {
                     break;
                 }
                 call_args.pop();
@@ -1609,7 +1609,7 @@ fn context_free_eval_value_for_expr(expr: &CompiledExpr) -> Option<EvalValue> {
                     hstack_arg_should_collapse(arg, call_arg, &HelperBindingFrame::default())
                 })
             {
-                return Some(EvalValue::Error(WorksheetErrorCode::Calc));
+                return Some(FunctionValue::Error(WorksheetErrorCode::Calc));
             }
             Some(invoke_context_free_function_call(
                 function_call_target,
@@ -1620,44 +1620,44 @@ fn context_free_eval_value_for_expr(expr: &CompiledExpr) -> Option<EvalValue> {
     }
 }
 
-fn context_free_call_arg_for_expr(expr: &CompiledExpr) -> Option<CallArgValue> {
+fn context_free_call_arg_for_expr(expr: &CompiledExpr) -> Option<FunctionArg> {
     match expr {
-        CompiledExpr::OmittedArgument => Some(CallArgValue::MissingArg),
-        _ => context_free_eval_value_for_expr(expr).map(CallArgValue::Eval),
+        CompiledExpr::OmittedArgument => Some(FunctionArg::MissingArg),
+        _ => context_free_eval_value_for_expr(expr).map(FunctionArg::Eval),
     }
 }
 
-fn calc_value_from_call_arg(arg: &CallArgValue) -> CalcValue {
+fn calc_value_from_call_arg(arg: &FunctionArg) -> CalcValue {
     match arg {
-        CallArgValue::Eval(value) => CalcValue::from(value.clone()),
-        CallArgValue::MissingArg => CalcValue::missing(),
-        CallArgValue::EmptyCell => CalcValue::empty(),
-        CallArgValue::Reference(reference) => CalcValue::reference(reference.clone()),
+        FunctionArg::Eval(value) => CalcValue::from(value.clone()),
+        FunctionArg::MissingArg => CalcValue::missing(),
+        FunctionArg::EmptyCell => CalcValue::empty(),
+        FunctionArg::Reference(reference) => CalcValue::reference(reference.clone()),
     }
 }
 
 fn calc_value_from_call_arg_with_registry(
-    arg: &CallArgValue,
+    arg: &FunctionArg,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> CalcValue {
     match arg {
-        CallArgValue::Eval(value) => {
+        FunctionArg::Eval(value) => {
             callable_value_from_transport_eval_value(value, callable_registry)
                 .map(CalcValue::callable)
                 .unwrap_or_else(|| CalcValue::from(value.clone()))
         }
-        CallArgValue::MissingArg => CalcValue::missing(),
-        CallArgValue::EmptyCell => CalcValue::empty(),
-        CallArgValue::Reference(reference) => CalcValue::reference(reference.clone()),
+        FunctionArg::MissingArg => CalcValue::missing(),
+        FunctionArg::EmptyCell => CalcValue::empty(),
+        FunctionArg::Reference(reference) => CalcValue::reference(reference.clone()),
     }
 }
 
-fn calc_values_from_call_args(args: &[CallArgValue]) -> Vec<CalcValue> {
+fn calc_values_from_call_args(args: &[FunctionArg]) -> Vec<CalcValue> {
     args.iter().map(calc_value_from_call_arg).collect()
 }
 
 fn calc_values_from_call_args_with_registry(
-    args: &[CallArgValue],
+    args: &[FunctionArg],
     callable_registry: &RefCell<CallableRegistry>,
 ) -> Vec<CalcValue> {
     args.iter()
@@ -1665,33 +1665,33 @@ fn calc_values_from_call_args_with_registry(
         .collect()
 }
 
-fn legacy_call_args_from_calc_values(args: &[CalcValue]) -> Vec<CallArgValue> {
-    args.iter().cloned().map(CallArgValue::value).collect()
+fn legacy_call_args_from_calc_values(args: &[CalcValue]) -> Vec<FunctionArg> {
+    args.iter().cloned().map(FunctionArg::value).collect()
 }
 
-fn eval_value_from_calc_value(value: CalcValue) -> EvalValue {
+fn eval_value_from_calc_value(value: CalcValue) -> FunctionValue {
     if let Some(callable) = value.callable_value() {
         return callable_transport_eval_value(callable);
     }
 
     match value.core {
-        CoreValue::Number(n) => EvalValue::Number(n),
-        CoreValue::Text(t) => EvalValue::Text(t),
-        CoreValue::Logical(b) => EvalValue::Logical(b),
-        CoreValue::Error(code) => EvalValue::Error(code),
-        CoreValue::Empty | CoreValue::Missing => EvalValue::Error(WorksheetErrorCode::Value),
-        CoreValue::Array(array) => EvalValue::Array(array.to_legacy_eval_array_lossy()),
-        CoreValue::Reference(reference) => EvalValue::Reference(reference),
+        CoreValue::Number(n) => FunctionValue::Number(n),
+        CoreValue::Text(t) => FunctionValue::Text(t),
+        CoreValue::Logical(b) => FunctionValue::Logical(b),
+        CoreValue::Error(code) => FunctionValue::Error(code),
+        CoreValue::Empty | CoreValue::Missing => FunctionValue::Error(WorksheetErrorCode::Value),
+        CoreValue::Array(array) => FunctionValue::Array(array.to_function_array_lossy()),
+        CoreValue::Reference(reference) => FunctionValue::Reference(reference),
     }
 }
 
 fn invoke_context_free_function_call(
     call_target: &FunctionCallTarget,
-    args: &[CallArgValue],
-) -> EvalValue {
+    args: &[FunctionArg],
+) -> FunctionValue {
     debug_assert!(
         args.iter().all(|arg| match arg {
-            CallArgValue::Eval(value) => !eval_value_is_callable_transport(value),
+            FunctionArg::Eval(value) => !eval_value_is_callable_transport(value),
             _ => true,
         }),
         "context-free invocation cannot transport callable arguments"
@@ -1701,7 +1701,7 @@ fn invoke_context_free_function_call(
     let calc_args = calc_values_from_call_args(args);
     match call_target.invoke(&calc_args, &mut fec) {
         Ok(value) => eval_value_from_calc_value(value),
-        Err(code) => EvalValue::Error(code),
+        Err(code) => FunctionValue::Error(code),
     }
 }
 
@@ -1736,7 +1736,7 @@ pub struct EvaluationContext<'a> {
     pub backend: EvaluationBackend,
     pub caller_row: usize,
     pub caller_col: usize,
-    pub cell_values: BTreeMap<String, EvalValue>,
+    pub cell_values: BTreeMap<String, FunctionValue>,
     pub defined_names: BTreeMap<String, DefinedNameBinding>,
     pub locale_ctx: Option<&'a LocaleFormatContext<'a>>,
     pub host_info: Option<&'a dyn HostInfoProvider>,
@@ -1952,7 +1952,7 @@ pub fn evaluate_formula(
 /// root is not a directly portable LAMBDA literal (e.g. a curried or
 /// LET-returned callable): we never fabricate a body we cannot honestly derive.
 fn portable_callable_for_top_level_result(
-    output_value: &EvalValue,
+    output_value: &FunctionValue,
     callable_registry: &RefCell<CallableRegistry>,
     bind_formula: &BoundFormula,
     defined_names: &BTreeMap<String, DefinedNameBinding>,
@@ -2244,7 +2244,7 @@ fn collect_free_reference_atoms(
 
 fn returned_value_surface_for_output(
     root: &CompiledExpr,
-    value: &EvalValue,
+    value: &FunctionValue,
     context: &EvaluationContext<'_>,
 ) -> ReturnedValueSurface {
     if let Some(surface) = typed_surface_for_top_level_host_or_provider_call(root, context) {
@@ -2259,11 +2259,11 @@ fn returned_value_surface_for_output(
 }
 
 fn dereference_final_output_value(
-    value: EvalValue,
+    value: FunctionValue,
     reference_system_provider: &dyn ReferenceSystemProvider,
-) -> Result<EvalValue, EvaluationError> {
+) -> Result<FunctionValue, EvaluationError> {
     match value {
-        EvalValue::Reference(reference) => {
+        FunctionValue::Reference(reference) => {
             resolve_oxfunc_eval_value(reference_system_provider, &reference)
                 .map_err(map_resolution_error)
         }
@@ -2382,7 +2382,7 @@ fn build_top_level_call_args(
     args: &[CompiledExpr],
     context: &EvaluationContext<'_>,
     preserve_reference: bool,
-) -> Result<Vec<CallArgValue>, EvaluationError> {
+) -> Result<Vec<FunctionArg>, EvaluationError> {
     let callable_registry = RefCell::new(CallableRegistry::default());
     let reference_system_provider = context.reference_system_provider();
     let helper_bindings = HelperBindingFrame::default();
@@ -2413,7 +2413,7 @@ fn evaluate_root_expr_value(
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
-) -> Result<EvalValue, EvaluationError> {
+) -> Result<FunctionValue, EvaluationError> {
     if !context.bind_formula.root_expression_is_grouped {
         if let CompiledExpr::Binary {
             op,
@@ -2461,15 +2461,15 @@ fn evaluate_expr_value(
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
-) -> Result<EvalValue, EvaluationError> {
+) -> Result<FunctionValue, EvaluationError> {
     match expr {
-        CompiledExpr::NumberLiteral { source, value } => {
-            value.map(EvalValue::Number).ok_or_else(|| EvaluationError {
+        CompiledExpr::NumberLiteral { source, value } => value
+            .map(FunctionValue::Number)
+            .ok_or_else(|| EvaluationError {
                 message: format!("failed to parse numeric literal {source}"),
-            })
-        }
-        CompiledExpr::LogicalLiteral(value) => Ok(EvalValue::Logical(*value)),
-        CompiledExpr::StringLiteral(text) => Ok(EvalValue::Text(text.clone())),
+            }),
+        CompiledExpr::LogicalLiteral(value) => Ok(FunctionValue::Logical(*value)),
+        CompiledExpr::StringLiteral(text) => Ok(FunctionValue::Text(text.clone())),
         CompiledExpr::PrecomputedValue { value, source } => {
             if context.records_prepared_calls() {
                 evaluate_expr_value(
@@ -2492,7 +2492,7 @@ fn evaluate_expr_value(
             callable_registry,
             trace,
         ),
-        CompiledExpr::OmittedArgument => Ok(EvalValue::Error(WorksheetErrorCode::Value)),
+        CompiledExpr::OmittedArgument => Ok(FunctionValue::Error(WorksheetErrorCode::Value)),
         CompiledExpr::HelperParameterName { name, .. }
         | CompiledExpr::HelperOptionalParameterName { name, .. } => Err(EvaluationError {
             message: format!(
@@ -2642,7 +2642,7 @@ fn evaluate_function_call(
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
-) -> Result<EvalValue, EvaluationError> {
+) -> Result<FunctionValue, EvaluationError> {
     match call_target.special_form {
         CompiledFunctionSpecialForm::Let => {
             return evaluate_let_call(
@@ -2682,7 +2682,7 @@ fn evaluate_function_call(
             let Some(special_operator_call_target) =
                 call_target.special_operator_call_target.as_ref()
             else {
-                return Ok(EvalValue::Error(WorksheetErrorCode::Name));
+                return Ok(FunctionValue::Error(WorksheetErrorCode::Name));
             };
             return evaluate_legacy_single_call(
                 special_operator_call_target,
@@ -2718,9 +2718,9 @@ fn evaluate_ordinary_function_call(
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
-) -> Result<EvalValue, EvaluationError> {
+) -> Result<FunctionValue, EvaluationError> {
     if runtime_capability_denied_for_function(context, function_name) {
-        return Ok(EvalValue::Error(WorksheetErrorCode::Blocked));
+        return Ok(FunctionValue::Error(WorksheetErrorCode::Blocked));
     }
 
     let Some(function_call_target) = call_target.function_call_target.as_ref() else {
@@ -2738,7 +2738,7 @@ fn evaluate_ordinary_function_call(
                 trace,
             );
         }
-        return Ok(EvalValue::Error(WorksheetErrorCode::Name));
+        return Ok(FunctionValue::Error(WorksheetErrorCode::Name));
     };
     let meta = function_call_target.function_meta();
 
@@ -2849,7 +2849,7 @@ fn evaluate_ordinary_function_call(
     };
 
     let returned_value = if collapse_hstack_empty_carrier {
-        EvalValue::Error(WorksheetErrorCode::Calc)
+        FunctionValue::Error(WorksheetErrorCode::Calc)
     } else {
         match evaluate_function_call_target_scratch(
             function_call_target,
@@ -2871,9 +2871,9 @@ fn evaluate_ordinary_function_call(
                     context.host_info,
                 ) =>
             {
-                EvalValue::Error(WorksheetErrorCode::Value)
+                FunctionValue::Error(WorksheetErrorCode::Value)
             }
-            Err(code) => EvalValue::Error(code),
+            Err(code) => FunctionValue::Error(code),
         }
     };
 
@@ -2911,7 +2911,7 @@ fn evaluate_host_function_call(
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
-) -> Result<EvalValue, EvaluationError> {
+) -> Result<FunctionValue, EvaluationError> {
     if context.backend == EvaluationBackend::LocalBootstrap {
         return Err(EvaluationError {
             message: format!(
@@ -2944,9 +2944,9 @@ fn evaluate_host_function_call(
             ));
         }
         let invocation_arg = match call_arg {
-            CallArgValue::Eval(value) => value,
-            CallArgValue::EmptyCell | CallArgValue::MissingArg | CallArgValue::Reference(_) => {
-                EvalValue::Error(WorksheetErrorCode::Value)
+            FunctionArg::Eval(value) => value,
+            FunctionArg::EmptyCell | FunctionArg::MissingArg | FunctionArg::Reference(_) => {
+                FunctionValue::Error(WorksheetErrorCode::Value)
             }
         };
         invocation_args.push(invocation_arg);
@@ -2982,7 +2982,7 @@ fn evaluate_host_function_call(
             args: invocation_args,
         }) {
             Ok(value) => value,
-            Err(_) => EvalValue::Error(WorksheetErrorCode::Value),
+            Err(_) => FunctionValue::Error(WorksheetErrorCode::Value),
         };
     record_prepared_call_returned_value(trace, prepared_call_index, &returned_value);
     Ok(returned_value)
@@ -2990,7 +2990,7 @@ fn evaluate_host_function_call(
 
 fn allow_host_query_worksheet_error_fallback(
     function_id: &str,
-    call_args: &[CallArgValue],
+    call_args: &[FunctionArg],
     reference_system_provider: &dyn ReferenceSystemProvider,
     host_info: Option<&dyn HostInfoProvider>,
 ) -> bool {
@@ -3009,11 +3009,11 @@ fn allow_host_query_worksheet_error_fallback(
 
 fn evaluate_function_call_target(
     call_target: &FunctionCallTarget,
-    args: &[CallArgValue],
+    args: &[FunctionArg],
     context: &EvaluationContext<'_>,
     reference_system_provider: &dyn ReferenceSystemProvider,
     callable_registry: &RefCell<CallableRegistry>,
-) -> Result<EvalValue, WorksheetErrorCode> {
+) -> Result<FunctionValue, WorksheetErrorCode> {
     let callable_invoker = OxFmlCallableInvoker {
         context,
         callable_registry,
@@ -3038,7 +3038,7 @@ fn evaluate_function_call_target_scratch(
     context: &EvaluationContext<'_>,
     reference_system_provider: &dyn ReferenceSystemProvider,
     callable_registry: &RefCell<CallableRegistry>,
-) -> Result<EvalValue, WorksheetErrorCode> {
+) -> Result<FunctionValue, WorksheetErrorCode> {
     let callable_invoker = OxFmlCallableInvoker {
         context,
         callable_registry,
@@ -3058,11 +3058,11 @@ fn evaluate_function_call_target_scratch(
 
 fn evaluate_function_call_target_value(
     call_target: &FunctionCallTarget,
-    args: &[CallArgValue],
+    args: &[FunctionArg],
     context: &EvaluationContext<'_>,
     reference_system_provider: &dyn ReferenceSystemProvider,
     callable_registry: &RefCell<CallableRegistry>,
-) -> EvalValue {
+) -> FunctionValue {
     match evaluate_function_call_target(
         call_target,
         args,
@@ -3071,7 +3071,7 @@ fn evaluate_function_call_target_value(
         callable_registry,
     ) {
         Ok(value) => value,
-        Err(code) => EvalValue::Error(code),
+        Err(code) => FunctionValue::Error(code),
     }
 }
 
@@ -3154,7 +3154,7 @@ fn evaluate_expr_as_call_arg(
     preserve_reference: bool,
     callable_slot: bool,
     trace: &mut EvaluationTrace,
-) -> Result<CallArgValue, EvaluationError> {
+) -> Result<FunctionArg, EvaluationError> {
     if callable_slot {
         if let Some(callable_arg) =
             built_in_callable_arg_for_expr(expr, context, callable_registry)?
@@ -3164,7 +3164,7 @@ fn evaluate_expr_as_call_arg(
     }
 
     match expr {
-        CompiledExpr::OmittedArgument => Ok(CallArgValue::MissingArg),
+        CompiledExpr::OmittedArgument => Ok(FunctionArg::MissingArg),
         CompiledExpr::Reference(reference) => evaluate_reference_as_call_arg(
             reference,
             context,
@@ -3187,7 +3187,7 @@ fn evaluate_expr_as_call_arg(
                 trace,
             )?;
             let args = [arg];
-            Ok(CallArgValue::Eval(evaluate_function_call_target_value(
+            Ok(FunctionArg::Eval(evaluate_function_call_target_value(
                 call_target,
                 &args,
                 context,
@@ -3195,7 +3195,7 @@ fn evaluate_expr_as_call_arg(
                 callable_registry,
             )))
         }
-        _ => Ok(CallArgValue::Eval(evaluate_expr_value(
+        _ => Ok(FunctionArg::Eval(evaluate_expr_value(
             expr,
             context,
             reference_system_provider,
@@ -3210,7 +3210,7 @@ fn built_in_callable_arg_for_expr(
     expr: &CompiledExpr,
     _context: &EvaluationContext<'_>,
     callable_registry: &RefCell<CallableRegistry>,
-) -> Result<Option<CallArgValue>, EvaluationError> {
+) -> Result<Option<FunctionArg>, EvaluationError> {
     match expr {
         CompiledExpr::BuiltinCallable(callable) => {
             built_in_callable_arg_for_call_target(&callable.call_target, callable_registry)
@@ -3241,7 +3241,7 @@ fn evaluate_reference_as_call_arg(
     preserve_reference: bool,
     callable_slot: bool,
     trace: &mut EvaluationTrace,
-) -> Result<CallArgValue, EvaluationError> {
+) -> Result<FunctionArg, EvaluationError> {
     match reference {
         CompiledReferenceExpr::Atom(NormalizedReference::Cell(cell)) => {
             call_arg_for_reference_like(
@@ -3336,12 +3336,12 @@ fn evaluate_reference_as_call_arg(
                 },
                 context,
             );
-            let returned = EvalValue::Error(WorksheetErrorCode::Ref);
+            let returned = FunctionValue::Error(WorksheetErrorCode::Ref);
             record_prepared_call_returned_value(trace, prepared_call_index, &returned);
-            Ok(CallArgValue::Eval(returned))
+            Ok(FunctionArg::Eval(returned))
         }
-        CompiledReferenceExpr::Atom(NormalizedReference::Error(error)) => Ok(CallArgValue::Eval(
-            EvalValue::Error(error_code_for_error_ref(error)),
+        CompiledReferenceExpr::Atom(NormalizedReference::Error(error)) => Ok(FunctionArg::Eval(
+            FunctionValue::Error(error_code_for_error_ref(error)),
         )),
         CompiledReferenceExpr::Spill {
             call_target,
@@ -3415,7 +3415,7 @@ fn evaluate_reference_operator_call(
     callable_registry: &RefCell<CallableRegistry>,
     preserve_reference: bool,
     trace: &mut EvaluationTrace,
-) -> Result<CallArgValue, EvaluationError> {
+) -> Result<FunctionArg, EvaluationError> {
     let function_id = call_target.function_id();
     let mut args = Vec::with_capacity(operands.len());
     let records_prepared_calls = context.records_prepared_calls();
@@ -3460,27 +3460,27 @@ fn evaluate_reference_operator_call(
     );
     let value = match result {
         Ok(value) => value,
-        Err(code) => EvalValue::Error(code),
+        Err(code) => FunctionValue::Error(code),
     };
     record_prepared_call_returned_value(trace, prepared_call_index, &value);
     call_arg_from_reference_operator_value(value, preserve_reference, reference_system_provider)
 }
 
 fn call_arg_from_reference_operator_value(
-    value: EvalValue,
+    value: FunctionValue,
     preserve_reference: bool,
     reference_system_provider: &dyn ReferenceSystemProvider,
-) -> Result<CallArgValue, EvaluationError> {
+) -> Result<FunctionArg, EvaluationError> {
     match value {
-        EvalValue::Reference(reference) if preserve_reference => {
-            Ok(CallArgValue::Reference(reference))
+        FunctionValue::Reference(reference) if preserve_reference => {
+            Ok(FunctionArg::Reference(reference))
         }
-        EvalValue::Reference(reference) => {
+        FunctionValue::Reference(reference) => {
             resolve_oxfunc_eval_value(reference_system_provider, &reference)
                 .map(call_arg_from_resolved_reference_value)
                 .map_err(map_resolution_error)
         }
-        other => Ok(CallArgValue::Eval(other)),
+        other => Ok(FunctionArg::Eval(other)),
     }
 }
 
@@ -3489,9 +3489,9 @@ fn call_arg_for_reference_like(
     preserve_reference: bool,
     context: &EvaluationContext<'_>,
     reference_system_provider: &dyn ReferenceSystemProvider,
-) -> Result<CallArgValue, EvaluationError> {
+) -> Result<FunctionArg, EvaluationError> {
     if preserve_reference || context.reference_system_provider.is_some() {
-        Ok(CallArgValue::Reference(reference))
+        Ok(FunctionArg::Reference(reference))
     } else {
         resolve_oxfunc_eval_value(reference_system_provider, &reference)
             .map(call_arg_from_resolved_reference_value)
@@ -3506,7 +3506,7 @@ fn evaluate_array_literal(
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
-) -> Result<EvalValue, EvaluationError> {
+) -> Result<FunctionValue, EvaluationError> {
     let height = rows.len();
     let width = rows.iter().map(|row| row.len()).max().unwrap_or(0);
     let mut array_rows = Vec::with_capacity(height);
@@ -3524,12 +3524,12 @@ fn evaluate_array_literal(
             array_row.push(array_cell_value_from_eval_value(Some(value)));
         }
         while array_row.len() < width {
-            array_row.push(ArrayCellValue::EmptyCell);
+            array_row.push(FunctionArrayCell::EmptyCell);
         }
         array_rows.push(array_row);
     }
-    EvalArray::from_rows(array_rows)
-        .map(EvalValue::Array)
+    FunctionArray::from_rows(array_rows)
+        .map(FunctionValue::Array)
         .ok_or_else(|| EvaluationError {
             message: "array literal produced an invalid rectangular shape".to_string(),
         })
@@ -3545,7 +3545,7 @@ fn evaluate_binary_operator_call(
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
-) -> Result<EvalValue, EvaluationError> {
+) -> Result<FunctionValue, EvaluationError> {
     evaluate_binary_operator_call_evaluation(
         op,
         call_target,
@@ -3561,33 +3561,33 @@ fn evaluate_binary_operator_call(
 }
 
 struct BinaryOperatorCallEvaluation {
-    lhs: CallArgValue,
-    rhs: CallArgValue,
-    value: EvalValue,
+    lhs: FunctionArg,
+    rhs: FunctionArg,
+    value: FunctionValue,
 }
 
 fn publish_root_add_subtract_zero_reaching_result(
     op: BinaryOp,
-    lhs: &CallArgValue,
-    rhs: &CallArgValue,
-    value: EvalValue,
-) -> EvalValue {
-    let EvalValue::Number(result) = value else {
+    lhs: &FunctionArg,
+    rhs: &FunctionArg,
+    value: FunctionValue,
+) -> FunctionValue {
+    let FunctionValue::Number(result) = value else {
         return value;
     };
     let (Some(lhs), Some(rhs)) = (scalar_number_call_arg(lhs), scalar_number_call_arg(rhs)) else {
-        return EvalValue::Number(result);
+        return FunctionValue::Number(result);
     };
     if excel_root_add_subtract_reaches_zero(op, lhs, rhs, result) {
-        EvalValue::Number(0.0)
+        FunctionValue::Number(0.0)
     } else {
-        EvalValue::Number(result)
+        FunctionValue::Number(result)
     }
 }
 
-fn scalar_number_call_arg(arg: &CallArgValue) -> Option<f64> {
+fn scalar_number_call_arg(arg: &FunctionArg) -> Option<f64> {
     match arg {
-        CallArgValue::Eval(EvalValue::Number(number)) => Some(*number),
+        FunctionArg::Eval(FunctionValue::Number(number)) => Some(*number),
         _ => None,
     }
 }
@@ -3677,7 +3677,7 @@ fn evaluate_binary_operator_call_evaluation(
     );
     let value = match result {
         Ok(value) => value,
-        Err(code) => EvalValue::Error(code),
+        Err(code) => FunctionValue::Error(code),
     };
     record_prepared_call_returned_value(trace, prepared_call_index, &value);
     Ok(BinaryOperatorCallEvaluation { lhs, rhs, value })
@@ -3692,7 +3692,7 @@ fn evaluate_unary_operator_call(
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
-) -> Result<EvalValue, EvaluationError> {
+) -> Result<FunctionValue, EvaluationError> {
     let (function_name, function_id) = unary_operator_identity(op);
     let arg = evaluate_expr_as_call_arg(
         expr,
@@ -3728,7 +3728,7 @@ fn evaluate_unary_operator_call(
     );
     let value = match result {
         Ok(value) => value,
-        Err(code) => EvalValue::Error(code),
+        Err(code) => FunctionValue::Error(code),
     };
     record_prepared_call_returned_value(trace, prepared_call_index, &value);
     Ok(value)
@@ -3767,7 +3767,7 @@ fn call_arg_for_name(
     reference_system_provider: &dyn ReferenceSystemProvider,
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
-) -> Result<CallArgValue, EvaluationError> {
+) -> Result<FunctionArg, EvaluationError> {
     if let Some(binding) = helper_binding_get(helper_bindings, &name.name) {
         return call_arg_for_helper_binding(
             binding,
@@ -3779,7 +3779,7 @@ fn call_arg_for_name(
 
     let Some(binding) = context.defined_names.get(&name.name) else {
         if callable_slot {
-            return Ok(CallArgValue::Eval(EvalValue::Error(
+            return Ok(FunctionArg::Eval(FunctionValue::Error(
                 WorksheetErrorCode::Name,
             )));
         }
@@ -3789,20 +3789,20 @@ fn call_arg_for_name(
     };
 
     match binding {
-        DefinedNameBinding::Value(value) => Ok(CallArgValue::Eval(value.clone())),
+        DefinedNameBinding::Value(value) => Ok(FunctionArg::Eval(value.clone())),
         DefinedNameBinding::Reference(reference) => {
             if preserve_reference || context.reference_system_provider.is_some() {
-                Ok(CallArgValue::Reference(reference.clone()))
+                Ok(FunctionArg::Reference(reference.clone()))
             } else {
                 resolve_oxfunc_eval_value(reference_system_provider, reference)
-                    .map(CallArgValue::Eval)
+                    .map(FunctionArg::Eval)
                     .map_err(map_resolution_error)
             }
         }
         DefinedNameBinding::Callable(binding) => {
             let lambda = lambda_binding_from_defined_name_binding(binding, callable_registry);
             let callable = callable_registry.borrow_mut().register(lambda);
-            Ok(CallArgValue::Eval(callable_transport_eval_value(&callable)))
+            Ok(FunctionArg::Eval(callable_transport_eval_value(&callable)))
         }
     }
 }
@@ -3813,7 +3813,7 @@ fn call_arg_for_helper_slot(
     preserve_reference: bool,
     reference_system_provider: &dyn ReferenceSystemProvider,
     callable_registry: &RefCell<CallableRegistry>,
-) -> Option<Result<CallArgValue, EvaluationError>> {
+) -> Option<Result<FunctionArg, EvaluationError>> {
     let slot_cell = helper_bindings.slots.get(slot)?;
     let slot_ref = slot_cell.borrow();
     let binding = slot_ref.as_ref()?;
@@ -3830,12 +3830,12 @@ fn call_arg_for_helper_binding(
     preserve_reference: bool,
     reference_system_provider: &dyn ReferenceSystemProvider,
     callable_registry: &RefCell<CallableRegistry>,
-) -> Result<CallArgValue, EvaluationError> {
+) -> Result<FunctionArg, EvaluationError> {
     match binding {
-        HelperBinding::Arg(CallArgValue::Reference(reference))
-        | HelperBinding::EmptyHstackCarrier(CallArgValue::Reference(reference)) => {
+        HelperBinding::Arg(FunctionArg::Reference(reference))
+        | HelperBinding::EmptyHstackCarrier(FunctionArg::Reference(reference)) => {
             if preserve_reference {
-                Ok(CallArgValue::Reference(reference.clone()))
+                Ok(FunctionArg::Reference(reference.clone()))
             } else {
                 resolve_oxfunc_eval_value(reference_system_provider, reference)
                     .map(call_arg_from_resolved_reference_value)
@@ -3854,7 +3854,7 @@ fn call_arg_for_helper_binding(
                 body: body.clone(),
                 closure: closure.clone(),
             });
-            Ok(CallArgValue::Eval(callable_transport_eval_value(&callable)))
+            Ok(FunctionArg::Eval(callable_transport_eval_value(&callable)))
         }
     }
 }
@@ -3862,9 +3862,9 @@ fn call_arg_for_helper_binding(
 fn built_in_callable_arg_for_call_target(
     call_target: &FunctionCallTarget,
     callable_registry: &RefCell<CallableRegistry>,
-) -> Result<CallArgValue, EvaluationError> {
+) -> Result<FunctionArg, EvaluationError> {
     let callable = built_in_callable_from_call_target(call_target, callable_registry);
-    Ok(CallArgValue::Eval(callable_transport_eval_value(&callable)))
+    Ok(FunctionArg::Eval(callable_transport_eval_value(&callable)))
 }
 
 fn built_in_callable_from_call_target(
@@ -3884,7 +3884,7 @@ fn evaluate_let_call(
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
-) -> Result<EvalValue, EvaluationError> {
+) -> Result<FunctionValue, EvaluationError> {
     if args.len() < 2 {
         return Err(EvaluationError {
             message: "LET requires at least one binding pair and a final expression".to_string(),
@@ -4001,7 +4001,7 @@ fn evaluate_slot_only_let_call(
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
-) -> Result<EvalValue, EvaluationError> {
+) -> Result<FunctionValue, EvaluationError> {
     let records_prepared_calls = context.records_prepared_calls();
     let mut prepared_arguments = if records_prepared_calls {
         Vec::with_capacity(args.len())
@@ -4099,11 +4099,11 @@ fn evaluate_slot_only_let_call(
 }
 
 fn coerce_excel_if_text_condition(
-    condition: &CallArgValue,
+    condition: &FunctionArg,
     reference_system_provider: &dyn ReferenceSystemProvider,
 ) -> Result<Option<bool>, EvaluationError> {
     match condition {
-        CallArgValue::Eval(EvalValue::Text(text)) => {
+        FunctionArg::Eval(FunctionValue::Text(text)) => {
             let normalized = text.to_string_lossy().trim().to_ascii_uppercase();
             match normalized.as_str() {
                 "TRUE" => Ok(Some(true)),
@@ -4111,12 +4111,12 @@ fn coerce_excel_if_text_condition(
                 _ => Ok(None),
             }
         }
-        CallArgValue::Reference(reference) => {
+        FunctionArg::Reference(reference) => {
             resolve_oxfunc_eval_value(reference_system_provider, reference)
                 .map_err(map_resolution_error)
                 .and_then(|value| {
                     coerce_excel_if_text_condition(
-                        &CallArgValue::Eval(value),
+                        &FunctionArg::Eval(value),
                         reference_system_provider,
                     )
                 })
@@ -4132,9 +4132,9 @@ fn evaluate_if_call(
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
-) -> Result<EvalValue, EvaluationError> {
+) -> Result<FunctionValue, EvaluationError> {
     if !(2..=3).contains(&args.len()) {
-        return Ok(EvalValue::Error(WorksheetErrorCode::Value));
+        return Ok(FunctionValue::Error(WorksheetErrorCode::Value));
     }
 
     let condition = evaluate_expr_as_call_arg(
@@ -4158,7 +4158,7 @@ fn evaluate_if_call(
     let normalized_condition = if let Some(value) =
         coerce_excel_if_text_condition(&condition, reference_system_provider)?
     {
-        CallArgValue::Eval(EvalValue::Logical(value))
+        FunctionArg::Eval(FunctionValue::Logical(value))
     } else {
         condition.clone()
     };
@@ -4195,7 +4195,7 @@ fn evaluate_if_call(
             }
             false_arg
         } else {
-            CallArgValue::MissingArg
+            FunctionArg::MissingArg
         };
 
         let prepared_call_index = push_special_prepared_call(
@@ -4210,7 +4210,7 @@ fn evaluate_if_call(
             &[normalized_condition.clone(), true_arg, false_arg],
             reference_system_provider,
         )
-        .unwrap_or_else(|error| EvalValue::Error(map_if_error_to_ws(&error)));
+        .unwrap_or_else(|error| FunctionValue::Error(map_if_error_to_ws(&error)));
         record_prepared_call_returned_value(trace, prepared_call_index, &value);
         return Ok(value);
     }
@@ -4218,13 +4218,13 @@ fn evaluate_if_call(
     let condition_is_true = match eval_if_surface(
         &[
             normalized_condition.clone(),
-            CallArgValue::Eval(EvalValue::Number(1.0)),
-            CallArgValue::Eval(EvalValue::Number(0.0)),
+            FunctionArg::Eval(FunctionValue::Number(1.0)),
+            FunctionArg::Eval(FunctionValue::Number(0.0)),
         ],
         reference_system_provider,
     ) {
-        Ok(EvalValue::Number(n)) => n != 0.0,
-        Ok(EvalValue::Logical(b)) => b,
+        Ok(FunctionValue::Number(n)) => n != 0.0,
+        Ok(FunctionValue::Logical(b)) => b,
         Ok(_) => false,
         Err(error) => {
             if records_prepared_calls {
@@ -4249,7 +4249,7 @@ fn evaluate_if_call(
                 prepared_arguments,
                 context,
             );
-            let value = EvalValue::Error(map_if_error_to_ws(&error));
+            let value = FunctionValue::Error(map_if_error_to_ws(&error));
             record_prepared_call_returned_value(trace, prepared_call_index, &value);
             return Ok(value);
         }
@@ -4272,7 +4272,7 @@ fn evaluate_if_call(
         }
         call_args.push(true_arg);
         if args.len() == 3 {
-            call_args.push(CallArgValue::MissingArg);
+            call_args.push(FunctionArg::MissingArg);
             if records_prepared_calls {
                 prepared_arguments.push(lazy_skipped_prepared_argument(
                     2,
@@ -4282,7 +4282,7 @@ fn evaluate_if_call(
             }
         }
     } else {
-        call_args.push(CallArgValue::MissingArg);
+        call_args.push(FunctionArg::MissingArg);
         if records_prepared_calls {
             prepared_arguments.push(lazy_skipped_prepared_argument(
                 1,
@@ -4319,18 +4319,18 @@ fn evaluate_if_call(
         context,
     );
     let value = eval_if_surface(&call_args, reference_system_provider)
-        .unwrap_or_else(|error| EvalValue::Error(map_if_error_to_ws(&error)));
+        .unwrap_or_else(|error| FunctionValue::Error(map_if_error_to_ws(&error)));
     record_prepared_call_returned_value(trace, prepared_call_index, &value);
     Ok(value)
 }
 
 fn if_condition_resolves_to_array(
-    condition: &CallArgValue,
+    condition: &FunctionArg,
     reference_system_provider: &dyn ReferenceSystemProvider,
 ) -> bool {
     matches!(
         prepare_arg_values_only(condition, reference_system_provider),
-        Ok(PreparedArgValue::Eval(EvalValue::Array(_)))
+        Ok(PreparedValue::Eval(FunctionValue::Array(_)))
     )
 }
 
@@ -4341,9 +4341,9 @@ fn evaluate_iferror_call(
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
-) -> Result<EvalValue, EvaluationError> {
+) -> Result<FunctionValue, EvaluationError> {
     if args.len() != 2 {
-        return Ok(EvalValue::Error(WorksheetErrorCode::Value));
+        return Ok(FunctionValue::Error(WorksheetErrorCode::Value));
     }
 
     let primary = evaluate_expr_as_call_arg(
@@ -4359,7 +4359,7 @@ fn evaluate_iferror_call(
 
     let primary_is_error = matches!(
         prepare_arg_values_only(&primary, reference_system_provider),
-        Ok(PreparedArgValue::Eval(EvalValue::Error(_)))
+        Ok(PreparedValue::Eval(FunctionValue::Error(_)))
     );
 
     let records_prepared_calls = context.records_prepared_calls();
@@ -4392,7 +4392,7 @@ fn evaluate_iferror_call(
                 "fallback_not_evaluated_lazy",
             ));
         }
-        call_args.push(CallArgValue::MissingArg);
+        call_args.push(FunctionArg::MissingArg);
     }
 
     let prepared_call_index = push_special_prepared_call(
@@ -4404,7 +4404,7 @@ fn evaluate_iferror_call(
         context,
     );
     let value = eval_iferror_surface(&call_args, reference_system_provider)
-        .unwrap_or_else(|error| EvalValue::Error(map_iferror_error_to_ws(&error)));
+        .unwrap_or_else(|error| FunctionValue::Error(map_iferror_error_to_ws(&error)));
     record_prepared_call_returned_value(trace, prepared_call_index, &value);
     Ok(value)
 }
@@ -4415,7 +4415,7 @@ fn evaluate_lambda_call(
     callable_registry: &RefCell<CallableRegistry>,
     context: &EvaluationContext<'_>,
     trace: &mut EvaluationTrace,
-) -> Result<EvalValue, EvaluationError> {
+) -> Result<FunctionValue, EvaluationError> {
     if args.is_empty() {
         return Err(EvaluationError {
             message: "LAMBDA requires at least a body expression".to_string(),
@@ -4495,7 +4495,7 @@ fn evaluate_legacy_single_call(
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
-) -> Result<EvalValue, EvaluationError> {
+) -> Result<FunctionValue, EvaluationError> {
     let Some(arg) = args.first() else {
         return Err(EvaluationError {
             message: "_xlfn.SINGLE requires one argument".to_string(),
@@ -4544,9 +4544,9 @@ fn evaluate_invocation(
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
-) -> Result<EvalValue, EvaluationError> {
+) -> Result<FunctionValue, EvaluationError> {
     if is_missing_helper_local_callee_name(callee, helper_bindings, &context.defined_names) {
-        return Ok(EvalValue::Error(WorksheetErrorCode::Name));
+        return Ok(FunctionValue::Error(WorksheetErrorCode::Name));
     }
     let lambda = resolve_callable(
         callee,
@@ -4558,7 +4558,7 @@ fn evaluate_invocation(
     )?;
     let required_arity = lambda_required_arity(&lambda.params);
     if args.len() > lambda.params.len() {
-        return Ok(EvalValue::Error(WorksheetErrorCode::Value));
+        return Ok(FunctionValue::Error(WorksheetErrorCode::Value));
     }
     if args.len() < required_arity {
         return Err(EvaluationError {
@@ -4609,14 +4609,14 @@ fn evaluate_invocation(
             &mut local_bindings,
             param.name.clone(),
             param.slot,
-            HelperBinding::Arg(CallArgValue::MissingArg),
+            HelperBinding::Arg(FunctionArg::MissingArg),
         );
     }
     let Some(_recursion_guard) = try_enter_callable_recursion(
         &context.frame_state.callable_recursion_state,
         recursion_cost_units,
     ) else {
-        return Ok(EvalValue::Error(WorksheetErrorCode::Num));
+        return Ok(FunctionValue::Error(WorksheetErrorCode::Num));
     };
     let prepared_call_index = push_special_prepared_call(
         trace,
@@ -4724,14 +4724,14 @@ fn lambda_binding_for_evaluated_callee(
         })
 }
 
-fn eval_value_kind(value: &EvalValue) -> &'static str {
+fn eval_value_kind(value: &FunctionValue) -> &'static str {
     match value {
-        EvalValue::Number(_) => "Number",
-        EvalValue::Text(_) => "Text",
-        EvalValue::Logical(_) => "Logical",
-        EvalValue::Error(_) => "Error",
-        EvalValue::Array(_) => "Array",
-        EvalValue::Reference(_) => "Reference",
+        FunctionValue::Number(_) => "Number",
+        FunctionValue::Text(_) => "Text",
+        FunctionValue::Logical(_) => "Logical",
+        FunctionValue::Error(_) => "Error",
+        FunctionValue::Array(_) => "Array",
+        FunctionValue::Reference(_) => "Reference",
         _ => "Callable",
     }
 }
@@ -4751,7 +4751,7 @@ fn try_enter_callable_recursion(
 
 fn helper_binding_from_expr(
     expr: &CompiledExpr,
-    fallback: CallArgValue,
+    fallback: FunctionArg,
     helper_bindings: &HelperBindingFrame,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> HelperBinding {
@@ -4772,7 +4772,7 @@ fn helper_binding_from_expr(
             }
         }
         _ => {
-            if let CallArgValue::Eval(value) = &fallback {
+            if let FunctionArg::Eval(value) = &fallback {
                 if let Some(callable) =
                     callable_value_from_transport_eval_value(value, callable_registry)
                 {
@@ -4788,7 +4788,7 @@ fn helper_binding_from_expr(
             }
             if matches!(
                 fallback,
-                CallArgValue::Eval(EvalValue::Error(WorksheetErrorCode::Calc))
+                FunctionArg::Eval(FunctionValue::Error(WorksheetErrorCode::Calc))
             ) && expr_is_hstack_empty_carrier(expr, helper_bindings)
             {
                 return HelperBinding::EmptyHstackCarrier(fallback);
@@ -4860,7 +4860,7 @@ fn expr_is_numeric_zero(expr: &CompiledExpr) -> bool {
             ..
         } => expr_is_numeric_zero(expr),
         CompiledExpr::PrecomputedValue { value, source } => {
-            matches!(value, EvalValue::Number(number) if *number == 0.0)
+            matches!(value, FunctionValue::Number(number) if *number == 0.0)
                 || expr_is_numeric_zero(source)
         }
         _ => false,
@@ -4869,12 +4869,12 @@ fn expr_is_numeric_zero(expr: &CompiledExpr) -> bool {
 
 fn hstack_arg_should_collapse(
     expr: &CompiledExpr,
-    call_arg: &CallArgValue,
+    call_arg: &FunctionArg,
     helper_bindings: &HelperBindingFrame,
 ) -> bool {
     matches!(
         call_arg,
-        CallArgValue::Eval(EvalValue::Error(WorksheetErrorCode::Calc))
+        FunctionArg::Eval(FunctionValue::Error(WorksheetErrorCode::Calc))
     ) && expr_is_hstack_empty_carrier(expr, helper_bindings)
 }
 
@@ -4913,7 +4913,7 @@ fn lambda_binding_for_callee(
                     body: body.clone(),
                     closure: closure.clone(),
                 }),
-                Some(HelperBinding::Arg(CallArgValue::Eval(value))) => {
+                Some(HelperBinding::Arg(FunctionArg::Eval(value))) => {
                     callable_value_from_transport_eval_value(value, callable_registry).and_then(
                         |callable| {
                             let callable_token = callable_token_from_oxfunc_callable(&callable);
@@ -4939,7 +4939,7 @@ fn lambda_binding_for_callee(
                     body,
                     closure,
                 }),
-                Some(HelperBinding::Arg(CallArgValue::Eval(value))) => {
+                Some(HelperBinding::Arg(FunctionArg::Eval(value))) => {
                     callable_value_from_transport_eval_value(&value, callable_registry).and_then(
                         |callable| {
                             let callable_token = callable_token_from_oxfunc_callable(&callable);
@@ -5005,10 +5005,10 @@ fn lambda_binding_from_defined_name_binding(
             .map(|(name, binding)| {
                 let helper_binding = match binding {
                     DefinedNameBinding::Value(value) => {
-                        HelperBinding::Arg(CallArgValue::Eval(value.clone()))
+                        HelperBinding::Arg(FunctionArg::Eval(value.clone()))
                     }
                     DefinedNameBinding::Reference(reference) => {
-                        HelperBinding::Arg(CallArgValue::Reference(reference.clone()))
+                        HelperBinding::Arg(FunctionArg::Reference(reference.clone()))
                     }
                     // Preserve nested callable closure entries so a callable can
                     // invoke another captured callable (composition / mutual
@@ -5022,7 +5022,7 @@ fn lambda_binding_from_defined_name_binding(
                         let nested_binding =
                             lambda_binding_from_defined_name_binding(nested, callable_registry);
                         let callable = callable_registry.borrow_mut().register(nested_binding);
-                        HelperBinding::Arg(CallArgValue::Eval(callable_transport_eval_value(
+                        HelperBinding::Arg(FunctionArg::Eval(callable_transport_eval_value(
                             &callable,
                         )))
                     }
@@ -5329,14 +5329,14 @@ fn helper_closure_from_names(
 }
 
 fn materialize_call_arg(
-    arg: CallArgValue,
+    arg: FunctionArg,
     reference_system_provider: &dyn ReferenceSystemProvider,
-) -> Result<EvalValue, EvaluationError> {
+) -> Result<FunctionValue, EvaluationError> {
     match arg {
-        CallArgValue::Eval(value) => Ok(value),
-        CallArgValue::MissingArg => Ok(EvalValue::Error(WorksheetErrorCode::Value)),
-        CallArgValue::EmptyCell => Ok(EvalValue::Number(0.0)),
-        CallArgValue::Reference(reference) => {
+        FunctionArg::Eval(value) => Ok(value),
+        FunctionArg::MissingArg => Ok(FunctionValue::Error(WorksheetErrorCode::Value)),
+        FunctionArg::EmptyCell => Ok(FunctionValue::Number(0.0)),
+        FunctionArg::Reference(reference) => {
             resolve_oxfunc_eval_value(reference_system_provider, &reference)
                 .map_err(map_resolution_error)
         }
@@ -5346,23 +5346,23 @@ fn materialize_call_arg(
 fn prepared_argument_for_call_arg(
     ordinal: usize,
     expr: &CompiledExpr,
-    arg: &CallArgValue,
+    arg: &FunctionArg,
     _preserve_reference: bool,
 ) -> PreparedArgument {
     let source_class = prepared_source_class(expr);
     match arg {
-        CallArgValue::Reference(reference) => PreparedArgument {
+        FunctionArg::Reference(reference) => PreparedArgument {
             ordinal,
             structure_class: PreparedStructureClass::ReferenceVisible,
             source_class,
             evaluation_mode: PreparedEvaluationMode::ReferencePreserved,
             blankness_class: PreparedBlanknessClass::NonBlank,
             caller_context_sensitive: matches!(expr, CompiledExpr::ImplicitIntersection { .. }),
-            reference_target: Some(reference.target.clone()),
+            reference_target: Some(reference.target().to_string()),
             opaque_reason: prepared_argument_opaque_reason(expr),
             resolved_value: None,
         },
-        CallArgValue::MissingArg => PreparedArgument {
+        FunctionArg::MissingArg => PreparedArgument {
             ordinal,
             structure_class: PreparedStructureClass::Omitted,
             source_class,
@@ -5373,7 +5373,7 @@ fn prepared_argument_for_call_arg(
             opaque_reason: prepared_argument_opaque_reason(expr),
             resolved_value: None,
         },
-        CallArgValue::EmptyCell => PreparedArgument {
+        FunctionArg::EmptyCell => PreparedArgument {
             ordinal,
             structure_class: PreparedStructureClass::DirectScalar,
             source_class,
@@ -5384,10 +5384,10 @@ fn prepared_argument_for_call_arg(
             opaque_reason: prepared_argument_opaque_reason(expr),
             resolved_value: None,
         },
-        CallArgValue::Eval(value) => PreparedArgument {
+        FunctionArg::Eval(value) => PreparedArgument {
             ordinal,
             structure_class: match value {
-                EvalValue::Array(_) => PreparedStructureClass::ArrayLike,
+                FunctionValue::Array(_) => PreparedStructureClass::ArrayLike,
                 _ => PreparedStructureClass::DirectScalar,
             },
             source_class,
@@ -5532,7 +5532,7 @@ fn push_prepared_call_unchecked(trace: &mut EvaluationTrace, call: PreparedCall)
 fn record_prepared_call_returned_value(
     trace: &mut EvaluationTrace,
     index: Option<usize>,
-    value: &EvalValue,
+    value: &FunctionValue,
 ) {
     let Some(index) = index else {
         return;
@@ -5542,7 +5542,7 @@ fn record_prepared_call_returned_value(
     }
 }
 
-fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> PreparedResult {
+fn prepared_result_from_eval_value(value: &FunctionValue, plan: &SemanticPlan) -> PreparedResult {
     let format_hint = if plan.execution_profile.requires_locale {
         Some("locale_format_semantics".to_string())
     } else {
@@ -5554,7 +5554,7 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
         None
     };
     let capability_dependencies = prepared_result_capability_dependencies(plan);
-    let deferred_reason = if matches!(value, EvalValue::Error(WorksheetErrorCode::Ref))
+    let deferred_reason = if matches!(value, FunctionValue::Error(WorksheetErrorCode::Ref))
         && plan
             .capability_requirements
             .iter()
@@ -5598,7 +5598,7 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
     }
 
     match value {
-        EvalValue::Number(number) => PreparedResult {
+        FunctionValue::Number(number) => PreparedResult {
             result_class: PreparedResultClass::Scalar,
             structure_class: PreparedStructureClass::DirectScalar,
             payload_summary: format!("Number({number})"),
@@ -5612,7 +5612,7 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
             publication_hint,
             capability_dependencies,
         },
-        EvalValue::Text(text) => PreparedResult {
+        FunctionValue::Text(text) => PreparedResult {
             result_class: PreparedResultClass::Scalar,
             structure_class: PreparedStructureClass::DirectScalar,
             payload_summary: format!("Text({})", text.to_string_lossy()),
@@ -5626,7 +5626,7 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
             publication_hint,
             capability_dependencies,
         },
-        EvalValue::Logical(value) => PreparedResult {
+        FunctionValue::Logical(value) => PreparedResult {
             result_class: PreparedResultClass::Scalar,
             structure_class: PreparedStructureClass::DirectScalar,
             payload_summary: format!("Logical({value})"),
@@ -5640,7 +5640,7 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
             publication_hint,
             capability_dependencies,
         },
-        EvalValue::Error(code) => PreparedResult {
+        FunctionValue::Error(code) => PreparedResult {
             result_class: PreparedResultClass::Error,
             structure_class: PreparedStructureClass::DirectScalar,
             payload_summary: format!("Error({code:?})"),
@@ -5654,7 +5654,7 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
             publication_hint,
             capability_dependencies,
         },
-        EvalValue::Array(array) => PreparedResult {
+        FunctionValue::Array(array) => PreparedResult {
             result_class: PreparedResultClass::Array,
             structure_class: PreparedStructureClass::ArrayLike,
             payload_summary: format!("Array({}x{})", array.shape().rows, array.shape().cols),
@@ -5668,12 +5668,12 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
             publication_hint,
             capability_dependencies,
         },
-        EvalValue::Reference(reference) => PreparedResult {
+        FunctionValue::Reference(reference) => PreparedResult {
             result_class: PreparedResultClass::Reference,
             structure_class: PreparedStructureClass::ReferenceVisible,
-            payload_summary: format!("Reference({:?})", reference.kind),
+            payload_summary: format!("Reference({:?})", reference.kind()),
             blankness_class: PreparedBlanknessClass::NonBlank,
-            reference_target: Some(reference.target.clone()),
+            reference_target: Some(reference.target().to_string()),
             callable_carrier: None,
             callable_profile: None,
             callable_profile_detail: None,
@@ -5700,7 +5700,7 @@ fn prepared_result_from_eval_value(value: &EvalValue, plan: &SemanticPlan) -> Pr
 }
 
 fn prepared_result_from_portable_callable(
-    value: &EvalValue,
+    value: &FunctionValue,
     plan: &SemanticPlan,
     portable: &PortableCallableValue,
 ) -> PreparedResult {
@@ -5716,9 +5716,9 @@ fn prepared_result_from_portable_callable(
     result
 }
 
-fn blankness_class_for_eval_value(value: &EvalValue) -> PreparedBlanknessClass {
+fn blankness_class_for_eval_value(value: &FunctionValue) -> PreparedBlanknessClass {
     match value {
-        EvalValue::Text(text) if text.to_string_lossy().is_empty() => {
+        FunctionValue::Text(text) if text.to_string_lossy().is_empty() => {
             PreparedBlanknessClass::EmptyText
         }
         _ => PreparedBlanknessClass::NonBlank,
@@ -5953,8 +5953,8 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
     fn invoke(
         &self,
         callable: &OxCallableValue,
-        args: &[PreparedArgValue],
-    ) -> Result<PreparedArgValue, CallableInvocationError> {
+        args: &[PreparedValue],
+    ) -> Result<PreparedValue, CallableInvocationError> {
         let callable_token = callable_token_from_oxfunc_callable(callable);
         if self
             .callable_registry
@@ -6008,7 +6008,7 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
                 &mut local_bindings,
                 param.name.clone(),
                 param.slot,
-                HelperBinding::Arg(CallArgValue::MissingArg),
+                HelperBinding::Arg(FunctionArg::MissingArg),
             );
         }
         let recursion_cost_units = LOCAL_CALLABLE_RECURSION_BASE_COST_UNITS
@@ -6021,7 +6021,7 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
             &self.context.frame_state.callable_recursion_state,
             recursion_cost_units,
         ) else {
-            return Ok(prepared_arg_from_eval_value(EvalValue::Error(
+            return Ok(prepared_arg_from_eval_value(FunctionValue::Error(
                 WorksheetErrorCode::Num,
             )));
         };
@@ -6106,7 +6106,7 @@ impl CallableInvoker for OxFmlCallableInvoker<'_, '_> {
                     &self.context.frame_state.callable_recursion_state,
                     recursion_cost_units,
                 ) else {
-                    batch.accept_result(prepared_arg_from_eval_value(EvalValue::Error(
+                    batch.accept_result(prepared_arg_from_eval_value(FunctionValue::Error(
                         WorksheetErrorCode::Num,
                     )))?;
                     continue;
@@ -6206,7 +6206,7 @@ impl OxFmlCallableInvoker<'_, '_> {
 
 fn build_scratch_from_prepared_args(
     scratch: &mut FunctionCallScratch,
-    args: &[PreparedArgValue],
+    args: &[PreparedValue],
     callable_registry: &RefCell<CallableRegistry>,
 ) {
     scratch.clear();
@@ -6229,7 +6229,7 @@ fn prime_local_callable_param_slots(
             param_key.clone(),
             param.name.clone(),
             param.slot,
-            HelperBinding::Arg(CallArgValue::MissingArg),
+            HelperBinding::Arg(FunctionArg::MissingArg),
         );
     }
 }
@@ -6238,7 +6238,7 @@ fn set_local_callable_arg_slots(
     local_bindings: &mut HelperBindingFrame,
     params: &[LambdaParam],
     param_keys: &[String],
-    args: &[PreparedArgValue],
+    args: &[PreparedValue],
     callable_registry: &RefCell<CallableRegistry>,
 ) -> usize {
     let mut lambda_arg_count = 0usize;
@@ -6255,7 +6255,7 @@ fn set_local_callable_arg_slots(
         }
     }
     for (param, param_key) in params.iter().zip(param_keys.iter()).skip(args.len()) {
-        let binding = HelperBinding::Arg(CallArgValue::MissingArg);
+        let binding = HelperBinding::Arg(FunctionArg::MissingArg);
         if let Some(slot) = param.slot {
             local_bindings.set_slot(slot, binding);
         } else {
@@ -6266,21 +6266,21 @@ fn set_local_callable_arg_slots(
 }
 
 fn call_arg_from_prepared(
-    prepared: &PreparedArgValue,
+    prepared: &PreparedValue,
     callable_registry: &RefCell<CallableRegistry>,
-) -> CallArgValue {
+) -> FunctionArg {
     match prepared {
-        PreparedArgValue::Eval(value) => CallArgValue::Eval(decode_callable_transport_scalar(
+        PreparedValue::Eval(value) => FunctionArg::Eval(decode_callable_transport_scalar(
             value.clone(),
             callable_registry,
         )),
-        PreparedArgValue::MissingArg => CallArgValue::MissingArg,
-        PreparedArgValue::EmptyCell => CallArgValue::EmptyCell,
+        PreparedValue::MissingArg => FunctionArg::MissingArg,
+        PreparedValue::EmptyCell => FunctionArg::EmptyCell,
     }
 }
 
 fn prepared_arg_contains_callable(
-    prepared: &PreparedArgValue,
+    prepared: &PreparedValue,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> bool {
     call_arg_transport_callable_value(
@@ -6290,15 +6290,15 @@ fn prepared_arg_contains_callable(
     .is_some()
 }
 
-fn prepared_arg_from_eval_value(value: EvalValue) -> PreparedArgValue {
-    PreparedArgValue::Eval(value)
+fn prepared_arg_from_eval_value(value: FunctionValue) -> PreparedValue {
+    PreparedValue::Eval(value)
 }
 
 fn decode_callable_transport_function_result(
     function_id: &str,
-    value: EvalValue,
+    value: FunctionValue,
     callable_registry: &RefCell<CallableRegistry>,
-) -> EvalValue {
+) -> FunctionValue {
     match function_id {
         FUNC_ID_INDEX | FUNC_ID_XLOOKUP => {
             decode_callable_transport_scalar(value, callable_registry)
@@ -6308,15 +6308,15 @@ fn decode_callable_transport_function_result(
 }
 
 fn decode_callable_transport_scalar(
-    value: EvalValue,
+    value: FunctionValue,
     callable_registry: &RefCell<CallableRegistry>,
-) -> EvalValue {
+) -> FunctionValue {
     match value {
-        EvalValue::Text(text) => {
+        FunctionValue::Text(text) => {
             if decode_callable_transport_text(&text, callable_registry).is_some() {
-                EvalValue::Text(text)
+                FunctionValue::Text(text)
             } else {
-                EvalValue::Text(text)
+                FunctionValue::Text(text)
             }
         }
         other => other,
@@ -6324,32 +6324,32 @@ fn decode_callable_transport_scalar(
 }
 
 fn sanitize_final_output_value(
-    value: EvalValue,
+    value: FunctionValue,
     callable_registry: &RefCell<CallableRegistry>,
-) -> EvalValue {
+) -> FunctionValue {
     match value {
-        EvalValue::Text(text) => EvalValue::Text(text),
-        EvalValue::Array(array) => {
+        FunctionValue::Text(text) => FunctionValue::Text(text),
+        FunctionValue::Array(array) => {
             let shape = array.shape();
             let mut cells = Vec::with_capacity(shape.rows * shape.cols);
             for row in 0..shape.rows {
                 for col in 0..shape.cols {
                     let cell = match array.get(row, col) {
-                        Some(ArrayCellValue::Text(text))
+                        Some(FunctionArrayCell::Text(text))
                             if decode_callable_transport_text(text, callable_registry)
                                 .is_some() =>
                         {
-                            ArrayCellValue::Error(WorksheetErrorCode::Calc)
+                            FunctionArrayCell::Error(WorksheetErrorCode::Calc)
                         }
                         Some(cell) => cell.clone(),
-                        None => ArrayCellValue::EmptyCell,
+                        None => FunctionArrayCell::EmptyCell,
                     };
                     cells.push(cell);
                 }
             }
-            EvalArray::new(shape, cells)
-                .map(EvalValue::Array)
-                .unwrap_or(EvalValue::Error(WorksheetErrorCode::Value))
+            FunctionArray::new(shape, cells)
+                .map(FunctionValue::Array)
+                .unwrap_or(FunctionValue::Error(WorksheetErrorCode::Value))
         }
         other => other,
     }
@@ -6359,27 +6359,27 @@ fn callable_array_carrier_text(token: &str) -> ExcelText {
     ExcelText::from_interop_assignment(&format!("{}{}", CALLABLE_ARRAY_CARRIER_PREFIX, token))
 }
 
-fn callable_transport_eval_value(callable: &OxCallableValue) -> EvalValue {
-    EvalValue::Text(callable_array_carrier_text(
+fn callable_transport_eval_value(callable: &OxCallableValue) -> FunctionValue {
+    FunctionValue::Text(callable_array_carrier_text(
         &callable_token_from_oxfunc_callable(callable),
     ))
 }
 
 fn callable_value_from_transport_eval_value(
-    value: &EvalValue,
+    value: &FunctionValue,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> Option<OxCallableValue> {
-    let EvalValue::Text(text) = value else {
+    let FunctionValue::Text(text) = value else {
         return None;
     };
     decode_callable_transport_text(text, callable_registry)
 }
 
 fn call_arg_transport_callable_value(
-    call_arg: &CallArgValue,
+    call_arg: &FunctionArg,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> Option<OxCallableValue> {
-    let CallArgValue::Eval(value) = call_arg else {
+    let FunctionArg::Eval(value) = call_arg else {
         return None;
     };
     callable_value_from_transport_eval_value(value, callable_registry)
@@ -6399,32 +6399,32 @@ fn decode_callable_transport_text(
         .or_else(|| registry.builtin_value(&token))
 }
 
-fn array_cell_value_from_eval_value(value: Option<EvalValue>) -> ArrayCellValue {
+fn array_cell_value_from_eval_value(value: Option<FunctionValue>) -> FunctionArrayCell {
     match value {
-        Some(EvalValue::Number(number)) => ArrayCellValue::Number(number),
-        Some(EvalValue::Text(text)) => ArrayCellValue::Text(text),
-        Some(EvalValue::Logical(value)) => ArrayCellValue::Logical(value),
-        Some(EvalValue::Error(code)) => ArrayCellValue::Error(code),
-        Some(EvalValue::Array(_)) | Some(EvalValue::Reference(_)) => {
-            ArrayCellValue::Error(WorksheetErrorCode::Value)
+        Some(FunctionValue::Number(number)) => FunctionArrayCell::Number(number),
+        Some(FunctionValue::Text(text)) => FunctionArrayCell::Text(text),
+        Some(FunctionValue::Logical(value)) => FunctionArrayCell::Logical(value),
+        Some(FunctionValue::Error(code)) => FunctionArrayCell::Error(code),
+        Some(FunctionValue::Array(_)) | Some(FunctionValue::Reference(_)) => {
+            FunctionArrayCell::Error(WorksheetErrorCode::Value)
         }
-        Some(_) => ArrayCellValue::Error(WorksheetErrorCode::Calc),
-        None => ArrayCellValue::EmptyCell,
+        Some(_) => FunctionArrayCell::Error(WorksheetErrorCode::Calc),
+        None => FunctionArrayCell::EmptyCell,
     }
 }
 
-fn call_arg_from_resolved_reference_value(value: EvalValue) -> CallArgValue {
+fn call_arg_from_resolved_reference_value(value: FunctionValue) -> FunctionArg {
     if is_scalar_empty_cell_array(&value) {
-        CallArgValue::EmptyCell
+        FunctionArg::EmptyCell
     } else {
-        CallArgValue::Eval(value)
+        FunctionArg::Eval(value)
     }
 }
 
-fn is_scalar_empty_cell_array(value: &EvalValue) -> bool {
+fn is_scalar_empty_cell_array(value: &FunctionValue) -> bool {
     match value {
-        EvalValue::Array(array) if array.shape().rows == 1 && array.shape().cols == 1 => {
-            matches!(array.get(0, 0), Some(ArrayCellValue::EmptyCell))
+        FunctionValue::Array(array) if array.shape().rows == 1 && array.shape().cols == 1 => {
+            matches!(array.get(0, 0), Some(FunctionArrayCell::EmptyCell))
         }
         _ => false,
     }
@@ -6432,15 +6432,15 @@ fn is_scalar_empty_cell_array(value: &EvalValue) -> bool {
 
 const CALLABLE_ARRAY_CARRIER_PREFIX: &str = "oxfml.callable-array::";
 
-pub(crate) fn eval_value_is_callable_transport(value: &EvalValue) -> bool {
+pub(crate) fn eval_value_is_callable_transport(value: &FunctionValue) -> bool {
     matches!(
         value,
-        EvalValue::Text(text) if text.to_string_lossy().starts_with(CALLABLE_ARRAY_CARRIER_PREFIX)
+        FunctionValue::Text(text) if text.to_string_lossy().starts_with(CALLABLE_ARRAY_CARRIER_PREFIX)
     )
 }
 
-pub(crate) fn eval_value_callable_transport_summary(value: &EvalValue) -> Option<String> {
-    let EvalValue::Text(text) = value else {
+pub(crate) fn eval_value_callable_transport_summary(value: &FunctionValue) -> Option<String> {
+    let FunctionValue::Text(text) = value else {
         return None;
     };
     text.to_string_lossy()
