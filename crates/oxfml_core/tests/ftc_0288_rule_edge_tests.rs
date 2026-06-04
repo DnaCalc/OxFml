@@ -1,9 +1,10 @@
+use oxfunc_core::value::CalcValue;
 use std::collections::BTreeMap;
 
 mod common;
 
 use oxfml_core::consumer::runtime::{RuntimeEnvironment, RuntimeFormulaRequest};
-use oxfml_core::eval::{EvaluationContext, FunctionValue, evaluate_formula};
+use oxfml_core::eval::{EvaluationContext, evaluate_formula};
 use oxfml_core::format::{
     oxfml_en_us_format_profile, oxfml_en_us_locale_context, render_with_code,
 };
@@ -66,8 +67,8 @@ fn evaluate_formula_with_locale(
     evaluate_formula(context).expect("evaluation should succeed")
 }
 
-fn text_eval_value(text: &str) -> FunctionValue {
-    FunctionValue::Text(ExcelText::from_interop_assignment(text))
+fn text_eval_value(text: &str) -> CalcValue {
+    CalcValue::text(ExcelText::from_interop_assignment(text))
 }
 
 #[test]

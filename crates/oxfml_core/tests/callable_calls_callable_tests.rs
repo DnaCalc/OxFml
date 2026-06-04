@@ -4,12 +4,14 @@
 //! closure entries when lowering a `CallableDefinedNameBinding` to a runtime
 //! lambda, which made a callable unable to call another callable.
 
+use oxfunc_core::value::CalcValue;
+
 use std::collections::BTreeMap;
 
 use oxfml_core::binding::{BindContext, BindRequest, BoundExpr, NameKind, bind_formula};
 use oxfml_core::eval::{
     CallableDefinedNameBinding, CallableValueCarrier, CallableValueProfile, DefinedNameBinding,
-    EvaluationBackend, FunctionValue,
+    EvaluationBackend,
 };
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::red::project_red_view;
@@ -54,7 +56,7 @@ fn callable_can_invoke_another_callable_captured_in_its_closure() {
 
     assert_eq!(
         output.evaluation.oxfunc_value,
-        FunctionValue::Number(55.0),
+        CalcValue::number(55.0),
         "captured callable should be invoked: Inner(5) + 5 = 55"
     );
 }

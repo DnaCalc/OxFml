@@ -1,4 +1,3 @@
-use oxfml_core::eval::{FunctionArray, FunctionArrayCell, FunctionValue};
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::{
     AverageRuleOptions, ColorScaleRuleOptions, ColorScaleRuleStop, ConditionalFormattingRank,
@@ -8,19 +7,20 @@ use oxfml_core::{
     VerificationPublicationContext, VerificationPublicationSurface,
     build_verification_publication_surface,
 };
-use oxfunc_core::value::{CalcValue, ExcelText, WorksheetErrorCode};
+use oxfunc_core::value::{CalcArray, CalcValue};
+use oxfunc_core::value::{ExcelText, WorksheetErrorCode};
 
 fn surface_for_array(
-    rows: Vec<Vec<FunctionArrayCell>>,
+    rows: Vec<Vec<CalcValue>>,
     rules: Vec<VerificationConditionalFormattingRule>,
     now_serial: Option<f64>,
 ) -> VerificationPublicationSurface {
-    let value = FunctionValue::Array(FunctionArray::from_rows(rows).expect("rectangular array"));
+    let value = CalcValue::array(CalcArray::from_rows(rows).expect("rectangular array"));
     surface_for_value(value, rules, now_serial)
 }
 
 fn surface_for_value(
-    value: FunctionValue,
+    value: CalcValue,
     rules: Vec<VerificationConditionalFormattingRule>,
     now_serial: Option<f64>,
 ) -> VerificationPublicationSurface {
@@ -221,14 +221,14 @@ fn array_cell_value_rule_applies_per_cell() {
     let surface = surface_for_array(
         vec![
             vec![
-                FunctionArrayCell::Number(1.0),
-                FunctionArrayCell::Number(2.0),
-                FunctionArrayCell::Number(3.0),
+                CalcValue::number(1.0),
+                CalcValue::number(2.0),
+                CalcValue::number(3.0),
             ],
             vec![
-                FunctionArrayCell::Number(4.0),
-                FunctionArrayCell::Number(5.0),
-                FunctionArrayCell::Number(6.0),
+                CalcValue::number(4.0),
+                CalcValue::number(5.0),
+                CalcValue::number(6.0),
             ],
         ],
         vec![rule(
@@ -258,14 +258,14 @@ fn array_error_and_blank_predicates_apply_per_cell() {
     let error_surface = surface_for_array(
         vec![
             vec![
-                FunctionArrayCell::Number(1.0),
-                FunctionArrayCell::Text(ExcelText::from_interop_assignment("x")),
-                FunctionArrayCell::Error(WorksheetErrorCode::Div0),
+                CalcValue::number(1.0),
+                CalcValue::text(ExcelText::from_interop_assignment("x")),
+                CalcValue::error(WorksheetErrorCode::Div0),
             ],
             vec![
-                FunctionArrayCell::Number(2.0),
-                FunctionArrayCell::Text(ExcelText::from_interop_assignment("y")),
-                FunctionArrayCell::Error(WorksheetErrorCode::NA),
+                CalcValue::number(2.0),
+                CalcValue::text(ExcelText::from_interop_assignment("y")),
+                CalcValue::error(WorksheetErrorCode::NA),
             ],
         ],
         vec![rule("errors", None, Vec::new(), "#FFE1E1")],
@@ -284,9 +284,9 @@ fn array_error_and_blank_predicates_apply_per_cell() {
 
     let blank_surface = surface_for_array(
         vec![vec![
-            FunctionArrayCell::Number(1.0),
-            FunctionArrayCell::EmptyCell,
-            FunctionArrayCell::Text(ExcelText::from_interop_assignment("")),
+            CalcValue::number(1.0),
+            CalcValue::empty(),
+            CalcValue::text(ExcelText::from_interop_assignment("")),
         ]],
         vec![rule("blanks", None, Vec::new(), "#FFF2CC")],
         None,
@@ -307,9 +307,9 @@ fn array_error_and_blank_predicates_apply_per_cell() {
 fn array_relative_date_predicates_use_shared_now_serial_per_cell() {
     let surface = surface_for_array(
         vec![vec![
-            FunctionArrayCell::Number(46044.0),
-            FunctionArrayCell::Number(46045.0),
-            FunctionArrayCell::Number(46046.0),
+            CalcValue::number(46044.0),
+            CalcValue::number(46045.0),
+            CalcValue::number(46046.0),
         ]],
         vec![rule("dates", None, vec!["today"], "#D9EAD3")],
         Some(46045.0),
@@ -327,7 +327,7 @@ fn array_relative_date_predicates_use_shared_now_serial_per_cell() {
 #[test]
 fn one_by_one_array_cell_format_matches_whole_cell_cf_fields() {
     let surface = surface_for_array(
-        vec![vec![FunctionArrayCell::Number(4.0)]],
+        vec![vec![CalcValue::number(4.0)]],
         vec![rule(
             "cell_value",
             Some("greaterThan"),
@@ -356,11 +356,11 @@ fn one_by_one_array_cell_format_matches_whole_cell_cf_fields() {
 fn array_above_and_below_average_rules_use_numeric_aggregate_context() {
     let above_surface = surface_for_array(
         vec![vec![
-            FunctionArrayCell::Number(1.0),
-            FunctionArrayCell::Number(2.0),
-            FunctionArrayCell::Number(3.0),
-            FunctionArrayCell::Number(4.0),
-            FunctionArrayCell::Number(5.0),
+            CalcValue::number(1.0),
+            CalcValue::number(2.0),
+            CalcValue::number(3.0),
+            CalcValue::number(4.0),
+            CalcValue::number(5.0),
         ]],
         vec![typed_average_rule("aboveAverage", false, None, "#D9EAD3")],
         None,
@@ -376,11 +376,11 @@ fn array_above_and_below_average_rules_use_numeric_aggregate_context() {
 
     let below_surface = surface_for_array(
         vec![vec![
-            FunctionArrayCell::Number(1.0),
-            FunctionArrayCell::Number(2.0),
-            FunctionArrayCell::Number(3.0),
-            FunctionArrayCell::Number(4.0),
-            FunctionArrayCell::Number(5.0),
+            CalcValue::number(1.0),
+            CalcValue::number(2.0),
+            CalcValue::number(3.0),
+            CalcValue::number(4.0),
+            CalcValue::number(5.0),
         ]],
         vec![typed_average_rule("belowAverage", false, None, "#F4CCCC")],
         None,
@@ -398,7 +398,7 @@ fn array_above_and_below_average_rules_use_numeric_aggregate_context() {
 #[test]
 fn array_top_and_bottom_rules_use_ranked_numeric_context() {
     let values = (1..=10)
-        .map(|number| FunctionArrayCell::Number(number as f64))
+        .map(|number| CalcValue::number(number as f64))
         .collect::<Vec<_>>();
 
     let top_surface = surface_for_array(
@@ -464,10 +464,10 @@ fn array_top_and_bottom_rules_use_ranked_numeric_context() {
 fn array_unique_and_duplicate_rules_use_visible_value_counts() {
     let unique_surface = surface_for_array(
         vec![vec![
-            FunctionArrayCell::Number(1.0),
-            FunctionArrayCell::Number(2.0),
-            FunctionArrayCell::Number(1.0),
-            FunctionArrayCell::Number(3.0),
+            CalcValue::number(1.0),
+            CalcValue::number(2.0),
+            CalcValue::number(1.0),
+            CalcValue::number(3.0),
         ]],
         vec![rule("uniqueValues", None, Vec::new(), "#D9EAD3")],
         None,
@@ -483,9 +483,9 @@ fn array_unique_and_duplicate_rules_use_visible_value_counts() {
 
     let duplicate_surface = surface_for_array(
         vec![vec![
-            FunctionArrayCell::Text(ExcelText::from_interop_assignment("x")),
-            FunctionArrayCell::Text(ExcelText::from_interop_assignment("y")),
-            FunctionArrayCell::Text(ExcelText::from_interop_assignment("x")),
+            CalcValue::text(ExcelText::from_interop_assignment("x")),
+            CalcValue::text(ExcelText::from_interop_assignment("y")),
+            CalcValue::text(ExcelText::from_interop_assignment("x")),
         ]],
         vec![rule("duplicateValues", None, Vec::new(), "#F4CCCC")],
         None,
@@ -505,7 +505,7 @@ fn array_unique_and_duplicate_rules_use_visible_value_counts() {
 #[test]
 fn array_color_scale_interpolates_fill_colors_from_typed_stops() {
     let values = (1..=5)
-        .map(|number| FunctionArrayCell::Number(number as f64))
+        .map(|number| CalcValue::number(number as f64))
         .collect::<Vec<_>>();
     let surface = surface_for_array(
         vec![values],
@@ -537,10 +537,10 @@ fn array_color_scale_interpolates_fill_colors_from_typed_stops() {
 fn array_data_bar_uses_min_max_fill_ratios() {
     let surface = surface_for_array(
         vec![vec![
-            FunctionArrayCell::Number(10.0),
-            FunctionArrayCell::Number(20.0),
-            FunctionArrayCell::Number(30.0),
-            FunctionArrayCell::Number(40.0),
+            CalcValue::number(10.0),
+            CalcValue::number(20.0),
+            CalcValue::number(30.0),
+            CalcValue::number(40.0),
         ]],
         vec![typed_data_bar_rule(None, None, "#638EC6", None, false)],
         None,
@@ -561,7 +561,7 @@ fn array_data_bar_uses_min_max_fill_ratios() {
 #[test]
 fn array_icon_set_assigns_default_three_bin_indexes() {
     let values = (1..=6)
-        .map(|number| FunctionArrayCell::Number(number as f64))
+        .map(|number| CalcValue::number(number as f64))
         .collect::<Vec<_>>();
     let surface = surface_for_array(
         vec![values],
@@ -587,7 +587,7 @@ fn array_icon_set_assigns_default_three_bin_indexes() {
 #[test]
 fn array_visualization_and_scalar_rules_preserve_per_field_priority() {
     let values = (1..=6)
-        .map(|number| FunctionArrayCell::Number(number as f64))
+        .map(|number| CalcValue::number(number as f64))
         .collect::<Vec<_>>();
     let surface = surface_for_array(
         vec![values],
@@ -617,7 +617,7 @@ fn array_visualization_and_scalar_rules_preserve_per_field_priority() {
 #[test]
 fn scalar_visualization_rule_populates_single_cell_carrier() {
     let surface = surface_for_value(
-        FunctionValue::Number(42.0),
+        CalcValue::number(42.0),
         vec![typed_color_scale_rule(vec![
             (ConditionalFormattingThreshold::Min, "#F8696B"),
             (ConditionalFormattingThreshold::Max, "#63BE7B"),
@@ -638,9 +638,9 @@ fn scalar_visualization_rule_populates_single_cell_carrier() {
 fn array_data_bar_respects_explicit_min_max_thresholds() {
     let surface = surface_for_array(
         vec![vec![
-            FunctionArrayCell::Number(10.0),
-            FunctionArrayCell::Number(20.0),
-            FunctionArrayCell::Number(30.0),
+            CalcValue::number(10.0),
+            CalcValue::number(20.0),
+            CalcValue::number(30.0),
         ]],
         vec![typed_data_bar_rule(
             Some(ConditionalFormattingThreshold::Number(0.0)),
@@ -676,10 +676,10 @@ fn array_data_bar_respects_explicit_min_max_thresholds() {
 fn array_icon_set_respects_explicit_numeric_thresholds() {
     let surface = surface_for_array(
         vec![vec![
-            FunctionArrayCell::Number(10.0),
-            FunctionArrayCell::Number(20.0),
-            FunctionArrayCell::Number(30.0),
-            FunctionArrayCell::Number(40.0),
+            CalcValue::number(10.0),
+            CalcValue::number(20.0),
+            CalcValue::number(30.0),
+            CalcValue::number(40.0),
         ]],
         vec![typed_icon_set_rule(
             "3Arrows",
@@ -704,11 +704,11 @@ fn array_icon_set_respects_explicit_numeric_thresholds() {
 #[test]
 fn array_average_rules_respect_equal_and_stddev_thresholds() {
     let values = vec![vec![
-        FunctionArrayCell::Number(1.0),
-        FunctionArrayCell::Number(2.0),
-        FunctionArrayCell::Number(3.0),
-        FunctionArrayCell::Number(4.0),
-        FunctionArrayCell::Number(5.0),
+        CalcValue::number(1.0),
+        CalcValue::number(2.0),
+        CalcValue::number(3.0),
+        CalcValue::number(4.0),
+        CalcValue::number(5.0),
     ]];
 
     let equal_surface = surface_for_array(
@@ -754,7 +754,7 @@ fn array_average_rules_respect_equal_and_stddev_thresholds() {
 #[test]
 fn typed_color_scale_payload_drives_interpolation() {
     let values = (1..=5)
-        .map(|number| FunctionArrayCell::Number(number as f64))
+        .map(|number| CalcValue::number(number as f64))
         .collect::<Vec<_>>();
     let surface = surface_for_array(
         vec![values],
@@ -804,9 +804,9 @@ fn typed_color_scale_payload_drives_interpolation() {
 fn typed_data_bar_payload_controls_bounds_direction_and_bar_only() {
     let surface = surface_for_array(
         vec![vec![
-            FunctionArrayCell::Number(10.0),
-            FunctionArrayCell::Number(20.0),
-            FunctionArrayCell::Number(30.0),
+            CalcValue::number(10.0),
+            CalcValue::number(20.0),
+            CalcValue::number(30.0),
         ]],
         vec![typed_rule(
             "dataBar",
@@ -850,10 +850,10 @@ fn typed_data_bar_payload_controls_bounds_direction_and_bar_only() {
 fn typed_icon_set_payload_uses_explicit_thresholds() {
     let surface = surface_for_array(
         vec![vec![
-            FunctionArrayCell::Number(10.0),
-            FunctionArrayCell::Number(20.0),
-            FunctionArrayCell::Number(30.0),
-            FunctionArrayCell::Number(40.0),
+            CalcValue::number(10.0),
+            CalcValue::number(20.0),
+            CalcValue::number(30.0),
+            CalcValue::number(40.0),
         ]],
         vec![typed_rule(
             "iconSet",
@@ -885,7 +885,7 @@ fn typed_icon_set_payload_uses_explicit_thresholds() {
 #[test]
 fn typed_rank_and_average_payloads_drive_aggregate_predicates() {
     let top_values = (1..=10)
-        .map(|number| FunctionArrayCell::Number(number as f64))
+        .map(|number| CalcValue::number(number as f64))
         .collect::<Vec<_>>();
     let top_surface = surface_for_array(
         vec![top_values],
@@ -923,11 +923,11 @@ fn typed_rank_and_average_payloads_drive_aggregate_predicates() {
 
     let average_surface = surface_for_array(
         vec![vec![
-            FunctionArrayCell::Number(1.0),
-            FunctionArrayCell::Number(2.0),
-            FunctionArrayCell::Number(3.0),
-            FunctionArrayCell::Number(4.0),
-            FunctionArrayCell::Number(5.0),
+            CalcValue::number(1.0),
+            CalcValue::number(2.0),
+            CalcValue::number(3.0),
+            CalcValue::number(4.0),
+            CalcValue::number(5.0),
         ]],
         vec![typed_rule(
             "aboveAverage",
@@ -964,9 +964,9 @@ fn typed_rank_and_average_payloads_drive_aggregate_predicates() {
 fn bounded_visualization_threshold_strings_are_not_interpreted() {
     let surface = surface_for_array(
         vec![vec![
-            FunctionArrayCell::Number(1.0),
-            FunctionArrayCell::Number(2.0),
-            FunctionArrayCell::Number(3.0),
+            CalcValue::number(1.0),
+            CalcValue::number(2.0),
+            CalcValue::number(3.0),
         ]],
         vec![
             rule(
@@ -995,11 +995,11 @@ fn bounded_visualization_threshold_strings_are_not_interpreted() {
 fn bounded_aggregate_option_strings_are_not_interpreted() {
     let surface = surface_for_array(
         vec![vec![
-            FunctionArrayCell::Number(1.0),
-            FunctionArrayCell::Number(2.0),
-            FunctionArrayCell::Number(3.0),
-            FunctionArrayCell::Number(4.0),
-            FunctionArrayCell::Number(5.0),
+            CalcValue::number(1.0),
+            CalcValue::number(2.0),
+            CalcValue::number(3.0),
+            CalcValue::number(4.0),
+            CalcValue::number(5.0),
         ]],
         vec![
             rule("top", None, vec!["2"], "#D9EAD3"),

@@ -3,13 +3,12 @@ use std::collections::BTreeMap;
 mod common;
 
 use oxfml_core::consumer::runtime::{RuntimeEnvironment, RuntimeFormulaRequest};
-use oxfml_core::eval::{
-    EvaluationContext, FunctionArray, FunctionArrayCell, FunctionValue, evaluate_formula,
-};
+use oxfml_core::eval::{EvaluationContext, evaluate_formula};
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::test_support::host::SingleFormulaHost;
 use oxfml_core::{FormulaSourceRecord, TypedContextQueryBundle};
 use oxfunc_core::value::WorksheetErrorCode;
+use oxfunc_core::value::{CalcArray, CalcValue};
 
 fn evaluate_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::EvaluationOutput {
     let compiled = common::compile_formula(
@@ -23,10 +22,10 @@ fn evaluate_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::
     evaluate_formula(context).expect("evaluation should succeed")
 }
 
-fn calc_error_row(width: usize) -> FunctionValue {
-    FunctionValue::Array(
-        FunctionArray::from_rows(vec![vec![
-            FunctionArrayCell::Error(WorksheetErrorCode::Calc);
+fn calc_error_row(width: usize) -> CalcValue {
+    CalcValue::array(
+        CalcArray::from_rows(vec![vec![
+            CalcValue::error(WorksheetErrorCode::Calc);
             width
         ]])
         .expect("row array"),
@@ -80,7 +79,7 @@ fn lambda_array_selector_control_remains_green_ftc_0999() {
     let locale = oxfml_en_us_locale_context();
 
     let eval = evaluate_formula_text("ftc-0999:control:evaluator", formula);
-    assert_eq!(eval.oxfunc_value, FunctionValue::Number(10.0));
+    assert_eq!(eval.oxfunc_value, CalcValue::number(10.0));
 
     let runtime = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
@@ -88,10 +87,7 @@ fn lambda_array_selector_control_remains_green_ftc_0999() {
             TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
         ))
         .expect("runtime execution should succeed");
-    assert_eq!(
-        runtime.published_worksheet_value,
-        FunctionValue::Number(10.0)
-    );
+    assert_eq!(runtime.published_worksheet_value, CalcValue::number(10.0));
     assert_eq!(
         runtime.verification_publication_surface.visible_value_text,
         "10"

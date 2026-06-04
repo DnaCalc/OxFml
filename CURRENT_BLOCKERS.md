@@ -2,7 +2,7 @@
 
 Status: 1 active blocker.
 
-Last reviewed: 2026-05-24 after non-table W074 oracle expansion and OxFml validation.
+Last reviewed: 2026-06-04 during OxFml CalcValue internal value-model migration.
 
 ---
 
@@ -19,6 +19,16 @@ Last reviewed: 2026-05-24 after non-table W074 oracle expansion and OxFml valida
 ---
 
 ## Resolved Blockers
+
+### BLK-FML-010: OxFunc aggregate prepared-item refactor transiently blocked OxFml CalcValue migration validation
+
+- **Status**: resolved
+- **Impact**: transiently blocked `cargo test -p oxfml_core --no-run` during the CalcValue internal value-model migration validation pass.
+- **Current state**: an early validation attempt failed while compiling sibling `../OxFunc/crates/oxfunc_core` during a dirty aggregate prepared-item refactor. A subsequent `cargo test -p oxfml_core --no-run` from OxFml compiled through `oxfunc_core` and all OxFml test targets successfully, so this is not an active OxFml blocker.
+- **Exact unblock steps**: completed for this migration pass; continue with normal OxFml validation gates.
+- **Recommendation**: resolved
+- **Opened**: 2026-06-04
+- **Resolved**: 2026-06-04
 
 ### BLK-FML-008: W074 name/call freeze for W051/W056 host names
 

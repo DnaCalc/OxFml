@@ -1,3 +1,4 @@
+use oxfunc_core::value::{CalcValue, CoreValue};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
@@ -5,7 +6,7 @@ use std::path::PathBuf;
 use oxfml_core::binding::{BindContext, BindRequest, BoundExpr, NameKind, bind_formula};
 use oxfml_core::eval::{
     CallableDefinedNameBinding, CallableValueCarrier, CallableValueProfile, DefinedNameBinding,
-    EvaluationBackend, FunctionArrayCell, FunctionValue,
+    EvaluationBackend,
 };
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::red::project_red_view;
@@ -203,19 +204,19 @@ fn parse_defined_name_summary(summary: &str) -> DefinedNameBinding {
     DefinedNameBinding::Value(parse_eval_value_summary(summary))
 }
 
-fn parse_eval_value_summary(summary: &str) -> FunctionValue {
+fn parse_eval_value_summary(summary: &str) -> CalcValue {
     if let Some(number) = summary
         .strip_prefix("Number(")
         .and_then(|rest| rest.strip_suffix(')'))
     {
-        return FunctionValue::Number(number.parse::<f64>().expect("numeric fixture binding"));
+        return CalcValue::number(number.parse::<f64>().expect("numeric fixture binding"));
     }
 
     if let Some(text) = summary
         .strip_prefix("Text(")
         .and_then(|rest| rest.strip_suffix(')'))
     {
-        return FunctionValue::Text(ExcelText::from_utf16_code_units(
+        return CalcValue::text(ExcelText::from_utf16_code_units(
             text.encode_utf16().collect(),
         ));
     }
@@ -225,8 +226,8 @@ fn parse_eval_value_summary(summary: &str) -> FunctionValue {
         .and_then(|rest| rest.strip_suffix(')'))
     {
         return match logical {
-            "true" | "True" | "TRUE" => FunctionValue::Logical(true),
-            "false" | "False" | "FALSE" => FunctionValue::Logical(false),
+            "true" | "True" | "TRUE" => CalcValue::logical(true),
+            "false" | "False" | "FALSE" => CalcValue::logical(false),
             _ => panic!("unsupported logical fixture binding {summary}"),
         };
     }
@@ -284,27 +285,27 @@ fn split_profile_list(value: &str) -> Vec<String> {
     }
 }
 
-fn array_numbers(value: &FunctionValue) -> Vec<f64> {
-    let FunctionValue::Array(array) = value else {
+fn array_numbers(value: &CalcValue) -> Vec<f64> {
+    let CoreValue::Array(array) = value.core() else {
         panic!("expected array result, got {value:?}");
     };
     array
         .iter_row_major()
-        .map(|cell| match cell {
-            FunctionArrayCell::Number(number) => *number,
+        .map(|cell| match cell.core() {
+            CoreValue::Number(number) => *number,
             other => panic!("expected numeric array cell, got {other:?}"),
         })
         .collect()
 }
 
-fn array_logicals(value: &FunctionValue) -> Vec<bool> {
-    let FunctionValue::Array(array) = value else {
+fn array_logicals(value: &CalcValue) -> Vec<bool> {
+    let CoreValue::Array(array) = value.core() else {
         panic!("expected array result, got {value:?}");
     };
     array
         .iter_row_major()
-        .map(|cell| match cell {
-            FunctionArrayCell::Logical(value) => *value,
+        .map(|cell| match cell.core() {
+            CoreValue::Logical(value) => *value,
             other => panic!("expected logical array cell, got {other:?}"),
         })
         .collect()

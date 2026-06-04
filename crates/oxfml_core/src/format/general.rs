@@ -1,34 +1,32 @@
 use oxfunc_core::locale_format::FormatProfile;
-use oxfunc_core::value::WorksheetErrorCode;
+use oxfunc_core::value::{CalcValue, CoreValue, WorksheetErrorCode};
 
-use crate::eval::{
-    FunctionArrayCell, FunctionValue, eval_value_callable_summary, eval_value_is_callable,
-};
+use crate::eval::{eval_value_callable_summary, eval_value_is_callable};
 
-pub fn render_visible_value_text(value: &FunctionValue) -> String {
+pub fn render_visible_value_text(value: &CalcValue) -> String {
     if eval_value_is_callable(value) {
         return format!(
             "Callable({})",
             eval_value_callable_summary(value).unwrap_or_default()
         );
     }
-    match value {
-        FunctionValue::Number(number) => render_visible_number(*number),
-        FunctionValue::Text(text) => text.to_string_lossy(),
-        FunctionValue::Logical(value) => {
+    match value.core() {
+        CoreValue::Number(number) => render_visible_number(*number),
+        CoreValue::Text(text) => text.to_string_lossy(),
+        CoreValue::Logical(value) => {
             if *value {
                 "TRUE".to_string()
             } else {
                 "FALSE".to_string()
             }
         }
-        FunctionValue::Error(code) => worksheet_error_text(*code).to_string(),
-        FunctionValue::Array(array) => array
+        CoreValue::Error(code) => worksheet_error_text(*code).to_string(),
+        CoreValue::Empty | CoreValue::Missing => String::new(),
+        CoreValue::Array(array) => array
             .get(0, 0)
             .map(render_array_cell_text)
             .unwrap_or_default(),
-        FunctionValue::Reference(reference) => reference.target().to_string(),
-        FunctionValue::Callable(callable) => format!("Callable({})", callable.summary),
+        CoreValue::Reference(reference) => reference.target().to_string(),
     }
 }
 
@@ -68,19 +66,24 @@ pub fn worksheet_error_text(code: WorksheetErrorCode) -> &'static str {
     }
 }
 
-fn render_array_cell_text(value: &FunctionArrayCell) -> String {
-    match value {
-        FunctionArrayCell::Number(number) => render_visible_number(*number),
-        FunctionArrayCell::Text(text) => text.to_string_lossy(),
-        FunctionArrayCell::Logical(value) => {
+fn render_array_cell_text(value: &CalcValue) -> String {
+    if let Some(callable) = value.callable_value() {
+        return format!("Callable({})", callable.summary);
+    }
+    match value.core() {
+        CoreValue::Number(number) => render_visible_number(*number),
+        CoreValue::Text(text) => text.to_string_lossy(),
+        CoreValue::Logical(value) => {
             if *value {
                 "TRUE".to_string()
             } else {
                 "FALSE".to_string()
             }
         }
-        FunctionArrayCell::Error(code) => worksheet_error_text(*code).to_string(),
-        FunctionArrayCell::EmptyCell => String::new(),
-        FunctionArrayCell::Callable(callable) => format!("Callable({})", callable.summary),
+        CoreValue::Error(code) => worksheet_error_text(*code).to_string(),
+        CoreValue::Empty | CoreValue::Missing => String::new(),
+        CoreValue::Array(_) | CoreValue::Reference(_) => {
+            worksheet_error_text(WorksheetErrorCode::Value).to_string()
+        }
     }
 }

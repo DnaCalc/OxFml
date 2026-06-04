@@ -1,3 +1,4 @@
+use oxfunc_core::value::CalcValue;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::fs;
@@ -17,7 +18,7 @@ use oxfunc_core::resolver::{
     ReferenceSystemProvider, ReferenceTextResolutionMode, ReferenceTextResolveRequest,
 };
 use oxfunc_core::value::{
-    CalcValue, CellStyleHint, ExcelText, NumberFormatHint, PresentationHint, ReferenceKind,
+    CellStyleHint, CoreValue, ExcelText, NumberFormatHint, PresentationHint, ReferenceKind,
     ReferenceLike, WorksheetErrorCode,
 };
 use serde::Deserialize;
@@ -27,7 +28,7 @@ use oxfml_core::binding::{
 };
 use oxfml_core::eval::{
     CallableDefinedNameBinding, CallableValueCarrier, CallableValueProfile, DefinedNameBinding,
-    EvaluationContext, EvaluationTraceMode, FunctionArrayCell, FunctionValue, evaluate_formula,
+    EvaluationContext, EvaluationTraceMode, evaluate_formula,
 };
 use oxfml_core::interface::TypedContextQueryBundle;
 
@@ -44,7 +45,7 @@ fn evaluation_context_defaults_to_value_only_trace_mode() {
     let context = EvaluationContext::new(&compiled.bound_formula, &compiled.semantic_plan);
     let output = evaluate_formula(context).expect("evaluation should succeed");
 
-    assert_eq!(output.oxfunc_value, FunctionValue::Number(3.0));
+    assert_eq!(output.oxfunc_value, CalcValue::number(3.0));
     assert!(output.trace.prepared_calls.is_empty());
 }
 
@@ -91,7 +92,7 @@ fn evaluator_runs_text_with_pinned_grouping_separator_context() {
     );
     assert_eq!(
         output.oxfunc_value,
-        FunctionValue::Text(ExcelText::from_interop_assignment("1,234,567.89"))
+        CalcValue::text(ExcelText::from_interop_assignment("1,234,567.89"))
     );
     assert_eq!(output.result.payload_summary, "Text(1,234,567.89)");
     assert_eq!(
@@ -115,7 +116,7 @@ fn evaluator_runs_text_with_scientific_format_patterns() {
         let output = evaluate(formula, None, None, Some(&oxfml_en_us_locale_context()));
         assert_eq!(
             output.oxfunc_value,
-            FunctionValue::Text(ExcelText::from_interop_assignment(expected)),
+            CalcValue::text(ExcelText::from_interop_assignment(expected)),
             "formula {formula}"
         );
         assert_eq!(
@@ -186,9 +187,10 @@ fn evaluator_preserves_hyperlink_publication_intent() {
         Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(
-        output.oxfunc_value,
-        FunctionValue::Text(ExcelText::from_interop_assignment("Go"))
+        output.oxfunc_value.core(),
+        &CoreValue::Text(ExcelText::from_interop_assignment("Go"))
     );
+    assert!(output.oxfunc_value.rich().is_some());
     assert_eq!(
         output.returned_value_surface.kind,
         oxfml_core::ReturnedValueSurfaceKind::ValueWithPresentation
@@ -202,7 +204,8 @@ fn evaluator_preserves_hyperlink_publication_intent() {
 #[test]
 fn evaluator_preserves_today_presentation_hint_through_generic_extended_path() {
     let output = evaluate("=TODAY()", None, None, Some(&oxfml_en_us_locale_context()));
-    assert_eq!(output.oxfunc_value, FunctionValue::Number(46000.0));
+    assert_eq!(output.oxfunc_value.core(), &CoreValue::Number(46000.0));
+    assert!(output.oxfunc_value.rich().is_some());
     assert_eq!(
         output.returned_value_surface.kind,
         oxfml_core::ReturnedValueSurfaceKind::ValueWithPresentation
@@ -222,9 +225,10 @@ fn evaluator_preserves_image_rich_value_surface_through_host_query_lane() {
         Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(
-        output.oxfunc_value,
-        FunctionValue::Text(ExcelText::from_interop_assignment("-2146826273"))
+        output.oxfunc_value.core(),
+        &CoreValue::Text(ExcelText::from_interop_assignment("-2146826273"))
     );
+    assert!(output.oxfunc_value.rich().is_some());
     assert_eq!(
         output.returned_value_surface.kind,
         oxfml_core::ReturnedValueSurfaceKind::RichValue
@@ -248,7 +252,7 @@ fn evaluator_maps_image_provider_denial_to_blocked_error() {
     );
     assert_eq!(
         output.oxfunc_value,
-        FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Blocked)
+        CalcValue::error(oxfunc_core::value::WorksheetErrorCode::Blocked)
     );
     assert_eq!(
         output.returned_value_surface.kind,
@@ -386,7 +390,7 @@ fn evaluator_runs_row_and_column_with_caller_context() {
 #[test]
 fn evaluator_runs_unary_negative_literal_through_function_calls() {
     let sign_output = evaluate("=SIGN(-5)", None, None, Some(&oxfml_en_us_locale_context()));
-    assert_eq!(sign_output.oxfunc_value, FunctionValue::Number(-1.0));
+    assert_eq!(sign_output.oxfunc_value, CalcValue::number(-1.0));
 
     let pv_output = evaluate(
         "=PV(0.05,10,-100)",
@@ -394,9 +398,12 @@ fn evaluator_runs_unary_negative_literal_through_function_calls() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    match pv_output.oxfunc_value {
-        FunctionValue::Number(value) => assert!((value - 772.1734929184818).abs() < 1e-9),
-        other => panic!("expected numeric PV result, got {other:?}"),
+    match pv_output.oxfunc_value.as_number() {
+        Some(value) => assert!((value - 772.1734929184818).abs() < 1e-9),
+        None => panic!(
+            "expected numeric PV result, got {:?}",
+            pv_output.oxfunc_value
+        ),
     }
 
     let fv_output = evaluate(
@@ -405,16 +412,19 @@ fn evaluator_runs_unary_negative_literal_through_function_calls() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    match fv_output.oxfunc_value {
-        FunctionValue::Number(value) => assert!((value - 1257.789253554884).abs() < 1e-9),
-        other => panic!("expected numeric FV result, got {other:?}"),
+    match fv_output.oxfunc_value.as_number() {
+        Some(value) => assert!((value - 1257.789253554884).abs() < 1e-9),
+        None => panic!(
+            "expected numeric FV result, got {:?}",
+            fv_output.oxfunc_value
+        ),
     }
 }
 
 #[test]
 fn evaluator_matches_current_exponentiation_empirical_baseline() {
     let chained = evaluate("=2^3^2", None, None, Some(&oxfml_en_us_locale_context()));
-    assert_eq!(chained.oxfunc_value, FunctionValue::Number(64.0));
+    assert_eq!(chained.oxfunc_value, CalcValue::number(64.0));
     assert_eq!(
         chained
             .trace
@@ -426,7 +436,7 @@ fn evaluator_matches_current_exponentiation_empirical_baseline() {
     );
 
     let unary = evaluate("=-2^2", None, None, Some(&oxfml_en_us_locale_context()));
-    assert_eq!(unary.oxfunc_value, FunctionValue::Number(4.0));
+    assert_eq!(unary.oxfunc_value, CalcValue::number(4.0));
     assert_eq!(
         unary
             .trace
@@ -438,7 +448,7 @@ fn evaluator_matches_current_exponentiation_empirical_baseline() {
     );
 
     let multiplied = evaluate("=2^2*3", None, None, Some(&oxfml_en_us_locale_context()));
-    assert_eq!(multiplied.oxfunc_value, FunctionValue::Number(12.0));
+    assert_eq!(multiplied.oxfunc_value, CalcValue::number(12.0));
     assert_eq!(
         multiplied
             .trace
@@ -450,7 +460,7 @@ fn evaluator_matches_current_exponentiation_empirical_baseline() {
     );
 
     let additive = evaluate("=1+2*3^2", None, None, Some(&oxfml_en_us_locale_context()));
-    assert_eq!(additive.oxfunc_value, FunctionValue::Number(19.0));
+    assert_eq!(additive.oxfunc_value, CalcValue::number(19.0));
     assert_eq!(
         additive
             .trace
@@ -465,7 +475,7 @@ fn evaluator_matches_current_exponentiation_empirical_baseline() {
 #[test]
 fn evaluator_dispatches_percent_concat_and_comparison_operators_to_oxfunc() {
     let percent = evaluate("=50%", None, None, Some(&oxfml_en_us_locale_context()));
-    assert_eq!(percent.oxfunc_value, FunctionValue::Number(0.5));
+    assert_eq!(percent.oxfunc_value, CalcValue::number(0.5));
     assert_eq!(
         percent
             .trace
@@ -479,7 +489,7 @@ fn evaluator_dispatches_percent_concat_and_comparison_operators_to_oxfunc() {
     let concat = evaluate("=1&2", None, None, Some(&oxfml_en_us_locale_context()));
     assert_eq!(
         concat.oxfunc_value,
-        FunctionValue::Text(ExcelText::from_interop_assignment("12"))
+        CalcValue::text(ExcelText::from_interop_assignment("12"))
     );
     assert_eq!(
         concat
@@ -497,7 +507,7 @@ fn evaluator_dispatches_percent_concat_and_comparison_operators_to_oxfunc() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(compared.oxfunc_value, FunctionValue::Logical(true));
+    assert_eq!(compared.oxfunc_value, CalcValue::logical(true));
     assert_eq!(
         compared
             .trace
@@ -509,7 +519,7 @@ fn evaluator_dispatches_percent_concat_and_comparison_operators_to_oxfunc() {
     );
 
     let ordered = evaluate("=1<2", None, None, Some(&oxfml_en_us_locale_context()));
-    assert_eq!(ordered.oxfunc_value, FunctionValue::Logical(true));
+    assert_eq!(ordered.oxfunc_value, CalcValue::logical(true));
     assert_eq!(
         ordered
             .trace
@@ -521,7 +531,7 @@ fn evaluator_dispatches_percent_concat_and_comparison_operators_to_oxfunc() {
     );
 
     let not_equal = evaluate("=1<>2", None, None, Some(&oxfml_en_us_locale_context()));
-    assert_eq!(not_equal.oxfunc_value, FunctionValue::Logical(true));
+    assert_eq!(not_equal.oxfunc_value, CalcValue::logical(true));
     assert_eq!(
         not_equal
             .trace
@@ -533,7 +543,7 @@ fn evaluator_dispatches_percent_concat_and_comparison_operators_to_oxfunc() {
     );
 
     let greater_equal = evaluate("=2>=1", None, None, Some(&oxfml_en_us_locale_context()));
-    assert_eq!(greater_equal.oxfunc_value, FunctionValue::Logical(true));
+    assert_eq!(greater_equal.oxfunc_value, CalcValue::logical(true));
     assert_eq!(
         greater_equal
             .trace
@@ -552,14 +562,14 @@ fn evaluator_dispatches_percent_concat_and_comparison_operators_to_oxfunc() {
     );
     assert_eq!(
         bool_concat.oxfunc_value,
-        FunctionValue::Text(ExcelText::from_interop_assignment("TRUEFALSE"))
+        CalcValue::text(ExcelText::from_interop_assignment("TRUEFALSE"))
     );
 }
 
 #[test]
 fn evaluator_supports_scientific_numeric_literals() {
     let literal = evaluate("=1E+3+2", None, None, Some(&oxfml_en_us_locale_context()));
-    assert_eq!(literal.oxfunc_value, FunctionValue::Number(1002.0));
+    assert_eq!(literal.oxfunc_value, CalcValue::number(1002.0));
     assert_eq!(
         literal
             .trace
@@ -571,7 +581,7 @@ fn evaluator_supports_scientific_numeric_literals() {
     );
 
     let leading_decimal = evaluate("=.5E+1", None, None, Some(&oxfml_en_us_locale_context()));
-    assert_eq!(leading_decimal.oxfunc_value, FunctionValue::Number(5.0));
+    assert_eq!(leading_decimal.oxfunc_value, CalcValue::number(5.0));
 }
 
 #[test]
@@ -579,7 +589,7 @@ fn evaluator_maps_negative_fractional_power_to_num_error() {
     let output = evaluate("=(-1)^0.5", None, None, Some(&oxfml_en_us_locale_context()));
     assert_eq!(
         output.oxfunc_value,
-        FunctionValue::Error(WorksheetErrorCode::Num)
+        CalcValue::error(WorksheetErrorCode::Num)
     );
     assert_eq!(output.result.payload_summary, "Error(Num)");
 }
@@ -594,7 +604,7 @@ fn evaluator_projects_ordinary_worksheet_errors_as_values() {
     );
     assert_eq!(
         output.oxfunc_value,
-        FunctionValue::Error(WorksheetErrorCode::Value)
+        CalcValue::error(WorksheetErrorCode::Value)
     );
     assert_eq!(output.result.payload_summary, "Error(Value)");
     assert_eq!(output.trace.prepared_calls[0].function_id, "FUNC.ABS");
@@ -610,7 +620,7 @@ fn evaluator_matches_current_if_empty_text_excel_outcome() {
     );
     assert_eq!(
         output.oxfunc_value,
-        FunctionValue::Error(WorksheetErrorCode::Value)
+        CalcValue::error(WorksheetErrorCode::Value)
     );
     assert_eq!(output.result.payload_summary, "Error(Value)");
     assert_eq!(output.trace.prepared_calls[0].function_id, "FUNC.IF");
@@ -623,12 +633,12 @@ fn evaluator_executes_foundation_let_lambda_success_cases() {
         (
             "FTC-0446",
             "=LET(dict,{\"key1\",LAMBDA({10,20,30});\"key2\",LAMBDA({40,50,60})},keys,INDEX(dict,0,1),INDEX(keys,1,1))",
-            FunctionValue::Text(ExcelText::from_interop_assignment("key1")),
+            CalcValue::text(ExcelText::from_interop_assignment("key1")),
         ),
         (
             "FTC-0447",
             "=LET(dict,{\"a\",LAMBDA(1);\"b\",LAMBDA(2);\"c\",LAMBDA(3)},keys,TAKE(dict,,1),ROWS(keys))",
-            FunctionValue::Number(3.0),
+            CalcValue::number(3.0),
         ),
     ];
 
@@ -654,7 +664,7 @@ fn evaluator_executes_foundation_array_lambda_carrier_case_ftc_0455() {
     .unwrap_or_else(|error| panic!("FTC-0455 evaluator execution should succeed: {error:?}"));
     assert_eq!(
         output.oxfunc_value,
-        FunctionValue::Number(20.0),
+        CalcValue::number(20.0),
         "FTC-0455 value"
     );
 }
@@ -662,11 +672,11 @@ fn evaluator_executes_foundation_array_lambda_carrier_case_ftc_0455() {
 #[test]
 fn evaluator_executes_lambda_array_authoring_frontier_acceptance_baselines() {
     let cases = [
-        ("S1", "=LAMBDA(200)()", FunctionValue::Number(200.0)),
+        ("S1", "=LAMBDA(200)()", CalcValue::number(200.0)),
         (
             "S4",
             "=LET(dict,{\"x\",1;\"y\",2},XLOOKUP(\"y\",TAKE(dict,,1),DROP(dict,,1)))",
-            FunctionValue::Number(2.0),
+            CalcValue::number(2.0),
         ),
     ];
 
@@ -690,7 +700,7 @@ fn evaluator_executes_if_text_true_condition_ftc_0541() {
 
     assert_eq!(
         output.oxfunc_value,
-        FunctionValue::Text(ExcelText::from_interop_assignment("yes"))
+        CalcValue::text(ExcelText::from_interop_assignment("yes"))
     );
     assert_eq!(output.result.payload_summary, "Text(yes)");
     assert_eq!(output.trace.prepared_calls[0].function_id, "FUNC.IF");
@@ -704,7 +714,7 @@ fn evaluator_executes_if_text_false_condition() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(output.oxfunc_value, FunctionValue::Number(2.0));
+    assert_eq!(output.oxfunc_value, CalcValue::number(2.0));
     assert_eq!(output.result.payload_summary, "Number(2)");
 }
 
@@ -716,7 +726,7 @@ fn evaluator_consumes_broader_float_comparison_family_split() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(tolerant_operator.oxfunc_value, FunctionValue::Logical(true));
+    assert_eq!(tolerant_operator.oxfunc_value, CalcValue::logical(true));
     assert_eq!(
         tolerant_operator
             .trace
@@ -733,7 +743,7 @@ fn evaluator_consumes_broader_float_comparison_family_split() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(tolerant_switch.oxfunc_value, FunctionValue::Number(1.0));
+    assert_eq!(tolerant_switch.oxfunc_value, CalcValue::number(1.0));
 
     let exact_delta = evaluate(
         "=DELTA(((123456789012345*10)+5)/1E25,((123456789012345*10)+4)/1E25)",
@@ -741,7 +751,7 @@ fn evaluator_consumes_broader_float_comparison_family_split() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(exact_delta.oxfunc_value, FunctionValue::Number(0.0));
+    assert_eq!(exact_delta.oxfunc_value, CalcValue::number(0.0));
 }
 
 #[test]
@@ -752,7 +762,7 @@ fn evaluator_publishes_excel_root_add_subtract_zero_reaching_result() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(root_zero.oxfunc_value, FunctionValue::Number(0.0));
+    assert_eq!(root_zero.oxfunc_value, CalcValue::number(0.0));
 
     let grouped_root = evaluate(
         "=(0.1+0.2-0.3)",
@@ -762,7 +772,7 @@ fn evaluator_publishes_excel_root_add_subtract_zero_reaching_result() {
     );
     assert_eq!(
         grouped_root.oxfunc_value,
-        FunctionValue::Number(5.551115123125783e-17)
+        CalcValue::number(5.551115123125783e-17)
     );
 
     let scaled = evaluate(
@@ -771,10 +781,7 @@ fn evaluator_publishes_excel_root_add_subtract_zero_reaching_result() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(
-        scaled.oxfunc_value,
-        FunctionValue::Number(5.551115123125783)
-    );
+    assert_eq!(scaled.oxfunc_value, CalcValue::number(5.551115123125783));
 
     let condition = evaluate(
         "=IF(0.1+0.2-0.3,1,0)",
@@ -782,7 +789,7 @@ fn evaluator_publishes_excel_root_add_subtract_zero_reaching_result() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(condition.oxfunc_value, FunctionValue::Number(1.0));
+    assert_eq!(condition.oxfunc_value, CalcValue::number(1.0));
 
     let comparison = evaluate(
         "=(0.1+0.2-0.3)=0",
@@ -790,7 +797,7 @@ fn evaluator_publishes_excel_root_add_subtract_zero_reaching_result() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(comparison.oxfunc_value, FunctionValue::Logical(false));
+    assert_eq!(comparison.oxfunc_value, CalcValue::logical(false));
 
     let small_intended_delta = evaluate(
         "=1E-17+(-2E-17)",
@@ -800,7 +807,7 @@ fn evaluator_publishes_excel_root_add_subtract_zero_reaching_result() {
     );
     assert_eq!(
         small_intended_delta.oxfunc_value,
-        FunctionValue::Number(-1.0e-17)
+        CalcValue::number(-1.0e-17)
     );
 
     let larger_residue = evaluate(
@@ -811,7 +818,7 @@ fn evaluator_publishes_excel_root_add_subtract_zero_reaching_result() {
     );
     assert_eq!(
         larger_residue.oxfunc_value,
-        FunctionValue::Number(9.992007221626409e-16)
+        CalcValue::number(9.992007221626409e-16)
     );
 
     let large_exact_delta = evaluate(
@@ -820,7 +827,7 @@ fn evaluator_publishes_excel_root_add_subtract_zero_reaching_result() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(large_exact_delta.oxfunc_value, FunctionValue::Number(1.0));
+    assert_eq!(large_exact_delta.oxfunc_value, CalcValue::number(1.0));
 
     let larger_absolute_residue = evaluate(
         "=43.1-43.2+0.1",
@@ -830,7 +837,7 @@ fn evaluator_publishes_excel_root_add_subtract_zero_reaching_result() {
     );
     assert_eq!(
         larger_absolute_residue.oxfunc_value,
-        FunctionValue::Number(-1.4155343563970746e-15)
+        CalcValue::number(-1.4155343563970746e-15)
     );
 }
 
@@ -842,7 +849,7 @@ fn evaluator_dispatches_range_and_intersection_reference_operators_to_oxfunc() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(range.oxfunc_value, FunctionValue::Number(31.0));
+    assert_eq!(range.oxfunc_value, CalcValue::number(31.0));
     assert_eq!(
         range
             .trace
@@ -859,7 +866,10 @@ fn evaluator_dispatches_range_and_intersection_reference_operators_to_oxfunc() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(intersection.oxfunc_value, FunctionValue::Number(24.0));
+    assert_eq!(
+        intersection.oxfunc_value,
+        CalcValue::error(WorksheetErrorCode::Ref)
+    );
     assert_eq!(
         intersection
             .trace
@@ -876,7 +886,10 @@ fn evaluator_dispatches_range_and_intersection_reference_operators_to_oxfunc() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(union.oxfunc_value, FunctionValue::Number(31.0));
+    assert_eq!(
+        union.oxfunc_value,
+        CalcValue::error(WorksheetErrorCode::Ref)
+    );
     assert_eq!(
         union
             .trace
@@ -889,14 +902,17 @@ fn evaluator_dispatches_range_and_intersection_reference_operators_to_oxfunc() {
 }
 
 #[test]
-fn evaluator_materializes_same_sheet_prefixed_multi_area_references() {
+fn evaluator_projects_same_sheet_prefixed_multi_area_without_upstream_reference_composition() {
     let mut extra_cells = BTreeMap::new();
-    extra_cells.insert("Alpha!A1".to_string(), FunctionValue::Number(7.0));
-    extra_cells.insert("Alpha!A2".to_string(), FunctionValue::Number(11.0));
-    extra_cells.insert("Alpha!B2".to_string(), FunctionValue::Number(13.0));
+    extra_cells.insert("Alpha!A1".to_string(), CalcValue::number(7.0));
+    extra_cells.insert("Alpha!A2".to_string(), CalcValue::number(11.0));
+    extra_cells.insert("Alpha!B2".to_string(), CalcValue::number(13.0));
 
     let output = evaluate_with_cells("=SUM((Alpha!A1:A2,Alpha!B2))", extra_cells);
-    assert_eq!(output.oxfunc_value, FunctionValue::Number(31.0));
+    assert_eq!(
+        output.oxfunc_value,
+        CalcValue::error(WorksheetErrorCode::Ref)
+    );
     assert_eq!(
         output
             .trace
@@ -911,20 +927,20 @@ fn evaluator_materializes_same_sheet_prefixed_multi_area_references() {
 #[test]
 fn evaluator_resolves_direct_sheet_qualified_cell_reference_end_to_end() {
     let mut extra_cells = BTreeMap::new();
-    extra_cells.insert("Alpha!A1".to_string(), FunctionValue::Number(17.0));
+    extra_cells.insert("Alpha!A1".to_string(), CalcValue::number(17.0));
 
     let output = evaluate_with_cells("=Alpha!A1", extra_cells);
-    assert_eq!(output.oxfunc_value, FunctionValue::Number(17.0));
+    assert_eq!(output.oxfunc_value, CalcValue::number(17.0));
 }
 
 #[test]
 fn evaluator_resolves_direct_sheet_qualified_area_reference_end_to_end() {
     let mut extra_cells = BTreeMap::new();
-    extra_cells.insert("Alpha!A1".to_string(), FunctionValue::Number(7.0));
-    extra_cells.insert("Alpha!A2".to_string(), FunctionValue::Number(11.0));
+    extra_cells.insert("Alpha!A1".to_string(), CalcValue::number(7.0));
+    extra_cells.insert("Alpha!A2".to_string(), CalcValue::number(11.0));
 
     let output = evaluate_with_cells("=SUM(Alpha!A1:A2)", extra_cells);
-    assert_eq!(output.oxfunc_value, FunctionValue::Number(18.0));
+    assert_eq!(output.oxfunc_value, CalcValue::number(18.0));
     assert_eq!(
         output
             .trace
@@ -937,30 +953,37 @@ fn evaluator_resolves_direct_sheet_qualified_area_reference_end_to_end() {
 }
 
 #[test]
-fn evaluator_rejects_mixed_sheet_multi_area_end_to_end() {
+fn evaluator_projects_mixed_sheet_multi_area_without_upstream_reference_composition() {
     let mut extra_cells = BTreeMap::new();
-    extra_cells.insert("Alpha!A1".to_string(), FunctionValue::Number(7.0));
-    extra_cells.insert("Alpha!A2".to_string(), FunctionValue::Number(11.0));
-    extra_cells.insert("Beta!B2".to_string(), FunctionValue::Number(13.0));
+    extra_cells.insert("Alpha!A1".to_string(), CalcValue::number(7.0));
+    extra_cells.insert("Alpha!A2".to_string(), CalcValue::number(11.0));
+    extra_cells.insert("Beta!B2".to_string(), CalcValue::number(13.0));
 
-    let got = evaluate_with_cells_result("=SUM((Alpha!A1:A2,Beta!B2))", extra_cells);
-    let err = got.expect_err("mixed-sheet multi-area should reject");
-    assert!(
-        err.message.contains("mixed_sheet_multi_area"),
-        "expected mixed-sheet multi-area failure, got {}",
-        err.message
+    let output = evaluate_with_cells("=SUM((Alpha!A1:A2,Beta!B2))", extra_cells);
+    assert_eq!(
+        output.oxfunc_value,
+        CalcValue::error(WorksheetErrorCode::Ref)
+    );
+    assert_eq!(
+        output
+            .trace
+            .prepared_calls
+            .iter()
+            .map(|call| call.function_id)
+            .collect::<Vec<_>>(),
+        vec!["FUNC.OP_UNION_REF", "FUNC.SUM"]
     );
 }
 
 #[test]
 fn evaluator_preserves_sheet_qualified_whole_row_reference_for_reference_visible_function() {
     let mut extra_cells = BTreeMap::new();
-    extra_cells.insert("Alpha!A1".to_string(), FunctionValue::Number(7.0));
-    extra_cells.insert("Alpha!B2".to_string(), FunctionValue::Number(13.0));
-    extra_cells.insert("Alpha!C3".to_string(), FunctionValue::Number(17.0));
+    extra_cells.insert("Alpha!A1".to_string(), CalcValue::number(7.0));
+    extra_cells.insert("Alpha!B2".to_string(), CalcValue::number(13.0));
+    extra_cells.insert("Alpha!C3".to_string(), CalcValue::number(17.0));
 
     let output = evaluate_with_cells("=ROWS(Alpha!1:3)", extra_cells);
-    assert_eq!(output.oxfunc_value, FunctionValue::Number(3.0));
+    assert_eq!(output.oxfunc_value, CalcValue::number(3.0));
     assert_eq!(output.trace.prepared_calls[0].function_id, "FUNC.ROWS");
     assert_eq!(
         output.trace.prepared_calls[0].prepared_arguments[0].evaluation_mode,
@@ -971,12 +994,12 @@ fn evaluator_preserves_sheet_qualified_whole_row_reference_for_reference_visible
 #[test]
 fn evaluator_preserves_sheet_qualified_whole_column_reference_for_reference_visible_function() {
     let mut extra_cells = BTreeMap::new();
-    extra_cells.insert("Alpha!A1".to_string(), FunctionValue::Number(7.0));
-    extra_cells.insert("Alpha!A2".to_string(), FunctionValue::Number(11.0));
-    extra_cells.insert("Alpha!B2".to_string(), FunctionValue::Number(13.0));
+    extra_cells.insert("Alpha!A1".to_string(), CalcValue::number(7.0));
+    extra_cells.insert("Alpha!A2".to_string(), CalcValue::number(11.0));
+    extra_cells.insert("Alpha!B2".to_string(), CalcValue::number(13.0));
 
     let output = evaluate_with_cells("=COLUMNS(Alpha!A:B)", extra_cells);
-    assert_eq!(output.oxfunc_value, FunctionValue::Number(2.0));
+    assert_eq!(output.oxfunc_value, CalcValue::number(2.0));
     assert_eq!(output.trace.prepared_calls[0].function_id, "FUNC.COLUMNS");
     assert_eq!(
         output.trace.prepared_calls[0].prepared_arguments[0].evaluation_mode,
@@ -987,9 +1010,9 @@ fn evaluator_preserves_sheet_qualified_whole_column_reference_for_reference_visi
 #[test]
 fn evaluator_rejects_sheet_qualified_whole_row_reference_in_local_value_only_lane() {
     let mut extra_cells = BTreeMap::new();
-    extra_cells.insert("Alpha!A1".to_string(), FunctionValue::Number(7.0));
-    extra_cells.insert("Alpha!B2".to_string(), FunctionValue::Number(13.0));
-    extra_cells.insert("Alpha!C3".to_string(), FunctionValue::Number(17.0));
+    extra_cells.insert("Alpha!A1".to_string(), CalcValue::number(7.0));
+    extra_cells.insert("Alpha!B2".to_string(), CalcValue::number(13.0));
+    extra_cells.insert("Alpha!C3".to_string(), CalcValue::number(17.0));
 
     let got = evaluate_with_cells_result("=SUM(Alpha!1:3)", extra_cells);
     let err = got.expect_err("whole-row local value-only deref should reject honestly");
@@ -1003,9 +1026,9 @@ fn evaluator_rejects_sheet_qualified_whole_row_reference_in_local_value_only_lan
 #[test]
 fn evaluator_rejects_sheet_qualified_whole_column_reference_in_local_value_only_lane() {
     let mut extra_cells = BTreeMap::new();
-    extra_cells.insert("Alpha!A1".to_string(), FunctionValue::Number(7.0));
-    extra_cells.insert("Alpha!A2".to_string(), FunctionValue::Number(11.0));
-    extra_cells.insert("Alpha!B2".to_string(), FunctionValue::Number(13.0));
+    extra_cells.insert("Alpha!A1".to_string(), CalcValue::number(7.0));
+    extra_cells.insert("Alpha!A2".to_string(), CalcValue::number(11.0));
+    extra_cells.insert("Alpha!B2".to_string(), CalcValue::number(13.0));
 
     let got = evaluate_with_cells_result("=SUM(Alpha!A:B)", extra_cells);
     let err = got.expect_err("whole-column local value-only deref should reject honestly");
@@ -1078,19 +1101,19 @@ fn evaluator_lifts_division_over_arrays_and_preserves_element_errors() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    let FunctionValue::Array(array) = &output.oxfunc_value else {
+    let CoreValue::Array(array) = output.oxfunc_value.core() else {
         panic!("expected array result, got {:?}", output.oxfunc_value);
     };
     assert_eq!(output.result.payload_summary, "Array(2x2)");
-    assert_eq!(array.get(0, 0), Some(&FunctionArrayCell::Number(4.0)));
+    assert_eq!(array.get(0, 0), Some(&CalcValue::number(4.0)));
     assert_eq!(
         array.get(0, 1),
-        Some(&FunctionArrayCell::Error(
+        Some(&CalcValue::error(
             oxfunc_core::value::WorksheetErrorCode::Div0
         ))
     );
-    assert_eq!(array.get(1, 0), Some(&FunctionArrayCell::Number(4.0)));
-    assert_eq!(array.get(1, 1), Some(&FunctionArrayCell::Number(1.0)));
+    assert_eq!(array.get(1, 0), Some(&CalcValue::number(4.0)));
+    assert_eq!(array.get(1, 1), Some(&CalcValue::number(1.0)));
 }
 
 #[derive(Debug, Deserialize)]
@@ -1135,13 +1158,13 @@ fn evaluator_treats_absent_single_cell_reference_as_true_blank() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(isblank_output.oxfunc_value, FunctionValue::Logical(true));
+    assert_eq!(isblank_output.oxfunc_value, CalcValue::logical(true));
 
     let n_output = evaluate("=N(A9)", None, None, Some(&oxfml_en_us_locale_context()));
-    assert_eq!(n_output.oxfunc_value, FunctionValue::Number(0.0));
+    assert_eq!(n_output.oxfunc_value, CalcValue::number(0.0));
 
     let type_output = evaluate("=TYPE(A9)", None, None, Some(&oxfml_en_us_locale_context()));
-    assert_eq!(type_output.oxfunc_value, FunctionValue::Number(1.0));
+    assert_eq!(type_output.oxfunc_value, CalcValue::number(1.0));
 }
 
 #[test]
@@ -1158,7 +1181,7 @@ fn evaluator_runs_indirect_offset_and_iferror() {
     );
     assert_eq!(
         indirect_output.oxfunc_value,
-        FunctionValue::Error(WorksheetErrorCode::Ref)
+        CalcValue::error(WorksheetErrorCode::Ref)
     );
 
     let offset_output = evaluate(
@@ -1188,17 +1211,17 @@ fn evaluator_runs_indirect_offset_and_iferror() {
 #[test]
 fn evaluator_threads_indirect_reference_text_resolution_to_oxfunc_fec() {
     let mut cells = BTreeMap::new();
-    cells.insert("A2".to_string(), FunctionValue::Number(11.0));
+    cells.insert("A2".to_string(), CalcValue::number(11.0));
     let resolver =
         RecordingReferenceSystemProvider::new(ReferenceLike::new(ReferenceKind::A1, "A2"))
             .with_values(cells.clone());
     let output =
         evaluate_with_reference_system_provider("=INDIRECT(\"Tree.Node\")", &resolver, cells);
 
-    assert_eq!(output.oxfunc_value, FunctionValue::Number(11.0));
+    assert_eq!(output.oxfunc_value, CalcValue::number(11.0));
     assert_eq!(
         output.trace.prepared_calls[0].returned_value,
-        Some(FunctionValue::Reference(ReferenceLike::new(
+        Some(CalcValue::reference(ReferenceLike::new(
             ReferenceKind::A1,
             "A2"
         )))
@@ -1226,7 +1249,7 @@ fn evaluator_maps_unknown_function_call_to_name_error() {
     );
     assert_eq!(
         output.oxfunc_value,
-        FunctionValue::Error(WorksheetErrorCode::Name)
+        CalcValue::error(WorksheetErrorCode::Name)
     );
 }
 
@@ -1238,7 +1261,7 @@ fn evaluator_iferror_catches_unknown_function_name_error() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(output.oxfunc_value, FunctionValue::Number(0.0));
+    assert_eq!(output.oxfunc_value, CalcValue::number(0.0));
 }
 
 #[test]
@@ -1249,7 +1272,7 @@ fn evaluator_preserves_if_branch_laziness_locally() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(output.oxfunc_value, FunctionValue::Number(1.0));
+    assert_eq!(output.oxfunc_value, CalcValue::number(1.0));
 }
 
 #[test]
@@ -1260,7 +1283,7 @@ fn evaluator_preserves_iferror_fallback_laziness_locally() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(output.oxfunc_value, FunctionValue::Number(1.0));
+    assert_eq!(output.oxfunc_value, CalcValue::number(1.0));
 }
 
 #[test]
@@ -1277,7 +1300,7 @@ fn evaluator_uses_defined_name_bindings_for_sum() {
     let mut bindings = BTreeMap::new();
     bindings.insert(
         "InputValue".to_string(),
-        DefinedNameBinding::Value(FunctionValue::Number(5.0)),
+        DefinedNameBinding::Value(CalcValue::number(5.0)),
     );
 
     let output = evaluate(
@@ -1584,7 +1607,7 @@ fn evaluator_preserves_defined_name_callable_as_first_class_value() {
     let mut closure = BTreeMap::new();
     closure.insert(
         "x".to_string(),
-        DefinedNameBinding::Value(FunctionValue::Number(10.0)),
+        DefinedNameBinding::Value(CalcValue::number(10.0)),
     );
     bindings.insert(
         "NamedLambda".to_string(),
@@ -1787,7 +1810,7 @@ fn evaluator_executes_reduce_with_local_lambda_callable() {
         Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(output.result.payload_summary, "Number(6)");
-    assert_eq!(output.oxfunc_value, FunctionValue::Number(6.0));
+    assert_eq!(output.oxfunc_value, CalcValue::number(6.0));
 }
 
 #[test]
@@ -1955,7 +1978,7 @@ fn evaluator_executes_direct_lambda_with_optional_bracket_parameter() {
         Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(omitted.result.payload_summary, "Number(10)");
-    assert_eq!(omitted.oxfunc_value, FunctionValue::Number(10.0));
+    assert_eq!(omitted.oxfunc_value, CalcValue::number(10.0));
 
     let present = evaluate(
         "=LAMBDA(x,[y],IF(ISOMITTED(y),x*2,x+y))(5,3)",
@@ -1964,7 +1987,7 @@ fn evaluator_executes_direct_lambda_with_optional_bracket_parameter() {
         Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(present.result.payload_summary, "Number(8)");
-    assert_eq!(present.oxfunc_value, FunctionValue::Number(8.0));
+    assert_eq!(present.oxfunc_value, CalcValue::number(8.0));
 }
 
 #[test]
@@ -1976,7 +1999,7 @@ fn evaluator_executes_helper_bound_lambda_with_optional_bracket_parameter() {
         Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(omitted.result.payload_summary, "Number(10)");
-    assert_eq!(omitted.oxfunc_value, FunctionValue::Number(10.0));
+    assert_eq!(omitted.oxfunc_value, CalcValue::number(10.0));
 
     let present = evaluate(
         "=LET(f,LAMBDA(x,[y],IF(ISOMITTED(y),x*2,x+y)),f(5,3))",
@@ -1985,7 +2008,7 @@ fn evaluator_executes_helper_bound_lambda_with_optional_bracket_parameter() {
         Some(&oxfml_en_us_locale_context()),
     );
     assert_eq!(present.result.payload_summary, "Number(8)");
-    assert_eq!(present.oxfunc_value, FunctionValue::Number(8.0));
+    assert_eq!(present.oxfunc_value, CalcValue::number(8.0));
 }
 
 #[test]
@@ -2008,7 +2031,7 @@ fn evaluator_executes_helper_bound_returned_lambda_invocation() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(output.oxfunc_value, FunctionValue::Number(15.0));
+    assert_eq!(output.oxfunc_value, CalcValue::number(15.0));
     assert_eq!(
         output
             .trace
@@ -2053,7 +2076,7 @@ fn evaluator_executes_nested_returned_lambda_invocation() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(output.oxfunc_value, FunctionValue::Number(15.0));
+    assert_eq!(output.oxfunc_value, CalcValue::number(15.0));
     assert_eq!(
         output
             .trace
@@ -2078,7 +2101,7 @@ fn evaluator_executes_returned_lambda_with_lexical_capture() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(output.oxfunc_value, FunctionValue::Number(115.0));
+    assert_eq!(output.oxfunc_value, CalcValue::number(115.0));
 }
 
 #[test]
@@ -2105,7 +2128,7 @@ fn evaluator_projects_runaway_recursive_defined_name_callable_as_num_error() {
     );
     assert_eq!(
         output.oxfunc_value,
-        FunctionValue::Error(WorksheetErrorCode::Num)
+        CalcValue::error(WorksheetErrorCode::Num)
     );
 }
 
@@ -2150,7 +2173,7 @@ fn evaluator_executes_bounded_recursive_defined_name_callable() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(output.oxfunc_value, FunctionValue::Number(120.0));
+    assert_eq!(output.oxfunc_value, CalcValue::number(120.0));
 }
 
 #[test]
@@ -2194,7 +2217,7 @@ fn evaluator_matches_excel_named_recursion_success_boundary() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(output.oxfunc_value, FunctionValue::Number(5460.0));
+    assert_eq!(output.oxfunc_value, CalcValue::number(5460.0));
 }
 
 #[test]
@@ -2240,7 +2263,7 @@ fn evaluator_matches_excel_named_recursion_failure_boundary() {
     );
     assert_eq!(
         output.oxfunc_value,
-        FunctionValue::Error(WorksheetErrorCode::Num)
+        CalcValue::error(WorksheetErrorCode::Num)
     );
 }
 
@@ -2317,7 +2340,7 @@ fn evaluator_executes_bounded_mutual_recursive_defined_name_callables() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(even_output.oxfunc_value, FunctionValue::Number(1.0));
+    assert_eq!(even_output.oxfunc_value, CalcValue::number(1.0));
 
     let odd_output = evaluate(
         "=IsEven(7)",
@@ -2325,7 +2348,7 @@ fn evaluator_executes_bounded_mutual_recursive_defined_name_callables() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(odd_output.oxfunc_value, FunctionValue::Number(0.0));
+    assert_eq!(odd_output.oxfunc_value, CalcValue::number(0.0));
 }
 
 // Builds the `IsEven`/`IsOdd` mutually recursive defined-name callable pair:
@@ -2410,7 +2433,7 @@ fn evaluator_matches_shared_budget_mutual_recursion_success_boundary() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(output.oxfunc_value, FunctionValue::Number(1.0));
+    assert_eq!(output.oxfunc_value, CalcValue::number(1.0));
 }
 
 #[test]
@@ -2423,7 +2446,7 @@ fn evaluator_matches_shared_budget_mutual_recursion_failure_boundary() {
     );
     assert_eq!(
         output.oxfunc_value,
-        FunctionValue::Error(WorksheetErrorCode::Num)
+        CalcValue::error(WorksheetErrorCode::Num)
     );
 }
 
@@ -2467,7 +2490,7 @@ fn evaluator_projects_runaway_mutual_recursive_defined_name_callables_as_num_err
     );
     assert_eq!(
         output.oxfunc_value,
-        FunctionValue::Error(WorksheetErrorCode::Num)
+        CalcValue::error(WorksheetErrorCode::Num)
     );
 }
 
@@ -2481,7 +2504,7 @@ fn evaluator_matches_excel_builtin_colliding_let_recursive_name_frontier_ftc_044
     );
     assert_eq!(
         output.oxfunc_value,
-        FunctionValue::Error(WorksheetErrorCode::Value)
+        CalcValue::error(WorksheetErrorCode::Value)
     );
 }
 
@@ -2493,7 +2516,7 @@ fn evaluator_preserves_non_builtin_let_recursive_name_self_application() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(output.oxfunc_value, FunctionValue::Number(12.0));
+    assert_eq!(output.oxfunc_value, CalcValue::number(12.0));
 }
 
 #[test]
@@ -2504,7 +2527,7 @@ fn evaluator_preserves_generic_recursive_self_application_baseline() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(output.oxfunc_value, FunctionValue::Number(3.0));
+    assert_eq!(output.oxfunc_value, CalcValue::number(3.0));
 }
 
 #[test]
@@ -2515,7 +2538,7 @@ fn evaluator_matches_excel_let_self_application_recursion_success_boundary() {
         None,
         Some(&oxfml_en_us_locale_context()),
     );
-    assert_eq!(output.oxfunc_value, FunctionValue::Number(4094.0));
+    assert_eq!(output.oxfunc_value, CalcValue::number(4094.0));
 }
 
 #[test]
@@ -2528,7 +2551,7 @@ fn evaluator_matches_excel_let_self_application_recursion_failure_boundary() {
     );
     assert_eq!(
         output.oxfunc_value,
-        FunctionValue::Error(WorksheetErrorCode::Num)
+        CalcValue::error(WorksheetErrorCode::Num)
     );
 }
 
@@ -2542,7 +2565,7 @@ fn evaluator_projects_direct_helper_local_self_recursion_as_name_error() {
     );
     assert_eq!(
         output.oxfunc_value,
-        FunctionValue::Error(WorksheetErrorCode::Name)
+        CalcValue::error(WorksheetErrorCode::Name)
     );
 }
 
@@ -2558,7 +2581,7 @@ fn evaluate(
 
 struct RecordingReferenceSystemProvider {
     reference: ReferenceLike,
-    values: BTreeMap<String, FunctionValue>,
+    values: BTreeMap<String, CalcValue>,
     requests: RefCell<Vec<ReferenceTextResolveRequest>>,
 }
 
@@ -2571,7 +2594,7 @@ impl RecordingReferenceSystemProvider {
         }
     }
 
-    fn with_values(mut self, values: BTreeMap<String, FunctionValue>) -> Self {
+    fn with_values(mut self, values: BTreeMap<String, CalcValue>) -> Self {
         self.values = values;
         self
     }
@@ -2611,7 +2634,7 @@ impl ReferenceSystemProvider for RecordingReferenceSystemProvider {
 fn evaluate_with_reference_system_provider(
     formula: &str,
     reference_system_provider: &dyn ReferenceSystemProvider,
-    cell_values: BTreeMap<String, FunctionValue>,
+    cell_values: BTreeMap<String, CalcValue>,
 ) -> oxfml_core::EvaluationOutput {
     let compiled = common::compile_formula(
         "eval-fixture",
@@ -2641,14 +2664,14 @@ fn evaluate_with_reference_system_provider(
 
 fn evaluate_with_cells(
     formula: &str,
-    extra_cells: BTreeMap<String, FunctionValue>,
+    extra_cells: BTreeMap<String, CalcValue>,
 ) -> oxfml_core::EvaluationOutput {
     evaluate_with_cells_result(formula, extra_cells).expect("evaluation should succeed")
 }
 
 fn evaluate_with_cells_result(
     formula: &str,
-    extra_cells: BTreeMap<String, FunctionValue>,
+    extra_cells: BTreeMap<String, CalcValue>,
 ) -> Result<oxfml_core::EvaluationOutput, oxfml_core::eval::EvaluationError> {
     let compiled = common::compile_formula(
         "eval-fixture",
@@ -2661,13 +2684,13 @@ fn evaluate_with_cells_result(
     let mut context = EvaluationContext::new(&compiled.bound_formula, &compiled.semantic_plan);
     context
         .cell_values
-        .insert("A1".to_string(), FunctionValue::Number(7.0));
+        .insert("A1".to_string(), CalcValue::number(7.0));
     context
         .cell_values
-        .insert("A2".to_string(), FunctionValue::Number(11.0));
+        .insert("A2".to_string(), CalcValue::number(11.0));
     context
         .cell_values
-        .insert("B2".to_string(), FunctionValue::Number(13.0));
+        .insert("B2".to_string(), CalcValue::number(13.0));
     context.cell_values.extend(extra_cells);
     let locale = oxfml_en_us_locale_context();
     context.apply_typed_context_query_bundle(TypedContextQueryBundle::new(
@@ -2714,13 +2737,13 @@ fn evaluate_with_rtd_provider(
     let mut context = EvaluationContext::new(&compiled.bound_formula, &compiled.semantic_plan);
     context
         .cell_values
-        .insert("A1".to_string(), FunctionValue::Number(7.0));
+        .insert("A1".to_string(), CalcValue::number(7.0));
     context
         .cell_values
-        .insert("A2".to_string(), FunctionValue::Number(11.0));
+        .insert("A2".to_string(), CalcValue::number(11.0));
     context
         .cell_values
-        .insert("B2".to_string(), FunctionValue::Number(13.0));
+        .insert("B2".to_string(), CalcValue::number(13.0));
     context.defined_names = defined_names.unwrap_or_default();
     context.apply_typed_context_query_bundle(TypedContextQueryBundle::new(
         host_info,
@@ -2820,13 +2843,16 @@ fn load_json_fixture<T: for<'de> Deserialize<'de>>(file_name: &str) -> T {
     serde_json::from_str(&content).expect("fixture file should deserialize")
 }
 
-fn eval_value_summary(value: &FunctionValue) -> String {
-    match value {
-        FunctionValue::Number(number) => format!("Number({})", number_summary(*number)),
-        FunctionValue::Text(text) => format!("Text({})", text.to_string_lossy()),
-        FunctionValue::Logical(value) => format!("Logical({value})"),
-        FunctionValue::Error(code) => format!("Error({code:?})"),
-        FunctionValue::Array(array) => {
+fn eval_value_summary(value: &CalcValue) -> String {
+    if let Some(callable) = value.callable_value() {
+        return format!("Callable({})", callable.summary);
+    }
+    match value.core() {
+        CoreValue::Number(number) => format!("Number({})", number_summary(*number)),
+        CoreValue::Text(text) => format!("Text({})", text.to_string_lossy()),
+        CoreValue::Logical(value) => format!("Logical({value})"),
+        CoreValue::Error(code) => format!("Error({code:?})"),
+        CoreValue::Array(array) => {
             let cells = array
                 .iter_row_major()
                 .map(array_cell_summary)
@@ -2834,19 +2860,22 @@ fn eval_value_summary(value: &FunctionValue) -> String {
                 .join(",");
             format!("Array({cells})")
         }
-        FunctionValue::Reference(reference) => format!("Reference({})", reference.target()),
+        CoreValue::Reference(reference) => format!("Reference({})", reference.target()),
         other => format!("Unsupported({other:?})"),
     }
 }
 
-fn array_cell_summary(cell: &FunctionArrayCell) -> String {
-    match cell {
-        FunctionArrayCell::Number(number) => format!("Number({})", number_summary(*number)),
-        FunctionArrayCell::Text(text) => format!("Text({})", text.to_string_lossy()),
-        FunctionArrayCell::Logical(value) => format!("Logical({value})"),
-        FunctionArrayCell::Error(code) => format!("Error({code:?})"),
-        FunctionArrayCell::EmptyCell => "EmptyCell".to_string(),
-        FunctionArrayCell::Callable(callable) => format!("Callable({})", callable.summary),
+fn array_cell_summary(cell: &CalcValue) -> String {
+    if let Some(callable) = cell.callable_value() {
+        return format!("Callable({})", callable.summary);
+    }
+    match cell.core() {
+        CoreValue::Number(number) => format!("Number({})", number_summary(*number)),
+        CoreValue::Text(text) => format!("Text({})", text.to_string_lossy()),
+        CoreValue::Logical(value) => format!("Logical({value})"),
+        CoreValue::Error(code) => format!("Error({code:?})"),
+        CoreValue::Empty | CoreValue::Missing => "EmptyCell".to_string(),
+        other => format!("Unsupported({other:?})"),
     }
 }
 
@@ -2858,27 +2887,27 @@ fn number_summary(number: f64) -> String {
     }
 }
 
-fn array_numbers(value: &FunctionValue) -> Vec<f64> {
-    let FunctionValue::Array(array) = value else {
+fn array_numbers(value: &CalcValue) -> Vec<f64> {
+    let CoreValue::Array(array) = value.core() else {
         panic!("expected array result, got {value:?}");
     };
     array
         .iter_row_major()
-        .map(|cell| match cell {
-            FunctionArrayCell::Number(number) => *number,
+        .map(|cell| match cell.core() {
+            CoreValue::Number(number) => *number,
             other => panic!("expected numeric array cell, got {other:?}"),
         })
         .collect()
 }
 
-fn array_logicals(value: &FunctionValue) -> Vec<bool> {
-    let FunctionValue::Array(array) = value else {
+fn array_logicals(value: &CalcValue) -> Vec<bool> {
+    let CoreValue::Array(array) = value.core() else {
         panic!("expected array result, got {value:?}");
     };
     array
         .iter_row_major()
-        .map(|cell| match cell {
-            FunctionArrayCell::Logical(value) => *value,
+        .map(|cell| match cell.core() {
+            CoreValue::Logical(value) => *value,
             other => panic!("expected logical array cell, got {other:?}"),
         })
         .collect()
@@ -2903,7 +2932,7 @@ impl HostInfoProvider for MockHostInfoProvider {
         _reference: Option<&ReferenceLike>,
     ) -> Result<CalcValue, HostInfoError> {
         match query {
-            CellInfoQuery::Filename => Ok(CalcValue::from(FunctionValue::Text(
+            CellInfoQuery::Filename => Ok(CalcValue::from(CalcValue::text(
                 ExcelText::from_utf16_code_units("[Book1]Sheet1".encode_utf16().collect()),
             ))),
             _ => Err(HostInfoError::UnsupportedCellInfoQuery(query)),
@@ -2912,7 +2941,7 @@ impl HostInfoProvider for MockHostInfoProvider {
 
     fn query_info(&self, query: InfoQuery) -> Result<CalcValue, HostInfoError> {
         match query {
-            InfoQuery::Directory => Ok(CalcValue::from(FunctionValue::Text(
+            InfoQuery::Directory => Ok(CalcValue::from(CalcValue::text(
                 ExcelText::from_utf16_code_units("C:\\Work".encode_utf16().collect()),
             ))),
             _ => Err(HostInfoError::UnsupportedInfoQuery(query)),
@@ -2979,7 +3008,7 @@ impl RtdProvider for ValueRtdProvider {
         &self,
         _request: &oxfunc_core::functions::rtd_fn::RtdRequest,
     ) -> RtdProviderResult {
-        RtdProviderResult::Value(CalcValue::from(FunctionValue::Number(7.0)))
+        RtdProviderResult::Value(CalcValue::from(CalcValue::number(7.0)))
     }
 }
 

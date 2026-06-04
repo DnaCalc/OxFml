@@ -12,7 +12,6 @@ use oxfml_core::consumer::runtime::{
     RuntimeHostReferenceBindResult, RuntimeManagedSessionError, RuntimeManagedSessionPhase,
     RuntimeOxFuncBridgeMetadata, RuntimeSessionFacade,
 };
-use oxfml_core::eval::{FunctionArray, FunctionArrayCell, FunctionValue};
 use oxfml_core::format::{
     oxfml_en_us_format_profile, oxfml_en_us_locale_context, worksheet_error_text,
 };
@@ -61,7 +60,8 @@ use oxfunc_core::resolver::{
     ResolvedReferenceCell, ResolvedReferenceExtent, ResolvedReferenceValues,
 };
 use oxfunc_core::value::{ArrayShape, ReferenceKind, ReferenceLike};
-use oxfunc_core::value::{CalcValue, CoreValue, ExcelText};
+use oxfunc_core::value::{CalcArray, CalcValue};
+use oxfunc_core::value::{CoreValue, ExcelText};
 
 struct SequenceRandomProvider {
     next: Cell<u32>,
@@ -80,27 +80,27 @@ fn runtime_environment_evaluates_non_formula_worksheet_entries() {
     let cases = [
         (
             "ABC",
-            FunctionValue::Text(ExcelText::from_interop_assignment("ABC")),
+            CalcValue::text(ExcelText::from_interop_assignment("ABC")),
         ),
         (
             "'=123",
-            FunctionValue::Text(ExcelText::from_interop_assignment("=123")),
+            CalcValue::text(ExcelText::from_interop_assignment("=123")),
         ),
         (
             "12.1.1",
-            FunctionValue::Text(ExcelText::from_interop_assignment("12.1.1")),
+            CalcValue::text(ExcelText::from_interop_assignment("12.1.1")),
         ),
         (
             "x y z = 12.3",
-            FunctionValue::Text(ExcelText::from_interop_assignment("x y z = 12.3")),
+            CalcValue::text(ExcelText::from_interop_assignment("x y z = 12.3")),
         ),
         (
             "\"ABC\"",
-            FunctionValue::Text(ExcelText::from_interop_assignment("ABC")),
+            CalcValue::text(ExcelText::from_interop_assignment("ABC")),
         ),
-        ("123.4", FunctionValue::Number(123.4)),
-        ("TRUE", FunctionValue::Logical(true)),
-        ("FALSE", FunctionValue::Logical(false)),
+        ("123.4", CalcValue::number(123.4)),
+        ("TRUE", CalcValue::logical(true)),
+        ("FALSE", CalcValue::logical(false)),
     ];
 
     let environment = RuntimeEnvironment::new();
@@ -263,7 +263,7 @@ fn runtime_session_facade_runs_managed_session_through_commit() {
     let mut defined_names = std::collections::BTreeMap::new();
     defined_names.insert(
         "InputValue".to_string(),
-        oxfml_core::DefinedNameBinding::Value(FunctionValue::Number(5.0)),
+        oxfml_core::DefinedNameBinding::Value(CalcValue::number(5.0)),
     );
     let environment = RuntimeEnvironment::new().with_defined_names(defined_names);
     let mut session = RuntimeSessionFacade::new(environment);
@@ -364,7 +364,7 @@ fn runtime_formal_input_binding_executes_without_synthetic_cells_or_defined_name
     let prepare_binding = RuntimeFormalInputBinding {
         reference_handle: None,
         reference_descriptor: "InputValue".to_string(),
-        binding: oxfml_core::DefinedNameBinding::Value(FunctionValue::Number(5.0)),
+        binding: oxfml_core::DefinedNameBinding::Value(CalcValue::number(5.0)),
     };
     let mut prepare_session = RuntimeEnvironment::new()
         .with_formal_input_bindings(vec![prepare_binding])
@@ -385,7 +385,7 @@ fn runtime_formal_input_binding_executes_without_synthetic_cells_or_defined_name
     let execute_binding = RuntimeFormalInputBinding {
         reference_handle: Some(formal_reference.reference_handle.clone()),
         reference_descriptor: formal_reference.reference_descriptor,
-        binding: oxfml_core::DefinedNameBinding::Value(FunctionValue::Number(5.0)),
+        binding: oxfml_core::DefinedNameBinding::Value(CalcValue::number(5.0)),
     };
     let result = RuntimeEnvironment::new()
         .with_formal_input_bindings(vec![execute_binding])
@@ -395,13 +395,13 @@ fn runtime_formal_input_binding_executes_without_synthetic_cells_or_defined_name
         ))
         .expect("formal input binding should execute without cell_values/defined_names");
 
-    assert_eq!(result.published_worksheet_value, FunctionValue::Number(7.0));
+    assert_eq!(result.published_worksheet_value, CalcValue::number(7.0));
 }
 
 #[test]
 fn runtime_result_exposes_prepared_formula_identity_for_direct_execution() {
     let mut cell_values = std::collections::BTreeMap::new();
-    cell_values.insert("A1".to_string(), FunctionValue::Number(4.0));
+    cell_values.insert("A1".to_string(), CalcValue::number(4.0));
     let environment = RuntimeEnvironment::new().with_cell_values(cell_values);
     let request = RuntimeFormulaRequest::new(
         FormulaSourceRecord::new("runtime:prepared-identity", 1, "=SUM(A1,2)"),
@@ -501,10 +501,10 @@ impl ReferenceSystemProvider for RuntimeTestReferenceSystemProvider {
 #[test]
 fn runtime_reference_system_provider_feeds_first_aggregate_group() {
     let cases = [
-        ("=SUM(InputRef)", FunctionValue::Number(2.0)),
-        ("=COUNT(InputRef)", FunctionValue::Number(1.0)),
-        ("=COUNTA(InputRef)", FunctionValue::Number(3.0)),
-        ("=COUNTBLANK(InputRef)", FunctionValue::Number(3.0)),
+        ("=SUM(InputRef)", CalcValue::number(2.0)),
+        ("=COUNT(InputRef)", CalcValue::number(1.0)),
+        ("=COUNTA(InputRef)", CalcValue::number(3.0)),
+        ("=COUNTBLANK(InputRef)", CalcValue::number(3.0)),
     ];
 
     for (formula, expected) in cases {
@@ -552,10 +552,10 @@ fn runtime_reference_system_provider_feeds_first_aggregate_group() {
 #[test]
 fn runtime_structured_references_use_sparse_values_when_available() {
     let cases = [
-        ("=SUM(Table1[Amount])", FunctionValue::Number(2.0)),
-        ("=COUNT(Table1[Amount])", FunctionValue::Number(1.0)),
-        ("=COUNTA(Table1[Amount])", FunctionValue::Number(2.0)),
-        ("=COUNTBLANK(Table1[Amount])", FunctionValue::Number(2.0)),
+        ("=SUM(Table1[Amount])", CalcValue::number(2.0)),
+        ("=COUNT(Table1[Amount])", CalcValue::number(1.0)),
+        ("=COUNTA(Table1[Amount])", CalcValue::number(2.0)),
+        ("=COUNTBLANK(Table1[Amount])", CalcValue::number(2.0)),
     ];
 
     for (formula, expected) in cases {
@@ -646,7 +646,7 @@ fn runtime_structured_reference_uses_formula_scope_sheet_for_sparse_values() {
         )
         .expect("structured sparse reference should execute");
 
-    assert_eq!(result.evaluation.oxfunc_value, FunctionValue::Number(30.0));
+    assert_eq!(result.evaluation.oxfunc_value, CalcValue::number(30.0));
     assert_eq!(
         result.evaluation.trace.prepared_calls[0].prepared_arguments[0]
             .reference_target
@@ -824,7 +824,7 @@ fn runtime_bare_host_name_binding_maps_to_defined_name_lane_and_replay_identity(
     };
     let binding = RuntimeHostNameBinding {
         bind_result: bind_result.clone(),
-        binding: DefinedNameBinding::Value(FunctionValue::Number(41.0)),
+        binding: DefinedNameBinding::Value(CalcValue::number(41.0)),
     };
     let request = RuntimeFormulaRequest::new(
         FormulaSourceRecord::new("runtime:w074-bare-host-name", 1, "=HostMargin+1"),
@@ -837,7 +837,7 @@ fn runtime_bare_host_name_binding_maps_to_defined_name_lane_and_replay_identity(
         .execute(request.clone())
         .expect("bare host name should use the generic defined-name lane");
 
-    assert_eq!(first.published_worksheet_value, FunctionValue::Number(42.0));
+    assert_eq!(first.published_worksheet_value, CalcValue::number(42.0));
     assert_eq!(first.host_formula_context, Some(host_context.clone()));
     assert_eq!(first.host_name_bind_results, vec![bind_result.clone()]);
     assert!(
@@ -920,7 +920,7 @@ fn managed_runtime_executes_bare_host_name_binding_with_same_prepared_identity()
         .with_host_formula_context(host_context)
         .with_host_name_bindings(vec![RuntimeHostNameBinding {
             bind_result: bind_result.clone(),
-            binding: DefinedNameBinding::Value(FunctionValue::Number(41.0)),
+            binding: DefinedNameBinding::Value(CalcValue::number(41.0)),
         }])
         .open_session();
 
@@ -976,7 +976,7 @@ fn runtime_bare_host_callable_uses_defined_name_lambda_lane() {
         .execute(request)
         .expect("callable host name should invoke through defined-name lambda lane");
 
-    assert_eq!(result.published_worksheet_value, FunctionValue::Number(3.0));
+    assert_eq!(result.published_worksheet_value, CalcValue::number(3.0));
     assert_eq!(result.host_name_bind_results, vec![bind_result.clone()]);
     assert_eq!(
         result
@@ -1003,11 +1003,11 @@ fn runtime_table_context_mutation_changes_prepared_identity_for_structured_refs(
     let mut first_values = BTreeMap::new();
     first_values.insert(
         "B2:B4".to_string(),
-        FunctionValue::Array(
-            FunctionArray::from_rows(vec![vec![
-                FunctionArrayCell::Number(3.0),
-                FunctionArrayCell::Number(4.0),
-                FunctionArrayCell::Number(5.0),
+        CalcValue::array(
+            CalcArray::from_rows(vec![vec![
+                CalcValue::number(3.0),
+                CalcValue::number(4.0),
+                CalcValue::number(5.0),
             ]])
             .expect("array fixture should be valid"),
         ),
@@ -1017,16 +1017,16 @@ fn runtime_table_context_mutation_changes_prepared_identity_for_structured_refs(
         .with_cell_values(first_values)
         .execute(request.clone())
         .expect("first table-context execution should succeed");
-    assert_eq!(first.evaluation.oxfunc_value, FunctionValue::Number(12.0));
+    assert_eq!(first.evaluation.oxfunc_value, CalcValue::number(12.0));
 
     let mut second_values = BTreeMap::new();
     second_values.insert(
         "D2:D4".to_string(),
-        FunctionValue::Array(
-            FunctionArray::from_rows(vec![vec![
-                FunctionArrayCell::Number(3.0),
-                FunctionArrayCell::Number(4.0),
-                FunctionArrayCell::Number(5.0),
+        CalcValue::array(
+            CalcArray::from_rows(vec![vec![
+                CalcValue::number(3.0),
+                CalcValue::number(4.0),
+                CalcValue::number(5.0),
             ]])
             .expect("array fixture should be valid"),
         ),
@@ -1054,11 +1054,11 @@ fn runtime_projects_structured_reference_bind_packets_for_downstream_consumers()
     let mut explicit_values = BTreeMap::new();
     explicit_values.insert(
         "B2:B4".to_string(),
-        FunctionValue::Array(
-            FunctionArray::from_rows(vec![vec![
-                FunctionArrayCell::Number(3.0),
-                FunctionArrayCell::Number(4.0),
-                FunctionArrayCell::Number(5.0),
+        CalcValue::array(
+            CalcArray::from_rows(vec![vec![
+                CalcValue::number(3.0),
+                CalcValue::number(4.0),
+                CalcValue::number(5.0),
             ]])
             .expect("array fixture should be valid"),
         ),
@@ -1111,7 +1111,7 @@ fn runtime_projects_structured_reference_bind_packets_for_downstream_consumers()
     );
 
     let mut omitted_values = BTreeMap::new();
-    omitted_values.insert("B3".to_string(), FunctionValue::Number(7.0));
+    omitted_values.insert("B3".to_string(), CalcValue::number(7.0));
     let omitted = RuntimeEnvironment::new()
         .with_table_context(
             vec![runtime_w074_table("B2:B4")],
@@ -1153,12 +1153,12 @@ fn runtime_links_qualified_structured_reference_failure_and_following_success_pa
     let result = RuntimeEnvironment::new()
         .with_table_context(vec![table], None, None)
         .with_cell_values(BTreeMap::from([(
-            "B2:B4".to_string(),
-            FunctionValue::Array(
-                FunctionArray::from_rows(vec![vec![
-                    FunctionArrayCell::Number(3.0),
-                    FunctionArrayCell::Number(4.0),
-                    FunctionArrayCell::Number(5.0),
+            "Sheet1!B2:B4".to_string(),
+            CalcValue::array(
+                CalcArray::from_rows(vec![vec![
+                    CalcValue::number(3.0),
+                    CalcValue::number(4.0),
+                    CalcValue::number(5.0),
                 ]])
                 .expect("array fixture should be valid"),
             ),
@@ -1229,11 +1229,11 @@ fn runtime_stable_table_fact_mutation_changes_prepared_identity_for_structured_r
     let mut values = BTreeMap::new();
     values.insert(
         "B2:B4".to_string(),
-        FunctionValue::Array(
-            FunctionArray::from_rows(vec![vec![
-                FunctionArrayCell::Number(3.0),
-                FunctionArrayCell::Number(4.0),
-                FunctionArrayCell::Number(5.0),
+        CalcValue::array(
+            CalcArray::from_rows(vec![vec![
+                CalcValue::number(3.0),
+                CalcValue::number(4.0),
+                CalcValue::number(5.0),
             ]])
             .expect("array fixture should be valid"),
         ),
@@ -1270,8 +1270,8 @@ fn runtime_stable_table_fact_mutation_changes_prepared_identity_for_structured_r
         .execute(request)
         .expect("stable table fact mutation should succeed");
 
-    assert_eq!(first.evaluation.oxfunc_value, FunctionValue::Number(12.0));
-    assert_eq!(second.evaluation.oxfunc_value, FunctionValue::Number(12.0));
+    assert_eq!(first.evaluation.oxfunc_value, CalcValue::number(12.0));
+    assert_eq!(second.evaluation.oxfunc_value, CalcValue::number(12.0));
     assert_eq!(
         first.prepared_formula_identity.formal_references,
         second.prepared_formula_identity.formal_references,
@@ -1305,7 +1305,7 @@ fn runtime_table_descriptor_fact_mutations_change_prepared_identity() {
         .with_cell_values(base_values.clone())
         .execute(request.clone())
         .expect("base table descriptor execution should succeed");
-    assert_eq!(base.evaluation.oxfunc_value, FunctionValue::Number(12.0));
+    assert_eq!(base.evaluation.oxfunc_value, CalcValue::number(12.0));
 
     let mut changed_table_id = runtime_w074_table("B2:B4");
     changed_table_id.table_id = "table:w074:renamed-id".to_string();
@@ -1316,7 +1316,7 @@ fn runtime_table_descriptor_fact_mutations_change_prepared_identity() {
         .expect("changed table id execution should succeed");
     assert_eq!(
         changed_table_id_result.evaluation.oxfunc_value,
-        FunctionValue::Number(12.0)
+        CalcValue::number(12.0)
     );
     assert_ne!(
         base.structured_reference_bind_records,
@@ -1340,7 +1340,7 @@ fn runtime_table_descriptor_fact_mutations_change_prepared_identity() {
         .expect("changed table range execution should succeed");
     assert_eq!(
         changed_table_range_result.evaluation.oxfunc_value,
-        FunctionValue::Number(12.0)
+        CalcValue::number(12.0)
     );
     assert_eq!(
         base.prepared_formula_identity.formal_references,
@@ -1373,7 +1373,7 @@ fn runtime_table_descriptor_fact_mutations_change_prepared_identity() {
         .expect("changed column id execution should succeed");
     assert_eq!(
         changed_column_id_result.evaluation.oxfunc_value,
-        FunctionValue::Number(12.0)
+        CalcValue::number(12.0)
     );
     assert_ne!(
         base.structured_reference_bind_records,
@@ -1397,7 +1397,7 @@ fn runtime_table_descriptor_fact_mutations_change_prepared_identity() {
         .expect("changed column ordinal execution should succeed");
     assert_eq!(
         changed_column_ordinal_result.evaluation.oxfunc_value,
-        FunctionValue::Number(12.0)
+        CalcValue::number(12.0)
     );
     assert_eq!(
         base.structured_reference_bind_records,
@@ -1426,7 +1426,7 @@ fn runtime_table_descriptor_fact_mutations_change_prepared_identity() {
         .expect("changed column range execution should succeed");
     assert_eq!(
         changed_column_range_result.evaluation.oxfunc_value,
-        FunctionValue::Number(12.0)
+        CalcValue::number(12.0)
     );
     assert_ne!(
         base.structured_reference_bind_records,
@@ -1478,8 +1478,8 @@ fn runtime_unrelated_table_catalog_mutation_is_identity_only_for_referenced_tabl
         .execute(request)
         .expect("mutated unrelated table catalog execution should succeed");
 
-    assert_eq!(first.evaluation.oxfunc_value, FunctionValue::Number(12.0));
-    assert_eq!(second.evaluation.oxfunc_value, FunctionValue::Number(12.0));
+    assert_eq!(first.evaluation.oxfunc_value, CalcValue::number(12.0));
+    assert_eq!(second.evaluation.oxfunc_value, CalcValue::number(12.0));
     assert_eq!(
         first.structured_reference_bind_records, second.structured_reference_bind_records,
         "unrelated table catalog entries must not change the referenced structured bind packet"
@@ -1523,10 +1523,7 @@ fn runtime_omitted_structured_refs_include_enclosing_table_and_caller_row_identi
                 data_row_offset: Some(1),
             }),
         )
-        .with_cell_values(BTreeMap::from([(
-            "B3".to_string(),
-            FunctionValue::Number(7.0),
-        )]))
+        .with_cell_values(BTreeMap::from([("B3".to_string(), CalcValue::number(7.0))]))
         .execute(request.clone())
         .expect("first omitted structured reference should execute");
     let second = RuntimeEnvironment::new()
@@ -1541,10 +1538,7 @@ fn runtime_omitted_structured_refs_include_enclosing_table_and_caller_row_identi
                 data_row_offset: Some(1),
             }),
         )
-        .with_cell_values(BTreeMap::from([(
-            "D3".to_string(),
-            FunctionValue::Number(7.0),
-        )]))
+        .with_cell_values(BTreeMap::from([("D3".to_string(), CalcValue::number(7.0))]))
         .execute(request.clone())
         .expect("changed enclosing table should execute");
     let third = RuntimeEnvironment::new()
@@ -1559,16 +1553,13 @@ fn runtime_omitted_structured_refs_include_enclosing_table_and_caller_row_identi
                 data_row_offset: Some(2),
             }),
         )
-        .with_cell_values(BTreeMap::from([(
-            "B4".to_string(),
-            FunctionValue::Number(7.0),
-        )]))
+        .with_cell_values(BTreeMap::from([("B4".to_string(), CalcValue::number(7.0))]))
         .execute(request)
         .expect("changed caller row should execute");
 
-    assert_eq!(first.evaluation.oxfunc_value, FunctionValue::Number(7.0));
-    assert_eq!(second.evaluation.oxfunc_value, FunctionValue::Number(7.0));
-    assert_eq!(third.evaluation.oxfunc_value, FunctionValue::Number(7.0));
+    assert_eq!(first.evaluation.oxfunc_value, CalcValue::number(7.0));
+    assert_eq!(second.evaluation.oxfunc_value, CalcValue::number(7.0));
+    assert_eq!(third.evaluation.oxfunc_value, CalcValue::number(7.0));
     assert_ne!(
         first.structured_reference_bind_records, second.structured_reference_bind_records,
         "enclosing_table_ref changes must change omitted structured-reference binding"
@@ -1717,7 +1708,7 @@ fn runtime_carries_zero_row_structured_data_packet_without_data_a1_area() {
         ))
         .expect("lazy zero-row structured reference should execute");
 
-    assert_eq!(result.evaluation.oxfunc_value, FunctionValue::Number(0.0));
+    assert_eq!(result.evaluation.oxfunc_value, CalcValue::number(0.0));
     assert!(result.bind_diagnostics.is_empty());
     assert!(
         result
@@ -1773,7 +1764,7 @@ fn runtime_reports_zero_row_this_row_diagnostic_with_packet_identity() {
         ))
         .expect("lazy zero-row current-row diagnostic should execute");
 
-    assert_eq!(result.evaluation.oxfunc_value, FunctionValue::Number(0.0));
+    assert_eq!(result.evaluation.oxfunc_value, CalcValue::number(0.0));
     assert_eq!(result.bind_diagnostics.len(), 1);
     assert!(
         result.bind_diagnostics[0]
@@ -1811,7 +1802,7 @@ fn runtime_preserves_lexical_callables_without_host_namespace() {
         ))
         .expect("lexical returned lambda should execute without host namespace");
 
-    assert_eq!(result.evaluation.oxfunc_value, FunctionValue::Number(115.0));
+    assert_eq!(result.evaluation.oxfunc_value, CalcValue::number(115.0));
     assert_eq!(result.host_formula_context, None);
     assert!(result.host_reference_bind_results.is_empty());
     assert_eq!(result.prepared_formula_identity.host_formula_context, None);
@@ -1867,14 +1858,14 @@ fn runtime_w074_zero_row_table() -> TableDescriptor {
     }
 }
 
-fn runtime_w074_range_values(range_ref: &str) -> BTreeMap<String, FunctionValue> {
+fn runtime_w074_range_values(range_ref: &str) -> BTreeMap<String, CalcValue> {
     BTreeMap::from([(
         range_ref.to_string(),
-        FunctionValue::Array(
-            FunctionArray::from_rows(vec![vec![
-                FunctionArrayCell::Number(3.0),
-                FunctionArrayCell::Number(4.0),
-                FunctionArrayCell::Number(5.0),
+        CalcValue::array(
+            CalcArray::from_rows(vec![vec![
+                CalcValue::number(3.0),
+                CalcValue::number(4.0),
+                CalcValue::number(5.0),
             ]])
             .expect("array fixture should be valid"),
         ),
@@ -1991,7 +1982,7 @@ fn runtime_registry_view_admits_udf_without_unknown_function_freeze() {
     );
     assert_eq!(
         default_result.published_worksheet_value,
-        FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Name)
+        CalcValue::error(oxfunc_core::value::WorksheetErrorCode::Name)
     );
 
     let mut registry = builtin_registry().clone();
@@ -2074,7 +2065,7 @@ fn runtime_registry_view_admits_udf_without_unknown_function_freeze() {
     );
     assert_eq!(
         unregistered_result.published_worksheet_value,
-        FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Name)
+        CalcValue::error(oxfunc_core::value::WorksheetErrorCode::Name)
     );
     assert_ne!(
         registered_result
@@ -2111,7 +2102,7 @@ fn runtime_capability_overlay_blocks_registry_present_call_before_dispatch_and_r
         .expect("baseline SUM should execute without capability overlay");
     assert_eq!(
         allowed_result.published_worksheet_value,
-        FunctionValue::Number(3.0)
+        CalcValue::number(3.0)
     );
     assert!(
         allowed_result
@@ -2127,7 +2118,7 @@ fn runtime_capability_overlay_blocks_registry_present_call_before_dispatch_and_r
 
     assert_eq!(
         result.published_worksheet_value,
-        FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Blocked)
+        CalcValue::error(oxfunc_core::value::WorksheetErrorCode::Blocked)
     );
     let summary = result
         .semantic_plan
@@ -2347,7 +2338,7 @@ fn runtime_environment_builder_applies_caller_context() {
         .execute(request)
         .expect("runtime execution with caller context should succeed");
 
-    assert_eq!(result.published_worksheet_value, FunctionValue::Number(8.0));
+    assert_eq!(result.published_worksheet_value, CalcValue::number(8.0));
 }
 
 #[test]
@@ -2468,7 +2459,7 @@ fn runtime_environment_executes_rtd_formula_through_typed_query_bundle() {
             .families
             .contains(&TypedContextQueryFamily::Rtd)
     );
-    assert_eq!(result.published_worksheet_value, FunctionValue::Number(7.0));
+    assert_eq!(result.published_worksheet_value, CalcValue::number(7.0));
 }
 
 #[test]
@@ -2490,10 +2481,7 @@ fn runtime_environment_executes_registered_external_formula_through_typed_query_
             .families
             .contains(&TypedContextQueryFamily::RegisteredExternal)
     );
-    assert_eq!(
-        result.published_worksheet_value,
-        FunctionValue::Number(14.0)
-    );
+    assert_eq!(result.published_worksheet_value, CalcValue::number(14.0));
     assert_eq!(provider.last_lookup.borrow().as_ref(), Some(&4242.0));
     match result.evaluation.trace.prepared_calls[0]
         .registered_external_call_request
@@ -2540,21 +2528,18 @@ fn runtime_environment_executes_bind_visible_host_function_through_typed_query_b
             .contains(&TypedContextQueryFamily::HostFunction)
     );
     assert!(result.semantic_plan.diagnostics.is_empty());
-    assert_eq!(result.published_worksheet_value, FunctionValue::Number(5.0));
+    assert_eq!(result.published_worksheet_value, CalcValue::number(5.0));
     assert_eq!(
         provider.last_invocation.borrow().as_ref(),
         Some(&HostFunctionInvocation {
             function_name: "ADDTHEM".to_string(),
-            args: vec![FunctionValue::Number(2.0), FunctionValue::Number(3.0)],
+            args: vec![CalcValue::number(2.0), CalcValue::number(3.0)],
         })
     );
     let prepared_call = &result.evaluation.trace.prepared_calls[0];
     assert_eq!(prepared_call.function_name, "ADDTHEM");
     assert_eq!(prepared_call.function_id, "FUNC.HOST_CALLBACK");
-    assert_eq!(
-        prepared_call.returned_value,
-        Some(FunctionValue::Number(5.0))
-    );
+    assert_eq!(prepared_call.returned_value, Some(CalcValue::number(5.0)));
 }
 
 #[test]
@@ -2571,7 +2556,7 @@ fn runtime_environment_keeps_unknown_function_as_name_error_with_host_provider()
 
     assert_eq!(
         result.published_worksheet_value,
-        FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Name)
+        CalcValue::error(oxfunc_core::value::WorksheetErrorCode::Name)
     );
     assert!(provider.last_invocation.borrow().is_none());
 }
@@ -2747,7 +2732,7 @@ fn runtime_environment_preserves_randarray_width_for_columns_ftc_0505_with_rando
         )
         .expect("FTC-0505 runtime execution should succeed");
 
-    assert_eq!(result.published_worksheet_value, FunctionValue::Number(3.0));
+    assert_eq!(result.published_worksheet_value, CalcValue::number(3.0));
     assert_eq!(
         result.execution_outcome_surface.outcome_kind,
         ExecutionOutcomeKind::ExecutedResult
@@ -2790,14 +2775,14 @@ fn runtime_environment_randarray_consumes_distinct_provider_draws() {
         ))
         .expect("RANDARRAY runtime execution should succeed");
 
-    let FunctionValue::Array(array) = result.published_worksheet_value else {
+    let CoreValue::Array(array) = result.published_worksheet_value.core() else {
         panic!("expected array result");
     };
     assert_eq!(array.shape(), ArrayShape { rows: 5, cols: 5 });
     let values = array.iter_row_major().cloned().collect::<Vec<_>>();
-    assert_eq!(values.first(), Some(&FunctionArrayCell::Number(0.01)));
-    assert_eq!(values.get(12), Some(&FunctionArrayCell::Number(0.13)));
-    assert_eq!(values.last(), Some(&FunctionArrayCell::Number(0.25)));
+    assert_eq!(values.first(), Some(&CalcValue::number(0.01)));
+    assert_eq!(values.get(12), Some(&CalcValue::number(0.13)));
+    assert_eq!(values.last(), Some(&CalcValue::number(0.25)));
     assert_eq!(random_provider.next.get(), 26);
 }
 
@@ -2827,7 +2812,7 @@ fn runtime_environment_matches_excel_lambda_array_authoring_frontier_cases() {
 
         assert_eq!(
             result.published_worksheet_value,
-            FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Value),
+            CalcValue::error(oxfunc_core::value::WorksheetErrorCode::Value),
             "{case_id} published worksheet value"
         );
         assert_eq!(
@@ -2857,7 +2842,7 @@ fn runtime_environment_matches_excel_builtin_collision_arity_authoring_frontier_
 
     assert_eq!(
         result.published_worksheet_value,
-        FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Value)
+        CalcValue::error(oxfunc_core::value::WorksheetErrorCode::Value)
     );
     assert_eq!(
         result.verification_publication_surface.visible_value_text,
@@ -2941,19 +2926,19 @@ fn runtime_environment_mirrors_builtin_frontier_for_colliding_let_call_shapes() 
         (
             "plain-gcd-two",
             "=GCD(48,36)",
-            FunctionValue::Number(12.0),
+            CalcValue::number(12.0),
             "12",
         ),
         (
             "colliding-gcd-two",
             "=LET(gcd,LAMBDA(42),gcd(48,36))",
-            FunctionValue::Number(12.0),
+            CalcValue::number(12.0),
             "12",
         ),
         (
             "plain-gcd-value",
             "=GCD(\"x\",48)",
-            FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Value),
+            CalcValue::error(oxfunc_core::value::WorksheetErrorCode::Value),
             "#VALUE!",
         ),
     ];
@@ -2989,7 +2974,7 @@ fn runtime_environment_preserves_non_colliding_zero_arg_lambda_thunk_call_ftc_04
     assert_runtime_foundation_case(
         "FTC-0444-CONTROL",
         "=LET(THUNK,LAMBDA(x,LAMBDA(x)),tt,THUNK(42),tt())",
-        FunctionValue::Number(42.0),
+        CalcValue::number(42.0),
         "42",
     );
 }
@@ -2999,7 +2984,7 @@ fn runtime_environment_executes_foundation_array_lambda_carrier_case_ftc_0455() 
     assert_runtime_foundation_case(
         "FTC-0455",
         "=LET(THUNK,LAMBDA(x,LAMBDA(x)),vals,MAP({1;2;3},LAMBDA(v,THUNK(v*10))),INDEX(vals,2,1)())",
-        FunctionValue::Number(20.0),
+        CalcValue::number(20.0),
         "20",
     );
 }
@@ -3028,7 +3013,7 @@ fn runtime_environment_matches_excel_builtin_colliding_let_recursive_name_fronti
     );
     assert_eq!(
         result.published_worksheet_value,
-        FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Value)
+        CalcValue::error(oxfunc_core::value::WorksheetErrorCode::Value)
     );
     assert_eq!(
         result.verification_publication_surface.visible_value_text,
@@ -3047,7 +3032,7 @@ fn runtime_environment_preserves_non_builtin_recursive_self_application() {
     assert_runtime_foundation_case(
         "FTC-0443-NON-BUILTIN",
         "=LET(zzgcd,LAMBDA(self,a,b,IF(b=0,a,self(self,b,MOD(a,b)))),zzgcd(zzgcd,48,36))",
-        FunctionValue::Number(12.0),
+        CalcValue::number(12.0),
         "12",
     );
 }
@@ -3057,7 +3042,7 @@ fn runtime_environment_preserves_generic_recursive_self_application_baseline() {
     assert_runtime_foundation_case(
         "FTC-0443-BASELINE",
         "=LET(f,LAMBDA(self,n,IF(n<=0,0,1+self(self,n-1))),f(f,3))",
-        FunctionValue::Number(3.0),
+        CalcValue::number(3.0),
         "3",
     );
 }
@@ -3097,7 +3082,7 @@ fn runtime_environment_executes_foundation_text_date_format_case_ftc_1022() {
     assert_runtime_foundation_text_case(
         "FTC-1022",
         "=LET(yr,2024,m,3,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),testDate,DATE(yr,2,28),result,TEXT(testDate,\"[<\"&firstDay&\"] ;[>\"&lastDay&\"] ;dd\"),LEN(TRIM(result)))",
-        FunctionValue::Number(0.0),
+        CalcValue::number(0.0),
         "0",
     );
 }
@@ -3164,7 +3149,7 @@ fn runtime_environment_matches_dnaonecalc_exact_request_shape_for_text_date_fami
         (
             "FTC-1022",
             "=LET(yr,2024,m,3,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),testDate,DATE(yr,2,28),result,TEXT(testDate,\"[<\"&firstDay&\"] ;[>\"&lastDay&\"] ;dd\"),LEN(TRIM(result)))",
-            FunctionValue::Number(0.0),
+            CalcValue::number(0.0),
             serde_json::json!({"kind": "number", "value": 0.0}),
         ),
         (
@@ -3289,7 +3274,7 @@ fn runtime_environment_canonicalizes_en_us_locale_context_engines_for_text_date_
         (
             "FTC-1022",
             "=LET(yr,2024,m,3,firstDay,DATE(yr,m,1),lastDay,EOMONTH(firstDay,0),testDate,DATE(yr,2,28),result,TEXT(testDate,\"[<\"&firstDay&\"] ;[>\"&lastDay&\"] ;dd\"),LEN(TRIM(result)))",
-            FunctionValue::Number(0.0),
+            CalcValue::number(0.0),
         ),
         (
             "FTC-1023",
@@ -3395,10 +3380,7 @@ fn runtime_environment_executes_foundation_helper_array_case_ftc_1031() {
         ))
         .expect("FTC-1031 runtime execution should succeed");
 
-    assert_eq!(
-        result.published_worksheet_value,
-        FunctionValue::Number(21.0)
-    );
+    assert_eq!(result.published_worksheet_value, CalcValue::number(21.0));
     assert_eq!(
         result.verification_publication_surface.visible_value_text,
         "21"
@@ -3548,7 +3530,7 @@ fn runtime_session_facade_reports_managed_diagnostics_for_overlay_and_claim_owne
 fn assert_runtime_foundation_case(
     case_id: &str,
     formula: &str,
-    expected_value: FunctionValue,
+    expected_value: CalcValue,
     expected_text: &str,
 ) {
     let locale = oxfml_en_us_locale_context();
@@ -3579,7 +3561,7 @@ fn assert_runtime_foundation_case(
 fn assert_runtime_foundation_text_case(
     case_id: &str,
     formula: &str,
-    expected_value: FunctionValue,
+    expected_value: CalcValue,
     expected_text: &str,
 ) {
     let locale = oxfml_en_us_locale_context();
@@ -3690,13 +3672,13 @@ fn foreign_en_us_context_with_rejecting_formatter() -> LocaleFormatContext<'stat
     }
 }
 
-fn expected_programmatic_comparison_value(value: &FunctionValue) -> Value {
-    match value {
-        FunctionValue::Number(number) => serde_json::json!({
+fn expected_programmatic_comparison_value(value: &CalcValue) -> Value {
+    match value.core() {
+        CoreValue::Number(number) => serde_json::json!({
             "kind": "number",
             "value": number
         }),
-        FunctionValue::Error(code) => serde_json::json!({
+        CoreValue::Error(code) => serde_json::json!({
             "kind": "error",
             "code": format!("{code:?}"),
             "display": worksheet_error_text(*code)
@@ -3705,15 +3687,15 @@ fn expected_programmatic_comparison_value(value: &FunctionValue) -> Value {
     }
 }
 
-fn text_eval_value(text: &str) -> FunctionValue {
-    FunctionValue::Text(ExcelText::from_interop_assignment(text))
+fn text_eval_value(text: &str) -> CalcValue {
+    CalcValue::text(ExcelText::from_interop_assignment(text))
 }
 
 struct ValueRtdProvider;
 
 impl RtdProvider for ValueRtdProvider {
     fn resolve_rtd(&self, _request: &RtdRequest) -> RtdProviderResult {
-        RtdProviderResult::Value(CalcValue::from(FunctionValue::Number(7.0)))
+        RtdProviderResult::Value(CalcValue::from(CalcValue::number(7.0)))
     }
 }
 
@@ -3730,7 +3712,7 @@ impl HostInfoProvider for ClaimingHostInfoProvider {
 
     fn query_info(&self, query: InfoQuery) -> Result<CalcValue, HostInfoError> {
         match query {
-            InfoQuery::Directory => Ok(CalcValue::from(FunctionValue::Text(
+            InfoQuery::Directory => Ok(CalcValue::from(CalcValue::text(
                 ExcelText::from_interop_assignment("C:\\Work"),
             ))),
             _ => Err(HostInfoError::UnsupportedInfoQuery(query)),
@@ -3814,13 +3796,17 @@ impl HostFunctionProvider for RecordingHostFunctionProvider {
     fn invoke_host_function(
         &self,
         invocation: &HostFunctionInvocation,
-    ) -> Result<FunctionValue, HostFunctionProviderError> {
+    ) -> Result<CalcValue, HostFunctionProviderError> {
         self.last_invocation.replace(Some(invocation.clone()));
         match invocation.args.as_slice() {
-            [FunctionValue::Number(a), FunctionValue::Number(b)]
-                if invocation.function_name.eq_ignore_ascii_case("AddThem") =>
-            {
-                Ok(FunctionValue::Number(a + b))
+            [a, b] if invocation.function_name.eq_ignore_ascii_case("AddThem") => {
+                let Some(a) = a.as_number() else {
+                    return Err(HostFunctionProviderError::new("unsupported host function"));
+                };
+                let Some(b) = b.as_number() else {
+                    return Err(HostFunctionProviderError::new("unsupported host function"));
+                };
+                Ok(CalcValue::number(a + b))
             }
             _ => Err(HostFunctionProviderError::new("unsupported host function")),
         }

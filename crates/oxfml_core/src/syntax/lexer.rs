@@ -40,6 +40,14 @@ pub fn lex(input: &str) -> Vec<Token> {
             '^' => simple(TokenKind::Caret, ch, start),
             '*' => simple(TokenKind::Star, ch, start),
             '/' => simple(TokenKind::Slash, ch, start),
+            '.' if peek_is_ascii_digit(&chars, index + 1) => {
+                index = consume_number_literal(&chars, index);
+                Token::new(
+                    TokenKind::Number,
+                    chars[start..index].iter().collect::<String>(),
+                    TextSpan::new(start, index - start),
+                )
+            }
             '.' => simple(TokenKind::Dot, ch, start),
             '@' => simple(TokenKind::At, ch, start),
             '#' => {

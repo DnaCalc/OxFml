@@ -1,9 +1,10 @@
+use oxfunc_core::value::CalcValue;
 use std::collections::BTreeMap;
 
 mod common;
 
 use oxfml_core::consumer::runtime::{RuntimeEnvironment, RuntimeFormulaRequest};
-use oxfml_core::eval::{EvaluationContext, FunctionValue, evaluate_formula};
+use oxfml_core::eval::{EvaluationContext, evaluate_formula};
 use oxfml_core::format::{oxfml_en_us_locale_context, render_with_code};
 use oxfml_core::test_support::oxfunc_adapter::{
     OxFuncAdapterRequest, run_oxfunc_preparation_adapter,
@@ -46,7 +47,7 @@ fn evaluator_renders_fraction_placeholder_text_code_ftc_0654() {
     let output = evaluate_formula_text_with_locale("ftc-0654:evaluator", "=TEXT(0.25,\"# ?/?\")");
     assert_eq!(
         output.oxfunc_value,
-        FunctionValue::Text(ExcelText::from_interop_assignment(" 1/4"))
+        CalcValue::text(ExcelText::from_interop_assignment(" 1/4"))
     );
 }
 
@@ -62,7 +63,7 @@ fn runtime_renders_fraction_placeholder_text_code_ftc_0654() {
 
     assert_eq!(
         result.published_worksheet_value,
-        FunctionValue::Text(ExcelText::from_interop_assignment(" 1/4"))
+        CalcValue::text(ExcelText::from_interop_assignment(" 1/4"))
     );
 }
 
@@ -84,7 +85,7 @@ fn adapter_renders_fraction_placeholder_text_code_ftc_0654() {
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        FunctionValue::Text(ExcelText::from_interop_assignment(" 1/4"))
+        CalcValue::text(ExcelText::from_interop_assignment(" 1/4"))
     );
     assert_eq!(
         run.evaluation_artifact.evaluation_result.payload_summary,
@@ -104,6 +105,6 @@ fn scientific_text_control_remains_green_after_ftc_0654_fix() {
 
     assert_eq!(
         result.published_worksheet_value,
-        FunctionValue::Text(ExcelText::from_interop_assignment("1.23E+04"))
+        CalcValue::text(ExcelText::from_interop_assignment("1.23E+04"))
     );
 }

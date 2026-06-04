@@ -3,14 +3,14 @@ use std::fs;
 use std::path::PathBuf;
 
 use oxfml_core::EvaluationBackend;
-use oxfml_core::eval::FunctionValue;
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::seam::AcceptDecision;
 use oxfml_core::test_support::host::{
     EmpiricalOracleScenario, HostRecalcOutput, SingleFormulaHost,
 };
 use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
-use oxfunc_core::value::{CalcValue, ExcelText, ReferenceKind, ReferenceLike};
+use oxfunc_core::value::CalcValue;
+use oxfunc_core::value::{ExcelText, ReferenceKind, ReferenceLike};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -830,19 +830,19 @@ fn assert_commit_accepted(decision: &AcceptDecision) {
     }
 }
 
-fn parse_eval_value_wire(wire_value: &str) -> FunctionValue {
+fn parse_eval_value_wire(wire_value: &str) -> CalcValue {
     if let Some(inner) = wire_value
         .strip_prefix("Number(")
         .and_then(|value| value.strip_suffix(')'))
     {
-        return FunctionValue::Number(inner.parse::<f64>().expect("number should parse"));
+        return CalcValue::number(inner.parse::<f64>().expect("number should parse"));
     }
 
     if let Some(inner) = wire_value
         .strip_prefix("Text(")
         .and_then(|value| value.strip_suffix(')'))
     {
-        return FunctionValue::Text(ExcelText::from_utf16_code_units(
+        return CalcValue::text(ExcelText::from_utf16_code_units(
             inner.encode_utf16().collect(),
         ));
     }
@@ -903,7 +903,7 @@ impl HostInfoProvider for ReplayHostInfoProvider {
         _reference: Option<&ReferenceLike>,
     ) -> Result<CalcValue, HostInfoError> {
         match query {
-            CellInfoQuery::Filename => Ok(CalcValue::from(FunctionValue::Text(
+            CellInfoQuery::Filename => Ok(CalcValue::from(CalcValue::text(
                 ExcelText::from_utf16_code_units("[Book1]Sheet1".encode_utf16().collect()),
             ))),
             _ => Err(HostInfoError::UnsupportedCellInfoQuery(query)),
@@ -912,7 +912,7 @@ impl HostInfoProvider for ReplayHostInfoProvider {
 
     fn query_info(&self, query: InfoQuery) -> Result<CalcValue, HostInfoError> {
         match query {
-            InfoQuery::Directory => Ok(CalcValue::from(FunctionValue::Text(
+            InfoQuery::Directory => Ok(CalcValue::from(CalcValue::text(
                 ExcelText::from_utf16_code_units("C:\\Work".encode_utf16().collect()),
             ))),
             _ => Err(HostInfoError::UnsupportedInfoQuery(query)),

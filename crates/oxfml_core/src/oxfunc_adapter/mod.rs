@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 
+use oxfunc_core::value::CalcValue;
+
 use crate::binding::BindDiagnostic;
 use crate::eval::{
-    DefinedNameBinding, EvaluationBackend, EvaluationTraceMode, FunctionValue, PreparedCall,
-    PreparedResult,
+    DefinedNameBinding, EvaluationBackend, EvaluationTraceMode, PreparedCall, PreparedResult,
 };
 use crate::host::{HostRecalcOutput, SingleFormulaHost};
 use crate::interface::{
@@ -24,7 +25,7 @@ pub struct OxFuncAdapterRequest<'a> {
     pub caller_anchor: Locus,
     pub active_selection_anchor: Option<Locus>,
     pub structure_context_version: String,
-    pub cell_fixture: BTreeMap<String, FunctionValue>,
+    pub cell_fixture: BTreeMap<String, CalcValue>,
     pub defined_name_bindings: BTreeMap<String, DefinedNameBinding>,
     pub table_catalog: Vec<TableDescriptor>,
     pub enclosing_table_ref: Option<TableRef>,
@@ -91,7 +92,7 @@ pub struct OxFuncEvaluationArtifact {
     pub fixture_case_id: String,
     pub library_context_snapshot_ref: Option<LibraryContextSnapshotRef>,
     pub evaluation_result: PreparedResult,
-    pub worksheet_value: FunctionValue,
+    pub worksheet_value: CalcValue,
     pub returned_value_surface: ReturnedValueSurface,
     pub execution_outcome_surface: ExecutionOutcomeSurface,
     pub candidate_result_id: String,

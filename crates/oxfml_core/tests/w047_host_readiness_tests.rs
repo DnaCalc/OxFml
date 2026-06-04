@@ -1,6 +1,6 @@
 use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult, RtdRequest};
 use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
-use oxfunc_core::value::{CalcValue, ExcelText};
+use oxfunc_core::value::ExcelText;
 
 use oxfml_core::binding::{BindContext, BindRequest, NormalizedReference, bind_formula};
 use oxfml_core::carrier::{
@@ -8,7 +8,6 @@ use oxfml_core::carrier::{
     DataValidationCarrierSpec, validate_conditional_formatting_formula,
     validate_data_validation_formula,
 };
-use oxfml_core::eval::FunctionValue;
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::interface::{
     HostProviderOutcomeKind, InMemoryLibraryContextProvider, ReturnedValueSurfaceKind,
@@ -25,6 +24,7 @@ use oxfml_core::test_support::host::SingleFormulaHost;
 use oxfml_core::{
     EvaluationBackend, ExecutionOutcomeKind, ExecutionOutcomeStage, LibraryContextSnapshotRef,
 };
+use oxfunc_core::value::CalcValue;
 
 #[test]
 fn r1c1_channel_translates_absolute_relative_and_area_references() {
@@ -410,7 +410,7 @@ impl HostInfoProvider for W047HostInfoProvider {
 
     fn query_info(&self, query: InfoQuery) -> Result<CalcValue, HostInfoError> {
         match query {
-            InfoQuery::Directory => Ok(CalcValue::from(FunctionValue::Text(
+            InfoQuery::Directory => Ok(CalcValue::from(CalcValue::text(
                 ExcelText::from_utf16_code_units("C:\\Work".encode_utf16().collect()),
             ))),
             _ => Err(HostInfoError::UnsupportedInfoQuery(query)),

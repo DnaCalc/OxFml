@@ -3,12 +3,11 @@ use std::collections::BTreeMap;
 mod common;
 
 use oxfml_core::consumer::runtime::{RuntimeEnvironment, RuntimeFormulaRequest};
-use oxfml_core::eval::{
-    EvaluationContext, FunctionArray, FunctionArrayCell, FunctionValue, evaluate_formula,
-};
+use oxfml_core::eval::{EvaluationContext, evaluate_formula};
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::{FormulaSourceRecord, TypedContextQueryBundle};
 use oxfunc_core::value::WorksheetErrorCode;
+use oxfunc_core::value::{CalcArray, CalcValue};
 
 fn evaluate_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::EvaluationOutput {
     let compiled = common::compile_formula(
@@ -22,12 +21,12 @@ fn evaluate_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::
     evaluate_formula(context).expect("evaluation should succeed")
 }
 
-fn number_row(values: &[f64]) -> FunctionValue {
-    FunctionValue::Array(
-        FunctionArray::from_rows(vec![
+fn number_row(values: &[f64]) -> CalcValue {
+    CalcValue::array(
+        CalcArray::from_rows(vec![
             values
                 .iter()
-                .map(|value| FunctionArrayCell::Number(*value))
+                .map(|value| CalcValue::number(*value))
                 .collect(),
         ])
         .expect("row array"),
@@ -98,7 +97,7 @@ fn nested_callable_map_reuse_projects_calc_ftc_0999() {
     let eval = evaluate_formula_text("ftc-0999:nested", formula);
     assert_eq!(
         eval.oxfunc_value,
-        FunctionValue::Error(WorksheetErrorCode::Calc)
+        CalcValue::error(WorksheetErrorCode::Calc)
     );
 
     let locale = oxfml_en_us_locale_context();
@@ -110,7 +109,7 @@ fn nested_callable_map_reuse_projects_calc_ftc_0999() {
         .expect("runtime execution should succeed");
     assert_eq!(
         runtime.published_worksheet_value,
-        FunctionValue::Error(WorksheetErrorCode::Calc)
+        CalcValue::error(WorksheetErrorCode::Calc)
     );
     assert_eq!(
         runtime.verification_publication_surface.visible_value_text,

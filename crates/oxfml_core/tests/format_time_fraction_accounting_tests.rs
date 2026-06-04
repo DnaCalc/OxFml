@@ -1,12 +1,12 @@
 use oxfml_core::consumer::runtime::{RuntimeEnvironment, RuntimeFormulaRequest};
-use oxfml_core::eval::FunctionValue;
 use oxfml_core::format::{oxfml_en_us_locale_context, render_with_code};
 use oxfml_core::publication::{
     VerificationPublicationContext, build_verification_publication_surface,
 };
 use oxfml_core::seam::TopologyDelta;
 use oxfml_core::{FormulaSourceRecord, ReturnedValueSurface, TypedContextQueryBundle};
-use oxfunc_core::value::{CalcValue, CoreValue, NumberFormatHint, PresentationHint};
+use oxfunc_core::value::CalcValue;
+use oxfunc_core::value::{CoreValue, NumberFormatHint, PresentationHint};
 
 #[test]
 fn format_engine_renders_time_tokens_and_ampm_modes() {
@@ -152,7 +152,7 @@ fn publication_surface_respects_user_supplied_time_format_code() {
 
     let surface = build_verification_publication_surface(
         &source,
-        &FunctionValue::Number(45293.625),
+        &CalcValue::number(45293.625),
         &returned_value_surface,
         &TopologyDelta {
             formula_stable_id: "publication:time-format".to_string(),
@@ -188,7 +188,7 @@ fn runtime_text_uses_fraction_format_code() {
 
     assert_eq!(
         result.published_worksheet_value,
-        FunctionValue::Text(oxfunc_core::value::ExcelText::from_interop_assignment(
+        CalcValue::text(oxfunc_core::value::ExcelText::from_interop_assignment(
             " 1/4"
         ))
     );

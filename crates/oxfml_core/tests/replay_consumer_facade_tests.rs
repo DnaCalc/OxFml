@@ -16,7 +16,6 @@ use oxfml_core::consumer::runtime::{
     RuntimeEnvironment, RuntimeFormulaRequest, RuntimeHostFormulaContext,
     RuntimeHostReferenceBindResult, RuntimeSessionFacade,
 };
-use oxfml_core::eval::{FunctionArray, FunctionArrayCell, FunctionValue};
 use oxfml_core::format::{
     oxfml_current_excel_host_locale_context, oxfml_en_us_locale_context, worksheet_error_text,
 };
@@ -39,6 +38,7 @@ use oxfunc_core::host_info::{
     HostInfoError, HostInfoProvider, ImageProviderResult, ImageRequest, ResolvedWebImage,
 };
 use oxfunc_core::value::ExcelText;
+use oxfunc_core::value::{CalcArray, CalcValue, CoreValue};
 use serde_json::Value;
 
 #[test]
@@ -249,7 +249,7 @@ fn replay_projection_service_projects_runtime_and_host_outputs() {
             .verification_publication_surface
             .as_ref()
             .map(|surface| surface.published_value.clone()),
-        Some(FunctionValue::Number(6.0))
+        Some(CalcValue::number(6.0))
     );
     assert_eq!(
         runtime_projection
@@ -561,7 +561,7 @@ fn replay_projection_service_prefers_first_host_capture_publication_surface_for_
         .verification_publication_surface
         .locale_format_context = None;
     mutated.verification_publication_surface.published_value =
-        FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Value);
+        CalcValue::error(oxfunc_core::value::WorksheetErrorCode::Value);
     mutated.verification_publication_surface.visible_value_text = "#VALUE!".to_string();
     mutated
         .verification_publication_surface
@@ -930,13 +930,13 @@ fn load_expected_comparison_views_fixture() -> Value {
     fixture["comparison_views"].clone()
 }
 
-fn expected_programmatic_comparison_value(value: &FunctionValue) -> Value {
-    match value {
-        FunctionValue::Number(number) => serde_json::json!({
+fn expected_programmatic_comparison_value(value: &CalcValue) -> Value {
+    match value.core() {
+        CoreValue::Number(number) => serde_json::json!({
             "kind": "number",
             "value": number
         }),
-        FunctionValue::Error(code) => serde_json::json!({
+        CoreValue::Error(code) => serde_json::json!({
             "kind": "error",
             "code": format!("{code:?}"),
             "display": worksheet_error_text(*code)
@@ -1256,11 +1256,11 @@ fn replay_projection_carries_w074_structured_table_identity() {
         .with_table_context(vec![replay_w074_table("B2:B4")], None, None)
         .with_cell_values(BTreeMap::from([(
             "B2:B4".to_string(),
-            FunctionValue::Array(
-                FunctionArray::from_rows(vec![vec![
-                    FunctionArrayCell::Number(3.0),
-                    FunctionArrayCell::Number(4.0),
-                    FunctionArrayCell::Number(5.0),
+            CalcValue::array(
+                CalcArray::from_rows(vec![vec![
+                    CalcValue::number(3.0),
+                    CalcValue::number(4.0),
+                    CalcValue::number(5.0),
                 ]])
                 .expect("array fixture should be valid"),
             ),
@@ -1312,11 +1312,11 @@ fn replay_projection_carries_escaped_structured_column_bind_packet() {
         .with_table_context(vec![replay_w074_escaped_table()], None, None)
         .with_cell_values(BTreeMap::from([(
             "B2:B4".to_string(),
-            FunctionValue::Array(
-                FunctionArray::from_rows(vec![vec![
-                    FunctionArrayCell::Number(2.0),
-                    FunctionArrayCell::Number(3.0),
-                    FunctionArrayCell::Number(5.0),
+            CalcValue::array(
+                CalcArray::from_rows(vec![vec![
+                    CalcValue::number(2.0),
+                    CalcValue::number(3.0),
+                    CalcValue::number(5.0),
                 ]])
                 .expect("array fixture should be valid"),
             ),
@@ -1340,7 +1340,7 @@ fn replay_projection_carries_escaped_structured_column_bind_packet() {
 
     assert_eq!(
         runtime_result.evaluation.oxfunc_value,
-        FunctionValue::Number(10.0)
+        CalcValue::number(10.0)
     );
     assert_eq!(record.source_token_text, "Table1[['#Data]]");
     assert_eq!(
@@ -1378,7 +1378,7 @@ fn replay_projection_carries_zero_row_structured_table_packet() {
 
     assert_eq!(
         runtime_result.evaluation.oxfunc_value,
-        FunctionValue::Number(0.0)
+        CalcValue::number(0.0)
     );
     assert_eq!(
         identity.structured_reference_bind_records,
@@ -1420,7 +1420,7 @@ fn replay_projection_preserves_no_host_namespace_lexical_guardrail() {
 
     assert_eq!(
         runtime_result.evaluation.oxfunc_value,
-        FunctionValue::Number(115.0)
+        CalcValue::number(115.0)
     );
     let projection =
         ReplayProjectionService::project(ReplayProjectionRequest::runtime_result(&runtime_result));

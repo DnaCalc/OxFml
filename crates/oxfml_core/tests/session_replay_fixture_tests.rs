@@ -4,11 +4,10 @@ use std::path::PathBuf;
 
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
-use oxfunc_core::value::{CalcValue, ExcelText, ReferenceLike};
+use oxfunc_core::value::{ExcelText, ReferenceLike};
 use serde::Deserialize;
 
 use oxfml_core::binding::{BindContext, BindRequest, NameKind, bind_formula};
-use oxfml_core::eval::FunctionValue;
 use oxfml_core::interface::TypedContextQueryBundle;
 use oxfml_core::red::project_red_view;
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
@@ -20,6 +19,7 @@ use oxfml_core::{
     AcceptDecision, DefinedNameBinding, EvaluationBackend, Locus, RejectCode, TraceEventKind,
     ValuePayload, compile_semantic_plan,
 };
+use oxfunc_core::value::CalcValue;
 
 #[derive(Debug, Deserialize)]
 struct SessionReplayFixture {
@@ -70,7 +70,7 @@ fn session_lifecycle_replay_fixtures_match_expected_snapshots() {
                 if fixture.with_input_name {
                     defined_names.insert(
                         "InputValue".to_string(),
-                        DefinedNameBinding::Value(FunctionValue::Number(5.0)),
+                        DefinedNameBinding::Value(CalcValue::number(5.0)),
                     );
                 }
 
@@ -184,7 +184,7 @@ fn session_lifecycle_replay_fixtures_match_expected_snapshots() {
                 if fixture.with_input_name {
                     defined_names.insert(
                         "InputValue".to_string(),
-                        DefinedNameBinding::Value(FunctionValue::Number(5.0)),
+                        DefinedNameBinding::Value(CalcValue::number(5.0)),
                     );
                 }
 
@@ -258,7 +258,7 @@ fn session_lifecycle_replay_fixtures_match_expected_snapshots() {
                 if fixture.with_input_name {
                     defined_names.insert(
                         "InputValue".to_string(),
-                        DefinedNameBinding::Value(FunctionValue::Number(5.0)),
+                        DefinedNameBinding::Value(CalcValue::number(5.0)),
                     );
                 }
                 service
@@ -590,7 +590,7 @@ impl HostInfoProvider for ReplayHostInfoProvider {
         _reference: Option<&ReferenceLike>,
     ) -> Result<CalcValue, HostInfoError> {
         match query {
-            CellInfoQuery::Filename => Ok(CalcValue::from(FunctionValue::Text(
+            CellInfoQuery::Filename => Ok(CalcValue::from(CalcValue::text(
                 ExcelText::from_utf16_code_units("[Book1]Sheet1".encode_utf16().collect()),
             ))),
             _ => Err(HostInfoError::UnsupportedCellInfoQuery(query)),
@@ -599,7 +599,7 @@ impl HostInfoProvider for ReplayHostInfoProvider {
 
     fn query_info(&self, query: InfoQuery) -> Result<CalcValue, HostInfoError> {
         match query {
-            InfoQuery::Directory => Ok(CalcValue::from(FunctionValue::Text(
+            InfoQuery::Directory => Ok(CalcValue::from(CalcValue::text(
                 ExcelText::from_utf16_code_units("C:\\Work".encode_utf16().collect()),
             ))),
             _ => Err(HostInfoError::UnsupportedInfoQuery(query)),

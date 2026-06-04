@@ -2,12 +2,12 @@ use oxfml_core::binding::{
     BindContext, BindRequest, BoundExpr, NameKind, NormalizedReference, ReferenceExpr, bind_formula,
 };
 use oxfml_core::consumer::runtime::{RuntimeEnvironment, RuntimeFormulaRequest};
-use oxfml_core::eval::FunctionValue;
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::red::project_red_view;
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
 use oxfml_core::{ExecutionOutcomeKind, ExecutionOutcomeStage, TypedContextQueryBundle};
+use oxfunc_core::value::CalcValue;
 use oxfunc_core::value::{ExcelText, WorksheetErrorCode};
 
 fn bind_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::binding::BindResult {
@@ -118,7 +118,7 @@ fn runtime_rejects_colliding_row_callable_shapes_at_bind_boundary() {
         );
         assert_eq!(
             result.published_worksheet_value,
-            FunctionValue::Error(WorksheetErrorCode::Value),
+            CalcValue::error(WorksheetErrorCode::Value),
             "{case_id} worksheet value"
         );
         assert!(result.bind_diagnostics.iter().any(|diagnostic| {
@@ -135,37 +135,37 @@ fn runtime_preserves_alias_escape_hatch_for_colliding_row_callables() {
         (
             "colliding-row-reference",
             "=LET(row,LAMBDA(n,n),row(A1))",
-            FunctionValue::Number(1.0),
+            CalcValue::number(1.0),
             "1",
         ),
         (
             "colliding-row-aliased-scalar",
             "=LET(row,LAMBDA(n,n),g,row,g(7))",
-            FunctionValue::Number(7.0),
+            CalcValue::number(7.0),
             "7",
         ),
         (
             "colliding-row-self-aliased-outer-only",
             "=LET(row,LAMBDA(self,LAMBDA(n,n)),g,row,g(row)(7))",
-            FunctionValue::Number(7.0),
+            CalcValue::number(7.0),
             "7",
         ),
         (
             "colliding-t-direct",
             "=LET(t,LAMBDA(x,x+1),t(7))",
-            FunctionValue::Text(ExcelText::from_interop_assignment("")),
+            CalcValue::text(ExcelText::from_interop_assignment("")),
             "",
         ),
         (
             "colliding-sum-direct",
             "=LET(sum,LAMBDA(x,x+1),sum(7))",
-            FunctionValue::Number(7.0),
+            CalcValue::number(7.0),
             "7",
         ),
         (
             "colliding-gcd-direct",
             "=LET(gcd,LAMBDA(a,b,a+b),gcd(8,4))",
-            FunctionValue::Number(4.0),
+            CalcValue::number(4.0),
             "4",
         ),
     ];

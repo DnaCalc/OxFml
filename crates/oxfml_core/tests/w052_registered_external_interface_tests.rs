@@ -3,18 +3,18 @@ use oxfunc_core::functions::call_register_id_family::{
     RegisteredExternalProvider, RegisteredExternalProviderError, RegisteredExternalTarget,
     RegisteredProcedureSpec,
 };
-use oxfunc_core::value::{CalcValue, CoreValue, ExcelText, ReferenceKind, ReferenceLike};
+use oxfunc_core::value::{CoreValue, ExcelText, ReferenceKind, ReferenceLike};
 use std::cell::RefCell;
 
 use oxfml_core::EvaluationTraceMode;
 use oxfml_core::TypedContextQueryBundleSpec;
-use oxfml_core::eval::FunctionValue;
 use oxfml_core::interface::{
     RegisteredExternalCatalogController, RegisteredExternalCatalogMutationRequest,
     RegisteredExternalCatalogMutationResult, RegisteredExternalHostRegistrationRequest,
     RegisteredExternalRegistrationChannel, TypedContextQueryBundle, TypedContextQueryFamily,
 };
 use oxfml_core::test_support::host::SingleFormulaHost;
+use oxfunc_core::value::CalcValue;
 
 #[test]
 fn typed_query_bundle_includes_registered_external_family_when_provider_present() {
@@ -43,7 +43,7 @@ fn host_executes_register_id_and_call_through_registered_external_provider() {
 
     assert_eq!(
         register_output.published_worksheet_value,
-        FunctionValue::Number(4242.0)
+        CalcValue::number(4242.0)
     );
     assert_eq!(
         register_output.evaluation.trace.prepared_calls[0]
@@ -86,7 +86,7 @@ fn host_executes_register_id_and_call_through_registered_external_provider() {
 
     assert_eq!(
         call_output.published_worksheet_value,
-        FunctionValue::Number(14.0)
+        CalcValue::number(14.0)
     );
     let (descriptor, args) = provider.last_invoke.borrow().clone().expect("invoke");
     assert_eq!(descriptor.register_id, 4242.0);
@@ -143,10 +143,7 @@ fn host_executes_call_by_register_id_through_lookup_lane() {
         .recalc_with_registered_external_provider(None, Some(&provider), None, None)
         .expect("call by register id host recalc");
 
-    assert_eq!(
-        output.published_worksheet_value,
-        FunctionValue::Number(14.0)
-    );
+    assert_eq!(output.published_worksheet_value, CalcValue::number(14.0));
     assert_eq!(provider.last_lookup.borrow().as_ref(), Some(&4242.0));
     match output.evaluation.trace.prepared_calls[0]
         .registered_external_call_request
@@ -178,16 +175,13 @@ fn host_preserves_reference_visible_call_argument_for_registered_external_invoca
         "formula:call-ref",
         "=CALL(\"Kernel32\",\"ProbeRef\",\"J\",A1)",
     );
-    host.set_cell_value("A1", FunctionValue::Number(7.0));
+    host.set_cell_value("A1", CalcValue::number(7.0));
 
     let output = host
         .recalc_with_registered_external_provider(None, Some(&provider), None, None)
         .expect("call with reference host recalc");
 
-    assert_eq!(
-        output.published_worksheet_value,
-        FunctionValue::Number(99.0)
-    );
+    assert_eq!(output.published_worksheet_value, CalcValue::number(99.0));
     let (_, args) = provider.last_invoke.borrow().clone().expect("invoke");
     assert_eq!(
         args,

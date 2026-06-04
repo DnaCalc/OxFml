@@ -3,12 +3,11 @@ use std::collections::BTreeMap;
 mod common;
 
 use oxfml_core::consumer::runtime::{RuntimeEnvironment, RuntimeFormulaRequest};
-use oxfml_core::eval::{
-    EvaluationContext, FunctionArray, FunctionArrayCell, FunctionValue, evaluate_formula,
-};
+use oxfml_core::eval::{EvaluationContext, evaluate_formula};
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::{FormulaSourceRecord, TypedContextQueryBundle};
 use oxfunc_core::value::WorksheetErrorCode;
+use oxfunc_core::value::{CalcArray, CalcValue};
 
 fn evaluate_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::EvaluationOutput {
     let compiled = common::compile_formula(
@@ -35,12 +34,12 @@ fn runtime_execute(
         .expect("runtime execution should succeed")
 }
 
-fn row_numbers(values: &[f64]) -> FunctionValue {
-    FunctionValue::Array(
-        FunctionArray::from_rows(vec![
+fn row_numbers(values: &[f64]) -> CalcValue {
+    CalcValue::array(
+        CalcArray::from_rows(vec![
             values
                 .iter()
-                .map(|value| FunctionArrayCell::Number(*value))
+                .map(|value| CalcValue::number(*value))
                 .collect(),
         ])
         .expect("row array"),
@@ -53,7 +52,7 @@ fn evaluator_collapses_hstack_empty_carrier_formula_ftc_1043() {
     let output = evaluate_formula_text("ftc-1043:evaluator", formula);
     assert_eq!(
         output.oxfunc_value,
-        FunctionValue::Error(WorksheetErrorCode::Calc)
+        CalcValue::error(WorksheetErrorCode::Calc)
     );
 }
 
@@ -63,7 +62,7 @@ fn runtime_collapses_hstack_empty_carrier_formula_ftc_1043() {
     let result = runtime_execute("ftc-1043:runtime", formula);
     assert_eq!(
         result.published_worksheet_value,
-        FunctionValue::Error(WorksheetErrorCode::Calc)
+        CalcValue::error(WorksheetErrorCode::Calc)
     );
     assert_eq!(
         result.verification_publication_surface.visible_value_text,
@@ -82,13 +81,13 @@ fn hstack_collapse_applies_to_direct_take_zero_carriers() {
         let eval = evaluate_formula_text(&format!("ftc-1043:collapse:{index}"), formula);
         assert_eq!(
             eval.oxfunc_value,
-            FunctionValue::Error(WorksheetErrorCode::Calc)
+            CalcValue::error(WorksheetErrorCode::Calc)
         );
 
         let runtime = runtime_execute(&format!("ftc-1043:runtime:collapse:{index}"), formula);
         assert_eq!(
             runtime.published_worksheet_value,
-            FunctionValue::Error(WorksheetErrorCode::Calc)
+            CalcValue::error(WorksheetErrorCode::Calc)
         );
         assert_eq!(
             runtime.verification_publication_surface.visible_value_text,

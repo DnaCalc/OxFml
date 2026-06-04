@@ -1,9 +1,10 @@
+use oxfunc_core::value::{CalcValue, CoreValue};
 use std::collections::BTreeMap;
 
 mod common;
 
 use oxfml_core::consumer::runtime::{RuntimeEnvironment, RuntimeFormulaRequest};
-use oxfml_core::eval::{EvaluationContext, FunctionValue, evaluate_formula};
+use oxfml_core::eval::{EvaluationContext, evaluate_formula};
 use oxfml_core::{FormulaSourceRecord, TypedContextQueryBundle};
 
 fn evaluate_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::EvaluationOutput {
@@ -24,47 +25,39 @@ fn evaluator_characterizes_ftc_0630_subnormal_boundary_family() {
         (
             "FTC-0630",
             "=2.2250738585072014E-308/10",
-            FunctionValue::Number(0.0),
+            CalcValue::number(0.0),
         ),
         (
             "nearby-div2",
             "=2.2250738585072014E-308/2",
-            FunctionValue::Number(0.0),
+            CalcValue::number(0.0),
         ),
         (
             "nearby-div100",
             "=2.2250738585072014E-308/100",
-            FunctionValue::Number(0.0),
+            CalcValue::number(0.0),
         ),
         (
             "nearby-double-div10",
             "=4.450147717014403E-308/10",
-            FunctionValue::Number(0.0),
+            CalcValue::number(0.0),
         ),
         (
             "literal-boundary-preserved",
             "=2.2250738585072100E-308",
-            FunctionValue::Number(2.22507385850721e-308),
+            CalcValue::number(2.22507385850721e-308),
         ),
         (
             "preserved-boundary-div2",
             "=2.2250738585072100E-308/2",
-            FunctionValue::Number(0.0),
+            CalcValue::number(0.0),
         ),
-        (
-            "nonzero-control",
-            "=5E-308/2",
-            FunctionValue::Number(2.5e-308),
-        ),
-        (
-            "power-underflow",
-            "=POWER(2,-1023)",
-            FunctionValue::Number(0.0),
-        ),
+        ("nonzero-control", "=5E-308/2", CalcValue::number(2.5e-308)),
+        ("power-underflow", "=POWER(2,-1023)", CalcValue::number(0.0)),
         (
             "power-min-normal",
             "=POWER(2,-1022)",
-            FunctionValue::Number(f64::MIN_POSITIVE),
+            CalcValue::number(f64::MIN_POSITIVE),
         ),
     ];
 
@@ -73,8 +66,8 @@ fn evaluator_characterizes_ftc_0630_subnormal_boundary_family() {
         assert_eq!(output.oxfunc_value, expected, "{case_id} evaluator value");
         assert_eq!(
             output.result.payload_summary,
-            match expected {
-                FunctionValue::Number(number) => format!("Number({number})"),
+            match expected.core() {
+                CoreValue::Number(number) => format!("Number({number})"),
                 _ => unreachable!(),
             },
             "{case_id} payload_summary"
@@ -88,47 +81,39 @@ fn runtime_characterizes_ftc_0630_subnormal_boundary_family() {
         (
             "FTC-0630",
             "=2.2250738585072014E-308/10",
-            FunctionValue::Number(0.0),
+            CalcValue::number(0.0),
         ),
         (
             "nearby-div2",
             "=2.2250738585072014E-308/2",
-            FunctionValue::Number(0.0),
+            CalcValue::number(0.0),
         ),
         (
             "nearby-div100",
             "=2.2250738585072014E-308/100",
-            FunctionValue::Number(0.0),
+            CalcValue::number(0.0),
         ),
         (
             "nearby-double-div10",
             "=4.450147717014403E-308/10",
-            FunctionValue::Number(0.0),
+            CalcValue::number(0.0),
         ),
         (
             "literal-boundary-preserved",
             "=2.2250738585072100E-308",
-            FunctionValue::Number(2.22507385850721e-308),
+            CalcValue::number(2.22507385850721e-308),
         ),
         (
             "preserved-boundary-div2",
             "=2.2250738585072100E-308/2",
-            FunctionValue::Number(0.0),
+            CalcValue::number(0.0),
         ),
-        (
-            "nonzero-control",
-            "=5E-308/2",
-            FunctionValue::Number(2.5e-308),
-        ),
-        (
-            "power-underflow",
-            "=POWER(2,-1023)",
-            FunctionValue::Number(0.0),
-        ),
+        ("nonzero-control", "=5E-308/2", CalcValue::number(2.5e-308)),
+        ("power-underflow", "=POWER(2,-1023)", CalcValue::number(0.0)),
         (
             "power-min-normal",
             "=POWER(2,-1022)",
-            FunctionValue::Number(f64::MIN_POSITIVE),
+            CalcValue::number(f64::MIN_POSITIVE),
         ),
     ];
 

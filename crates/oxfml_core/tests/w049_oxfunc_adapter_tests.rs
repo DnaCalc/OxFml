@@ -1,6 +1,5 @@
 use std::cell::Cell;
 
-use oxfml_core::eval::{FunctionArrayCell, FunctionValue};
 use oxfml_core::interface::{
     HostProviderOutcomeKind, InMemoryLibraryContextProvider, LibraryContextSnapshotRef,
     ReturnedValueSurfaceKind, TypedContextQueryBundle, TypedContextQueryFamily,
@@ -25,9 +24,8 @@ use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult, RtdRequest}
 use oxfunc_core::host_info::{
     HostInfoError, HostInfoProvider, ImageProviderResult, ImageRequest, ResolvedWebImage,
 };
-use oxfunc_core::value::{
-    ArrayShape, CalcValue, CellStyleHint, CoreValue, ExcelText, PresentationHint,
-};
+use oxfunc_core::value::CalcValue;
+use oxfunc_core::value::{ArrayShape, CellStyleHint, CoreValue, ExcelText, PresentationHint};
 
 struct SequenceRandomProvider {
     next: Cell<u32>,
@@ -98,10 +96,10 @@ fn adapter_projects_direct_scalar_and_array_like_preparation_artifacts() {
     );
     array_like_request
         .cell_fixture
-        .insert("A1".to_string(), FunctionValue::Number(10.0));
+        .insert("A1".to_string(), CalcValue::number(10.0));
     array_like_request
         .cell_fixture
-        .insert("A2".to_string(), FunctionValue::Number(20.0));
+        .insert("A2".to_string(), CalcValue::number(20.0));
     let array_like_run =
         run_oxfunc_preparation_adapter(array_like_request).expect("array-like adapter run");
 
@@ -138,7 +136,7 @@ fn adapter_executes_text_with_scientific_format_pattern_ftc_0655() {
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        FunctionValue::Text(ExcelText::from_interop_assignment("1.23E+04"))
+        CalcValue::text(ExcelText::from_interop_assignment("1.23E+04"))
     );
     assert_eq!(
         run.evaluation_artifact.evaluation_result.payload_summary,
@@ -173,7 +171,7 @@ fn adapter_preserves_randarray_width_for_columns_ftc_0505_with_random_provider()
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        FunctionValue::Number(3.0)
+        CalcValue::number(3.0)
     );
     assert_eq!(
         run.evaluation_artifact.evaluation_result.payload_summary,
@@ -204,14 +202,14 @@ fn adapter_randarray_consumes_distinct_provider_draws() {
     ))
     .expect("RANDARRAY adapter run should succeed");
 
-    let FunctionValue::Array(array) = run.evaluation_artifact.worksheet_value else {
+    let CoreValue::Array(array) = run.evaluation_artifact.worksheet_value.core() else {
         panic!("expected array result");
     };
     assert_eq!(array.shape(), ArrayShape { rows: 5, cols: 5 });
     let values = array.iter_row_major().cloned().collect::<Vec<_>>();
-    assert_eq!(values.first(), Some(&FunctionArrayCell::Number(0.01)));
-    assert_eq!(values.get(12), Some(&FunctionArrayCell::Number(0.13)));
-    assert_eq!(values.last(), Some(&FunctionArrayCell::Number(0.25)));
+    assert_eq!(values.first(), Some(&CalcValue::number(0.01)));
+    assert_eq!(values.get(12), Some(&CalcValue::number(0.13)));
+    assert_eq!(values.last(), Some(&CalcValue::number(0.25)));
     assert_eq!(random_provider.next.get(), 26);
 }
 
@@ -228,7 +226,7 @@ fn adapter_handles_unary_negative_literals_in_ordinary_calls() {
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        FunctionValue::Number(-1.0)
+        CalcValue::number(-1.0)
     );
 }
 
@@ -245,7 +243,7 @@ fn adapter_treats_absent_single_cell_reference_as_blank_stand_in() {
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        FunctionValue::Logical(true)
+        CalcValue::logical(true)
     );
 }
 
@@ -286,7 +284,7 @@ fn adapter_respects_requested_snapshot_and_caller_anchor() {
     );
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        FunctionValue::Number(7.0)
+        CalcValue::number(7.0)
     );
 }
 
@@ -339,10 +337,12 @@ fn adapter_preserves_hyperlink_publication_intent() {
     ))
     .expect("hyperlink adapter run");
 
+    let expected = CalcValue::text(ExcelText::from_interop_assignment("Go"));
     assert_eq!(
-        run.evaluation_artifact.worksheet_value,
-        FunctionValue::Text(ExcelText::from_interop_assignment("Go"))
+        run.evaluation_artifact.worksheet_value.core(),
+        expected.core()
     );
+    assert!(run.evaluation_artifact.worksheet_value.rich().is_some());
     assert_eq!(
         run.evaluation_artifact.returned_value_surface.kind,
         ReturnedValueSurfaceKind::ValueWithPresentation
@@ -372,10 +372,12 @@ fn adapter_preserves_image_rich_value_surface() {
             .families
             .contains(&TypedContextQueryFamily::Image)
     );
+    let expected = CalcValue::text(ExcelText::from_interop_assignment("-2146826273"));
     assert_eq!(
-        run.evaluation_artifact.worksheet_value,
-        FunctionValue::Text(ExcelText::from_interop_assignment("-2146826273"))
+        run.evaluation_artifact.worksheet_value.core(),
+        expected.core()
     );
+    assert!(run.evaluation_artifact.worksheet_value.rich().is_some());
     assert_eq!(
         run.evaluation_artifact.returned_value_surface.kind,
         ReturnedValueSurfaceKind::RichValue
@@ -418,7 +420,7 @@ fn adapter_projects_image_capability_denied_as_blocked_error() {
 
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Blocked)
+        CalcValue::error(oxfunc_core::value::WorksheetErrorCode::Blocked)
     );
     assert_eq!(
         run.evaluation_artifact.returned_value_surface.kind,
@@ -540,7 +542,7 @@ fn adapter_preserves_internal_lambda_but_publishes_calc_for_bare_lambda() {
     );
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Calc)
+        CalcValue::error(oxfunc_core::value::WorksheetErrorCode::Calc)
     );
     assert_eq!(
         run.evaluation_artifact.returned_value_surface.kind,
@@ -571,7 +573,7 @@ fn adapter_preserves_internal_lambda_but_publishes_calc_for_helper_bound_returne
     );
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Calc)
+        CalcValue::error(oxfunc_core::value::WorksheetErrorCode::Calc)
     );
     assert_eq!(
         run.evaluation_artifact.returned_value_surface.kind,
@@ -615,7 +617,7 @@ fn adapter_executes_helper_bound_returned_lambda_invocation() {
     );
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        FunctionValue::Number(15.0)
+        CalcValue::number(15.0)
     );
     assert_eq!(
         run.preparation_artifact
@@ -675,7 +677,7 @@ fn adapter_rejects_duplicate_let_binding_names_as_bind_mismatch() {
     );
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Value)
+        CalcValue::error(oxfunc_core::value::WorksheetErrorCode::Value)
     );
     assert!(
         run.preparation_artifact
@@ -726,7 +728,7 @@ fn adapter_rejects_builtin_collision_arity_helper_local_call_as_bind_mismatch_ft
     );
     assert_eq!(
         run.evaluation_artifact.worksheet_value,
-        FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Value)
+        CalcValue::error(oxfunc_core::value::WorksheetErrorCode::Value)
     );
     assert!(
         run.preparation_artifact
@@ -814,12 +816,12 @@ fn adapter_executes_colliding_let_calls_when_builtin_frontier_accepts_shape() {
         (
             "collision-t-accepted-shape",
             "=LET(t,LAMBDA(42),t(\"x\"))",
-            FunctionValue::Text(ExcelText::from_interop_assignment("x")),
+            CalcValue::text(ExcelText::from_interop_assignment("x")),
         ),
         (
             "collision-gcd-accepted-shape",
             "=LET(gcd,LAMBDA(42),gcd(48,36))",
-            FunctionValue::Number(12.0),
+            CalcValue::number(12.0),
         ),
     ];
 
@@ -888,7 +890,7 @@ fn adapter_rejects_lambda_array_constant_authoring_frontier_cases_as_bind_mismat
         );
         assert_eq!(
             run.evaluation_artifact.worksheet_value,
-            FunctionValue::Error(oxfunc_core::value::WorksheetErrorCode::Value),
+            CalcValue::error(oxfunc_core::value::WorksheetErrorCode::Value),
             "{case_id} worksheet value"
         );
         assert!(

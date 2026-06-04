@@ -1,8 +1,10 @@
 use std::collections::BTreeMap;
 
+use oxfunc_core::value::{CalcValue, CoreValue};
+
 use crate::binding::BoundFormula;
 use crate::eval::{
-    DefinedNameBinding, EvaluationBackend, EvaluationContext, EvaluationOutput, FunctionValue,
+    DefinedNameBinding, EvaluationBackend, EvaluationContext, EvaluationOutput,
     eval_value_is_callable, evaluate_formula,
 };
 use crate::interface::{
@@ -106,7 +108,7 @@ pub struct ExecuteRequest<'a> {
     pub backend: EvaluationBackend,
     pub caller_row: usize,
     pub caller_col: usize,
-    pub cell_values: BTreeMap<String, FunctionValue>,
+    pub cell_values: BTreeMap<String, CalcValue>,
     pub defined_names: BTreeMap<String, DefinedNameBinding>,
     pub typed_query_bundle: TypedContextQueryBundle<'a>,
 }
@@ -1317,7 +1319,7 @@ fn dependency_reclassifications_for_plan(semantic_plan: &SemanticPlan) -> Vec<St
 }
 
 fn value_payload_for_eval_value(
-    value: &FunctionValue,
+    value: &CalcValue,
 ) -> (WorksheetValueClass, ValuePayload, Option<Extent>) {
     if eval_value_is_callable(value) {
         return (
@@ -1327,28 +1329,33 @@ fn value_payload_for_eval_value(
         );
     }
 
-    match value {
-        FunctionValue::Number(number) => (
+    match value.core() {
+        CoreValue::Number(number) => (
             WorksheetValueClass::Scalar,
             ValuePayload::Number(format!("{number}")),
             Some(Extent { rows: 1, cols: 1 }),
         ),
-        FunctionValue::Text(text) => (
+        CoreValue::Text(text) => (
             WorksheetValueClass::Scalar,
             ValuePayload::Text(text.to_string_lossy()),
             Some(Extent { rows: 1, cols: 1 }),
         ),
-        FunctionValue::Logical(value) => (
+        CoreValue::Logical(value) => (
             WorksheetValueClass::Scalar,
             ValuePayload::Logical(*value),
             Some(Extent { rows: 1, cols: 1 }),
         ),
-        FunctionValue::Error(code) => (
+        CoreValue::Error(code) => (
             WorksheetValueClass::Error,
             ValuePayload::ErrorCode(format!("{code:?}")),
             Some(Extent { rows: 1, cols: 1 }),
         ),
-        FunctionValue::Array(array) => (
+        CoreValue::Empty | CoreValue::Missing => (
+            WorksheetValueClass::Scalar,
+            ValuePayload::Text(String::new()),
+            Some(Extent { rows: 1, cols: 1 }),
+        ),
+        CoreValue::Array(array) => (
             WorksheetValueClass::ArrayAnchor,
             ValuePayload::Text(format!(
                 "Array({}x{})",
@@ -1360,14 +1367,9 @@ fn value_payload_for_eval_value(
                 cols: array.shape().cols as u32,
             }),
         ),
-        FunctionValue::Reference(reference) => (
+        CoreValue::Reference(reference) => (
             WorksheetValueClass::Scalar,
             ValuePayload::Text(format!("Reference({})", reference.target())),
-            Some(Extent { rows: 1, cols: 1 }),
-        ),
-        FunctionValue::Callable(_) => (
-            WorksheetValueClass::Scalar,
-            ValuePayload::Text("Callable".to_string()),
             Some(Extent { rows: 1, cols: 1 }),
         ),
     }

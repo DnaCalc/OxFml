@@ -1,9 +1,10 @@
+use oxfunc_core::value::{CalcValue, CoreValue};
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 mod common;
 
-use oxfml_core::eval::{EvaluationContext, FunctionValue, evaluate_formula};
+use oxfml_core::eval::{EvaluationContext, evaluate_formula};
 
 const MANDELBROT_100_60_30: &str = r#"=LET(
   rows, 100,
@@ -112,19 +113,19 @@ fn duration_ms(duration: Duration) -> f64 {
     duration.as_secs_f64() * 1000.0
 }
 
-fn summarize_eval_value(value: &FunctionValue) -> String {
-    match value {
-        FunctionValue::Array(array) => {
+fn summarize_eval_value(value: &CalcValue) -> String {
+    match value.core() {
+        CoreValue::Array(array) => {
             let shape = array.shape();
             format!("Array({}x{})", shape.rows, shape.cols)
         }
-        FunctionValue::Number(number) => format!("Number({number})"),
-        FunctionValue::Text(text) => {
+        CoreValue::Number(number) => format!("Number({number})"),
+        CoreValue::Text(text) => {
             format!("Text(len={})", text.to_string_lossy().chars().count())
         }
-        FunctionValue::Logical(value) => format!("Logical({value})"),
-        FunctionValue::Error(code) => format!("Error({code:?})"),
-        FunctionValue::Reference(reference) => format!("Reference({})", reference.target()),
+        CoreValue::Logical(value) => format!("Logical({value})"),
+        CoreValue::Error(code) => format!("Error({code:?})"),
+        CoreValue::Reference(reference) => format!("Reference({})", reference.target()),
         other => format!("Unsupported({other:?})"),
     }
 }

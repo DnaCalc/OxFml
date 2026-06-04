@@ -1,7 +1,8 @@
+use oxfunc_core::value::CalcValue;
 use std::collections::BTreeMap;
 
 use oxfml_core::binding::NameKind;
-use oxfml_core::eval::{EvaluationContext, FunctionValue};
+use oxfml_core::eval::EvaluationContext;
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::interface::{
     HostProviderOutcomeKind, InMemoryLibraryContextProvider, LibraryContextProvider,
@@ -20,8 +21,8 @@ use oxfunc_core::host_info::{
     ResolvedWebImage,
 };
 use oxfunc_core::value::{
-    CalcValue, CoreValue, ExcelText, NumberFormatHint, PresentationHint, ReferenceLike,
-    RichObjectValue, RichValueData, RichValueType,
+    CoreValue, ExcelText, NumberFormatHint, PresentationHint, ReferenceLike, RichObjectValue,
+    RichValueData, RichValueType,
 };
 
 mod common;
@@ -378,7 +379,7 @@ impl HostInfoProvider for MockHostInfoProvider {
         _reference: Option<&ReferenceLike>,
     ) -> Result<CalcValue, HostInfoError> {
         match query {
-            CellInfoQuery::Filename => Ok(CalcValue::from(FunctionValue::Text(
+            CellInfoQuery::Filename => Ok(CalcValue::from(CalcValue::text(
                 ExcelText::from_utf16_code_units("[Book1]Sheet1".encode_utf16().collect()),
             ))),
             _ => Err(HostInfoError::UnsupportedCellInfoQuery(query)),
@@ -387,7 +388,7 @@ impl HostInfoProvider for MockHostInfoProvider {
 
     fn query_info(&self, query: InfoQuery) -> Result<CalcValue, HostInfoError> {
         match query {
-            InfoQuery::System => Ok(CalcValue::from(FunctionValue::Text(
+            InfoQuery::System => Ok(CalcValue::from(CalcValue::text(
                 ExcelText::from_utf16_code_units("pcdos".encode_utf16().collect()),
             ))),
             _ => Err(HostInfoError::UnsupportedInfoQuery(query)),
@@ -430,7 +431,7 @@ impl RtdProvider for MockRtdProvider {
         &self,
         _request: &oxfunc_core::functions::rtd_fn::RtdRequest,
     ) -> RtdProviderResult {
-        RtdProviderResult::Value(CalcValue::from(FunctionValue::Number(7.0)))
+        RtdProviderResult::Value(CalcValue::from(CalcValue::number(7.0)))
     }
 }
 

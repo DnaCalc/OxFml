@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
-use oxfml_core::eval::FunctionValue;
 use oxfml_core::interface::{InMemoryLibraryContextProvider, TypedContextQueryBundle};
 use oxfml_core::seam::Locus;
 use oxfml_core::semantics::{
@@ -12,6 +11,7 @@ use oxfml_core::semantics::{
 use oxfml_core::test_support::oxfunc_adapter::{
     OxFuncAdapterRequest, run_oxfunc_preparation_adapter,
 };
+use oxfunc_core::value::{CalcValue, CoreValue};
 use oxfunc_core::value::{ExcelText, WorksheetErrorCode};
 use serde::Deserialize;
 
@@ -319,18 +319,18 @@ fn fixture_dir() -> PathBuf {
         .join("fixtures")
 }
 
-fn parse_eval_value_summary(summary: &str) -> FunctionValue {
+fn parse_eval_value_summary(summary: &str) -> CalcValue {
     if let Some(number) = summary
         .strip_prefix("Number(")
         .and_then(|rest| rest.strip_suffix(')'))
     {
-        return FunctionValue::Number(number.parse().expect("numeric summary should parse"));
+        return CalcValue::number(number.parse().expect("numeric summary should parse"));
     }
     if let Some(text) = summary
         .strip_prefix("Text(")
         .and_then(|rest| rest.strip_suffix(')'))
     {
-        return FunctionValue::Text(ExcelText::from_utf16_code_units(
+        return CalcValue::text(ExcelText::from_utf16_code_units(
             text.encode_utf16().collect(),
         ));
     }
@@ -338,7 +338,7 @@ fn parse_eval_value_summary(summary: &str) -> FunctionValue {
         .strip_prefix("Logical(")
         .and_then(|rest| rest.strip_suffix(')'))
     {
-        return FunctionValue::Logical(matches!(logical, "TRUE" | "True" | "true"));
+        return CalcValue::logical(matches!(logical, "TRUE" | "True" | "true"));
     }
     if let Some(code) = summary
         .strip_prefix("Error(")
@@ -352,23 +352,23 @@ fn parse_eval_value_summary(summary: &str) -> FunctionValue {
             "#REF!" => WorksheetErrorCode::Ref,
             other => panic!("unsupported error summary {other}"),
         };
-        return FunctionValue::Error(code);
+        return CalcValue::error(code);
     }
 
     panic!("unsupported cell summary {summary}");
 }
 
-fn eval_value_summary(value: &FunctionValue) -> String {
-    match value {
-        FunctionValue::Number(number) => format!("Number({number})"),
-        FunctionValue::Text(text) => format!("Text({})", text.to_string_lossy()),
-        FunctionValue::Logical(value) => format!("Logical({value})"),
-        FunctionValue::Error(code) => format!("Error({code:?})"),
-        FunctionValue::Array(array) => {
+fn eval_value_summary(value: &CalcValue) -> String {
+    match value.core() {
+        CoreValue::Number(number) => format!("Number({number})"),
+        CoreValue::Text(text) => format!("Text({})", text.to_string_lossy()),
+        CoreValue::Logical(value) => format!("Logical({value})"),
+        CoreValue::Error(code) => format!("Error({code:?})"),
+        CoreValue::Array(array) => {
             let shape = array.shape();
             format!("Array({}x{})", shape.rows, shape.cols)
         }
-        FunctionValue::Reference(reference) => format!("Reference({})", reference.target()),
+        CoreValue::Reference(reference) => format!("Reference({})", reference.target()),
         other => format!("Unsupported({other:?})"),
     }
 }
