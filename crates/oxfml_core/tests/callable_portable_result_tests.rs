@@ -4,11 +4,12 @@
 //! can be stored and re-supplied as a defined-name callable.
 
 use oxfml_core::eval::{
-    CallableCaptureMode, CallableOriginKind, DefinedNameBinding, OxFmlCallableBinding,
+    CallableCaptureMode, CallableOriginKind, DefinedNameBinding, FunctionValue,
+    OxFmlCallableBinding,
 };
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::test_support::host::SingleFormulaHost;
-use oxfunc_core::value::{CoreValue, FunctionValue, RichValue, WorksheetErrorCode};
+use oxfunc_core::value::{CoreValue, RichValue, WorksheetErrorCode};
 
 #[test]
 fn top_level_lambda_with_capture_surfaces_portable_callable_payload() {

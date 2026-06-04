@@ -2,8 +2,7 @@ mod common;
 
 use std::collections::BTreeMap;
 
-use oxfml_core::eval::{EvaluationContext, EvaluationTraceMode, evaluate_formula};
-use oxfunc_core::value::FunctionValue;
+use oxfml_core::eval::{EvaluationContext, EvaluationTraceMode, FunctionValue, evaluate_formula};
 
 #[test]
 fn w075_context_free_precompute_preserves_prepared_call_trace() {

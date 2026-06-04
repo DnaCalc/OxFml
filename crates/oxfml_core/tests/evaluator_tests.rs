@@ -17,8 +17,8 @@ use oxfunc_core::resolver::{
     ReferenceSystemProvider, ReferenceTextResolutionMode, ReferenceTextResolveRequest,
 };
 use oxfunc_core::value::{
-    CellStyleHint, ExcelText, FunctionArrayCell, FunctionValue, NumberFormatHint, PresentationHint,
-    ReferenceKind, ReferenceLike, WorksheetErrorCode,
+    CalcValue, CellStyleHint, ExcelText, NumberFormatHint, PresentationHint, ReferenceKind,
+    ReferenceLike, WorksheetErrorCode,
 };
 use serde::Deserialize;
 
@@ -27,7 +27,7 @@ use oxfml_core::binding::{
 };
 use oxfml_core::eval::{
     CallableDefinedNameBinding, CallableValueCarrier, CallableValueProfile, DefinedNameBinding,
-    EvaluationContext, EvaluationTraceMode, evaluate_formula,
+    EvaluationContext, EvaluationTraceMode, FunctionArrayCell, FunctionValue, evaluate_formula,
 };
 use oxfml_core::interface::TypedContextQueryBundle;
 
@@ -2581,10 +2581,11 @@ impl ReferenceSystemProvider for RecordingReferenceSystemProvider {
     fn dereference(
         &self,
         request: &ReferenceDereferenceRequest,
-    ) -> Result<FunctionValue, ReferenceResolutionError> {
+    ) -> Result<CalcValue, ReferenceResolutionError> {
         self.values
             .get(request.reference.target())
             .cloned()
+            .map(CalcValue::from)
             .ok_or_else(|| ReferenceResolutionError::ProviderFailure {
                 detail: format!("unmapped reference {}", request.reference.target()),
             })
@@ -2845,6 +2846,7 @@ fn array_cell_summary(cell: &FunctionArrayCell) -> String {
         FunctionArrayCell::Logical(value) => format!("Logical({value})"),
         FunctionArrayCell::Error(code) => format!("Error({code:?})"),
         FunctionArrayCell::EmptyCell => "EmptyCell".to_string(),
+        FunctionArrayCell::Callable(callable) => format!("Callable({})", callable.summary),
     }
 }
 
@@ -2899,19 +2901,19 @@ impl HostInfoProvider for MockHostInfoProvider {
         &self,
         query: CellInfoQuery,
         _reference: Option<&ReferenceLike>,
-    ) -> Result<FunctionValue, HostInfoError> {
+    ) -> Result<CalcValue, HostInfoError> {
         match query {
-            CellInfoQuery::Filename => Ok(FunctionValue::Text(ExcelText::from_utf16_code_units(
-                "[Book1]Sheet1".encode_utf16().collect(),
+            CellInfoQuery::Filename => Ok(CalcValue::from(FunctionValue::Text(
+                ExcelText::from_utf16_code_units("[Book1]Sheet1".encode_utf16().collect()),
             ))),
             _ => Err(HostInfoError::UnsupportedCellInfoQuery(query)),
         }
     }
 
-    fn query_info(&self, query: InfoQuery) -> Result<FunctionValue, HostInfoError> {
+    fn query_info(&self, query: InfoQuery) -> Result<CalcValue, HostInfoError> {
         match query {
-            InfoQuery::Directory => Ok(FunctionValue::Text(ExcelText::from_utf16_code_units(
-                "C:\\Work".encode_utf16().collect(),
+            InfoQuery::Directory => Ok(CalcValue::from(FunctionValue::Text(
+                ExcelText::from_utf16_code_units("C:\\Work".encode_utf16().collect()),
             ))),
             _ => Err(HostInfoError::UnsupportedInfoQuery(query)),
         }
@@ -2948,7 +2950,7 @@ impl HostInfoProvider for FailingHostInfoProvider {
         &self,
         query: CellInfoQuery,
         _reference: Option<&ReferenceLike>,
-    ) -> Result<FunctionValue, HostInfoError> {
+    ) -> Result<CalcValue, HostInfoError> {
         match query {
             CellInfoQuery::Filename => Err(HostInfoError::ProviderFailure {
                 detail: "host offline".to_string(),
@@ -2957,7 +2959,7 @@ impl HostInfoProvider for FailingHostInfoProvider {
         }
     }
 
-    fn query_info(&self, query: InfoQuery) -> Result<FunctionValue, HostInfoError> {
+    fn query_info(&self, query: InfoQuery) -> Result<CalcValue, HostInfoError> {
         Err(HostInfoError::UnsupportedInfoQuery(query))
     }
 }
@@ -2977,7 +2979,7 @@ impl RtdProvider for ValueRtdProvider {
         &self,
         _request: &oxfunc_core::functions::rtd_fn::RtdRequest,
     ) -> RtdProviderResult {
-        RtdProviderResult::Value(FunctionValue::Number(7.0))
+        RtdProviderResult::Value(CalcValue::from(FunctionValue::Number(7.0)))
     }
 }
 

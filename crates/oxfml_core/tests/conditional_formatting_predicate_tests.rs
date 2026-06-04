@@ -1,10 +1,11 @@
+use oxfml_core::eval::FunctionValue;
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::{
     FormulaSourceRecord, ReturnedValueSurface, TopologyDelta,
     VerificationConditionalFormattingRule, VerificationPublicationContext,
     VerificationPublicationSurface, build_verification_publication_surface,
 };
-use oxfunc_core::value::{CalcValue, ExcelText, FunctionValue, WorksheetErrorCode};
+use oxfunc_core::value::{CalcValue, ExcelText, WorksheetErrorCode};
 
 fn surface_for(
     value: FunctionValue,

@@ -12,6 +12,7 @@ use oxfml_core::consumer::runtime::{
     RuntimeHostReferenceBindResult, RuntimeManagedSessionError, RuntimeManagedSessionPhase,
     RuntimeOxFuncBridgeMetadata, RuntimeSessionFacade,
 };
+use oxfml_core::eval::{FunctionArray, FunctionArrayCell, FunctionValue};
 use oxfml_core::format::{
     oxfml_en_us_format_profile, oxfml_en_us_locale_context, worksheet_error_text,
 };
@@ -59,10 +60,8 @@ use oxfunc_core::resolver::{
     ReferenceEnumerationRequest, ReferenceResolutionError, ReferenceSystemProvider,
     ResolvedReferenceCell, ResolvedReferenceExtent, ResolvedReferenceValues,
 };
-use oxfunc_core::value::{
-    ArrayShape, FunctionArray, FunctionArrayCell, FunctionValue, ReferenceKind, ReferenceLike,
-};
-use oxfunc_core::value::{ExcelText, FunctionArg};
+use oxfunc_core::value::{ArrayShape, ReferenceKind, ReferenceLike};
+use oxfunc_core::value::{CalcValue, CoreValue, ExcelText};
 
 struct SequenceRandomProvider {
     next: Cell<u32>,
@@ -515,16 +514,16 @@ fn runtime_reference_system_provider_feeds_first_aggregate_group() {
             ResolvedReferenceValues::new(
                 ResolvedReferenceExtent::new(5, 1),
                 vec![
-                    ResolvedReferenceCell::new(1, 1, FunctionArrayCell::Number(2.0)),
+                    ResolvedReferenceCell::new(1, 1, CalcValue::number(2.0)),
                     ResolvedReferenceCell::new(
                         2,
                         1,
-                        FunctionArrayCell::Text(ExcelText::from_utf16_code_units(Vec::new())),
+                        CalcValue::text(ExcelText::from_utf16_code_units(Vec::new())),
                     ),
                     ResolvedReferenceCell::new(
                         3,
                         1,
-                        FunctionArrayCell::Text(ExcelText::from_utf16_code_units(
+                        CalcValue::text(ExcelText::from_utf16_code_units(
                             "x".encode_utf16().collect(),
                         )),
                     ),
@@ -566,11 +565,11 @@ fn runtime_structured_references_use_sparse_values_when_available() {
             ResolvedReferenceValues::new(
                 ResolvedReferenceExtent::new(3, 1),
                 vec![
-                    ResolvedReferenceCell::new(1, 1, FunctionArrayCell::Number(2.0)),
+                    ResolvedReferenceCell::new(1, 1, CalcValue::number(2.0)),
                     ResolvedReferenceCell::new(
                         2,
                         1,
-                        FunctionArrayCell::Text(ExcelText::from_utf16_code_units(Vec::new())),
+                        CalcValue::text(ExcelText::from_utf16_code_units(Vec::new())),
                     ),
                 ],
                 Some("reader:w056:table:B2:B4".to_string()),
@@ -605,8 +604,8 @@ fn runtime_structured_reference_uses_formula_scope_sheet_for_sparse_values() {
         ResolvedReferenceValues::new(
             ResolvedReferenceExtent::new(2, 1),
             vec![
-                ResolvedReferenceCell::new(1, 1, FunctionArrayCell::Number(10.0)),
-                ResolvedReferenceCell::new(2, 1, FunctionArrayCell::Number(20.0)),
+                ResolvedReferenceCell::new(1, 1, CalcValue::number(10.0)),
+                ResolvedReferenceCell::new(2, 1, CalcValue::number(20.0)),
             ],
             Some("reader:treecalc:SalesTable:Amount".to_string()),
         ),
@@ -2509,9 +2508,9 @@ fn runtime_environment_executes_registered_external_formula_through_typed_query_
             assert_eq!(
                 *invocation_args,
                 vec![
-                    FunctionArg::Eval(FunctionValue::Number(6.0)),
-                    FunctionArg::Eval(FunctionValue::Number(7.0)),
-                    FunctionArg::Eval(FunctionValue::Number(3.0)),
+                    CalcValue::number(6.0),
+                    CalcValue::number(7.0),
+                    CalcValue::number(3.0),
                 ]
             );
         }
@@ -3714,7 +3713,7 @@ struct ValueRtdProvider;
 
 impl RtdProvider for ValueRtdProvider {
     fn resolve_rtd(&self, _request: &RtdRequest) -> RtdProviderResult {
-        RtdProviderResult::Value(FunctionValue::Number(7.0))
+        RtdProviderResult::Value(CalcValue::from(FunctionValue::Number(7.0)))
     }
 }
 
@@ -3725,14 +3724,14 @@ impl HostInfoProvider for ClaimingHostInfoProvider {
         &self,
         query: CellInfoQuery,
         _reference: Option<&oxfunc_core::value::ReferenceLike>,
-    ) -> Result<FunctionValue, HostInfoError> {
+    ) -> Result<CalcValue, HostInfoError> {
         Err(HostInfoError::UnsupportedCellInfoQuery(query))
     }
 
-    fn query_info(&self, query: InfoQuery) -> Result<FunctionValue, HostInfoError> {
+    fn query_info(&self, query: InfoQuery) -> Result<CalcValue, HostInfoError> {
         match query {
-            InfoQuery::Directory => Ok(FunctionValue::Text(ExcelText::from_interop_assignment(
-                "C:\\Work",
+            InfoQuery::Directory => Ok(CalcValue::from(FunctionValue::Text(
+                ExcelText::from_interop_assignment("C:\\Work"),
             ))),
             _ => Err(HostInfoError::UnsupportedInfoQuery(query)),
         }
@@ -3784,21 +3783,24 @@ impl RegisteredExternalProvider for RecordingRegisteredExternalProvider {
     fn invoke_registered_external(
         &self,
         descriptor: &RegisteredExternalDescriptor,
-        args: &[FunctionArg],
-    ) -> Result<FunctionValue, RegisteredExternalProviderError> {
+        args: &[CalcValue],
+    ) -> Result<CalcValue, RegisteredExternalProviderError> {
         match &descriptor.procedure {
             RegisteredProcedureSpec::Name(name) if name.to_string_lossy() == "MulDiv" => match args
             {
-                [
-                    FunctionArg::Eval(FunctionValue::Number(a)),
-                    FunctionArg::Eval(FunctionValue::Number(b)),
-                    FunctionArg::Eval(FunctionValue::Number(c)),
-                ] => Ok(FunctionValue::Number((a * b) / c)),
+                [a, b, c] => match (a.core(), b.core(), c.core()) {
+                    (CoreValue::Number(a), CoreValue::Number(b), CoreValue::Number(c)) => {
+                        Ok(CalcValue::number((a * b) / c))
+                    }
+                    _ => Err(RegisteredExternalProviderError::WorksheetError(
+                        oxfunc_core::value::WorksheetErrorCode::Value,
+                    )),
+                },
                 _ => Err(RegisteredExternalProviderError::WorksheetError(
                     oxfunc_core::value::WorksheetErrorCode::Value,
                 )),
             },
-            _ => Ok(FunctionValue::Number(descriptor.register_id)),
+            _ => Ok(CalcValue::number(descriptor.register_id)),
         }
     }
 }

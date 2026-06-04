@@ -1,3 +1,4 @@
+use oxfml_core::eval::{FunctionArray, FunctionArrayCell, FunctionValue};
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::{
     AverageRuleOptions, ColorScaleRuleOptions, ColorScaleRuleStop, ConditionalFormattingRank,
@@ -7,9 +8,7 @@ use oxfml_core::{
     VerificationPublicationContext, VerificationPublicationSurface,
     build_verification_publication_surface,
 };
-use oxfunc_core::value::{
-    CalcValue, ExcelText, FunctionArray, FunctionArrayCell, FunctionValue, WorksheetErrorCode,
-};
+use oxfunc_core::value::{CalcValue, ExcelText, WorksheetErrorCode};
 
 fn surface_for_array(
     rows: Vec<Vec<FunctionArrayCell>>,

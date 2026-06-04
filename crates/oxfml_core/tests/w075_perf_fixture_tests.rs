@@ -3,8 +3,7 @@ use std::time::{Duration, Instant};
 
 mod common;
 
-use oxfml_core::eval::{EvaluationContext, evaluate_formula};
-use oxfunc_core::value::FunctionValue;
+use oxfml_core::eval::{EvaluationContext, FunctionValue, evaluate_formula};
 
 const MANDELBROT_100_60_30: &str = r#"=LET(
   rows, 100,

@@ -1,5 +1,6 @@
 use std::cell::Cell;
 
+use oxfml_core::eval::{FunctionArrayCell, FunctionValue};
 use oxfml_core::interface::{
     HostProviderOutcomeKind, InMemoryLibraryContextProvider, LibraryContextSnapshotRef,
     ReturnedValueSurfaceKind, TypedContextQueryBundle, TypedContextQueryFamily,
@@ -25,8 +26,7 @@ use oxfunc_core::host_info::{
     HostInfoError, HostInfoProvider, ImageProviderResult, ImageRequest, ResolvedWebImage,
 };
 use oxfunc_core::value::{
-    ArrayShape, CellStyleHint, ExcelText, FunctionArg, FunctionArrayCell, FunctionValue,
-    PresentationHint,
+    ArrayShape, CalcValue, CellStyleHint, CoreValue, ExcelText, PresentationHint,
 };
 
 struct SequenceRandomProvider {
@@ -480,9 +480,9 @@ fn adapter_projects_registered_external_requests_for_register_id_and_call() {
             assert_eq!(
                 invocation_args,
                 &vec![
-                    FunctionArg::Eval(FunctionValue::Number(6.0)),
-                    FunctionArg::Eval(FunctionValue::Number(7.0)),
-                    FunctionArg::Eval(FunctionValue::Number(3.0)),
+                    CalcValue::number(6.0),
+                    CalcValue::number(7.0),
+                    CalcValue::number(3.0),
                 ]
             );
         }
@@ -1017,18 +1017,22 @@ impl RegisteredExternalProvider for RecordingRegisteredExternalProvider {
     fn invoke_registered_external(
         &self,
         descriptor: &oxfml_core::RegisteredExternalDescriptor,
-        args: &[FunctionArg],
-    ) -> Result<FunctionValue, RegisteredExternalProviderError> {
+        args: &[CalcValue],
+    ) -> Result<CalcValue, RegisteredExternalProviderError> {
         match (&descriptor.procedure, args) {
-            (
-                RegisteredProcedureSpec::Name(name),
-                [
-                    FunctionArg::Eval(FunctionValue::Number(a)),
-                    FunctionArg::Eval(FunctionValue::Number(b)),
-                    FunctionArg::Eval(FunctionValue::Number(c)),
-                ],
-            ) if name.to_string_lossy() == "MulDiv" => Ok(FunctionValue::Number((a * b) / c)),
-            _ => Ok(FunctionValue::Number(descriptor.register_id)),
+            (RegisteredProcedureSpec::Name(name), [a, b, c])
+                if name.to_string_lossy() == "MulDiv" =>
+            {
+                match (a.core(), b.core(), c.core()) {
+                    (CoreValue::Number(a), CoreValue::Number(b), CoreValue::Number(c)) => {
+                        Ok(CalcValue::number((a * b) / c))
+                    }
+                    _ => Err(RegisteredExternalProviderError::WorksheetError(
+                        oxfunc_core::value::WorksheetErrorCode::Value,
+                    )),
+                }
+            }
+            _ => Ok(CalcValue::number(descriptor.register_id)),
         }
     }
 }

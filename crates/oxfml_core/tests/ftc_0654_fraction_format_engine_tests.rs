@@ -3,13 +3,13 @@ use std::collections::BTreeMap;
 mod common;
 
 use oxfml_core::consumer::runtime::{RuntimeEnvironment, RuntimeFormulaRequest};
-use oxfml_core::eval::{EvaluationContext, evaluate_formula};
+use oxfml_core::eval::{EvaluationContext, FunctionValue, evaluate_formula};
 use oxfml_core::format::{oxfml_en_us_locale_context, render_with_code};
 use oxfml_core::test_support::oxfunc_adapter::{
     OxFuncAdapterRequest, run_oxfunc_preparation_adapter,
 };
 use oxfml_core::{FormulaSourceRecord, TypedContextQueryBundle};
-use oxfunc_core::value::{ExcelText, FunctionValue};
+use oxfunc_core::value::ExcelText;
 
 fn evaluate_formula_text_with_locale(
     formula_stable_id: &str,

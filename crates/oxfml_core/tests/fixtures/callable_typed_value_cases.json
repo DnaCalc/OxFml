@@ -1,6 +1,6 @@
 [
   {
-    "case_id": "callable_transport_001_defined_name_value_preserved",
+    "case_id": "callable_typed_value_001_defined_name_value_preserved",
     "formula": "=NamedLambda",
     "callable_name": "NamedLambda",
     "binding_summary": "arity=1;params=y;captures=x;body=Binary",
@@ -30,7 +30,7 @@
     }
   },
   {
-    "case_id": "callable_transport_002_defined_name_invocation",
+    "case_id": "callable_typed_value_002_defined_name_invocation",
     "formula": "=NamedLambda(2)",
     "callable_name": "NamedLambda",
     "binding_summary": "arity=1;params=y;captures=x;body=Binary",
@@ -48,7 +48,7 @@
     }
   },
   {
-    "case_id": "callable_transport_003_defined_name_no_capture",
+    "case_id": "callable_typed_value_003_defined_name_no_capture",
     "formula": "=NamedLambda",
     "callable_name": "NamedLambda",
     "binding_summary": "arity=1;params=x;captures=-;body=Binary",

@@ -7,9 +7,7 @@ use oxfunc_core::registry::{
     CapabilityOverlay, FunctionAvailability, FunctionEntry, FunctionRegistry, FunctionSource,
     builtin_registry,
 };
-use oxfunc_core::value::{
-    CalcValue, ExcelText, FunctionArrayCell, FunctionValue, WorksheetErrorCode,
-};
+use oxfunc_core::value::{CalcValue, ExcelText, WorksheetErrorCode};
 
 use crate::binding::{
     BindContext, BindDiagnostic, BindFunctionSurfaceKind, BoundFormula, HostNameBindRecord,
@@ -17,8 +15,9 @@ use crate::binding::{
 };
 use crate::consumer::ConsumerLibraryContextState;
 use crate::eval::{
-    DefinedNameBinding, EvaluationBackend, EvaluationOutput, EvaluationTraceMode, PreparedCall,
-    eval_value_callable_transport_summary, eval_value_is_callable_transport,
+    DefinedNameBinding, EvaluationBackend, EvaluationOutput, EvaluationTraceMode,
+    FunctionArrayCell, FunctionValue, PreparedCall, eval_value_callable_summary,
+    eval_value_is_callable,
 };
 use crate::host::{ArtifactReuseReport, FirstHostReplayCapturePacket};
 pub use crate::host::{HostRecalcOutput, SingleFormulaHost};
@@ -2161,13 +2160,13 @@ fn error_for_value(
 }
 
 fn value_preview(value: &FunctionValue) -> Option<FormulaDrillValuePreview> {
-    if eval_value_is_callable_transport(value) {
+    if eval_value_is_callable(value) {
         return Some(FormulaDrillValuePreview {
             value_kind: "callable".to_string(),
             array_shape: None,
             preview: vec![format!(
                 "callable:{}",
-                eval_value_callable_transport_summary(value).unwrap_or_default()
+                eval_value_callable_summary(value).unwrap_or_default()
             )],
             truncated: false,
             rich_value_type_name: None,
@@ -2203,14 +2202,15 @@ fn array_cell_label(value: &FunctionArrayCell) -> String {
         FunctionArrayCell::Logical(value) => value.to_string().to_ascii_uppercase(),
         FunctionArrayCell::Error(code) => worksheet_error_code_text(*code).to_string(),
         FunctionArrayCell::EmptyCell => String::new(),
+        FunctionArrayCell::Callable(callable) => format!("Callable({})", callable.summary),
     }
 }
 
 fn eval_value_label(value: &FunctionValue) -> String {
-    if eval_value_is_callable_transport(value) {
+    if eval_value_is_callable(value) {
         return format!(
             "Callable({})",
-            eval_value_callable_transport_summary(value).unwrap_or_default()
+            eval_value_callable_summary(value).unwrap_or_default()
         );
     }
     match value {
@@ -2223,7 +2223,7 @@ fn eval_value_label(value: &FunctionValue) -> String {
             format!("Array({}x{})", shape.rows, shape.cols)
         }
         FunctionValue::Reference(reference) => reference.target().to_string(),
-        other => format!("{other:?}"),
+        FunctionValue::Callable(callable) => format!("Callable({})", callable.summary),
     }
 }
 
@@ -3496,6 +3496,7 @@ fn syntax_diagnostic_execution_error(diagnostics: &[SyntaxDiagnostic]) -> String
 mod tests {
     use super::*;
     use crate::BoundExpr;
+    use crate::eval::FunctionValue;
     use oxfunc_core::function::{
         ArgPreparationProfile, Arity, CoercionLiftProfile, DeterminismClass, FecDependencyProfile,
         HostInteractionClass, KernelSignatureClass, ThreadSafetyClass, VolatilityClass,
@@ -3505,7 +3506,6 @@ mod tests {
         UdfRegistrationRequest, UdfRegistrationResult, UdfReplacementPolicy, UdfSourceKind,
         builtin_registry,
     };
-    use oxfunc_core::value::FunctionValue;
     use std::collections::BTreeMap;
 
     fn formula(text: &str) -> FormulaSourceRecord {

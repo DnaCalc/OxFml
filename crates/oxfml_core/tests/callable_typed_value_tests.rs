@@ -5,14 +5,14 @@ use std::path::PathBuf;
 use oxfml_core::binding::{BindContext, BindRequest, BoundExpr, NameKind, bind_formula};
 use oxfml_core::eval::{
     CallableDefinedNameBinding, CallableValueCarrier, CallableValueProfile, DefinedNameBinding,
-    EvaluationBackend, EvaluationTraceMode,
+    EvaluationBackend, EvaluationTraceMode, FunctionValue,
 };
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::red::project_red_view;
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
 use oxfml_core::test_support::host::SingleFormulaHost;
-use oxfunc_core::value::{ExcelText, FunctionValue, ReferenceLike};
+use oxfunc_core::value::{ExcelText, ReferenceLike};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -53,7 +53,7 @@ struct CallableProfileExpected {
 }
 
 #[test]
-fn callable_transport_fixtures_match_expected_snapshots() {
+fn callable_typed_value_fixtures_match_expected_snapshots() {
     let fixtures = load_fixtures();
     for fixture in fixtures {
         let mut host = SingleFormulaHost::new(
@@ -222,7 +222,7 @@ fn callable_transport_fixtures_match_expected_snapshots() {
 }
 
 fn load_fixtures() -> Vec<CallableTransportFixture> {
-    let content = fs::read_to_string(fixture_path("callable_transport_cases.json"))
+    let content = fs::read_to_string(fixture_path("callable_typed_value_cases.json"))
         .expect("callable transport fixture file should exist");
     serde_json::from_str(&content).expect("callable transport fixture file should deserialize")
 }

@@ -10,11 +10,11 @@ use oxfunc_core::host_info::{HostInfoError, HostInfoProvider};
 use oxfunc_core::locale_format::LocaleFormatContext;
 use oxfunc_core::registry::builtin_registry;
 use oxfunc_core::resolver::ReferenceSystemProvider;
-use oxfunc_core::value::{
-    CalcValue, CoreValue, FunctionValue, PresentationHint, RichValue, WorksheetErrorCode,
-};
+use oxfunc_core::value::{CalcValue, CoreValue, PresentationHint, RichValue, WorksheetErrorCode};
 
-use crate::eval::{eval_value_callable_transport_summary, eval_value_is_callable_transport};
+use crate::eval::{
+    FunctionValue, eval_value_callable_summary, eval_value_from_calc_value, eval_value_is_callable,
+};
 use crate::semantics::{LibraryContextSnapshot, LibraryContextSnapshotEntry};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -629,19 +629,22 @@ impl ReturnedValueSurface {
 
     pub fn from_rtd_provider_result(result: &RtdProviderResult) -> Self {
         match result {
-            RtdProviderResult::Value(value) => Self {
-                kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
-                payload_summary: eval_value_summary(value),
-                rich_value_type_name: None,
-                producer_capability_set_keys: Vec::new(),
-                exercised_capability_keys: Vec::new(),
-                presentation_hint: None,
-                host_provider_outcome: Some(HostProviderOutcomeSurface {
-                    outcome_kind: HostProviderOutcomeKind::Value,
-                    worksheet_error: None,
-                    detail: None,
-                }),
-            },
+            RtdProviderResult::Value(value) => {
+                let eval_value = eval_value_from_calc_value(value.clone());
+                Self {
+                    kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
+                    payload_summary: eval_value_summary(&eval_value),
+                    rich_value_type_name: None,
+                    producer_capability_set_keys: Vec::new(),
+                    exercised_capability_keys: Vec::new(),
+                    presentation_hint: None,
+                    host_provider_outcome: Some(HostProviderOutcomeSurface {
+                        outcome_kind: HostProviderOutcomeKind::Value,
+                        worksheet_error: None,
+                        detail: None,
+                    }),
+                }
+            }
             RtdProviderResult::NoValueYet => Self {
                 kind: ReturnedValueSurfaceKind::TypedHostProviderOutcome,
                 payload_summary: "NoValueYet".to_string(),
@@ -794,10 +797,10 @@ fn snapshot_entry_matches_surface_key(
 }
 
 fn eval_value_summary(value: &FunctionValue) -> String {
-    if eval_value_is_callable_transport(value) {
+    if eval_value_is_callable(value) {
         return format!(
             "Callable({})",
-            eval_value_callable_transport_summary(value).unwrap_or_default()
+            eval_value_callable_summary(value).unwrap_or_default()
         );
     }
     match value {
@@ -810,7 +813,7 @@ fn eval_value_summary(value: &FunctionValue) -> String {
             format!("Array({}x{})", shape.rows, shape.cols)
         }
         FunctionValue::Reference(reference) => format!("Reference({})", reference.target()),
-        other => format!("{other:?}"),
+        FunctionValue::Callable(callable) => format!("Callable({})", callable.summary),
     }
 }
 

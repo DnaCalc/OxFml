@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
+use oxfml_core::eval::FunctionValue;
 use oxfml_core::interface::{InMemoryLibraryContextProvider, TypedContextQueryBundle};
 use oxfml_core::seam::Locus;
 use oxfml_core::semantics::{
@@ -11,7 +12,7 @@ use oxfml_core::semantics::{
 use oxfml_core::test_support::oxfunc_adapter::{
     OxFuncAdapterRequest, run_oxfunc_preparation_adapter,
 };
-use oxfunc_core::value::{ExcelText, FunctionValue, WorksheetErrorCode};
+use oxfunc_core::value::{ExcelText, WorksheetErrorCode};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]

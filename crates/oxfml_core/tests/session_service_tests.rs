@@ -2,9 +2,10 @@ use std::collections::BTreeMap;
 
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
-use oxfunc_core::value::{ExcelText, FunctionValue, ReferenceLike};
+use oxfunc_core::value::{CalcValue, ExcelText, ReferenceLike};
 
 use oxfml_core::binding::{BindContext, BindRequest, NameKind, bind_formula};
+use oxfml_core::eval::FunctionValue;
 use oxfml_core::interface::{
     LibraryContextSnapshotRef, TypedContextQueryBundle, TypedContextQueryFamily,
 };
@@ -654,19 +655,19 @@ impl HostInfoProvider for SessionMockHostInfoProvider {
         &self,
         query: CellInfoQuery,
         _reference: Option<&ReferenceLike>,
-    ) -> Result<FunctionValue, HostInfoError> {
+    ) -> Result<CalcValue, HostInfoError> {
         match query {
-            CellInfoQuery::Filename => Ok(FunctionValue::Text(ExcelText::from_utf16_code_units(
-                "[Book1]Sheet1".encode_utf16().collect(),
+            CellInfoQuery::Filename => Ok(CalcValue::from(FunctionValue::Text(
+                ExcelText::from_utf16_code_units("[Book1]Sheet1".encode_utf16().collect()),
             ))),
             _ => Err(HostInfoError::UnsupportedCellInfoQuery(query)),
         }
     }
 
-    fn query_info(&self, query: InfoQuery) -> Result<FunctionValue, HostInfoError> {
+    fn query_info(&self, query: InfoQuery) -> Result<CalcValue, HostInfoError> {
         match query {
-            InfoQuery::Directory => Ok(FunctionValue::Text(ExcelText::from_utf16_code_units(
-                "C:\\Work".encode_utf16().collect(),
+            InfoQuery::Directory => Ok(CalcValue::from(FunctionValue::Text(
+                ExcelText::from_utf16_code_units("C:\\Work".encode_utf16().collect()),
             ))),
             _ => Err(HostInfoError::UnsupportedInfoQuery(query)),
         }

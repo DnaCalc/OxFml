@@ -7,11 +7,12 @@ use oxfunc_core::host_info::{
     ResolvedWebImage,
 };
 use oxfunc_core::value::{
-    CellStyleHint, ExcelText, FunctionValue, NumberFormatHint, PresentationHint, ReferenceLike,
+    CalcValue, CellStyleHint, ExcelText, NumberFormatHint, PresentationHint, ReferenceLike,
 };
 use serde::Deserialize;
 
 use oxfml_core::consumer::runtime::SingleFormulaHost;
+use oxfml_core::eval::FunctionValue;
 use oxfml_core::format::{oxfml_current_excel_host_locale_context, oxfml_en_us_locale_context};
 use oxfml_core::seam::{AcceptDecision, TraceEventKind};
 use oxfml_core::semantics::{
@@ -618,19 +619,19 @@ impl HostInfoProvider for MockHostInfoProvider {
         &self,
         query: CellInfoQuery,
         _reference: Option<&ReferenceLike>,
-    ) -> Result<FunctionValue, HostInfoError> {
+    ) -> Result<CalcValue, HostInfoError> {
         match query {
-            CellInfoQuery::Filename => Ok(FunctionValue::Text(ExcelText::from_utf16_code_units(
-                "[Book1]Sheet1".encode_utf16().collect(),
+            CellInfoQuery::Filename => Ok(CalcValue::from(FunctionValue::Text(
+                ExcelText::from_utf16_code_units("[Book1]Sheet1".encode_utf16().collect()),
             ))),
             _ => Err(HostInfoError::UnsupportedCellInfoQuery(query)),
         }
     }
 
-    fn query_info(&self, query: InfoQuery) -> Result<FunctionValue, HostInfoError> {
+    fn query_info(&self, query: InfoQuery) -> Result<CalcValue, HostInfoError> {
         match query {
-            InfoQuery::Directory => Ok(FunctionValue::Text(ExcelText::from_utf16_code_units(
-                "C:\\Work".encode_utf16().collect(),
+            InfoQuery::Directory => Ok(CalcValue::from(FunctionValue::Text(
+                ExcelText::from_utf16_code_units("C:\\Work".encode_utf16().collect()),
             ))),
             _ => Err(HostInfoError::UnsupportedInfoQuery(query)),
         }

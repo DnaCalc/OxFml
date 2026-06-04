@@ -16,6 +16,7 @@ use oxfml_core::consumer::runtime::{
     RuntimeEnvironment, RuntimeFormulaRequest, RuntimeHostFormulaContext,
     RuntimeHostReferenceBindResult, RuntimeSessionFacade,
 };
+use oxfml_core::eval::{FunctionArray, FunctionArrayCell, FunctionValue};
 use oxfml_core::format::{
     oxfml_current_excel_host_locale_context, oxfml_en_us_locale_context, worksheet_error_text,
 };
@@ -37,7 +38,7 @@ use oxfml_core::{
 use oxfunc_core::host_info::{
     HostInfoError, HostInfoProvider, ImageProviderResult, ImageRequest, ResolvedWebImage,
 };
-use oxfunc_core::value::{ExcelText, FunctionArray, FunctionArrayCell, FunctionValue};
+use oxfunc_core::value::ExcelText;
 use serde_json::Value;
 
 #[test]

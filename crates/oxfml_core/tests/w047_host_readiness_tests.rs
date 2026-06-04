@@ -1,6 +1,6 @@
 use oxfunc_core::functions::rtd_fn::{RtdProvider, RtdProviderResult, RtdRequest};
 use oxfunc_core::host_info::{CellInfoQuery, HostInfoError, HostInfoProvider, InfoQuery};
-use oxfunc_core::value::{ExcelText, FunctionValue};
+use oxfunc_core::value::{CalcValue, ExcelText};
 
 use oxfml_core::binding::{BindContext, BindRequest, NormalizedReference, bind_formula};
 use oxfml_core::carrier::{
@@ -8,6 +8,7 @@ use oxfml_core::carrier::{
     DataValidationCarrierSpec, validate_conditional_formatting_formula,
     validate_data_validation_formula,
 };
+use oxfml_core::eval::FunctionValue;
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::interface::{
     HostProviderOutcomeKind, InMemoryLibraryContextProvider, ReturnedValueSurfaceKind,
@@ -398,7 +399,7 @@ impl HostInfoProvider for W047HostInfoProvider {
         &self,
         query: CellInfoQuery,
         _reference: Option<&oxfunc_core::value::ReferenceLike>,
-    ) -> Result<FunctionValue, HostInfoError> {
+    ) -> Result<CalcValue, HostInfoError> {
         match query {
             CellInfoQuery::Filename => Err(HostInfoError::ProviderFailure {
                 detail: "filename_unavailable".to_string(),
@@ -407,10 +408,10 @@ impl HostInfoProvider for W047HostInfoProvider {
         }
     }
 
-    fn query_info(&self, query: InfoQuery) -> Result<FunctionValue, HostInfoError> {
+    fn query_info(&self, query: InfoQuery) -> Result<CalcValue, HostInfoError> {
         match query {
-            InfoQuery::Directory => Ok(FunctionValue::Text(ExcelText::from_utf16_code_units(
-                "C:\\Work".encode_utf16().collect(),
+            InfoQuery::Directory => Ok(CalcValue::from(FunctionValue::Text(
+                ExcelText::from_utf16_code_units("C:\\Work".encode_utf16().collect()),
             ))),
             _ => Err(HostInfoError::UnsupportedInfoQuery(query)),
         }

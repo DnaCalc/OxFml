@@ -9,14 +9,13 @@ use std::collections::BTreeMap;
 use oxfml_core::binding::{BindContext, BindRequest, BoundExpr, NameKind, bind_formula};
 use oxfml_core::eval::{
     CallableDefinedNameBinding, CallableValueCarrier, CallableValueProfile, DefinedNameBinding,
-    EvaluationBackend,
+    EvaluationBackend, FunctionValue,
 };
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::red::project_red_view;
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
 use oxfml_core::test_support::host::SingleFormulaHost;
-use oxfunc_core::value::FunctionValue;
 
 #[test]
 fn callable_can_invoke_another_callable_captured_in_its_closure() {

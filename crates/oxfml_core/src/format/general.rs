@@ -1,13 +1,15 @@
 use oxfunc_core::locale_format::FormatProfile;
-use oxfunc_core::value::{FunctionArrayCell, FunctionValue, WorksheetErrorCode};
+use oxfunc_core::value::WorksheetErrorCode;
 
-use crate::eval::{eval_value_callable_transport_summary, eval_value_is_callable_transport};
+use crate::eval::{
+    FunctionArrayCell, FunctionValue, eval_value_callable_summary, eval_value_is_callable,
+};
 
 pub fn render_visible_value_text(value: &FunctionValue) -> String {
-    if eval_value_is_callable_transport(value) {
+    if eval_value_is_callable(value) {
         return format!(
             "Callable({})",
-            eval_value_callable_transport_summary(value).unwrap_or_default()
+            eval_value_callable_summary(value).unwrap_or_default()
         );
     }
     match value {
@@ -26,7 +28,7 @@ pub fn render_visible_value_text(value: &FunctionValue) -> String {
             .map(render_array_cell_text)
             .unwrap_or_default(),
         FunctionValue::Reference(reference) => reference.target().to_string(),
-        other => format!("{other:?}"),
+        FunctionValue::Callable(callable) => format!("Callable({})", callable.summary),
     }
 }
 
@@ -79,5 +81,6 @@ fn render_array_cell_text(value: &FunctionArrayCell) -> String {
         }
         FunctionArrayCell::Error(code) => worksheet_error_text(*code).to_string(),
         FunctionArrayCell::EmptyCell => String::new(),
+        FunctionArrayCell::Callable(callable) => format!("Callable({})", callable.summary),
     }
 }

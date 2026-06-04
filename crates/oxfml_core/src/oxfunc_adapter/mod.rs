@@ -1,10 +1,9 @@
 use std::collections::BTreeMap;
 
-use oxfunc_core::value::FunctionValue;
-
 use crate::binding::BindDiagnostic;
 use crate::eval::{
-    DefinedNameBinding, EvaluationBackend, EvaluationTraceMode, PreparedCall, PreparedResult,
+    DefinedNameBinding, EvaluationBackend, EvaluationTraceMode, FunctionValue, PreparedCall,
+    PreparedResult,
 };
 use crate::host::{HostRecalcOutput, SingleFormulaHost};
 use crate::interface::{

@@ -2,12 +2,13 @@ use oxfml_core::binding::{
     BindContext, BindRequest, BoundExpr, NameKind, NormalizedReference, ReferenceExpr, bind_formula,
 };
 use oxfml_core::consumer::runtime::{RuntimeEnvironment, RuntimeFormulaRequest};
+use oxfml_core::eval::FunctionValue;
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::red::project_red_view;
 use oxfml_core::source::{FormulaSourceRecord, StructureContextVersion};
 use oxfml_core::syntax::parser::{ParseRequest, parse_formula};
 use oxfml_core::{ExecutionOutcomeKind, ExecutionOutcomeStage, TypedContextQueryBundle};
-use oxfunc_core::value::{ExcelText, FunctionValue, WorksheetErrorCode};
+use oxfunc_core::value::{ExcelText, WorksheetErrorCode};
 
 fn bind_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::binding::BindResult {
     let source = FormulaSourceRecord::new(formula_stable_id, 1, formula);

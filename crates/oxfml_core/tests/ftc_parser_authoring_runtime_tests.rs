@@ -3,9 +3,9 @@ use std::collections::BTreeMap;
 mod common;
 
 use oxfml_core::consumer::runtime::{RuntimeEnvironment, RuntimeFormulaRequest};
-use oxfml_core::eval::{EvaluationContext, evaluate_formula};
+use oxfml_core::eval::{EvaluationContext, FunctionValue, evaluate_formula};
 use oxfml_core::{FormulaSourceRecord, TypedContextQueryBundle};
-use oxfunc_core::value::{ExcelText, FunctionValue, WorksheetErrorCode};
+use oxfunc_core::value::{ExcelText, WorksheetErrorCode};
 
 fn evaluate_formula_text(formula_stable_id: &str, formula: &str) -> oxfml_core::EvaluationOutput {
     let compiled = common::compile_formula(

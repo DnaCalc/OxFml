@@ -1,11 +1,12 @@
 use oxfml_core::consumer::runtime::{RuntimeEnvironment, RuntimeFormulaRequest};
+use oxfml_core::eval::FunctionValue;
 use oxfml_core::format::{oxfml_en_us_locale_context, render_with_code};
 use oxfml_core::publication::{
     VerificationPublicationContext, build_verification_publication_surface,
 };
 use oxfml_core::seam::TopologyDelta;
 use oxfml_core::{FormulaSourceRecord, ReturnedValueSurface, TypedContextQueryBundle};
-use oxfunc_core::value::{CalcValue, CoreValue, FunctionValue, NumberFormatHint, PresentationHint};
+use oxfunc_core::value::{CalcValue, CoreValue, NumberFormatHint, PresentationHint};
 
 #[test]
 fn format_engine_renders_time_tokens_and_ampm_modes() {

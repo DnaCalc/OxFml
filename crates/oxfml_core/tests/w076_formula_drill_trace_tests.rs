@@ -3,9 +3,10 @@ use oxfml_core::consumer::runtime::{
     FormulaDrillNodeId, FormulaDrillNodeKind, FormulaDrillTrace, FormulaDrillTraceNode,
     RuntimeEnvironment, RuntimeFormulaRequest,
 };
+use oxfml_core::eval::FunctionValue;
 use oxfml_core::syntax::token::TextSpan;
 use oxfml_core::{EvaluationTraceMode, FormulaSourceRecord, TypedContextQueryBundle};
-use oxfunc_core::value::{FunctionValue, WorksheetErrorCode};
+use oxfunc_core::value::WorksheetErrorCode;
 
 fn execute(formula: &str) -> FormulaDrillTrace {
     RuntimeEnvironment::new()

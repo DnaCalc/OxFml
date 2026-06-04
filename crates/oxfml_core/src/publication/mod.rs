@@ -1,10 +1,13 @@
 use std::collections::BTreeMap;
 
 use oxfunc_core::locale_format::{LocaleFormatContext, WorkbookDateSystem, ymd_from_excel_serial};
-use oxfunc_core::value::{ExcelText, FunctionArrayCell, FunctionValue, PresentationHint};
+use oxfunc_core::value::{ExcelText, PresentationHint};
 use serde_json::{Value, json};
 
-use crate::eval::{eval_value_callable_transport_summary, eval_value_is_callable_transport};
+use crate::eval::{
+    FunctionArray, FunctionArrayCell, FunctionValue, eval_value_callable_summary,
+    eval_value_is_callable,
+};
 use crate::format::number::{
     render_text_with_number_format_code, selected_number_format_section_color,
     selected_text_format_section_color,
@@ -562,7 +565,7 @@ fn array_cell_to_eval_value(cell: &FunctionArrayCell) -> FunctionValue {
 }
 
 impl AggregateConditionalFormattingContext {
-    fn from_array(array: &oxfunc_core::value::FunctionArray) -> Self {
+    fn from_array(array: &FunctionArray) -> Self {
         Self::from_values(
             array
                 .iter_row_major()
@@ -670,10 +673,10 @@ fn published_worksheet_value_class(value: &FunctionValue) -> WorksheetValueClass
 }
 
 fn comparison_value_json(value: &FunctionValue) -> Value {
-    if eval_value_is_callable_transport(value) {
+    if eval_value_is_callable(value) {
         return json!({
             "kind": "callable",
-            "summary": eval_value_callable_transport_summary(value).unwrap_or_default()
+            "summary": eval_value_callable_summary(value).unwrap_or_default()
         });
     }
     match value {
@@ -710,9 +713,9 @@ fn comparison_value_json(value: &FunctionValue) -> Value {
             "reference_kind": format!("{:?}", reference.kind()),
             "target": reference.target()
         }),
-        other => json!({
-            "kind": "unsupported",
-            "summary": format!("{other:?}")
+        FunctionValue::Callable(callable) => json!({
+            "kind": "callable",
+            "summary": callable.summary
         }),
     }
 }
@@ -738,6 +741,10 @@ fn array_cell_json(value: &FunctionArrayCell) -> Value {
         }),
         FunctionArrayCell::EmptyCell => json!({
             "kind": "empty_cell"
+        }),
+        FunctionArrayCell::Callable(callable) => json!({
+            "kind": "callable",
+            "summary": callable.summary
         }),
     }
 }
@@ -1098,12 +1105,13 @@ fn selected_format_section_font_color(
 
 #[cfg(test)]
 mod tests {
-    use oxfunc_core::value::{CalcValue, ExcelText, FunctionValue};
+    use oxfunc_core::value::{CalcValue, ExcelText};
 
     use super::{
         VerificationConditionalFormattingRule, VerificationPublicationContext,
         build_verification_publication_surface,
     };
+    use crate::eval::FunctionValue;
     use crate::format::{oxfml_en_us_locale_context, render_with_code};
     use crate::interface::ReturnedValueSurface;
     use crate::seam::TopologyDelta;

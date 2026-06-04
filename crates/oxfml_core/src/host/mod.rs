@@ -6,15 +6,15 @@ use oxfunc_core::functions::call_register_id_family::{
 use oxfunc_core::functions::rtd_fn::RtdProvider;
 use oxfunc_core::host_info::HostInfoProvider;
 use oxfunc_core::locale_format::LocaleFormatContext;
-use oxfunc_core::value::{CalcValue, ExcelText, FunctionValue, ReferenceLike, WorksheetErrorCode};
+use oxfunc_core::value::{CalcValue, ExcelText, ReferenceLike, WorksheetErrorCode};
 
 use crate::binding::{
     BindContext, BindDiagnostic, BindRequest, BoundFormula, NameKind, bind_formula_incremental,
 };
 use crate::eval::{
     CallableDefinedNameBinding, DefinedNameBinding, EvaluationBackend, EvaluationContext,
-    EvaluationOutput, EvaluationTraceMode, PortableCallableValue, eval_value_is_callable_transport,
-    evaluate_formula,
+    EvaluationOutput, EvaluationTraceMode, FunctionValue, PortableCallableValue,
+    eval_value_is_callable, evaluate_formula,
 };
 use crate::format::canonicalize_locale_context;
 use crate::interface::{
@@ -1131,7 +1131,7 @@ fn execution_outcome_surface(commit_decision: &AcceptDecision) -> ExecutionOutco
 }
 
 fn published_worksheet_value(value: &FunctionValue) -> FunctionValue {
-    if eval_value_is_callable_transport(value) {
+    if eval_value_is_callable(value) {
         FunctionValue::Error(WorksheetErrorCode::Calc)
     } else {
         value.clone()
@@ -1163,9 +1163,11 @@ mod tests {
     };
     use crate::interface::{ReturnedValueSurface, ReturnedValueSurfaceKind};
     use oxfunc_core::value::{
-        CalcValue, CoreValue, ExcelText, FunctionValue, RichObjectValue, RichValueData,
-        RichValueType, WorksheetErrorCode,
+        CalcValue, CoreValue, ExcelText, RichObjectValue, RichValueData, RichValueType,
+        WorksheetErrorCode,
     };
+
+    use crate::eval::FunctionValue;
 
     #[test]
     fn published_returned_value_surface_preserves_non_ordinary_rich_surface() {
@@ -1300,6 +1302,14 @@ fn build_trace_events(
 fn value_payload_for_eval_value(
     value: &FunctionValue,
 ) -> (WorksheetValueClass, ValuePayload, Option<Extent>) {
+    if eval_value_is_callable(value) {
+        return (
+            WorksheetValueClass::Scalar,
+            ValuePayload::Text("Callable".to_string()),
+            Some(Extent { rows: 1, cols: 1 }),
+        );
+    }
+
     match value {
         FunctionValue::Number(number) => (
             WorksheetValueClass::Scalar,
@@ -1338,14 +1348,9 @@ fn value_payload_for_eval_value(
             ValuePayload::Text(format!("Reference({})", reference.target())),
             Some(Extent { rows: 1, cols: 1 }),
         ),
-        other if eval_value_is_callable_transport(other) => (
+        FunctionValue::Callable(_) => (
             WorksheetValueClass::Scalar,
             ValuePayload::Text("Callable".to_string()),
-            Some(Extent { rows: 1, cols: 1 }),
-        ),
-        other => (
-            WorksheetValueClass::Scalar,
-            ValuePayload::Text(format!("{other:?}")),
             Some(Extent { rows: 1, cols: 1 }),
         ),
     }

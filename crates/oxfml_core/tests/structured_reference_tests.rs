@@ -1,4 +1,4 @@
-use oxfunc_core::value::{ExcelText, FunctionArray, FunctionArrayCell, FunctionValue};
+use oxfunc_core::value::ExcelText;
 
 use oxfml_core::EvaluationBackend;
 use oxfml_core::binding::{
@@ -6,6 +6,7 @@ use oxfml_core::binding::{
     StructuredReferenceSourceTokenKind, StructuredResolvedRef, StructuredSectionKind,
     StructuredSelectorKind, bind_formula,
 };
+use oxfml_core::eval::{FunctionArray, FunctionArrayCell, FunctionValue};
 use oxfml_core::interface::{
     TableCallerRegion, TableColumnDescriptor, TableDescriptor, TableRef, TableRegionKind,
     TypedContextQueryBundle,

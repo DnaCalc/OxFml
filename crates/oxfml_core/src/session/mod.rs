@@ -1,11 +1,9 @@
 use std::collections::BTreeMap;
 
-use oxfunc_core::value::FunctionValue;
-
 use crate::binding::BoundFormula;
 use crate::eval::{
-    DefinedNameBinding, EvaluationBackend, EvaluationContext, EvaluationOutput,
-    eval_value_is_callable_transport, evaluate_formula,
+    DefinedNameBinding, EvaluationBackend, EvaluationContext, EvaluationOutput, FunctionValue,
+    eval_value_is_callable, evaluate_formula,
 };
 use crate::interface::{
     LibraryContextSnapshotRef, TypedContextQueryBundle, TypedContextQueryBundleSpec,
@@ -1321,6 +1319,14 @@ fn dependency_reclassifications_for_plan(semantic_plan: &SemanticPlan) -> Vec<St
 fn value_payload_for_eval_value(
     value: &FunctionValue,
 ) -> (WorksheetValueClass, ValuePayload, Option<Extent>) {
+    if eval_value_is_callable(value) {
+        return (
+            WorksheetValueClass::Scalar,
+            ValuePayload::Text("Callable".to_string()),
+            Some(Extent { rows: 1, cols: 1 }),
+        );
+    }
+
     match value {
         FunctionValue::Number(number) => (
             WorksheetValueClass::Scalar,
@@ -1359,14 +1365,9 @@ fn value_payload_for_eval_value(
             ValuePayload::Text(format!("Reference({})", reference.target())),
             Some(Extent { rows: 1, cols: 1 }),
         ),
-        other if eval_value_is_callable_transport(other) => (
+        FunctionValue::Callable(_) => (
             WorksheetValueClass::Scalar,
             ValuePayload::Text("Callable".to_string()),
-            Some(Extent { rows: 1, cols: 1 }),
-        ),
-        other => (
-            WorksheetValueClass::Scalar,
-            ValuePayload::Text(format!("{other:?}")),
             Some(Extent { rows: 1, cols: 1 }),
         ),
     }
