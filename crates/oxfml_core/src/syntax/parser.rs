@@ -13,6 +13,7 @@ pub struct ParseRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct HostReferenceSyntaxProfile {
     pub collection_members: Vec<HostReferenceCollectionSyntax>,
+    pub structural_selectors: Vec<HostReferenceStructuralSelectorSyntax>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,12 +22,29 @@ pub struct HostReferenceCollectionSyntax {
     pub collection_family: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostReferenceStructuralSelectorSyntax {
+    pub token_text: String,
+    pub selector_family: String,
+}
+
 impl HostReferenceSyntaxProfile {
     pub fn with_collection_members(
         collection_members: impl IntoIterator<Item = HostReferenceCollectionSyntax>,
     ) -> Self {
         Self {
             collection_members: collection_members.into_iter().collect(),
+            structural_selectors: Vec::new(),
+        }
+    }
+
+    pub fn with_members_and_structural_selectors(
+        collection_members: impl IntoIterator<Item = HostReferenceCollectionSyntax>,
+        structural_selectors: impl IntoIterator<Item = HostReferenceStructuralSelectorSyntax>,
+    ) -> Self {
+        Self {
+            collection_members: collection_members.into_iter().collect(),
+            structural_selectors: structural_selectors.into_iter().collect(),
         }
     }
 
@@ -39,6 +57,21 @@ impl HostReferenceSyntaxProfile {
             })
             .map(|member| member.collection_family.as_str())
     }
+
+    pub fn structural_selector_family_for(&self, token_text: &str) -> Option<&str> {
+        let normalized = normalize_host_reference_collection_token(token_text);
+        self.structural_selectors
+            .iter()
+            .find(|selector| {
+                normalize_host_reference_collection_token(&selector.token_text) == normalized
+            })
+            .map(|selector| selector.selector_family.as_str())
+    }
+
+    pub fn host_selector_family_for(&self, token_text: &str) -> Option<&str> {
+        self.collection_family_for(token_text)
+            .or_else(|| self.structural_selector_family_for(token_text))
+    }
 }
 
 impl HostReferenceCollectionSyntax {
@@ -46,6 +79,15 @@ impl HostReferenceCollectionSyntax {
         Self {
             token_text: token_text.into(),
             collection_family: collection_family.into(),
+        }
+    }
+}
+
+impl HostReferenceStructuralSelectorSyntax {
+    pub fn new(token_text: impl Into<String>, selector_family: impl Into<String>) -> Self {
+        Self {
+            token_text: token_text.into(),
+            selector_family: selector_family.into(),
         }
     }
 }
@@ -396,10 +438,24 @@ impl Parser {
             let at = self.bump();
             self.skip_whitespace();
             if self.at(TokenKind::Identifier) || self.at(TokenKind::Star) {
-                let member = self.bump();
+                let member = self.bump_host_member_token();
+                if let Some((selector, dot, tail)) = self.split_host_selector_tail_token(&member) {
+                    let base = GreenNode::new(
+                        SyntaxKind::HostReferenceCollectionExpr,
+                        vec![GreenChild::Token(at), GreenChild::Token(selector)],
+                    );
+                    return GreenNode::new(
+                        SyntaxKind::HostMemberReferenceExpr,
+                        vec![
+                            GreenChild::Node(Box::new(base)),
+                            GreenChild::Token(dot),
+                            GreenChild::Token(tail),
+                        ],
+                    );
+                }
                 if self
                     .host_reference_syntax
-                    .collection_family_for(&member.text)
+                    .host_selector_family_for(&member.text)
                     .is_some()
                 {
                     return GreenNode::new(
@@ -420,16 +476,37 @@ impl Parser {
                 vec![GreenChild::Token(at), GreenChild::Node(Box::new(expr))],
             );
         }
+        if self.at(TokenKind::Caret) {
+            return self.parse_ancestor_anchor_expr();
+        }
         if self.at(TokenKind::Dot) {
             let dot = self.bump();
             self.skip_whitespace();
             let at = self.at(TokenKind::At).then(|| self.bump());
             self.skip_whitespace();
             if self.at(TokenKind::Identifier) || self.at(TokenKind::Star) {
-                let member = self.bump();
+                let member = self.bump_host_member_token();
+                if let Some((selector, split_dot, tail)) =
+                    self.split_host_selector_tail_token(&member)
+                {
+                    let mut children = vec![GreenChild::Token(dot)];
+                    if let Some(at) = at {
+                        children.push(GreenChild::Token(at));
+                    }
+                    children.push(GreenChild::Token(selector));
+                    let base = GreenNode::new(SyntaxKind::HostReferenceCollectionExpr, children);
+                    return GreenNode::new(
+                        SyntaxKind::HostMemberReferenceExpr,
+                        vec![
+                            GreenChild::Node(Box::new(base)),
+                            GreenChild::Token(split_dot),
+                            GreenChild::Token(tail),
+                        ],
+                    );
+                }
                 if self
                     .host_reference_syntax
-                    .collection_family_for(&member.text)
+                    .host_selector_family_for(&member.text)
                     .is_some()
                 {
                     let mut children = vec![GreenChild::Token(dot)];
@@ -491,14 +568,43 @@ impl Parser {
                 let at = self.at(TokenKind::At).then(|| self.bump());
                 self.skip_whitespace();
                 let member = if self.at(TokenKind::Identifier) || self.at(TokenKind::Star) {
-                    self.bump()
+                    self.bump_host_member_token()
                 } else {
                     self.expect(TokenKind::Identifier, "expected host member selector")
                 };
-                let mut children = vec![GreenChild::Node(Box::new(node)), GreenChild::Token(dot)];
-                if let Some(at) = at {
-                    children.push(GreenChild::Token(at));
+                if let Some(at_token) = at {
+                    if let Some((selector, split_dot, tail)) =
+                        self.split_host_selector_tail_token(&member)
+                    {
+                        let first = GreenNode::new(
+                            SyntaxKind::HostMemberReferenceExpr,
+                            vec![
+                                GreenChild::Node(Box::new(node)),
+                                GreenChild::Token(dot),
+                                GreenChild::Token(at_token),
+                                GreenChild::Token(selector),
+                            ],
+                        );
+                        node = GreenNode::new(
+                            SyntaxKind::HostMemberReferenceExpr,
+                            vec![
+                                GreenChild::Node(Box::new(first)),
+                                GreenChild::Token(split_dot),
+                                GreenChild::Token(tail),
+                            ],
+                        );
+                        continue;
+                    }
+                    let mut children = vec![
+                        GreenChild::Node(Box::new(node)),
+                        GreenChild::Token(dot),
+                        GreenChild::Token(at_token),
+                    ];
+                    children.push(GreenChild::Token(member));
+                    node = GreenNode::new(SyntaxKind::HostMemberReferenceExpr, children);
+                    continue;
                 }
+                let mut children = vec![GreenChild::Node(Box::new(node)), GreenChild::Token(dot)];
                 children.push(GreenChild::Token(member));
                 node = GreenNode::new(SyntaxKind::HostMemberReferenceExpr, children);
             } else {
@@ -520,6 +626,93 @@ impl Parser {
         } else {
             self.parse_union(allow_union_comma)
         }
+    }
+
+    fn parse_ancestor_anchor_expr(&mut self) -> GreenNode {
+        let first = self.bump();
+        let mut node = GreenNode::new(
+            SyntaxKind::HostReferenceCollectionExpr,
+            vec![GreenChild::Token(Token::new(
+                TokenKind::Identifier,
+                "SELF",
+                first.span,
+            ))],
+        );
+        while self.at(TokenKind::Caret) {
+            let caret = self.bump();
+            node = GreenNode::new(
+                SyntaxKind::HostMemberReferenceExpr,
+                vec![
+                    GreenChild::Node(Box::new(node)),
+                    GreenChild::Token(Token::new(TokenKind::Identifier, "PARENT", caret.span)),
+                ],
+            );
+        }
+        if self.at(TokenKind::Dot) {
+            let dot = self.bump();
+            self.skip_whitespace();
+            let member = if self.at(TokenKind::Identifier) || self.at(TokenKind::Star) {
+                self.bump_host_member_token()
+            } else {
+                self.expect(TokenKind::Identifier, "expected host member selector")
+            };
+            node = GreenNode::new(
+                SyntaxKind::HostMemberReferenceExpr,
+                vec![
+                    GreenChild::Node(Box::new(node)),
+                    GreenChild::Token(dot),
+                    GreenChild::Token(member),
+                ],
+            );
+        }
+        node
+    }
+
+    fn split_host_selector_tail_token(&self, token: &Token) -> Option<(Token, Token, Token)> {
+        let (head, tail) = token.text.split_once('.')?;
+        if tail.is_empty()
+            || self
+                .host_reference_syntax
+                .host_selector_family_for(head)
+                .is_none()
+        {
+            return None;
+        }
+        let selector = Token::new(
+            token.kind,
+            head.to_string(),
+            TextSpan::new(token.span.start, head.len()),
+        );
+        let dot = Token::new(
+            TokenKind::Dot,
+            ".",
+            TextSpan::new(token.span.start + head.len(), 1),
+        );
+        let tail = Token::new(
+            TokenKind::Identifier,
+            tail.to_string(),
+            TextSpan::new(token.span.start + head.len() + 1, tail.len()),
+        );
+        Some((selector, dot, tail))
+    }
+
+    fn bump_host_member_token(&mut self) -> Token {
+        let first = self.bump();
+        if first.kind != TokenKind::Star
+            || !self.at(TokenKind::Star)
+            || self
+                .host_reference_syntax
+                .host_selector_family_for("**")
+                .is_none()
+        {
+            return first;
+        }
+        let second = self.bump();
+        Token::new(
+            TokenKind::Identifier,
+            "**",
+            TextSpan::new(first.span.start, second.span.end() - first.span.start),
+        )
     }
 
     fn parse_primary(&mut self) -> GreenNode {

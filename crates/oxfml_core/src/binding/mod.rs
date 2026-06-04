@@ -786,7 +786,7 @@ impl Binder<'_> {
     fn host_reference_collection_family(&self, member: &str) -> String {
         self.context
             .host_reference_syntax
-            .collection_family_for(member)
+            .host_selector_family_for(member)
             .unwrap_or(member)
             .to_ascii_lowercase()
     }

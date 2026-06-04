@@ -131,7 +131,7 @@ pub use source::{
 };
 pub use syntax::green::{GreenTreeRoot, SyntaxKind};
 pub use syntax::parser::{
-    HostReferenceCollectionSyntax, HostReferenceSyntaxProfile, IncrementalParseResult,
-    ParseRequest, ParseResult, parse_formula, parse_formula_incremental,
-    parse_formula_with_host_reference_syntax,
+    HostReferenceCollectionSyntax, HostReferenceStructuralSelectorSyntax,
+    HostReferenceSyntaxProfile, IncrementalParseResult, ParseRequest, ParseResult, parse_formula,
+    parse_formula_incremental, parse_formula_with_host_reference_syntax,
 };

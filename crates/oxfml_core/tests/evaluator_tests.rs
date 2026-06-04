@@ -2583,7 +2583,7 @@ impl ReferenceSystemProvider for RecordingReferenceSystemProvider {
         request: &ReferenceDereferenceRequest,
     ) -> Result<FunctionValue, ReferenceResolutionError> {
         self.values
-            .get(&request.reference.target())
+            .get(request.reference.target())
             .cloned()
             .ok_or_else(|| ReferenceResolutionError::ProviderFailure {
                 detail: format!("unmapped reference {}", request.reference.target()),

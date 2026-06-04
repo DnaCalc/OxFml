@@ -66,6 +66,7 @@ pub use crate::binding::{
 };
 pub use crate::syntax::parser::{
     HostReferenceCollectionSyntax as RuntimeHostReferenceCollectionSyntax,
+    HostReferenceStructuralSelectorSyntax as RuntimeHostReferenceStructuralSelectorSyntax,
     HostReferenceSyntaxProfile as RuntimeHostReferenceSyntaxProfile,
 };
 
@@ -3743,11 +3744,45 @@ mod tests {
         }
     }
 
+    #[test]
+    fn parser_binds_host_structural_selector_profile_members() {
+        let resolver = SingleNameResolver;
+
+        let bound = bound_formula_from(
+            RuntimeEnvironment::new()
+                .with_host_name_resolver(&resolver)
+                .with_host_reference_syntax(test_host_reference_syntax()),
+            "=SUM(NodeA.@PARENT, @NEXT)",
+        );
+
+        let BoundExpr::FunctionCall { args, .. } = &bound.root else {
+            panic!("expected SUM call");
+        };
+        assert!(matches!(
+            args.as_slice(),
+            [
+                BoundExpr::HostStructuralSelector(parent),
+                BoundExpr::HostReferenceCollection(next)
+            ] if parent.selector_family == "parent"
+                && next.collection_family == "next"
+                && matches!(&*parent.base, BoundExpr::HostReference(record)
+                    if record.canonical_name == "NodeA")
+        ));
+    }
+
     fn test_host_reference_syntax() -> HostReferenceSyntaxProfile {
-        HostReferenceSyntaxProfile::with_collection_members([
-            RuntimeHostReferenceCollectionSyntax::new("CHILDREN", "children"),
-            RuntimeHostReferenceCollectionSyntax::new("*", "children"),
-        ])
+        HostReferenceSyntaxProfile::with_members_and_structural_selectors(
+            [
+                RuntimeHostReferenceCollectionSyntax::new("CHILDREN", "children"),
+                RuntimeHostReferenceCollectionSyntax::new("*", "children"),
+            ],
+            [
+                RuntimeHostReferenceStructuralSelectorSyntax::new("PARENT", "parent"),
+                RuntimeHostReferenceStructuralSelectorSyntax::new("SELF", "self"),
+                RuntimeHostReferenceStructuralSelectorSyntax::new("PREV", "previous"),
+                RuntimeHostReferenceStructuralSelectorSyntax::new("NEXT", "next"),
+            ],
+        )
     }
 
     #[test]
