@@ -567,7 +567,10 @@ impl Parser {
                 self.skip_whitespace();
                 let at = self.at(TokenKind::At).then(|| self.bump());
                 self.skip_whitespace();
-                let member = if self.at(TokenKind::Identifier) || self.at(TokenKind::Star) {
+                let member = if self.at(TokenKind::Identifier)
+                    || self.at(TokenKind::Star)
+                    || self.at(TokenKind::BracketedQualifier)
+                {
                     self.bump_host_member_token()
                 } else {
                     self.expect(TokenKind::Identifier, "expected host member selector")

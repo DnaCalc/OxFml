@@ -129,7 +129,8 @@ pub fn lex(input: &str) -> Vec<Token> {
             c if is_identifier_start(c) => {
                 index += 1;
                 while index < chars.len() {
-                    if chars[index] == '.' && matches!(chars.get(index + 1), Some('@' | '*')) {
+                    if chars[index] == '.' && matches!(chars.get(index + 1), Some('@' | '*' | '['))
+                    {
                         break;
                     }
                     if is_identifier_continue(chars[index]) {

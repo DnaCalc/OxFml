@@ -593,6 +593,23 @@ impl Binder<'_> {
                 },
             )));
         }
+        if let Some(host_name) = bracketed_host_name_text(&text)
+            && let Some(kind) = self.context_name_kind(&host_name, node.span)
+        {
+            let caller_context_dependent = self.name_caller_context_dependent(&host_name);
+            let normalized = NormalizedReference::Name(NameRef {
+                name: host_name.clone(),
+                workbook_id: self.context.workbook_id.clone(),
+                sheet_id: self.context.sheet_id.clone(),
+                kind,
+                caller_context_dependent,
+            });
+            self.push_reference_seed(&normalized);
+            return self
+                .push_host_name_bind_record(&host_name, node.span)
+                .map(BoundExpr::HostReference)
+                .unwrap_or_else(|| BoundExpr::Reference(ReferenceExpr::Atom(normalized)));
+        }
         if let Some(structured) = bind_structured_reference_text(
             &text,
             &text,
@@ -671,6 +688,7 @@ impl Binder<'_> {
                     if matches!(
                         token.kind,
                         crate::syntax::token::TokenKind::Identifier
+                            | crate::syntax::token::TokenKind::BracketedQualifier
                             | crate::syntax::token::TokenKind::Star
                     ) =>
                 {
@@ -679,6 +697,7 @@ impl Binder<'_> {
                 _ => None,
             })
             .unwrap_or_default();
+        let member = bracketed_host_name_text(&member).unwrap_or(member);
         let selector_family = self.host_reference_collection_family(&member);
         let selector_handle = format!("hostref_selector_{}_{}", node.span.start, node.span.len);
         let source_token_text = node_source_text(node);
@@ -732,6 +751,7 @@ impl Binder<'_> {
                     if matches!(
                         token.kind,
                         crate::syntax::token::TokenKind::Identifier
+                            | crate::syntax::token::TokenKind::BracketedQualifier
                             | crate::syntax::token::TokenKind::Star
                     ) =>
                 {
@@ -740,6 +760,7 @@ impl Binder<'_> {
                 _ => None,
             })
             .unwrap_or_default();
+        let member = bracketed_host_name_text(&member).unwrap_or(member);
         let collection_family = self.host_reference_collection_family(&member);
         let collection_handle = format!("hostref_collection_{}_{}", node.span.start, node.span.len);
         let source_token_text = node_source_text(node);
@@ -1634,6 +1655,11 @@ fn strip_optional_lambda_parameter_syntax(text: &str) -> Option<String> {
     } else {
         None
     }
+}
+
+fn bracketed_host_name_text(text: &str) -> Option<String> {
+    let inner = text.strip_prefix('[')?.strip_suffix(']')?;
+    (!inner.is_empty()).then(|| unescape_structured_reference_text(inner))
 }
 
 fn node_source_text(node: &GreenNode) -> String {

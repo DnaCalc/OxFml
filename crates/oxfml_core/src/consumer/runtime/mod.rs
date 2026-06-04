@@ -3725,6 +3725,64 @@ mod tests {
     }
 
     #[test]
+    fn parser_binds_bracketed_host_member_selector_without_structured_reference() {
+        struct RegionResolver;
+
+        impl RuntimeHostNameResolver for RegionResolver {
+            fn resolve_host_name(
+                &self,
+                request: &RuntimeHostNameResolveRequest,
+            ) -> Option<RuntimeHostNameResolveResult> {
+                if !request.source_token_text.eq_ignore_ascii_case("Region") {
+                    return None;
+                }
+                Some(RuntimeHostNameResolveResult {
+                    kind: NameKind::ValueLike,
+                    bind_record: HostNameBindRecord {
+                        host_name_handle: "host-name:region".to_string(),
+                        canonical_name: "Region".to_string(),
+                        host_dependency_key: None,
+                        source_span: request.source_span,
+                        source_token_text: request.source_token_text.clone(),
+                        resolution_layer: "treecalc_host_name".to_string(),
+                        binding_kind: "defined_name_value_like".to_string(),
+                        shape_hint: Some("scalar_node_value".to_string()),
+                        caller_context_dependent: false,
+                        diagnostics: Vec::new(),
+                        replay_identity_contribution: "host-name:region:replay".to_string(),
+                    },
+                })
+            }
+        }
+
+        let resolver = RegionResolver;
+        let bound = bound_formula_from(
+            RuntimeEnvironment::new()
+                .with_host_name_resolver(&resolver)
+                .with_host_reference_syntax(test_host_reference_syntax()),
+            "=SUM(Region.[Net Revenue])",
+        );
+
+        let BoundExpr::FunctionCall { args, .. } = &bound.root else {
+            panic!("expected SUM call");
+        };
+        assert!(
+            matches!(
+            args.as_slice(),
+            [BoundExpr::HostStructuralSelector(selector)]
+                if selector.selector_family == "net revenue"
+                    && matches!(&*selector.base, BoundExpr::HostReference(record)
+                        if record.canonical_name == "Region")
+            ),
+            "args={args:?}; diagnostics={:?}; structured={:?}",
+            bound.diagnostics,
+            bound.structured_reference_bind_records
+        );
+        assert!(bound.diagnostics.is_empty(), "{:?}", bound.diagnostics);
+        assert!(bound.structured_reference_bind_records.is_empty());
+    }
+
+    #[test]
     fn parser_binds_owner_relative_host_reference_collections() {
         for source in ["=SUM(@CHILDREN)", "=SUM(.*)"] {
             let bound = bound_formula_from(
