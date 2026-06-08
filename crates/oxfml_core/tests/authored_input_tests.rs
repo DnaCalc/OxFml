@@ -1,7 +1,9 @@
 use oxfml_core::consumer::runtime::{
-    RuntimeAuthoredInputResult, RuntimeDryBindInputKind, RuntimeEnvironment,
+    RuntimeAuthoredInputResult, RuntimeDryBindInputKind, RuntimeDryBindProfileViolationKind,
+    RuntimeEnvironment,
 };
 use oxfml_core::{BoundExpr, FormulaSourceRecord};
+use oxfunc_core::registry::{CapabilityOverlay, builtin_registry};
 use oxfunc_core::value::CoreValue;
 
 fn source(text: &str) -> FormulaSourceRecord {
@@ -100,6 +102,42 @@ fn dry_bind_reports_bind_diagnostics_without_evaluation() {
             .iter()
             .any(|diagnostic| diagnostic.message == "duplicate LAMBDA parameter name 'x'")
     );
+}
+
+#[test]
+fn dry_bind_reports_capability_profile_violations_without_evaluation() {
+    let sum_id = builtin_registry()
+        .lookup_by_surface_name("SUM")
+        .map(|entry| entry.meta.function_id.clone())
+        .expect("SUM has a canonical function id");
+    let mut overlay = CapabilityOverlay::new();
+    overlay.deny_function_id(&sum_id, "disabled for authoring preview test");
+    let environment = RuntimeEnvironment::new().with_capability_overlay(&overlay);
+
+    let verdict = environment.dry_bind_authored_input(source("=SUM(1,2)"));
+
+    assert_eq!(verdict.input_kind, RuntimeDryBindInputKind::Formula);
+    assert!(!verdict.legal);
+    assert!(verdict.syntax_diagnostics.is_empty());
+    assert!(verdict.bind_diagnostics.is_empty());
+    assert_eq!(verdict.profile_violations.len(), 1);
+    let violation = &verdict.profile_violations[0];
+    assert_eq!(
+        violation.kind,
+        RuntimeDryBindProfileViolationKind::FunctionUnavailable {
+            function_id: sum_id.clone(),
+            function_name: "SUM".to_string(),
+            reason: "disabled for authoring preview test".to_string()
+        }
+    );
+    assert_eq!(violation.feature, format!("function:{sum_id}"));
+    assert!(
+        violation
+            .message
+            .contains("disabled for authoring preview test")
+    );
+    assert_eq!(violation.span.start, 1);
+    assert_eq!(violation.span.len, 3);
 }
 
 #[test]

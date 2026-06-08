@@ -82,7 +82,17 @@ pub enum RuntimeDryBindInputKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RuntimeDryBindProfileViolationKind {
+    FunctionUnavailable {
+        function_id: String,
+        function_name: String,
+        reason: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeDryBindProfileViolation {
+    pub kind: RuntimeDryBindProfileViolationKind,
     pub feature: String,
     pub message: String,
     pub span: TextSpan,
@@ -252,14 +262,61 @@ impl<'a> RuntimeEnvironment<'a> {
             context: self.bind_context_for_source(&source),
             host_name_resolver: self.host_name_resolver,
         });
+        let profile_violations = self.dry_bind_profile_violations(&bind.bound_formula);
         let bind_diagnostics = bind.bound_formula.diagnostics;
         RuntimeDryBindVerdict {
             input_kind: RuntimeDryBindInputKind::Formula,
-            legal: bind_diagnostics.is_empty(),
+            legal: bind_diagnostics.is_empty() && profile_violations.is_empty(),
             syntax_diagnostics: Vec::new(),
             bind_diagnostics,
-            profile_violations: Vec::new(),
+            profile_violations,
         }
+    }
+
+    fn dry_bind_profile_violations(
+        &self,
+        bound_formula: &BoundFormula,
+    ) -> Vec<RuntimeDryBindProfileViolation> {
+        let Some(capability_overlay) = self.capability_overlay else {
+            return Vec::new();
+        };
+        let mut seen = BTreeSet::new();
+        let mut violations = Vec::new();
+        for call in &bound_formula.function_call_sources {
+            let Some(entry) = self
+                .function_registry
+                .lookup_by_surface_name(&call.function_name)
+            else {
+                continue;
+            };
+            let FunctionAvailability::Unavailable { reason } =
+                capability_overlay.availability_for(&entry.meta.function_id)
+            else {
+                continue;
+            };
+            let feature = format!("function:{}", entry.meta.function_id);
+            if !seen.insert((
+                feature.clone(),
+                call.callee_span.start,
+                call.callee_span.len,
+            )) {
+                continue;
+            }
+            violations.push(RuntimeDryBindProfileViolation {
+                kind: RuntimeDryBindProfileViolationKind::FunctionUnavailable {
+                    function_id: entry.meta.function_id.clone(),
+                    function_name: call.function_name.clone(),
+                    reason: reason.clone(),
+                },
+                feature: feature.clone(),
+                message: format!(
+                    "function '{}' is unavailable in the active capability profile: {reason}",
+                    call.function_name
+                ),
+                span: call.callee_span,
+            });
+        }
+        violations
     }
 
     pub fn open_session(self) -> RuntimeSessionFacade<'a> {
