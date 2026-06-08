@@ -1,4 +1,6 @@
-use oxfml_core::consumer::runtime::{RuntimeAuthoredInputResult, RuntimeEnvironment};
+use oxfml_core::consumer::runtime::{
+    RuntimeAuthoredInputResult, RuntimeDryBindInputKind, RuntimeEnvironment,
+};
 use oxfml_core::{BoundExpr, FormulaSourceRecord};
 use oxfunc_core::value::CoreValue;
 
@@ -56,4 +58,58 @@ fn authored_input_returns_diagnostics_for_formula_acceptance_error() {
         }
         other => panic!("expected diagnostics, got {other:?}"),
     }
+}
+
+#[test]
+fn dry_bind_reports_formula_verdict_without_evaluation() {
+    let environment = RuntimeEnvironment::new();
+
+    let verdict = environment.dry_bind_authored_input(source("=SUM(1,2)"));
+
+    assert_eq!(verdict.input_kind, RuntimeDryBindInputKind::Formula);
+    assert!(verdict.legal);
+    assert!(verdict.syntax_diagnostics.is_empty());
+    assert!(verdict.bind_diagnostics.is_empty());
+    assert!(verdict.profile_violations.is_empty());
+}
+
+#[test]
+fn dry_bind_reports_syntax_diagnostics_without_binding() {
+    let environment = RuntimeEnvironment::new();
+
+    let verdict = environment.dry_bind_authored_input(source("=1+"));
+
+    assert_eq!(verdict.input_kind, RuntimeDryBindInputKind::Formula);
+    assert!(!verdict.legal);
+    assert!(!verdict.syntax_diagnostics.is_empty());
+    assert!(verdict.bind_diagnostics.is_empty());
+}
+
+#[test]
+fn dry_bind_reports_bind_diagnostics_without_evaluation() {
+    let environment = RuntimeEnvironment::new();
+
+    let verdict = environment.dry_bind_authored_input(source("=LAMBDA(x,x,x)"));
+
+    assert_eq!(verdict.input_kind, RuntimeDryBindInputKind::Formula);
+    assert!(!verdict.legal);
+    assert!(verdict.syntax_diagnostics.is_empty());
+    assert!(
+        verdict
+            .bind_diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.message == "duplicate LAMBDA parameter name 'x'")
+    );
+}
+
+#[test]
+fn dry_bind_classifies_literals_without_parsing_as_formula() {
+    let environment = RuntimeEnvironment::new();
+
+    let verdict = environment.dry_bind_authored_input(source("123"));
+
+    assert_eq!(verdict.input_kind, RuntimeDryBindInputKind::Literal);
+    assert!(verdict.legal);
+    assert!(verdict.syntax_diagnostics.is_empty());
+    assert!(verdict.bind_diagnostics.is_empty());
 }

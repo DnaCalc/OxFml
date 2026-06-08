@@ -75,6 +75,28 @@ pub enum RuntimeAuthoredInputResult {
     Diagnostics(RuntimeAuthoredInputDiagnostics),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeDryBindInputKind {
+    Literal,
+    Formula,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeDryBindProfileViolation {
+    pub feature: String,
+    pub message: String,
+    pub span: TextSpan,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeDryBindVerdict {
+    pub input_kind: RuntimeDryBindInputKind,
+    pub legal: bool,
+    pub syntax_diagnostics: Vec<SyntaxDiagnostic>,
+    pub bind_diagnostics: Vec<BindDiagnostic>,
+    pub profile_violations: Vec<RuntimeDryBindProfileViolation>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeAuthoredInputDiagnostics {
     pub syntax_diagnostics: Vec<SyntaxDiagnostic>,
@@ -192,6 +214,52 @@ impl<'a> RuntimeEnvironment<'a> {
             host_name_resolver: self.host_name_resolver,
         });
         RuntimeAuthoredInputResult::Formula(bind.bound_formula)
+    }
+
+    pub fn dry_bind_authored_input(&self, source: FormulaSourceRecord) -> RuntimeDryBindVerdict {
+        if !source_text_is_formula_entry(&source.entered_formula_text) {
+            return RuntimeDryBindVerdict {
+                input_kind: RuntimeDryBindInputKind::Literal,
+                legal: true,
+                syntax_diagnostics: Vec::new(),
+                bind_diagnostics: Vec::new(),
+                profile_violations: Vec::new(),
+            };
+        }
+
+        let parse = parse_formula_with_host_reference_syntax(
+            ParseRequest {
+                source: source.clone(),
+            },
+            &self.host_reference_syntax,
+        );
+        let syntax_diagnostics = parse.green_tree.diagnostics.clone();
+        if !syntax_diagnostics.is_empty() {
+            return RuntimeDryBindVerdict {
+                input_kind: RuntimeDryBindInputKind::Formula,
+                legal: false,
+                syntax_diagnostics,
+                bind_diagnostics: Vec::new(),
+                profile_violations: Vec::new(),
+            };
+        }
+
+        let red_projection = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
+        let bind = bind_formula(crate::binding::BindRequest {
+            source: source.clone(),
+            green_tree: parse.green_tree,
+            red_projection,
+            context: self.bind_context_for_source(&source),
+            host_name_resolver: self.host_name_resolver,
+        });
+        let bind_diagnostics = bind.bound_formula.diagnostics;
+        RuntimeDryBindVerdict {
+            input_kind: RuntimeDryBindInputKind::Formula,
+            legal: bind_diagnostics.is_empty(),
+            syntax_diagnostics: Vec::new(),
+            bind_diagnostics,
+            profile_violations: Vec::new(),
+        }
     }
 
     pub fn open_session(self) -> RuntimeSessionFacade<'a> {
