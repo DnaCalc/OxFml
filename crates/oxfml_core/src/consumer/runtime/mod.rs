@@ -113,6 +113,48 @@ pub struct RuntimeAuthoredInputDiagnostics {
     pub bind_diagnostics: Vec<BindDiagnostic>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeValueLiteralization {
+    pub authored_input_text: String,
+    pub kind: RuntimeValueLiteralizationKind,
+    pub provenance: RuntimeValueLiteralizationProvenance,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeValueLiteralizationKind {
+    Blank,
+    Number,
+    Text,
+    Logical,
+    WorksheetError,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeValueLiteralizationProvenance {
+    ComputedValueLiteralization,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RuntimeValueLiteralizationUnsupportedKind {
+    NonFiniteNumber,
+    Missing,
+    Array,
+    Reference,
+    RichValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeValueLiteralizationUnsupported {
+    pub kind: RuntimeValueLiteralizationUnsupportedKind,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RuntimeValueLiteralizationResult {
+    AuthoredInput(RuntimeValueLiteralization),
+    Unsupported(RuntimeValueLiteralizationUnsupported),
+}
+
 pub struct RuntimeEnvironment<'a> {
     workbook_id: String,
     structure_context_version: StructureContextVersion,
@@ -271,6 +313,13 @@ impl<'a> RuntimeEnvironment<'a> {
             bind_diagnostics,
             profile_violations,
         }
+    }
+
+    pub fn literalize_calc_value_for_authoring(
+        &self,
+        value: &CalcValue,
+    ) -> RuntimeValueLiteralizationResult {
+        literalize_calc_value_for_authoring(value)
     }
 
     fn dry_bind_profile_violations(
@@ -3378,6 +3427,81 @@ fn source_text_is_formula_entry(text: &str) -> bool {
     text.trim_start().starts_with('=')
 }
 
+fn literalize_calc_value_for_authoring(value: &CalcValue) -> RuntimeValueLiteralizationResult {
+    if value.rich().is_some() {
+        return unsupported_value_literalization(
+            RuntimeValueLiteralizationUnsupportedKind::RichValue,
+            "rich values and callables do not have an admitted authored literal form",
+        );
+    }
+
+    let (authored_input_text, kind) = match value.core() {
+        CoreValue::Empty => ("".to_string(), RuntimeValueLiteralizationKind::Blank),
+        CoreValue::Missing => {
+            return unsupported_value_literalization(
+                RuntimeValueLiteralizationUnsupportedKind::Missing,
+                "missing argument values are not cell-content literals",
+            );
+        }
+        CoreValue::Number(number) if number.is_finite() => (
+            literal_number_text(*number),
+            RuntimeValueLiteralizationKind::Number,
+        ),
+        CoreValue::Number(_) => {
+            return unsupported_value_literalization(
+                RuntimeValueLiteralizationUnsupportedKind::NonFiniteNumber,
+                "non-finite numbers cannot be authored as worksheet cell literals",
+            );
+        }
+        CoreValue::Text(text) => (
+            format!("'{}", text.to_string_lossy()),
+            RuntimeValueLiteralizationKind::Text,
+        ),
+        CoreValue::Logical(true) => ("TRUE".to_string(), RuntimeValueLiteralizationKind::Logical),
+        CoreValue::Logical(false) => ("FALSE".to_string(), RuntimeValueLiteralizationKind::Logical),
+        CoreValue::Error(code) => (
+            worksheet_error_code_text(*code).to_string(),
+            RuntimeValueLiteralizationKind::WorksheetError,
+        ),
+        CoreValue::Array(_) => {
+            return unsupported_value_literalization(
+                RuntimeValueLiteralizationUnsupportedKind::Array,
+                "array literalization is not admitted in this scalar authoring slice",
+            );
+        }
+        CoreValue::Reference(_) => {
+            return unsupported_value_literalization(
+                RuntimeValueLiteralizationUnsupportedKind::Reference,
+                "reference values require formula/reference authoring, not scalar literalization",
+            );
+        }
+    };
+
+    RuntimeValueLiteralizationResult::AuthoredInput(RuntimeValueLiteralization {
+        authored_input_text,
+        kind,
+        provenance: RuntimeValueLiteralizationProvenance::ComputedValueLiteralization,
+    })
+}
+
+fn unsupported_value_literalization(
+    kind: RuntimeValueLiteralizationUnsupportedKind,
+    message: impl Into<String>,
+) -> RuntimeValueLiteralizationResult {
+    RuntimeValueLiteralizationResult::Unsupported(RuntimeValueLiteralizationUnsupported {
+        kind,
+        message: message.into(),
+    })
+}
+
+fn literal_number_text(number: f64) -> String {
+    if number == 0.0 {
+        "0".to_string()
+    } else {
+        number.to_string()
+    }
+}
+
 fn calc_value_from_cell_entry_text(text: &str) -> CalcValue {
     if text.is_empty() {
         return CalcValue::empty();
@@ -3396,10 +3520,33 @@ fn calc_value_from_cell_entry_text(text: &str) -> CalcValue {
     {
         return CalcValue::number(number);
     }
+    if let Some(error) = worksheet_error_code_from_text(text) {
+        return CalcValue::error(error);
+    }
     if let Some(decoded) = decode_cell_entry_quoted_string(text) {
         return CalcValue::text(ExcelText::from_interop_assignment(&decoded));
     }
     CalcValue::text(ExcelText::from_interop_assignment(text))
+}
+
+fn worksheet_error_code_from_text(text: &str) -> Option<WorksheetErrorCode> {
+    match text.trim().to_ascii_uppercase().as_str() {
+        "#NULL!" => Some(WorksheetErrorCode::Null),
+        "#DIV/0!" => Some(WorksheetErrorCode::Div0),
+        "#VALUE!" => Some(WorksheetErrorCode::Value),
+        "#REF!" => Some(WorksheetErrorCode::Ref),
+        "#NAME?" => Some(WorksheetErrorCode::Name),
+        "#NUM!" => Some(WorksheetErrorCode::Num),
+        "#N/A" => Some(WorksheetErrorCode::NA),
+        "#BUSY!" => Some(WorksheetErrorCode::Busy),
+        "#GETTING_DATA" => Some(WorksheetErrorCode::GettingData),
+        "#SPILL!" => Some(WorksheetErrorCode::Spill),
+        "#CALC!" => Some(WorksheetErrorCode::Calc),
+        "#FIELD!" => Some(WorksheetErrorCode::Field),
+        "#BLOCKED!" => Some(WorksheetErrorCode::Blocked),
+        "#CONNECT!" => Some(WorksheetErrorCode::Connect),
+        _ => None,
+    }
 }
 
 fn decode_cell_entry_quoted_string(text: &str) -> Option<String> {

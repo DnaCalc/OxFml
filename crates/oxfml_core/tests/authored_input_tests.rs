@@ -1,10 +1,13 @@
 use oxfml_core::consumer::runtime::{
     RuntimeAuthoredInputResult, RuntimeDryBindInputKind, RuntimeDryBindProfileViolationKind,
-    RuntimeEnvironment,
+    RuntimeEnvironment, RuntimeValueLiteralizationKind, RuntimeValueLiteralizationResult,
+    RuntimeValueLiteralizationUnsupportedKind,
 };
 use oxfml_core::{BoundExpr, FormulaSourceRecord};
 use oxfunc_core::registry::{CapabilityOverlay, builtin_registry};
-use oxfunc_core::value::CoreValue;
+use oxfunc_core::value::{
+    CalcArray, CalcValue, CoreValue, ExcelText, ReferenceKind, ReferenceLike,
+};
 
 fn source(text: &str) -> FormulaSourceRecord {
     FormulaSourceRecord::new("authored-input:test", 1, text)
@@ -27,6 +30,16 @@ fn authored_input_returns_calc_value_for_cell_entry_literals() {
             other => panic!("expected forced text, got {other:?}"),
         },
         other => panic!("expected forced text literal, got {other:?}"),
+    }
+
+    match environment.interpret_authored_input(source("#DIV/0!")) {
+        RuntimeAuthoredInputResult::Literal(value) => {
+            assert_eq!(
+                value.core,
+                CoreValue::Error(oxfunc_core::value::WorksheetErrorCode::Div0)
+            );
+        }
+        other => panic!("expected worksheet error literal, got {other:?}"),
     }
 }
 
@@ -150,4 +163,106 @@ fn dry_bind_classifies_literals_without_parsing_as_formula() {
     assert!(verdict.legal);
     assert!(verdict.syntax_diagnostics.is_empty());
     assert!(verdict.bind_diagnostics.is_empty());
+}
+
+#[test]
+fn literalize_calc_value_for_authoring_round_trips_scalar_cell_values() {
+    let environment = RuntimeEnvironment::new();
+    let cases = [
+        (
+            CalcValue::number(12.5),
+            "12.5",
+            RuntimeValueLiteralizationKind::Number,
+        ),
+        (
+            CalcValue::number(-0.0),
+            "0",
+            RuntimeValueLiteralizationKind::Number,
+        ),
+        (
+            CalcValue::text(ExcelText::from_interop_assignment("=A1")),
+            "'=A1",
+            RuntimeValueLiteralizationKind::Text,
+        ),
+        (
+            CalcValue::logical(true),
+            "TRUE",
+            RuntimeValueLiteralizationKind::Logical,
+        ),
+        (
+            CalcValue::error(oxfunc_core::value::WorksheetErrorCode::NA),
+            "#N/A",
+            RuntimeValueLiteralizationKind::WorksheetError,
+        ),
+        (
+            CalcValue::empty(),
+            "",
+            RuntimeValueLiteralizationKind::Blank,
+        ),
+    ];
+
+    for (value, expected_text, expected_kind) in cases {
+        let RuntimeValueLiteralizationResult::AuthoredInput(literalized) =
+            environment.literalize_calc_value_for_authoring(&value)
+        else {
+            panic!("expected authored literal for {value:?}");
+        };
+        assert_eq!(literalized.authored_input_text, expected_text);
+        assert_eq!(literalized.kind, expected_kind);
+
+        let RuntimeAuthoredInputResult::Literal(round_trip) =
+            environment.interpret_authored_input(source(&literalized.authored_input_text))
+        else {
+            panic!("literalized text should interpret as a literal");
+        };
+        assert_eq!(round_trip.core, value.core);
+    }
+}
+
+#[test]
+fn literalize_calc_value_for_authoring_rejects_non_scalar_or_non_cell_values() {
+    let environment = RuntimeEnvironment::new();
+    let array = CalcValue::array(CalcArray::from_scalar(CalcValue::number(1.0)).unwrap());
+    let reference = CalcValue::reference(ReferenceLike::new(ReferenceKind::A1, "A1"));
+    let cases = [
+        (
+            CalcValue::number(f64::INFINITY),
+            RuntimeValueLiteralizationUnsupportedKind::NonFiniteNumber,
+        ),
+        (
+            CalcValue::missing(),
+            RuntimeValueLiteralizationUnsupportedKind::Missing,
+        ),
+        (array, RuntimeValueLiteralizationUnsupportedKind::Array),
+        (
+            reference,
+            RuntimeValueLiteralizationUnsupportedKind::Reference,
+        ),
+        (
+            CalcValue::callable(oxfunc_core::value::CallableValue {
+                arity: oxfunc_core::value::CallableArityShape::exact(0),
+                summary: "test".to_string(),
+                handle: std::rc::Rc::new(TestCallable),
+            }),
+            RuntimeValueLiteralizationUnsupportedKind::RichValue,
+        ),
+    ];
+
+    for (value, expected_kind) in cases {
+        let RuntimeValueLiteralizationResult::Unsupported(unsupported) =
+            environment.literalize_calc_value_for_authoring(&value)
+        else {
+            panic!("expected unsupported literalization for {value:?}");
+        };
+        assert_eq!(unsupported.kind, expected_kind);
+    }
+}
+
+#[derive(Debug)]
+struct TestCallable;
+
+impl oxfunc_core::value::OpaqueCallable for TestCallable {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
