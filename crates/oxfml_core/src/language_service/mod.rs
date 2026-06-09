@@ -12,7 +12,7 @@ use crate::red::{RedProjection, project_red_view_incremental};
 use crate::semantics::{CompileSemanticPlanRequest, SemanticPlan, compile_semantic_plan};
 use crate::source::{FormulaChannelKind, FormulaSourceRecord, FormulaTextVersion};
 use crate::syntax::green::{GreenChild, GreenNode, GreenTreeRoot, SyntaxKind};
-use crate::syntax::parser::{ParseRequest, parse_formula_incremental};
+use crate::syntax::parser::{ParseRequest, parse_formula_incremental_with_host_reference_syntax};
 use crate::syntax::token::{TextSpan, Token, TokenKind};
 use oxfunc_core::registry::{
     CapabilityOverlay, FunctionAvailability, FunctionEntry, FunctionRegistry,
@@ -117,11 +117,12 @@ pub(crate) fn apply_formula_edit(request: FormulaEditRequest<'_>) -> FormulaEdit
             &request.source.entered_formula_text,
         )
     });
-    let parse = parse_formula_incremental(
+    let parse = parse_formula_incremental_with_host_reference_syntax(
         ParseRequest {
             source: request.source.clone(),
         },
         request.previous_green_tree,
+        &request.bind_context.host_reference_syntax,
     );
     let red = project_red_view_incremental(
         request.source.formula_stable_id.clone(),

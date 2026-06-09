@@ -1,11 +1,17 @@
-use oxfml_core::consumer::editor::{EditorEditService, EditorEnvironment, EditorPlanOptions};
+use oxfml_core::binding::{BoundExpr, HostNameBindRecord, NameKind};
+use oxfml_core::consumer::editor::{
+    EditorAnalysisStage, EditorEditService, EditorEnvironment, EditorHostReferenceInsertionRequest,
+    EditorHostReferenceTarget, EditorPlanOptions,
+};
 use oxfml_core::semantics::{
     LibraryAvailabilityState, LibraryContextSnapshot, LibraryContextSnapshotEntry,
     RegistrationSourceKind,
 };
+use oxfml_core::syntax::token::TextSpan;
 use oxfml_core::{
-    BindContext, FormulaChannelKind, FormulaSourceRecord, InMemoryLibraryContextProvider,
-    LibraryContextProvider, LibraryContextSnapshotRef,
+    BindContext, FormulaChannelKind, FormulaSourceRecord, HostReferenceCollectionSyntax,
+    HostReferenceStructuralSelectorSyntax, HostReferenceSyntaxProfile,
+    InMemoryLibraryContextProvider, LibraryContextProvider, LibraryContextSnapshotRef,
 };
 
 #[test]
@@ -108,6 +114,185 @@ fn editor_edit_service_interaction_uses_registry_for_completion_and_snapshot_for
     );
 }
 
+#[test]
+fn editor_insert_host_reference_composes_profile_selector_and_rebinds() {
+    let environment = EditorEnvironment::new(treecalc_bind_context(["Base"]));
+    let service = EditorEditService::new(environment);
+    let document = service.open_document(
+        FormulaSourceRecord::new("editor:host-ref-insert", 1, "=SUM()"),
+        None,
+    );
+
+    let result = service
+        .insert_host_reference(
+            &document,
+            EditorHostReferenceInsertionRequest {
+                target: EditorHostReferenceTarget::HostStructuralSelector {
+                    base_canonical_name: "Base".to_string(),
+                    selector_family: "parent".to_string(),
+                },
+                replacement_span: Some(TextSpan::new("=SUM(".chars().count(), 0)),
+            },
+            EditorAnalysisStage::SyntaxAndBind,
+            None,
+        )
+        .expect("known selector family should compose");
+
+    assert_eq!(result.inserted_text, "Base.@PARENT");
+    assert_eq!(
+        result
+            .interaction_result
+            .document
+            .source
+            .entered_formula_text,
+        "=SUM(Base.@PARENT)"
+    );
+    let bound = result
+        .interaction_result
+        .document
+        .bound_formula
+        .expect("inserted formula should bind");
+    let BoundExpr::FunctionCall { args, .. } = bound.root else {
+        panic!("expected SUM call");
+    };
+    assert!(matches!(
+        args.as_slice(),
+        [BoundExpr::HostStructuralSelector(selector)]
+            if selector.selector_family == "parent"
+                && selector.source_token_text == "Base.@PARENT"
+                && matches!(&*selector.base, BoundExpr::HostReference(record)
+                    if record.canonical_name == "Base")
+    ));
+}
+
+#[test]
+fn editor_insert_host_reference_escapes_bracketed_host_name_and_rebinds() {
+    let environment = EditorEnvironment::new(treecalc_bind_context(["Net Revenue"]));
+    let service = EditorEditService::new(environment);
+    let document = service.open_document(
+        FormulaSourceRecord::new("editor:escaped-host-ref-insert", 1, "=SUM()"),
+        None,
+    );
+
+    let result = service
+        .insert_host_reference(
+            &document,
+            EditorHostReferenceInsertionRequest {
+                target: EditorHostReferenceTarget::HostName {
+                    canonical_name: "Net Revenue".to_string(),
+                },
+                replacement_span: Some(TextSpan::new("=SUM(".chars().count(), 0)),
+            },
+            EditorAnalysisStage::SyntaxAndBind,
+            None,
+        )
+        .expect("host name should compose");
+
+    assert_eq!(result.inserted_text, "[Net Revenue]");
+    assert_eq!(
+        result
+            .interaction_result
+            .document
+            .source
+            .entered_formula_text,
+        "=SUM([Net Revenue])"
+    );
+    let bound = result
+        .interaction_result
+        .document
+        .bound_formula
+        .expect("inserted formula should bind");
+    let BoundExpr::FunctionCall { args, .. } = bound.root else {
+        panic!("expected SUM call");
+    };
+    assert!(matches!(
+        args.as_slice(),
+        [BoundExpr::HostReference(record)]
+            if record.canonical_name == "Net Revenue"
+                && record.source_token_text == "Net Revenue"
+    ));
+}
+
+#[test]
+fn editor_insert_host_reference_composes_collection_token_from_profile() {
+    let environment = EditorEnvironment::new(treecalc_bind_context(["Base"]));
+    let service = EditorEditService::new(environment);
+    let document = service.open_document(
+        FormulaSourceRecord::new("editor:host-ref-collection-insert", 1, "=SUM()"),
+        None,
+    );
+
+    let result = service
+        .insert_host_reference(
+            &document,
+            EditorHostReferenceInsertionRequest {
+                target: EditorHostReferenceTarget::HostReferenceCollection {
+                    base_canonical_name: Some("Base".to_string()),
+                    collection_family: "children".to_string(),
+                },
+                replacement_span: Some(TextSpan::new("=SUM(".chars().count(), 0)),
+            },
+            EditorAnalysisStage::SyntaxAndBind,
+            None,
+        )
+        .expect("known collection family should compose");
+
+    assert_eq!(result.inserted_text, "Base.@CHILDREN");
+    let bound = result
+        .interaction_result
+        .document
+        .bound_formula
+        .expect("inserted formula should bind");
+    let BoundExpr::FunctionCall { args, .. } = bound.root else {
+        panic!("expected SUM call");
+    };
+    assert!(matches!(
+        args.as_slice(),
+        [BoundExpr::HostStructuralSelector(selector)]
+            if selector.selector_family == "children"
+                && selector.source_token_text == "Base.@CHILDREN"
+    ));
+}
+
+#[test]
+fn editor_insert_host_reference_composes_star_collection_without_double_dot() {
+    let mut context = treecalc_bind_context(["Base"]);
+    context.host_reference_syntax =
+        HostReferenceSyntaxProfile::with_collection_members([HostReferenceCollectionSyntax::new(
+            "*", "children",
+        )]);
+    let service = EditorEditService::new(EditorEnvironment::new(context));
+    let document = service.open_document(
+        FormulaSourceRecord::new("editor:host-ref-star-collection-insert", 1, "=SUM(0)"),
+        None,
+    );
+
+    let result = service
+        .insert_host_reference(
+            &document,
+            EditorHostReferenceInsertionRequest {
+                target: EditorHostReferenceTarget::HostReferenceCollection {
+                    base_canonical_name: Some("Base".to_string()),
+                    collection_family: "children".to_string(),
+                },
+                replacement_span: Some(TextSpan::new("=SUM(".chars().count(), 1)),
+            },
+            EditorAnalysisStage::SyntaxAndBind,
+            None,
+        )
+        .expect("known collection family should compose");
+
+    assert_eq!(result.inserted_text, "Base.*");
+    assert_eq!(
+        result
+            .interaction_result
+            .document
+            .source
+            .entered_formula_text,
+        "=SUM(Base.*)"
+    );
+}
+
 fn editor_snapshot_v1() -> LibraryContextSnapshot {
     LibraryContextSnapshot {
         snapshot_id: "editor-runtime".to_string(),
@@ -131,6 +316,49 @@ fn editor_snapshot_v1() -> LibraryContextSnapshot {
             runtime_capability_state: Some(LibraryAvailabilityState::CatalogKnown),
             post_dispatch_state: None,
         }],
+    }
+}
+
+fn treecalc_bind_context<const N: usize>(host_names: [&str; N]) -> BindContext {
+    let mut context = BindContext {
+        host_reference_syntax: HostReferenceSyntaxProfile::with_members_and_structural_selectors(
+            [
+                HostReferenceCollectionSyntax::new("CHILDREN", "children"),
+                HostReferenceCollectionSyntax::new("*", "children"),
+            ],
+            [
+                HostReferenceStructuralSelectorSyntax::new("PARENT", "parent"),
+                HostReferenceStructuralSelectorSyntax::new("SELF", "self"),
+                HostReferenceStructuralSelectorSyntax::new("PREV", "previous"),
+                HostReferenceStructuralSelectorSyntax::new("NEXT", "next"),
+            ],
+        ),
+        ..BindContext::default()
+    };
+    for name in host_names {
+        context
+            .names
+            .insert(name.to_string(), NameKind::ReferenceLike);
+        context
+            .host_name_bind_records
+            .insert(name.to_string(), host_name_bind_record(name));
+    }
+    context
+}
+
+fn host_name_bind_record(name: &str) -> HostNameBindRecord {
+    HostNameBindRecord {
+        host_name_handle: format!("host-name:{name}"),
+        canonical_name: name.to_string(),
+        host_dependency_key: Some(format!("tree-node:{name}")),
+        source_span: TextSpan::new(0, 0),
+        source_token_text: name.to_string(),
+        resolution_layer: "treecalc_host_name".to_string(),
+        binding_kind: "tree_node_reference".to_string(),
+        shape_hint: Some("scalar_node_value".to_string()),
+        caller_context_dependent: false,
+        diagnostics: Vec::new(),
+        replay_identity_contribution: format!("host-name:{name}:replay"),
     }
 }
 

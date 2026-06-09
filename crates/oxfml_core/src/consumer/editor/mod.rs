@@ -18,10 +18,12 @@ mod types;
 
 pub use types::{
     CompletionProposal, CompletionProposalKind, CompletionResult, EditorAnalysisStage,
-    EditorDocument, EditorPlanOptions, EditorSyntaxSnapshot, EditorToken, EditorTrivia,
-    EditorTriviaKind, FormulaEditReuseSummary, FormulaTextChangeRange, FunctionHelpPacket,
-    FunctionHelpSignatureForm, IntelligentCompletionContext, LiveDiagnostic,
-    LiveDiagnosticSeverity, LiveDiagnosticSnapshot, LiveDiagnosticStage, SignatureHelpContext,
+    EditorDocument, EditorHostReferenceInsertionError, EditorHostReferenceInsertionRequest,
+    EditorHostReferenceInsertionResult, EditorHostReferenceTarget, EditorPlanOptions,
+    EditorSyntaxSnapshot, EditorToken, EditorTrivia, EditorTriviaKind, FormulaEditReuseSummary,
+    FormulaTextChangeRange, FunctionHelpPacket, FunctionHelpSignatureForm,
+    IntelligentCompletionContext, LiveDiagnostic, LiveDiagnosticSeverity, LiveDiagnosticSnapshot,
+    LiveDiagnosticStage, SignatureHelpContext,
 };
 
 #[derive(Clone)]
@@ -319,6 +321,159 @@ impl<'a> EditorEditService<'a> {
         );
         completion_application_from_validation(self, validation)
     }
+
+    pub fn insert_host_reference(
+        &self,
+        document: &EditorDocument,
+        request: EditorHostReferenceInsertionRequest,
+        analysis_stage: EditorAnalysisStage,
+        plan_options: Option<EditorPlanOptions>,
+    ) -> Result<EditorHostReferenceInsertionResult, EditorHostReferenceInsertionError> {
+        let inserted_text = compose_host_reference_text(
+            &request.target,
+            &self.environment.bind_context.host_reference_syntax,
+        )?;
+        let application = self.validate_completion(
+            document,
+            request.replacement_span,
+            inserted_text.clone(),
+            analysis_stage,
+            plan_options,
+        );
+
+        Ok(EditorHostReferenceInsertionResult {
+            inserted_text,
+            applied_span: application.applied_span,
+            interaction_result: application.interaction_result,
+        })
+    }
+}
+
+fn compose_host_reference_text(
+    target: &EditorHostReferenceTarget,
+    host_reference_syntax: &crate::syntax::parser::HostReferenceSyntaxProfile,
+) -> Result<String, EditorHostReferenceInsertionError> {
+    match target {
+        EditorHostReferenceTarget::HostName { canonical_name } => compose_host_name(canonical_name),
+        EditorHostReferenceTarget::HostReferenceCollection {
+            base_canonical_name,
+            collection_family,
+        } => {
+            if collection_family.is_empty() {
+                return Err(EditorHostReferenceInsertionError::EmptySelectorFamily);
+            }
+            let token = host_reference_syntax
+                .collection_members
+                .iter()
+                .find(|member| member.collection_family == *collection_family)
+                .map(|member| member.token_text.as_str())
+                .ok_or_else(|| {
+                    EditorHostReferenceInsertionError::UnknownCollectionFamily(
+                        collection_family.clone(),
+                    )
+                })?;
+            let selector_text = compose_member_selector_token(token);
+            match base_canonical_name {
+                Some(base) => Ok(format!("{}.{}", compose_host_name(base)?, selector_text)),
+                None => Ok(compose_owner_relative_selector_token(token)),
+            }
+        }
+        EditorHostReferenceTarget::HostStructuralSelector {
+            base_canonical_name,
+            selector_family,
+        } => {
+            if selector_family.is_empty() {
+                return Err(EditorHostReferenceInsertionError::EmptySelectorFamily);
+            }
+            let token = host_reference_syntax
+                .structural_selectors
+                .iter()
+                .find(|selector| selector.selector_family == *selector_family)
+                .map(|selector| selector.token_text.as_str())
+                .ok_or_else(|| {
+                    EditorHostReferenceInsertionError::UnknownStructuralSelectorFamily(
+                        selector_family.clone(),
+                    )
+                })?;
+            Ok(format!(
+                "{}.{}",
+                compose_host_name(base_canonical_name)?,
+                compose_member_selector_token(token)
+            ))
+        }
+    }
+}
+
+fn compose_owner_relative_selector_token(token: &str) -> String {
+    if token == "*" {
+        ".*".to_string()
+    } else {
+        compose_member_selector_token(token)
+    }
+}
+
+fn compose_member_selector_token(token: &str) -> String {
+    if token == "*" || token.starts_with('@') {
+        token.to_string()
+    } else {
+        format!("@{token}")
+    }
+}
+
+fn compose_host_name(name: &str) -> Result<String, EditorHostReferenceInsertionError> {
+    if name.is_empty() {
+        return Err(EditorHostReferenceInsertionError::EmptyHostName);
+    }
+    if is_plain_host_name_identifier(name) && !is_formula_literal_identifier(name) {
+        Ok(name.to_string())
+    } else {
+        Ok(format!("[{}]", escape_bracketed_host_reference_text(name)))
+    }
+}
+
+fn is_plain_host_name_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !(first.is_ascii_alphabetic() || matches!(first, '_' | '$')) {
+        return false;
+    }
+    chars.all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '$'))
+}
+
+fn is_formula_literal_identifier(name: &str) -> bool {
+    let upper = name.to_ascii_uppercase();
+    matches!(
+        upper.as_str(),
+        "TRUE"
+            | "FALSE"
+            | "#NULL!"
+            | "#DIV/0!"
+            | "#VALUE!"
+            | "#REF!"
+            | "#NAME?"
+            | "#NUM!"
+            | "#N/A"
+            | "#BUSY!"
+            | "#GETTING_DATA"
+            | "#SPILL!"
+            | "#CALC!"
+            | "#FIELD!"
+            | "#BLOCKED!"
+            | "#CONNECT!"
+    )
+}
+
+fn escape_bracketed_host_reference_text(text: &str) -> String {
+    let mut output = String::with_capacity(text.len());
+    for ch in text.chars() {
+        if matches!(ch, '#' | '[' | ']' | '@' | '\'') {
+            output.push('\'');
+        }
+        output.push(ch);
+    }
+    output
 }
 
 fn build_function_help_packet(

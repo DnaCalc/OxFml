@@ -129,6 +129,18 @@ pub fn parse_formula_incremental(
     request: ParseRequest,
     previous_green_tree: Option<&GreenTreeRoot>,
 ) -> IncrementalParseResult {
+    parse_formula_incremental_with_host_reference_syntax(
+        request,
+        previous_green_tree,
+        &HostReferenceSyntaxProfile::default(),
+    )
+}
+
+pub fn parse_formula_incremental_with_host_reference_syntax(
+    request: ParseRequest,
+    previous_green_tree: Option<&GreenTreeRoot>,
+    host_reference_syntax: &HostReferenceSyntaxProfile,
+) -> IncrementalParseResult {
     if let Some(previous_green_tree) = previous_green_tree {
         let previous_text = previous_green_tree
             .full_fidelity_tokens
@@ -144,7 +156,7 @@ pub fn parse_formula_incremental(
         }
     }
 
-    let parse = parse_formula(request);
+    let parse = parse_formula_with_host_reference_syntax(request, host_reference_syntax);
     IncrementalParseResult {
         green_tree: parse.green_tree,
         reused_green_tree: false,

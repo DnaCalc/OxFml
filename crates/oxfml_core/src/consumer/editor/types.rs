@@ -186,3 +186,39 @@ pub struct EditorDocument {
     pub live_diagnostics: LiveDiagnosticSnapshot,
     pub reuse_summary: FormulaEditReuseSummary,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EditorHostReferenceTarget {
+    HostName {
+        canonical_name: String,
+    },
+    HostReferenceCollection {
+        base_canonical_name: Option<String>,
+        collection_family: String,
+    },
+    HostStructuralSelector {
+        base_canonical_name: String,
+        selector_family: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EditorHostReferenceInsertionRequest {
+    pub target: EditorHostReferenceTarget,
+    pub replacement_span: Option<TextSpan>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EditorHostReferenceInsertionResult {
+    pub inserted_text: String,
+    pub applied_span: TextSpan,
+    pub interaction_result: super::EditorInteractionResult,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EditorHostReferenceInsertionError {
+    EmptyHostName,
+    EmptySelectorFamily,
+    UnknownCollectionFamily(String),
+    UnknownStructuralSelectorFamily(String),
+}
