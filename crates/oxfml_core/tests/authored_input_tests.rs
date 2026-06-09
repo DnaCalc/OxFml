@@ -1,9 +1,9 @@
 use oxfml_core::consumer::runtime::{
     RuntimeAuthoredInputResult, RuntimeDryBindInputKind, RuntimeDryBindProfileViolationKind,
-    RuntimeEnvironment, RuntimeValueLiteralizationKind, RuntimeValueLiteralizationResult,
-    RuntimeValueLiteralizationUnsupportedKind,
+    RuntimeEnvironment, RuntimeFormulaRequest, RuntimeValueLiteralizationKind,
+    RuntimeValueLiteralizationResult, RuntimeValueLiteralizationUnsupportedKind,
 };
-use oxfml_core::{BoundExpr, FormulaSourceRecord};
+use oxfml_core::{BoundExpr, FormulaSourceRecord, TypedContextQueryBundle};
 use oxfunc_core::registry::{CapabilityOverlay, builtin_registry};
 use oxfunc_core::value::{
     CalcArray, CalcValue, CoreValue, ExcelText, ReferenceKind, ReferenceLike,
@@ -220,10 +220,56 @@ fn literalize_calc_value_for_authoring_round_trips_scalar_cell_values() {
 }
 
 #[test]
-fn literalize_calc_value_for_authoring_rejects_non_scalar_or_non_cell_values() {
+fn literalize_calc_value_for_authoring_round_trips_array_constants() {
     let environment = RuntimeEnvironment::new();
-    let array = CalcValue::array(CalcArray::from_scalar(CalcValue::number(1.0)).unwrap());
+    let value = CalcValue::array(
+        CalcArray::from_rows(vec![
+            vec![
+                CalcValue::number(1.0),
+                CalcValue::text(ExcelText::from_interop_assignment("text,;value")),
+                CalcValue::logical(true),
+            ],
+            vec![
+                CalcValue::error(oxfunc_core::value::WorksheetErrorCode::NA),
+                CalcValue::number(0.0),
+                CalcValue::logical(false),
+            ],
+        ])
+        .unwrap(),
+    );
+
+    let RuntimeValueLiteralizationResult::AuthoredInput(literalized) =
+        environment.literalize_calc_value_for_authoring(&value)
+    else {
+        panic!("expected authored array literal for {value:?}");
+    };
+    assert_eq!(
+        literalized.authored_input_text,
+        "={1,\"text,;value\",TRUE;#N/A,0,FALSE}"
+    );
+    assert_eq!(literalized.kind, RuntimeValueLiteralizationKind::Array);
+
+    let result = environment
+        .execute(RuntimeFormulaRequest::new(
+            source(&literalized.authored_input_text),
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("literalized array formula should execute");
+    assert_eq!(result.published_calc_value(), value);
+}
+
+#[test]
+fn literalize_calc_value_for_authoring_rejects_non_cell_values() {
+    let environment = RuntimeEnvironment::new();
     let reference = CalcValue::reference(ReferenceLike::new(ReferenceKind::A1, "A1"));
+    let array_with_empty = CalcValue::array(CalcArray::from_scalar(CalcValue::empty()).unwrap());
+    let array_with_reference = CalcValue::array(CalcArray::from_scalar(reference.clone()).unwrap());
+    let array_with_quoted_text = CalcValue::array(
+        CalcArray::from_scalar(CalcValue::text(ExcelText::from_interop_assignment(
+            "quoted\"text",
+        )))
+        .unwrap(),
+    );
     let cases = [
         (
             CalcValue::number(f64::INFINITY),
@@ -233,7 +279,6 @@ fn literalize_calc_value_for_authoring_rejects_non_scalar_or_non_cell_values() {
             CalcValue::missing(),
             RuntimeValueLiteralizationUnsupportedKind::Missing,
         ),
-        (array, RuntimeValueLiteralizationUnsupportedKind::Array),
         (
             reference,
             RuntimeValueLiteralizationUnsupportedKind::Reference,
@@ -245,6 +290,18 @@ fn literalize_calc_value_for_authoring_rejects_non_scalar_or_non_cell_values() {
                 handle: std::rc::Rc::new(TestCallable),
             }),
             RuntimeValueLiteralizationUnsupportedKind::RichValue,
+        ),
+        (
+            array_with_empty,
+            RuntimeValueLiteralizationUnsupportedKind::Array,
+        ),
+        (
+            array_with_reference,
+            RuntimeValueLiteralizationUnsupportedKind::Reference,
+        ),
+        (
+            array_with_quoted_text,
+            RuntimeValueLiteralizationUnsupportedKind::Array,
         ),
     ];
 

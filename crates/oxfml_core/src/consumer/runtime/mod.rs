@@ -127,6 +127,7 @@ pub enum RuntimeValueLiteralizationKind {
     Text,
     Logical,
     WorksheetError,
+    Array,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3463,12 +3464,10 @@ fn literalize_calc_value_for_authoring(value: &CalcValue) -> RuntimeValueLiteral
             worksheet_error_code_text(*code).to_string(),
             RuntimeValueLiteralizationKind::WorksheetError,
         ),
-        CoreValue::Array(_) => {
-            return unsupported_value_literalization(
-                RuntimeValueLiteralizationUnsupportedKind::Array,
-                "array literalization is not admitted in this scalar authoring slice",
-            );
-        }
+        CoreValue::Array(array) => match array_constant_literal_text(array) {
+            Ok(literal) => (format!("={literal}"), RuntimeValueLiteralizationKind::Array),
+            Err(unsupported) => return unsupported,
+        },
         CoreValue::Reference(_) => {
             return unsupported_value_literalization(
                 RuntimeValueLiteralizationUnsupportedKind::Reference,
@@ -3499,6 +3498,75 @@ fn literal_number_text(number: f64) -> String {
         "0".to_string()
     } else {
         number.to_string()
+    }
+}
+
+fn array_constant_literal_text(
+    array: &oxfunc_core::value::CalcArray,
+) -> Result<String, RuntimeValueLiteralizationResult> {
+    let shape = array.shape();
+    let mut rows = Vec::with_capacity(shape.rows);
+    for row in 0..shape.rows {
+        let mut cells = Vec::with_capacity(shape.cols);
+        for col in 0..shape.cols {
+            let Some(value) = array.get(row, col) else {
+                return Err(unsupported_value_literalization(
+                    RuntimeValueLiteralizationUnsupportedKind::Array,
+                    "array shape references a missing cell",
+                ));
+            };
+            cells.push(array_constant_cell_literal_text(value)?);
+        }
+        rows.push(cells.join(","));
+    }
+    Ok(format!("{{{}}}", rows.join(";")))
+}
+
+fn array_constant_cell_literal_text(
+    value: &CalcValue,
+) -> Result<String, RuntimeValueLiteralizationResult> {
+    if value.rich().is_some() {
+        return Err(unsupported_value_literalization(
+            RuntimeValueLiteralizationUnsupportedKind::RichValue,
+            "rich values and callables do not have an admitted array constant form",
+        ));
+    }
+
+    match value.core() {
+        CoreValue::Number(number) if number.is_finite() => Ok(literal_number_text(*number)),
+        CoreValue::Number(_) => Err(unsupported_value_literalization(
+            RuntimeValueLiteralizationUnsupportedKind::NonFiniteNumber,
+            "non-finite numbers cannot be authored as worksheet array constants",
+        )),
+        CoreValue::Text(text) => {
+            let text = text.to_string_lossy();
+            if text.contains('"') {
+                return Err(unsupported_value_literalization(
+                    RuntimeValueLiteralizationUnsupportedKind::Array,
+                    "double quotes inside array constant text are not admitted in this slice",
+                ));
+            }
+            Ok(format!("\"{text}\""))
+        }
+        CoreValue::Logical(true) => Ok("TRUE".to_string()),
+        CoreValue::Logical(false) => Ok("FALSE".to_string()),
+        CoreValue::Error(code) => Ok(worksheet_error_code_text(*code).to_string()),
+        CoreValue::Empty => Err(unsupported_value_literalization(
+            RuntimeValueLiteralizationUnsupportedKind::Array,
+            "empty values inside array constants are not admitted in this slice",
+        )),
+        CoreValue::Missing => Err(unsupported_value_literalization(
+            RuntimeValueLiteralizationUnsupportedKind::Missing,
+            "missing argument values are not array constant literals",
+        )),
+        CoreValue::Array(_) => Err(unsupported_value_literalization(
+            RuntimeValueLiteralizationUnsupportedKind::Array,
+            "nested arrays cannot be authored as worksheet array constants",
+        )),
+        CoreValue::Reference(_) => Err(unsupported_value_literalization(
+            RuntimeValueLiteralizationUnsupportedKind::Reference,
+            "reference values require formula/reference authoring, not array constant literalization",
+        )),
     }
 }
 
