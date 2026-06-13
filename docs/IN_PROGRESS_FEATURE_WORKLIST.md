@@ -224,3 +224,8 @@ Last updated: 2026-05-24.
 - **Remaining gaps**: DNA OneCalc acknowledgement and typed request-construction uptake.
 - **Why still open**: OxFml has local typed-payload evidence and old-string rejection evidence, but downstream typed request adoption remains an integration lane rather than an OxFml-only closure.
 - **Canonical owner**: `W073` tracking packet.
+
+## W077 strict Excel grid BindProfile and R1C1 identity
+- **Current floor**: planning/intake. `HANDOFF-DNATREECALC-001` has been registered as the OxFml intake for OxCalc `strict-excel-grid` formula identity. Existing R1C1 channel support remains the default behavior floor.
+- **Remaining gaps**: typed `BindProfile`, symbolic relative references, A1 `$` fidelity, grid bounds to `#REF!`, caller-independent bind identity, compiled-plan caching, and translation/rebind APIs.
+- **Canonical owner**: `docs/worksets/W077_strict_excel_grid_bind_profile_and_r1c1_identity.md`.

@@ -43,3 +43,15 @@ The current local evidence lives in:
 2. `crates/oxfml_core/src/source.rs`
 3. `crates/oxfml_core/src/binding/mod.rs`
 4. `crates/oxfml_core/src/syntax/lexer.rs`
+## Strict Excel Grid Successor Scope
+
+W077 promotes R1C1 from a caller-anchor-sensitive channel floor to the canonical formula identity surface for OxCalc `strict-excel-grid`.
+
+The successor scope is:
+1. preserve relative R1C1 parts symbolically in bound references when `BindProfile.symbolic_refs` is active;
+2. preserve A1 absolute/relative `$` fidelity so an equivalent R1C1-relative normal form is derivable from A1 entry;
+3. make bind identity caller-independent for formulas whose references are fully represented as caller-relative offsets or absolute coordinates;
+4. keep `WorksheetA1` and `WorksheetR1C1` as presentation/source channels over the same bound identity;
+5. enforce grid bounds through `GridBounds`, producing `#REF!` on invalid entry or translation.
+
+Default bind behavior remains the current local floor until the strict grid profile selects the new `BindProfile` fields.

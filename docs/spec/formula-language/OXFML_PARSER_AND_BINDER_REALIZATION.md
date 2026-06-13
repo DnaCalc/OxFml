@@ -150,6 +150,19 @@ The binder must not:
 2. treat runtime-discovered reference targets as static truth,
 3. collapse unresolved cases into generic parser errors.
 
+### 6.4 BindProfile for strict Excel grid
+
+The `strict-excel-grid` successor work introduces a typed `BindProfile` rather than ad hoc flags. Defaults must reproduce current behavior exactly.
+
+Required fields for W077 planning:
+1. `reference_syntax` — selects host reference syntax without changing formula-channel identity;
+2. `a1_relative_to_caller` — binds relative A1 axes as caller offsets where the grid profile requires it;
+3. `preserve_a1_dollar_fidelity` — keeps per-axis absolute/relative provenance for display and translation;
+4. `grid_bounds` — optional `GridBounds { max_row, max_col }`, with invalid references lowered to deterministic `#REF!`;
+5. `symbolic_refs` — keeps relative references as symbolic offsets so bind identity can be caller-independent.
+
+When `symbolic_refs` is active, caller anchor must not participate in bind identity for formulas whose semantic reference form is fully caller-independent. Evaluation receives caller coordinates separately.
+
 ## 7. Incremental Rebind Baseline
 ### 7.1 Rebind triggers
 A rebind is required when any of the following change:

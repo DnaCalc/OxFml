@@ -38,3 +38,4 @@ HANDOFF-CALC-003,inbound,Numerical Reduction And Error Algebra For W050,acknowle
 HANDOFF-CALC-004,inbound,Capability-Set Hole Admission For W050,acknowledged,OxCalc/W050,OxFml/OxFunc-successor,2026-05-14,2026-05-14
 HANDOFF-CALC-005,inbound,Generic Host Formula Context And Namespace Resolution For W051,acknowledged,OxCalc/W051,W051/W074,2026-05-21,2026-05-21
 HANDOFF-CALC-005-W074,outbound,W074 Name/Call Freeze Follow-Up For OxCalc W051/W056,filed,W074,OxCalc/W056,2026-05-24,
+HANDOFF-DNATREECALC-001,inbound,Strict Excel Grid BindProfile And R1C1 Formula Identity,filed,DnaTreeCalc-grid-planning,W077,2026-06-13,

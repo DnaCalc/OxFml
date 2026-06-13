@@ -159,6 +159,7 @@ Current baseline sequence after `W001`:
 72. `W074` registry mutation and name-resolution invalidation
 73. `W075` compiled formula plan and hot-loop optimization
 74. `W076` formula drill trace model
+75. `W077` strict Excel grid BindProfile and R1C1 identity
 
 This sequence is the current planning baseline.
 It may be refined, but new worksets should preserve dependency clarity rather than bypass it informally.
