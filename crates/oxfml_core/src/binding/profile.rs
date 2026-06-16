@@ -171,6 +171,40 @@ pub enum ReferenceAtomBindResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceRangeEndpointBindRequest {
+    pub source_span: TextSpan,
+    pub source_text: String,
+    pub target_text: String,
+    pub parsed_qualifier: Option<String>,
+    pub sheet_id: String,
+    pub external_target_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceRangeBindRequest {
+    pub source_channel: FormulaChannelKind,
+    pub source_span: TextSpan,
+    pub source_text: String,
+    pub left: ReferenceRangeEndpointBindRequest,
+    pub right: ReferenceRangeEndpointBindRequest,
+    pub workbook_id: String,
+    pub sheet_id: String,
+    pub caller_row: u32,
+    pub caller_col: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReferenceRangeBindResult {
+    Bound(ProfileReferenceRecord),
+    LegacyCompatibility,
+    Rejected {
+        validity: ReferenceValidity,
+        message: String,
+    },
+    Unsupported,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReferenceDependencyEnvelope {
     None,
     Static {
@@ -323,6 +357,10 @@ pub trait ReferenceBindProfile {
 
     fn bind_atom(&self, _request: &ReferenceAtomBindRequest) -> ReferenceAtomBindResult {
         ReferenceAtomBindResult::LegacyCompatibility
+    }
+
+    fn bind_range(&self, _request: &ReferenceRangeBindRequest) -> ReferenceRangeBindResult {
+        ReferenceRangeBindResult::LegacyCompatibility
     }
 
     fn normal_form_key(

@@ -13,6 +13,7 @@ pub use profile::{
     ReferenceDependencyEnvelope, ReferenceFingerprintPolicy, ReferenceInstantiationPurpose,
     ReferenceInstantiationRequest, ReferenceNormalFormKey, ReferenceOperatorCapabilities,
     ReferencePolicy, ReferenceProfileFingerprint, ReferenceProfileFingerprintContext,
+    ReferenceRangeBindRequest, ReferenceRangeBindResult, ReferenceRangeEndpointBindRequest,
     ReferenceRenderRequest, ReferenceRenderResult, ReferenceSourceInfo,
     ReferenceSyntaxCapabilities, ReferenceTransformKind, ReferenceTransformOutcome,
     ReferenceTransformRequest, ReferenceTransformResult, ReferenceValidity,
@@ -999,6 +1000,10 @@ impl Binder<'_> {
         let left_node = child_nodes.next().expect("range left");
         let right_node = child_nodes.next().expect("range right");
 
+        if let Some(bound) = self.try_bind_profile_reference_range(node, left_node, right_node) {
+            return bound;
+        }
+
         if !self.profile_uses_symbolic_references() {
             if let Some(normalized) = self.try_bind_simple_reference_range(left_node, right_node) {
                 self.push_reference_seed(&normalized);
@@ -1369,6 +1374,68 @@ impl Binder<'_> {
                 )))
             }
             ReferenceAtomBindResult::LegacyCompatibility => None,
+        }
+    }
+
+    fn try_bind_profile_reference_range(
+        &mut self,
+        node: &GreenNode,
+        left_node: &GreenNode,
+        right_node: &GreenNode,
+    ) -> Option<BoundExpr> {
+        let profile = self.reference_bind_profile?;
+        let (left_simple, right_simple) =
+            harmonize_simple_reference_fragments(left_node, right_node, &self.context)?;
+        let request = ReferenceRangeBindRequest {
+            source_channel: self.formula_channel_kind,
+            source_span: node.span,
+            source_text: node_source_text(node),
+            left: reference_range_endpoint_request(left_simple),
+            right: reference_range_endpoint_request(right_simple),
+            workbook_id: self.context.workbook_id.clone(),
+            sheet_id: self.context.sheet_id.clone(),
+            caller_row: self.context.caller_row,
+            caller_col: self.context.caller_col,
+        };
+        match profile.bind_range(&request) {
+            ReferenceRangeBindResult::Bound(record) => {
+                let normalized = NormalizedReference::ProfileSymbolic(record);
+                self.push_reference_seed(&normalized);
+                Some(BoundExpr::Reference(ReferenceExpr::Atom(normalized)))
+            }
+            ReferenceRangeBindResult::Rejected { validity, message } => {
+                self.diagnostics.push(BindDiagnostic {
+                    message: format!(
+                        "reference profile '{}' rejected range '{}': {message} ({validity:?})",
+                        profile.profile_id(),
+                        request.source_text
+                    ),
+                    span: request.source_span,
+                });
+                Some(BoundExpr::Reference(ReferenceExpr::Atom(
+                    NormalizedReference::Error(ErrorRef {
+                        error_class: "#REF!".to_string(),
+                        source_text: request.source_text,
+                    }),
+                )))
+            }
+            ReferenceRangeBindResult::Unsupported => {
+                self.diagnostics.push(BindDiagnostic {
+                    message: format!(
+                        "reference profile '{}' does not support reference range '{}'",
+                        profile.profile_id(),
+                        request.source_text
+                    ),
+                    span: request.source_span,
+                });
+                Some(BoundExpr::Reference(ReferenceExpr::Atom(
+                    NormalizedReference::Error(ErrorRef {
+                        error_class: "#REF!".to_string(),
+                        source_text: request.source_text,
+                    }),
+                )))
+            }
+            ReferenceRangeBindResult::LegacyCompatibility => None,
         }
     }
 
@@ -1836,6 +1903,8 @@ struct ParsedQualifier {
 #[derive(Debug, Clone)]
 struct SimpleReferenceFragment {
     qualifier: ParsedQualifier,
+    source_span: TextSpan,
+    source_text: String,
     target_text: String,
 }
 
@@ -2946,6 +3015,8 @@ fn try_parse_simple_reference_fragment(
                 is_external: false,
                 explicit: false,
             },
+            source_span: node.span,
+            source_text: node_source_text(node),
             target_text: first_token_text_free(node)?,
         }),
         SyntaxKind::QualifiedReferenceExpr => {
@@ -2962,6 +3033,8 @@ fn try_parse_simple_reference_fragment(
                 | SyntaxKind::QuotedIdentifierExpr
                 | SyntaxKind::NumberLiteralExpr => Some(SimpleReferenceFragment {
                     qualifier,
+                    source_span: node.span,
+                    source_text: node_source_text(node),
                     target_text: first_token_text_free(target)?,
                 }),
                 _ => None,
@@ -3044,6 +3117,22 @@ fn harmonize_simple_reference_fragments(
             Some((left_simple, right_simple))
         }
         _ => None,
+    }
+}
+
+fn reference_range_endpoint_request(
+    fragment: SimpleReferenceFragment,
+) -> ReferenceRangeEndpointBindRequest {
+    ReferenceRangeEndpointBindRequest {
+        source_span: fragment.source_span,
+        source_text: fragment.source_text,
+        target_text: fragment.target_text,
+        parsed_qualifier: fragment
+            .qualifier
+            .explicit
+            .then_some(fragment.qualifier.raw),
+        sheet_id: fragment.qualifier.sheet_id,
+        external_target_id: fragment.qualifier.external_target_id,
     }
 }
 

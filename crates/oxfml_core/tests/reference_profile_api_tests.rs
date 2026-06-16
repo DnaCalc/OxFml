@@ -11,9 +11,9 @@ use oxfml_core::{
     ReferenceAtomBindResult, ReferenceBindProfile, ReferenceDependencyEnvelope, ReferenceExpr,
     ReferenceFingerprintPolicy, ReferenceInstantiationPurpose, ReferenceInstantiationRequest,
     ReferenceNormalFormKey, ReferencePolicy, ReferenceProfileFingerprint,
-    ReferenceProfileFingerprintContext, ReferenceSourceInfo, ReferenceValidity,
-    RuntimeHostFormulaContext, StructureContextVersion, bind_formula, bind_formula_incremental,
-    compile_semantic_plan,
+    ReferenceProfileFingerprintContext, ReferenceRangeBindRequest, ReferenceRangeBindResult,
+    ReferenceSourceInfo, ReferenceValidity, RuntimeHostFormulaContext, StructureContextVersion,
+    bind_formula, bind_formula_incremental, compile_semantic_plan,
 };
 use oxfml_core::{EvaluationContext, evaluate_formula};
 use oxfml_core::{ParseRequest, parse_formula};
@@ -76,6 +76,40 @@ impl ReferenceBindProfile for FakeSymbolicProfile {
             validity: ReferenceValidity::ValidAfterInstantiation,
         })
     }
+
+    fn bind_range(&self, request: &ReferenceRangeBindRequest) -> ReferenceRangeBindResult {
+        if !request.left.target_text.eq_ignore_ascii_case("alpha")
+            || !request.right.target_text.eq_ignore_ascii_case("beta")
+        {
+            return ReferenceRangeBindResult::LegacyCompatibility;
+        }
+
+        ReferenceRangeBindResult::Bound(ProfileReferenceRecord {
+            profile_id: self.profile_id().to_string(),
+            profile_version: ProfileVersion::v1(),
+            source_info: ReferenceSourceInfo {
+                source_channel: request.source_channel,
+                source_span: request.source_span,
+                source_text: request.source_text.clone(),
+                parsed_qualifier: None,
+                address_fidelity: Some(request.source_text.clone()),
+            },
+            profile_payload: ProfilePayload::textual(
+                "fake-range-ref",
+                format!(
+                    "left={};right={};sheet={}",
+                    request.left.target_text, request.right.target_text, request.sheet_id
+                ),
+            ),
+            normal_form_key: ReferenceNormalFormKey(format!(
+                "fake-range:{}:{}",
+                request.left.target_text.to_ascii_uppercase(),
+                request.right.target_text.to_ascii_uppercase()
+            )),
+            render_hint: Some(request.source_text.clone()),
+            validity: ReferenceValidity::ValidAfterInstantiation,
+        })
+    }
 }
 
 #[test]
@@ -106,6 +140,30 @@ fn symbolic_profile_keeps_range_as_expression_composition() {
             assert_profile_symbolic_atom(end, "fake-cell:B2");
         }
         other => panic!("expected profile symbolic range expression, got {other:?}"),
+    }
+}
+
+#[test]
+fn symbolic_profile_can_bind_range_fragments_without_oxfml_grammar() {
+    let profile = FakeSymbolicProfile;
+    let bound = bind_formula_for(
+        "profile-range-fragment",
+        "=alpha:beta",
+        8,
+        4,
+        Some(&profile),
+    );
+
+    assert_profile_symbolic_normalized_reference(&bound, "fake-range:ALPHA:BETA");
+    match &bound.root {
+        BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::ProfileSymbolic(record))) => {
+            assert_eq!(record.source_info.source_text, "alpha:beta");
+            assert_eq!(
+                record.source_info.address_fidelity.as_deref(),
+                Some("alpha:beta")
+            );
+        }
+        other => panic!("expected profile-bound range atom, got {other:?}"),
     }
 }
 
