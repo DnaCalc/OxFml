@@ -1,4 +1,4 @@
-use crate::binding::BindContext;
+use crate::binding::{BindContext, ReferenceBindProfile};
 use crate::consumer::ConsumerLibraryContextState;
 use crate::interface::LibraryContextProvider;
 use crate::language_service::{
@@ -32,6 +32,7 @@ pub struct EditorEnvironment<'a> {
     library_context: ConsumerLibraryContextState<'a>,
     function_registry: &'a FunctionRegistry,
     capability_overlay: Option<&'a CapabilityOverlay>,
+    reference_bind_profile: Option<&'a dyn ReferenceBindProfile>,
 }
 
 impl EditorEnvironment<'_> {
@@ -41,6 +42,7 @@ impl EditorEnvironment<'_> {
             library_context: ConsumerLibraryContextState::new(),
             function_registry: builtin_registry(),
             capability_overlay: None,
+            reference_bind_profile: None,
         }
     }
 }
@@ -62,6 +64,14 @@ impl<'a> EditorEnvironment<'a> {
 
     pub fn with_capability_overlay(mut self, capability_overlay: &'a CapabilityOverlay) -> Self {
         self.capability_overlay = Some(capability_overlay);
+        self
+    }
+
+    pub fn with_reference_bind_profile(
+        mut self,
+        reference_bind_profile: &'a dyn ReferenceBindProfile,
+    ) -> Self {
+        self.reference_bind_profile = Some(reference_bind_profile);
         self
     }
 
@@ -175,6 +185,7 @@ impl<'a> EditorEditService<'a> {
             previous_red_projection: previous_document.map(|document| &document.red_projection),
             previous_bound_formula: previous_document
                 .and_then(|document| document.bound_formula.as_ref()),
+            reference_bind_profile: self.environment.reference_bind_profile,
             analysis_stage,
             plan_options,
         });
@@ -290,6 +301,7 @@ impl<'a> EditorEditService<'a> {
             previous_green_tree: Some(&document.green_tree),
             previous_red_projection: Some(&document.red_projection),
             previous_bound_formula: document.bound_formula.as_ref(),
+            reference_bind_profile: self.environment.reference_bind_profile,
             replacement_span,
             insert_text: insert_text.into(),
             analysis_stage,
@@ -312,6 +324,7 @@ impl<'a> EditorEditService<'a> {
                 previous_green_tree: Some(&document.green_tree),
                 previous_red_projection: Some(&document.red_projection),
                 previous_bound_formula: document.bound_formula.as_ref(),
+                reference_bind_profile: self.environment.reference_bind_profile,
                 replacement_span: None,
                 insert_text: String::new(),
                 analysis_stage,

@@ -1,4 +1,8 @@
-use oxfml_core::binding::{BindContext, BoundExpr, NameKind};
+use oxfml_core::binding::{
+    BindContext, BoundExpr, NameKind, NormalizedReference, ProfilePayload, ProfileReferenceRecord,
+    ProfileVersion, ReferenceAtomBindRequest, ReferenceAtomBindResult, ReferenceBindProfile,
+    ReferenceNormalFormKey, ReferencePolicy, ReferenceSourceInfo, ReferenceValidity,
+};
 use oxfml_core::consumer::editor::{
     CompletionProposalKind, EditorAnalysisStage, EditorEditService, EditorEnvironment,
     EditorPlanOptions, EditorSyntaxSnapshot, FormulaTextChangeRange, LiveDiagnosticStage,
@@ -24,6 +28,40 @@ use oxfunc_core::registry::{
     FunctionRegistryMetadata, FunctionSource, ParameterDescriptor, RegistryFunctionMeta,
     RichValueUsage, SemanticKernelMetadata, SignatureForm, builtin_registry,
 };
+
+struct EditorSymbolicProfile;
+
+impl ReferenceBindProfile for EditorSymbolicProfile {
+    fn profile_id(&self) -> &str {
+        "editor.symbolic.v1"
+    }
+
+    fn reference_policy(&self) -> ReferencePolicy {
+        ReferencePolicy::ProfileSymbolic
+    }
+
+    fn bind_atom(&self, request: &ReferenceAtomBindRequest) -> ReferenceAtomBindResult {
+        if !looks_like_cell_ref(&request.source_text) {
+            return ReferenceAtomBindResult::LegacyCompatibility;
+        }
+        let normal_text = request.source_text.to_ascii_uppercase();
+        ReferenceAtomBindResult::Bound(ProfileReferenceRecord {
+            profile_id: self.profile_id().to_string(),
+            profile_version: ProfileVersion::v1(),
+            source_info: ReferenceSourceInfo {
+                source_channel: request.source_channel,
+                source_span: request.source_span,
+                source_text: request.source_text.clone(),
+                parsed_qualifier: request.parsed_qualifier.clone(),
+                address_fidelity: Some(request.source_text.clone()),
+            },
+            profile_payload: ProfilePayload::textual("editor-cell-ref", normal_text.clone()),
+            normal_form_key: ReferenceNormalFormKey(format!("editor-cell:{normal_text}")),
+            render_hint: Some(request.source_text.clone()),
+            validity: ReferenceValidity::ValidAfterInstantiation,
+        })
+    }
+}
 
 #[test]
 fn editor_syntax_snapshot_tracks_leading_and_trailing_trivia() {
@@ -350,6 +388,66 @@ fn apply_formula_edit_reuses_green_red_and_bind_when_text_is_unchanged() {
     assert!(second.document.reuse_summary.reused_bound_formula);
     assert!(second.document.bound_formula.is_some());
     assert_eq!(second.document.text_change_range, None);
+}
+
+#[test]
+fn apply_formula_edit_uses_editor_environment_reference_profile() {
+    let profile = EditorSymbolicProfile;
+    let source = FormulaSourceRecord::new("editor-profile-bind", 1, "=A1");
+    let service = EditorEditService::new(
+        EditorEnvironment::new(editor_bind_context(source.clone()))
+            .with_reference_bind_profile(&profile),
+    );
+
+    let result = service.apply_edit(source, None, EditorAnalysisStage::SyntaxAndBind, None);
+    let bound = result
+        .document
+        .bound_formula
+        .as_ref()
+        .expect("editor bind should produce a bound formula");
+
+    assert_eq!(bound.normalized_references.len(), 1);
+    match &bound.normalized_references[0] {
+        NormalizedReference::ProfileSymbolic(record) => {
+            assert_eq!(record.profile_id, "editor.symbolic.v1");
+            assert_eq!(record.normal_form_key.0, "editor-cell:A1");
+        }
+        other => panic!("expected editor profile symbolic reference, got {other:?}"),
+    }
+}
+
+#[test]
+fn validate_completion_uses_editor_environment_reference_profile() {
+    let profile = EditorSymbolicProfile;
+    let source = FormulaSourceRecord::new("editor-profile-completion", 1, "=B1");
+    let service = EditorEditService::new(
+        EditorEnvironment::new(editor_bind_context(source.clone()))
+            .with_reference_bind_profile(&profile),
+    );
+    let opened = service.apply_edit(source, None, EditorAnalysisStage::SyntaxAndBind, None);
+
+    let result = service.validate_completion(
+        &opened.document,
+        Some(TextSpan::new(1, 2)),
+        "A1",
+        EditorAnalysisStage::SyntaxAndBind,
+        None,
+    );
+    let bound = result
+        .interaction_result
+        .document
+        .bound_formula
+        .as_ref()
+        .expect("completion validation should produce a bound formula");
+
+    assert_eq!(bound.normalized_references.len(), 1);
+    match &bound.normalized_references[0] {
+        NormalizedReference::ProfileSymbolic(record) => {
+            assert_eq!(record.profile_id, "editor.symbolic.v1");
+            assert_eq!(record.normal_form_key.0, "editor-cell:A1");
+        }
+        other => panic!("expected editor profile symbolic reference, got {other:?}"),
+    }
 }
 
 #[test]
@@ -1185,6 +1283,16 @@ fn collect_green_tokens_recursive(
             GreenChild::Token(token) => tokens.push(token.clone()),
         }
     }
+}
+
+fn looks_like_cell_ref(text: &str) -> bool {
+    let split = text
+        .find(|ch: char| ch.is_ascii_digit())
+        .unwrap_or(text.len());
+    split > 0
+        && split < text.len()
+        && text[..split].chars().all(|ch| ch.is_ascii_alphabetic())
+        && text[split..].chars().all(|ch| ch.is_ascii_digit())
 }
 
 fn test_udf_entry() -> FunctionEntry {

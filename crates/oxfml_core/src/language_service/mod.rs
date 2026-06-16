@@ -1,6 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 
-use crate::binding::{BindContext, BindRequest, BoundFormula, bind_formula_incremental};
+use crate::binding::{
+    BindContext, BindRequest, BoundFormula, ReferenceBindProfile, bind_formula_incremental,
+};
 use crate::consumer::editor::{
     CompletionProposal, CompletionProposalKind, CompletionResult, EditorAnalysisStage,
     EditorPlanOptions, EditorSyntaxSnapshot, EditorToken, EditorTrivia, EditorTriviaKind,
@@ -18,15 +21,42 @@ use oxfunc_core::registry::{
     CapabilityOverlay, FunctionAvailability, FunctionEntry, FunctionRegistry,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct FormulaEditRequest<'a> {
     pub source: FormulaSourceRecord,
     pub bind_context: BindContext,
     pub previous_green_tree: Option<&'a GreenTreeRoot>,
     pub previous_red_projection: Option<&'a RedProjection>,
     pub previous_bound_formula: Option<&'a BoundFormula>,
+    pub reference_bind_profile: Option<&'a dyn ReferenceBindProfile>,
     pub analysis_stage: EditorAnalysisStage,
     pub plan_options: Option<EditorPlanOptions>,
+}
+
+impl fmt::Debug for FormulaEditRequest<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FormulaEditRequest")
+            .field("source", &self.source)
+            .field("bind_context", &self.bind_context)
+            .field("previous_green_tree", &self.previous_green_tree.is_some())
+            .field(
+                "previous_red_projection",
+                &self.previous_red_projection.is_some(),
+            )
+            .field(
+                "previous_bound_formula",
+                &self.previous_bound_formula.is_some(),
+            )
+            .field(
+                "reference_bind_profile",
+                &self
+                    .reference_bind_profile
+                    .map(|profile| profile.profile_id()),
+            )
+            .field("analysis_stage", &self.analysis_stage)
+            .field("plan_options", &self.plan_options)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,17 +72,46 @@ pub struct FormulaEditResult {
     pub reuse_summary: FormulaEditReuseSummary,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct CompletionValidationRequest<'a> {
     pub source: FormulaSourceRecord,
     pub bind_context: BindContext,
     pub previous_green_tree: Option<&'a GreenTreeRoot>,
     pub previous_red_projection: Option<&'a RedProjection>,
     pub previous_bound_formula: Option<&'a BoundFormula>,
+    pub reference_bind_profile: Option<&'a dyn ReferenceBindProfile>,
     pub replacement_span: Option<TextSpan>,
     pub insert_text: String,
     pub analysis_stage: EditorAnalysisStage,
     pub plan_options: Option<EditorPlanOptions>,
+}
+
+impl fmt::Debug for CompletionValidationRequest<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CompletionValidationRequest")
+            .field("source", &self.source)
+            .field("bind_context", &self.bind_context)
+            .field("previous_green_tree", &self.previous_green_tree.is_some())
+            .field(
+                "previous_red_projection",
+                &self.previous_red_projection.is_some(),
+            )
+            .field(
+                "previous_bound_formula",
+                &self.previous_bound_formula.is_some(),
+            )
+            .field(
+                "reference_bind_profile",
+                &self
+                    .reference_bind_profile
+                    .map(|profile| profile.profile_id()),
+            )
+            .field("replacement_span", &self.replacement_span)
+            .field("insert_text", &self.insert_text)
+            .field("analysis_stage", &self.analysis_stage)
+            .field("plan_options", &self.plan_options)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -142,7 +201,7 @@ pub(crate) fn apply_formula_edit(request: FormulaEditRequest<'_>) -> FormulaEdit
 
                     host_name_resolver: None,
 
-                    reference_bind_profile: None,
+                    reference_bind_profile: request.reference_bind_profile,
                 },
                 request.previous_bound_formula,
             );
@@ -229,6 +288,7 @@ pub(crate) fn validate_completion_candidate(
         previous_green_tree: request.previous_green_tree,
         previous_red_projection: request.previous_red_projection,
         previous_bound_formula: request.previous_bound_formula,
+        reference_bind_profile: request.reference_bind_profile,
         analysis_stage: request.analysis_stage,
         plan_options: request.plan_options,
     });
