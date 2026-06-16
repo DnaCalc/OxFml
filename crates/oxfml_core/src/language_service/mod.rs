@@ -2,7 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use crate::binding::{
-    BindContext, BindRequest, BoundFormula, ReferenceBindProfile, bind_formula_incremental,
+    BindContext, BindRequest, BoundFormula, ReferenceBindProfile, ReferenceCompletionRequest,
+    ReferenceEditorContext, bind_formula_incremental,
 };
 use crate::consumer::editor::{
     CompletionProposal, CompletionProposalKind, CompletionResult, EditorAnalysisStage,
@@ -131,6 +132,7 @@ pub struct CompletionRequest<'a> {
     pub library_context: PinnedLibraryContextView<'a>,
     pub function_registry: &'a FunctionRegistry,
     pub capability_overlay: Option<&'a CapabilityOverlay>,
+    pub reference_bind_profile: Option<&'a dyn ReferenceBindProfile>,
     pub cursor_offset: usize,
 }
 
@@ -386,6 +388,7 @@ pub(crate) fn collect_completion_proposals(request: CompletionRequest<'_>) -> Co
                         insert_text: assist.to_string(),
                         replacement_span: Some(replacement_span),
                         documentation_ref: Some("syntax:r1c1".to_string()),
+                        profile_payload: None,
                         requires_revalidation: true,
                     },
                 );
@@ -409,6 +412,7 @@ pub(crate) fn collect_completion_proposals(request: CompletionRequest<'_>) -> Co
                         insert_text: selector.to_string(),
                         replacement_span: Some(replacement_span),
                         documentation_ref: None,
+                        profile_payload: None,
                         requires_revalidation: true,
                     },
                 );
@@ -442,6 +446,7 @@ pub(crate) fn collect_completion_proposals(request: CompletionRequest<'_>) -> Co
                             insert_text: column.column_name.clone(),
                             replacement_span: Some(replacement_span),
                             documentation_ref: None,
+                            profile_payload: None,
                             requires_revalidation: true,
                         },
                     );
@@ -463,6 +468,7 @@ pub(crate) fn collect_completion_proposals(request: CompletionRequest<'_>) -> Co
                     insert_text: name.clone(),
                     replacement_span: Some(replacement_span),
                     documentation_ref: None,
+                    profile_payload: None,
                     requires_revalidation: true,
                 },
             );
@@ -486,6 +492,7 @@ pub(crate) fn collect_completion_proposals(request: CompletionRequest<'_>) -> Co
                     insert_text: table.table_name.clone(),
                     replacement_span: Some(replacement_span),
                     documentation_ref: None,
+                    profile_payload: None,
                     requires_revalidation: true,
                 },
             );
@@ -498,6 +505,12 @@ pub(crate) fn collect_completion_proposals(request: CompletionRequest<'_>) -> Co
         request.capability_overlay,
         &normalized_prefix,
         replacement_span,
+    );
+    collect_profile_reference_completion_proposals(
+        &mut proposals,
+        &request,
+        replacement_span,
+        &prefix,
     );
 
     CompletionResult {
@@ -638,9 +651,65 @@ fn insert_function_completion_proposal(
             insert_text: entry.surface_name.clone(),
             replacement_span: Some(replacement_span),
             documentation_ref: entry.registry_metadata.interface_contract_ref.clone(),
+            profile_payload: None,
             requires_revalidation: true,
         },
     );
+}
+
+fn collect_profile_reference_completion_proposals(
+    proposals: &mut BTreeMap<(u8, String), CompletionProposal>,
+    request: &CompletionRequest<'_>,
+    replacement_span: TextSpan,
+    prefix: &str,
+) {
+    let Some(profile) = request.reference_bind_profile else {
+        return;
+    };
+
+    let profile_result = profile.reference_completion_proposals(&ReferenceCompletionRequest {
+        editor_context: ReferenceEditorContext {
+            source_channel: request.source.formula_channel_kind,
+            formula_text: request.source.entered_formula_text.clone(),
+            cursor_offset: request.cursor_offset,
+            workbook_id: request.bind_context.workbook_id.clone(),
+            sheet_id: request.bind_context.sheet_id.clone(),
+            caller_row: request.bind_context.caller_row,
+            caller_col: request.bind_context.caller_col,
+            formula_token: request.bind_context.formula_token.0.clone(),
+            structure_context_version: request.bind_context.structure_context_version.0.clone(),
+        },
+        replacement_span,
+        prefix: prefix.to_string(),
+    });
+
+    for profile_proposal in profile_result.proposals {
+        let proposal = CompletionProposal {
+            proposal_id: format!(
+                "profile-reference:{}:{}",
+                profile.profile_id(),
+                profile_proposal.proposal_id
+            ),
+            proposal_kind: CompletionProposalKind::ProfileReference,
+            display_text: profile_proposal.display_text,
+            insert_text: profile_proposal.insert_text,
+            replacement_span: profile_proposal.replacement_span.or(Some(replacement_span)),
+            documentation_ref: profile_proposal.documentation_ref,
+            profile_payload: profile_proposal.profile_payload,
+            requires_revalidation: profile_proposal.requires_revalidation,
+        };
+        proposals.insert(
+            (
+                5,
+                format!(
+                    "{}:{}",
+                    proposal.display_text.to_ascii_lowercase(),
+                    proposal.proposal_id.to_ascii_lowercase()
+                ),
+            ),
+            proposal,
+        );
+    }
 }
 
 /// Return the byte offset just past a call's closing `)` token when

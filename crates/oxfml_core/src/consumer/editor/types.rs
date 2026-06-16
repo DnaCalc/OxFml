@@ -1,3 +1,4 @@
+use crate::binding::ProfilePayload;
 use crate::semantics::LibraryContextSnapshot;
 use crate::source::{FormulaChannelKind, FormulaSourceRecord};
 use crate::syntax::green::SyntaxKind;
@@ -113,6 +114,7 @@ pub enum CompletionProposalKind {
     TableColumn,
     StructuredSelector,
     SyntaxAssist,
+    ProfileReference,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -123,6 +125,7 @@ pub struct CompletionProposal {
     pub insert_text: String,
     pub replacement_span: Option<TextSpan>,
     pub documentation_ref: Option<String>,
+    pub profile_payload: Option<ProfilePayload>,
     pub requires_revalidation: bool,
 }
 

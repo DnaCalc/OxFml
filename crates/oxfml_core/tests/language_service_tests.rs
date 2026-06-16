@@ -1,6 +1,7 @@
 use oxfml_core::binding::{
     BindContext, BoundExpr, NameKind, NormalizedReference, ProfilePayload, ProfileReferenceRecord,
     ProfileVersion, ReferenceAtomBindRequest, ReferenceAtomBindResult, ReferenceBindProfile,
+    ReferenceCompletionProposal, ReferenceCompletionRequest, ReferenceCompletionResult,
     ReferenceNormalFormKey, ReferencePolicy, ReferenceSourceInfo, ReferenceValidity,
 };
 use oxfml_core::consumer::editor::{
@@ -60,6 +61,95 @@ impl ReferenceBindProfile for EditorSymbolicProfile {
             render_hint: Some(request.source_text.clone()),
             validity: ReferenceValidity::ValidAfterInstantiation,
         })
+    }
+
+    fn reference_completion_proposals(
+        &self,
+        request: &ReferenceCompletionRequest,
+    ) -> ReferenceCompletionResult {
+        let display_text = "EditorA1";
+        if !display_text
+            .to_ascii_lowercase()
+            .starts_with(&request.prefix.to_ascii_lowercase())
+        {
+            return ReferenceCompletionResult {
+                proposals: Vec::new(),
+                diagnostics: Vec::new(),
+            };
+        }
+
+        ReferenceCompletionResult {
+            proposals: vec![ReferenceCompletionProposal {
+                proposal_id: format!(
+                    "editor-ref:{}:{}:{}:{}",
+                    request.editor_context.workbook_id,
+                    request.editor_context.sheet_id,
+                    request.editor_context.caller_row,
+                    request.editor_context.caller_col
+                ),
+                display_text: display_text.to_string(),
+                insert_text: "A1".to_string(),
+                replacement_span: Some(request.replacement_span),
+                documentation_ref: Some("profile:editor.symbolic.v1".to_string()),
+                profile_payload: Some(ProfilePayload::textual(
+                    "editor-completion-context",
+                    format!(
+                        "{}:{}:{}:{}:{:?}",
+                        request.editor_context.formula_token,
+                        request.editor_context.structure_context_version,
+                        request.editor_context.formula_text,
+                        request.editor_context.cursor_offset,
+                        request.editor_context.source_channel
+                    ),
+                )),
+                requires_revalidation: true,
+            }],
+            diagnostics: Vec::new(),
+        }
+    }
+}
+
+struct DuplicateDisplayReferenceCompletionProfile;
+
+impl ReferenceBindProfile for DuplicateDisplayReferenceCompletionProfile {
+    fn profile_id(&self) -> &str {
+        "editor.duplicate-display.v1"
+    }
+
+    fn reference_completion_proposals(
+        &self,
+        request: &ReferenceCompletionRequest,
+    ) -> ReferenceCompletionResult {
+        if !"sharedref".starts_with(&request.prefix.to_ascii_lowercase()) {
+            return ReferenceCompletionResult {
+                proposals: Vec::new(),
+                diagnostics: Vec::new(),
+            };
+        }
+
+        ReferenceCompletionResult {
+            proposals: vec![
+                ReferenceCompletionProposal {
+                    proposal_id: "sheet-one".to_string(),
+                    display_text: "SharedRef".to_string(),
+                    insert_text: "Sheet1!A1".to_string(),
+                    replacement_span: Some(request.replacement_span),
+                    documentation_ref: None,
+                    profile_payload: Some(ProfilePayload::textual("sheet", "one")),
+                    requires_revalidation: true,
+                },
+                ReferenceCompletionProposal {
+                    proposal_id: "sheet-two".to_string(),
+                    display_text: "SharedRef".to_string(),
+                    insert_text: "Sheet2!A1".to_string(),
+                    replacement_span: Some(request.replacement_span),
+                    documentation_ref: None,
+                    profile_payload: Some(ProfilePayload::textual("sheet", "two")),
+                    requires_revalidation: true,
+                },
+            ],
+            diagnostics: Vec::new(),
+        }
     }
 }
 
@@ -763,6 +853,98 @@ fn completion_proposals_include_r1c1_syntax_assists_in_r1c1_channel() {
         proposal.proposal_kind == CompletionProposalKind::SyntaxAssist
             && proposal.display_text == "RC"
     }));
+}
+
+#[test]
+fn completion_proposals_include_profile_reference_suggestions() {
+    let profile = EditorSymbolicProfile;
+    let source = FormulaSourceRecord::new("editor-profile-reference-complete", 1, "=Ed");
+    let service = EditorEditService::new(
+        EditorEnvironment::new(editor_bind_context(source.clone()))
+            .with_reference_bind_profile(&profile),
+    );
+
+    let document = service.open_document(source.clone(), None);
+    let result =
+        service.completion_at_cursor(&document, source.entered_formula_text.chars().count());
+    let proposal = result
+        .proposals
+        .iter()
+        .find(|proposal| {
+            proposal.proposal_kind == CompletionProposalKind::ProfileReference
+                && proposal.display_text == "EditorA1"
+        })
+        .expect("profile reference completion should be surfaced");
+
+    assert_eq!(
+        proposal.proposal_id,
+        "profile-reference:editor.symbolic.v1:editor-ref:book:editor:sheet:editor:1:1"
+    );
+    assert_eq!(proposal.insert_text, "A1");
+    assert_eq!(proposal.replacement_span, Some(TextSpan::new(1, 2)));
+    assert_eq!(
+        proposal.documentation_ref.as_deref(),
+        Some("profile:editor.symbolic.v1")
+    );
+    assert_eq!(
+        proposal
+            .profile_payload
+            .as_ref()
+            .map(|payload| payload.payload_kind.as_str()),
+        Some("editor-completion-context")
+    );
+    let expected_payload = format!(
+        "{}:editor-struct-v1:=Ed:3:WorksheetA1",
+        source.formula_token().0
+    );
+    assert_eq!(
+        proposal
+            .profile_payload
+            .as_ref()
+            .map(|payload| payload.data.as_str()),
+        Some(expected_payload.as_str())
+    );
+    assert!(proposal.requires_revalidation);
+}
+
+#[test]
+fn profile_reference_completions_preserve_duplicate_display_texts() {
+    let profile = DuplicateDisplayReferenceCompletionProfile;
+    let source = FormulaSourceRecord::new("editor-profile-duplicate-complete", 1, "=Sh");
+    let service = EditorEditService::new(
+        EditorEnvironment::new(editor_bind_context(source.clone()))
+            .with_reference_bind_profile(&profile),
+    );
+
+    let document = service.open_document(source.clone(), None);
+    let result =
+        service.completion_at_cursor(&document, source.entered_formula_text.chars().count());
+    let profile_proposals = result
+        .proposals
+        .iter()
+        .filter(|proposal| {
+            proposal.proposal_kind == CompletionProposalKind::ProfileReference
+                && proposal.display_text == "SharedRef"
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(profile_proposals.len(), 2);
+    assert_eq!(profile_proposals[0].insert_text, "Sheet1!A1");
+    assert_eq!(profile_proposals[1].insert_text, "Sheet2!A1");
+    assert_eq!(
+        profile_proposals[0]
+            .profile_payload
+            .as_ref()
+            .map(|payload| payload.data.as_str()),
+        Some("one")
+    );
+    assert_eq!(
+        profile_proposals[1]
+            .profile_payload
+            .as_ref()
+            .map(|payload| payload.data.as_str()),
+        Some("two")
+    );
 }
 
 #[test]

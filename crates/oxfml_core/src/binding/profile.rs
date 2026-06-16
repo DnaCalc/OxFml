@@ -272,6 +272,43 @@ pub struct ReferenceRenderResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceEditorContext {
+    pub source_channel: FormulaChannelKind,
+    pub formula_text: String,
+    pub cursor_offset: usize,
+    pub workbook_id: String,
+    pub sheet_id: String,
+    pub caller_row: u32,
+    pub caller_col: u32,
+    pub formula_token: String,
+    pub structure_context_version: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceCompletionRequest {
+    pub editor_context: ReferenceEditorContext,
+    pub replacement_span: TextSpan,
+    pub prefix: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceCompletionProposal {
+    pub proposal_id: String,
+    pub display_text: String,
+    pub insert_text: String,
+    pub replacement_span: Option<TextSpan>,
+    pub documentation_ref: Option<String>,
+    pub profile_payload: Option<ProfilePayload>,
+    pub requires_revalidation: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceCompletionResult {
+    pub proposals: Vec<ReferenceCompletionProposal>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReferenceInstantiationRequest {
     pub bound_reference: ProfileReferenceRecord,
     pub runtime_host_formula_context: RuntimeHostFormulaContext,
@@ -445,6 +482,16 @@ pub trait ReferenceBindProfile {
     fn render_reference(&self, request: &ReferenceRenderRequest) -> ReferenceRenderResult {
         ReferenceRenderResult {
             rendered_text: request.reference.render_hint.clone(),
+            diagnostics: Vec::new(),
+        }
+    }
+
+    fn reference_completion_proposals(
+        &self,
+        _request: &ReferenceCompletionRequest,
+    ) -> ReferenceCompletionResult {
+        ReferenceCompletionResult {
+            proposals: Vec::new(),
             diagnostics: Vec::new(),
         }
     }

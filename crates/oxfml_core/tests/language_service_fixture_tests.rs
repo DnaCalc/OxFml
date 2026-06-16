@@ -198,6 +198,7 @@ fn completion_kind_name(kind: CompletionProposalKind) -> &'static str {
         CompletionProposalKind::TableColumn => "TableColumn",
         CompletionProposalKind::StructuredSelector => "StructuredSelector",
         CompletionProposalKind::SyntaxAssist => "SyntaxAssist",
+        CompletionProposalKind::ProfileReference => "ProfileReference",
     }
 }
 
