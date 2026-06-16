@@ -1,4 +1,4 @@
-use crate::binding::ProfilePayload;
+use crate::binding::{ProfilePayload, ProfileReferenceRecord};
 use crate::semantics::LibraryContextSnapshot;
 use crate::source::{FormulaChannelKind, FormulaSourceRecord};
 use crate::syntax::green::SyntaxKind;
@@ -142,6 +142,16 @@ pub struct CompletionResult {
     pub replacement_span: Option<TextSpan>,
     pub proposals: Vec<CompletionProposal>,
     pub signature_help_context: Option<SignatureHelpContext>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EditorReferenceInfo {
+    pub formula_stable_id: String,
+    pub source_span: TextSpan,
+    pub source_text: String,
+    pub profile_record: ProfileReferenceRecord,
+    pub rendered_text: Option<String>,
+    pub diagnostics: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

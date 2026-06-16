@@ -5,10 +5,11 @@ use crate::language_service::{
     CompletionRequest, CompletionValidationRequest, CompletionValidationResult, FormulaEditRequest,
     FormulaEditResult, apply_completion_proposal, apply_formula_edit,
     build_function_help_lookup_request, build_intelligent_completion_context,
-    collect_completion_proposals, signature_help_context_at_cursor, validate_completion_candidate,
+    build_profile_reference_info_at_cursor, collect_completion_proposals,
+    signature_help_context_at_cursor, validate_completion_candidate,
 };
 use crate::semantics::LibraryContextSnapshot;
-use crate::source::FormulaSourceRecord;
+use crate::source::{FormulaChannelKind, FormulaSourceRecord};
 use oxfunc_core::registry::{
     CapabilityOverlay, FunctionAvailability, FunctionEntry, FunctionRegistry, SignatureForm,
     builtin_registry,
@@ -20,8 +21,8 @@ pub use types::{
     CompletionProposal, CompletionProposalKind, CompletionResult, EditorAnalysisStage,
     EditorDocument, EditorHostReferenceInsertionError, EditorHostReferenceInsertionRequest,
     EditorHostReferenceInsertionResult, EditorHostReferenceTarget, EditorPlanOptions,
-    EditorSyntaxSnapshot, EditorToken, EditorTrivia, EditorTriviaKind, FormulaEditReuseSummary,
-    FormulaTextChangeRange, FunctionHelpPacket, FunctionHelpSignatureForm,
+    EditorReferenceInfo, EditorSyntaxSnapshot, EditorToken, EditorTrivia, EditorTriviaKind,
+    FormulaEditReuseSummary, FormulaTextChangeRange, FunctionHelpPacket, FunctionHelpSignatureForm,
     IntelligentCompletionContext, LiveDiagnostic, LiveDiagnosticSeverity, LiveDiagnosticSnapshot,
     LiveDiagnosticStage, SignatureHelpContext,
 };
@@ -129,6 +130,7 @@ pub struct EditorInteractionResult {
     pub signature_help_context: Option<SignatureHelpContext>,
     pub function_help_packet: Option<FunctionHelpPacket>,
     pub intelligent_completion_context: Option<IntelligentCompletionContext>,
+    pub reference_info: Option<EditorReferenceInfo>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -196,6 +198,7 @@ impl<'a> EditorEditService<'a> {
             signature_help_context: None,
             function_help_packet: None,
             intelligent_completion_context: None,
+            reference_info: None,
         }
     }
 
@@ -241,6 +244,7 @@ impl<'a> EditorEditService<'a> {
             },
             &document.live_diagnostics,
         ));
+        let reference_info = self.reference_info_at_cursor(document, cursor_offset, None);
 
         EditorInteractionResult {
             document: document.clone(),
@@ -248,6 +252,7 @@ impl<'a> EditorEditService<'a> {
             signature_help_context,
             function_help_packet,
             intelligent_completion_context,
+            reference_info,
         }
     }
 
@@ -287,6 +292,21 @@ impl<'a> EditorEditService<'a> {
         self.interact_at_cursor(document, cursor_offset)
             .intelligent_completion_context
             .expect("intelligent completion context should be produced for an editor interaction")
+    }
+
+    pub fn reference_info_at_cursor(
+        &self,
+        document: &EditorDocument,
+        cursor_offset: usize,
+        target_channel: Option<FormulaChannelKind>,
+    ) -> Option<EditorReferenceInfo> {
+        build_profile_reference_info_at_cursor(
+            &document.source,
+            document.bound_formula.as_ref(),
+            self.environment.reference_bind_profile,
+            cursor_offset,
+            target_channel.unwrap_or(document.source.formula_channel_kind),
+        )
     }
 
     pub fn validate_completion(

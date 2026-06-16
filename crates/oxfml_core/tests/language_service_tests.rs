@@ -2,7 +2,8 @@ use oxfml_core::binding::{
     BindContext, BoundExpr, NameKind, NormalizedReference, ProfilePayload, ProfileReferenceRecord,
     ProfileVersion, ReferenceAtomBindRequest, ReferenceAtomBindResult, ReferenceBindProfile,
     ReferenceCompletionProposal, ReferenceCompletionRequest, ReferenceCompletionResult,
-    ReferenceNormalFormKey, ReferencePolicy, ReferenceSourceInfo, ReferenceValidity,
+    ReferenceNormalFormKey, ReferencePolicy, ReferenceRenderRequest, ReferenceRenderResult,
+    ReferenceSourceInfo, ReferenceValidity,
 };
 use oxfml_core::consumer::editor::{
     CompletionProposalKind, EditorAnalysisStage, EditorEditService, EditorEnvironment,
@@ -105,6 +106,16 @@ impl ReferenceBindProfile for EditorSymbolicProfile {
                 requires_revalidation: true,
             }],
             diagnostics: Vec::new(),
+        }
+    }
+
+    fn render_reference(&self, request: &ReferenceRenderRequest) -> ReferenceRenderResult {
+        ReferenceRenderResult {
+            rendered_text: Some(format!(
+                "{}::{:?}",
+                request.reference.normal_form_key.0, request.target_channel
+            )),
+            diagnostics: vec![format!("rendered-by:{}", self.profile_id())],
         }
     }
 }
@@ -504,6 +515,49 @@ fn apply_formula_edit_uses_editor_environment_reference_profile() {
         }
         other => panic!("expected editor profile symbolic reference, got {other:?}"),
     }
+}
+
+#[test]
+fn editor_reference_info_uses_profile_rendering_at_cursor() {
+    let profile = EditorSymbolicProfile;
+    let source = FormulaSourceRecord::new("editor-profile-info", 1, "=A1");
+    let service = EditorEditService::new(
+        EditorEnvironment::new(editor_bind_context(source.clone()))
+            .with_reference_bind_profile(&profile),
+    );
+
+    let document = service.open_document(source, None);
+    let default_info = service
+        .reference_info_at_cursor(&document, 2, None)
+        .expect("cursor should be on the profile symbolic reference");
+
+    assert_eq!(default_info.formula_stable_id, "editor-profile-info");
+    assert_eq!(default_info.source_span, TextSpan::new(1, 2));
+    assert_eq!(default_info.source_text, "A1");
+    assert_eq!(default_info.profile_record.profile_id, "editor.symbolic.v1");
+    assert_eq!(
+        default_info.profile_record.normal_form_key.0,
+        "editor-cell:A1"
+    );
+    assert_eq!(
+        default_info.rendered_text.as_deref(),
+        Some("editor-cell:A1::WorksheetA1")
+    );
+    assert_eq!(
+        default_info.diagnostics,
+        vec!["rendered-by:editor.symbolic.v1"]
+    );
+
+    let r1c1_info = service
+        .reference_info_at_cursor(&document, 2, Some(FormulaChannelKind::WorksheetR1C1))
+        .expect("target channel override should render through the profile");
+    assert_eq!(
+        r1c1_info.rendered_text.as_deref(),
+        Some("editor-cell:A1::WorksheetR1C1")
+    );
+
+    let interaction = service.interact_at_cursor(&document, 2);
+    assert_eq!(interaction.reference_info, Some(default_info));
 }
 
 #[test]

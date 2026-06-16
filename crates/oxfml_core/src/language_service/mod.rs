@@ -2,14 +2,16 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use crate::binding::{
-    BindContext, BindRequest, BoundFormula, ReferenceBindProfile, ReferenceCompletionRequest,
-    ReferenceEditorContext, bind_formula_incremental,
+    BindContext, BindRequest, BoundFormula, NormalizedReference, ProfileReferenceRecord,
+    ReferenceBindProfile, ReferenceCompletionRequest, ReferenceEditorContext,
+    ReferenceRenderRequest, bind_formula_incremental,
 };
 use crate::consumer::editor::{
     CompletionProposal, CompletionProposalKind, CompletionResult, EditorAnalysisStage,
-    EditorPlanOptions, EditorSyntaxSnapshot, EditorToken, EditorTrivia, EditorTriviaKind,
-    FormulaEditReuseSummary, FormulaTextChangeRange, IntelligentCompletionContext, LiveDiagnostic,
-    LiveDiagnosticSeverity, LiveDiagnosticSnapshot, LiveDiagnosticStage, SignatureHelpContext,
+    EditorPlanOptions, EditorReferenceInfo, EditorSyntaxSnapshot, EditorToken, EditorTrivia,
+    EditorTriviaKind, FormulaEditReuseSummary, FormulaTextChangeRange,
+    IntelligentCompletionContext, LiveDiagnostic, LiveDiagnosticSeverity, LiveDiagnosticSnapshot,
+    LiveDiagnosticStage, SignatureHelpContext,
 };
 use crate::interface::{LibraryContextSnapshotRef, PinnedLibraryContextView};
 use crate::red::{RedProjection, project_red_view_incremental};
@@ -550,6 +552,35 @@ pub(crate) fn build_intelligent_completion_context(
     }
 }
 
+pub(crate) fn build_profile_reference_info_at_cursor(
+    source: &FormulaSourceRecord,
+    bound_formula: Option<&BoundFormula>,
+    reference_bind_profile: Option<&dyn ReferenceBindProfile>,
+    cursor_offset: usize,
+    target_channel: FormulaChannelKind,
+) -> Option<EditorReferenceInfo> {
+    let bound_formula = bound_formula?;
+    let profile = reference_bind_profile?;
+    let record = profile_reference_at_cursor(
+        &bound_formula.normalized_references,
+        profile.profile_id(),
+        cursor_offset,
+    )?;
+    let render = profile.render_reference(&ReferenceRenderRequest {
+        reference: record.clone(),
+        target_channel,
+    });
+
+    Some(EditorReferenceInfo {
+        formula_stable_id: source.formula_stable_id.0.clone(),
+        source_span: record.source_info.source_span,
+        source_text: record.source_info.source_text.clone(),
+        profile_record: record.clone(),
+        rendered_text: render.rendered_text,
+        diagnostics: render.diagnostics,
+    })
+}
+
 pub(crate) fn signature_help_context_at_cursor(
     source: &FormulaSourceRecord,
     green_tree: &GreenTreeRoot,
@@ -710,6 +741,25 @@ fn collect_profile_reference_completion_proposals(
             proposal,
         );
     }
+}
+
+fn profile_reference_at_cursor<'a>(
+    references: &'a [NormalizedReference],
+    profile_id: &str,
+    cursor_offset: usize,
+) -> Option<&'a ProfileReferenceRecord> {
+    references
+        .iter()
+        .filter_map(|reference| match reference {
+            NormalizedReference::ProfileSymbolic(record)
+                if record.profile_id == profile_id
+                    && span_contains(record.source_info.source_span, cursor_offset) =>
+            {
+                Some(record)
+            }
+            _ => None,
+        })
+        .min_by_key(|record| record.source_info.source_span.len)
 }
 
 /// Return the byte offset just past a call's closing `)` token when
