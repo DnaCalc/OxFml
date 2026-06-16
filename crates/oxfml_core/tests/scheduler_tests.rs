@@ -149,6 +149,8 @@ fn contract_for(formula: &str) -> oxfml_core::ExecutionContract {
         },
 
         host_name_resolver: None,
+
+        reference_bind_profile: None,
     });
 
     let plan = oxfml_core::compile_semantic_plan(oxfml_core::CompileSemanticPlanRequest {

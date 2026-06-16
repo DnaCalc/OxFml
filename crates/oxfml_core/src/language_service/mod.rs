@@ -141,6 +141,8 @@ pub(crate) fn apply_formula_edit(request: FormulaEditRequest<'_>) -> FormulaEdit
                     context: request.bind_context.clone(),
 
                     host_name_resolver: None,
+
+                    reference_bind_profile: None,
                 },
                 request.previous_bound_formula,
             );

@@ -1061,6 +1061,18 @@ fn build_candidate_result(
                     structure_context_version: String::new(),
                     bind_context_fingerprint: String::new(),
                     bind_hash: semantic_plan.bind_hash.clone(),
+                    formula_source_identity: crate::binding::FormulaSourceIdentity {
+                        key: semantic_plan.bind_hash.clone(),
+                    },
+                    formula_template_identity: crate::binding::FormulaTemplateIdentity {
+                        key: semantic_plan.bind_hash.clone(),
+                    },
+                    placed_formula_identity: crate::binding::PlacedFormulaIdentity {
+                        key: semantic_plan.bind_hash.clone(),
+                    },
+                    runtime_dependency_identity: crate::binding::RuntimeDependencyIdentity {
+                        key: semantic_plan.bind_hash.clone(),
+                    },
                     root: crate::binding::BoundExpr::NumberLiteral("0".to_string()),
                     root_expression_is_grouped: false,
                     normalized_references: Vec::new(),

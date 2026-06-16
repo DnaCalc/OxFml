@@ -11,7 +11,8 @@ use oxfunc_core::value::{CalcValue, CoreValue, ExcelText, WorksheetErrorCode};
 
 use crate::binding::{
     BindContext, BindDiagnostic, BindFunctionSurfaceKind, BoundFormula, HostNameBindRecord,
-    HostNameResolver, NameKind, NormalizedReference, StructuredReferenceBindRecord, bind_formula,
+    HostNameResolver, NameKind, NormalizedReference, ReferenceBindProfile,
+    StructuredReferenceBindRecord, bind_formula,
 };
 use crate::consumer::ConsumerLibraryContextState;
 use crate::eval::{
@@ -168,6 +169,7 @@ pub struct RuntimeEnvironment<'a> {
     host_formula_context: Option<RuntimeHostFormulaContext>,
     host_name_bindings: Vec<RuntimeHostNameBinding>,
     host_name_resolver: Option<&'a dyn HostNameResolver>,
+    reference_bind_profile: Option<&'a dyn ReferenceBindProfile>,
     host_reference_bind_results: Vec<RuntimeHostReferenceBindResult>,
     table_catalog: Vec<TableDescriptor>,
     enclosing_table_ref: Option<TableRef>,
@@ -198,6 +200,7 @@ impl<'a> RuntimeEnvironment<'a> {
             host_formula_context: None,
             host_name_bindings: Vec::new(),
             host_name_resolver: None,
+            reference_bind_profile: None,
             host_reference_bind_results: Vec::new(),
             table_catalog: Vec::new(),
             enclosing_table_ref: None,
@@ -265,6 +268,7 @@ impl<'a> RuntimeEnvironment<'a> {
             red_projection,
             context: self.bind_context_for_source(&source),
             host_name_resolver: self.host_name_resolver,
+            reference_bind_profile: self.reference_bind_profile,
         });
         RuntimeAuthoredInputResult::Formula(bind.bound_formula)
     }
@@ -304,6 +308,7 @@ impl<'a> RuntimeEnvironment<'a> {
             red_projection,
             context: self.bind_context_for_source(&source),
             host_name_resolver: self.host_name_resolver,
+            reference_bind_profile: self.reference_bind_profile,
         });
         let profile_violations = self.dry_bind_profile_violations(&bind.bound_formula);
         let bind_diagnostics = bind.bound_formula.diagnostics;
@@ -449,6 +454,14 @@ impl<'a> RuntimeEnvironment<'a> {
 
     pub fn with_host_name_resolver(mut self, host_name_resolver: &'a dyn HostNameResolver) -> Self {
         self.host_name_resolver = Some(host_name_resolver);
+        self
+    }
+
+    pub fn with_reference_bind_profile(
+        mut self,
+        reference_bind_profile: &'a dyn ReferenceBindProfile,
+    ) -> Self {
+        self.reference_bind_profile = Some(reference_bind_profile);
         self
     }
 
@@ -606,11 +619,12 @@ impl<'a> RuntimeEnvironment<'a> {
         } else {
             self.library_context.pinned_view()
         };
-        let output = host.recalc_with_library_context_view(
+        let output = host.recalc_with_library_context_view_and_reference_bind_profile(
             request.backend(),
             request.typed_query_bundle,
             runtime_library_context_view,
             request.verification_publication_context(),
+            self.reference_bind_profile,
         )?;
         Ok(RuntimeFormulaResult::from_host_output(
             output,
@@ -3313,7 +3327,8 @@ fn runtime_structured_reference_record_handle_for_reference(
         | NormalizedReference::WholeRow(_)
         | NormalizedReference::WholeColumn(_)
         | NormalizedReference::Name(_)
-        | NormalizedReference::External(_) => None,
+        | NormalizedReference::External(_)
+        | NormalizedReference::ProfileSymbolic(_) => None,
     }
 }
 
@@ -3377,6 +3392,7 @@ fn runtime_template_hole_kind(reference: &NormalizedReference) -> &'static str {
         | NormalizedReference::Structured(_) => "ShapeSensitiveHole",
         NormalizedReference::External(_) => "RichValueHole",
         NormalizedReference::Error(_) => "UnresolvedReferenceHole",
+        NormalizedReference::ProfileSymbolic(_) => "ProfileReferenceHole",
         NormalizedReference::Cell(_)
         | NormalizedReference::Area(_)
         | NormalizedReference::Name(_) => "RefOrValueHole",
@@ -3401,6 +3417,7 @@ fn runtime_reference_family(reference: &NormalizedReference) -> &'static str {
             "relative_or_caller_sensitive"
         }
         NormalizedReference::Structured(_) => "direct",
+        NormalizedReference::ProfileSymbolic(_) => "profile_symbolic",
         NormalizedReference::Error(_) => "unresolved",
     }
 }
@@ -3414,6 +3431,7 @@ fn runtime_reference_caller_context_dependent(reference: &NormalizedReference) -
         NormalizedReference::WholeRow(_)
         | NormalizedReference::WholeColumn(_)
         | NormalizedReference::External(_)
+        | NormalizedReference::ProfileSymbolic(_)
         | NormalizedReference::Error(_) => false,
     }
 }
@@ -3662,6 +3680,7 @@ fn compile_runtime_prepare_request(
         red_projection,
         context: environment.bind_context_for_source(&source),
         host_name_resolver: environment.host_name_resolver,
+        reference_bind_profile: environment.reference_bind_profile,
     });
     let library_context_view = environment.library_context.pinned_view();
     let base_library_context_snapshot = library_context_view.resolve_snapshot();

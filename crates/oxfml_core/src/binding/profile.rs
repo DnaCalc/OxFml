@@ -1,0 +1,358 @@
+use crate::source::FormulaChannelKind;
+use crate::syntax::token::TextSpan;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ProfileVersion(pub String);
+
+impl ProfileVersion {
+    pub fn v1() -> Self {
+        Self("v1".to_string())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ReferenceProfileFingerprint(pub String);
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ReferenceNormalFormKey(pub String);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ReferencePolicy {
+    FormulaOnly,
+    LegacyCompatibility,
+    ProfileSymbolic,
+    HostExtended,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ReferenceFingerprintPolicy {
+    IncludeCallerAnchor,
+    ExcludeCallerAnchorForTemplate,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ReferenceSyntaxCapabilities {
+    pub a1_references: bool,
+    pub r1c1_references: bool,
+    pub host_references: bool,
+    pub structured_references: bool,
+    pub spill_references: bool,
+}
+
+impl ReferenceSyntaxCapabilities {
+    pub const fn worksheet_legacy() -> Self {
+        Self {
+            a1_references: true,
+            r1c1_references: true,
+            host_references: false,
+            structured_references: true,
+            spill_references: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BindProfile {
+    pub profile_id: String,
+    pub profile_version: ProfileVersion,
+    pub reference_policy: ReferencePolicy,
+    pub fingerprint_policy: ReferenceFingerprintPolicy,
+    pub syntax_capabilities: ReferenceSyntaxCapabilities,
+}
+
+impl BindProfile {
+    pub fn legacy_compatibility() -> Self {
+        Self {
+            profile_id: "formula-legacy".to_string(),
+            profile_version: ProfileVersion::v1(),
+            reference_policy: ReferencePolicy::LegacyCompatibility,
+            fingerprint_policy: ReferenceFingerprintPolicy::IncludeCallerAnchor,
+            syntax_capabilities: ReferenceSyntaxCapabilities::worksheet_legacy(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ReferenceOperatorCapabilities {
+    pub range: bool,
+    pub union: bool,
+    pub intersection: bool,
+    pub spill: bool,
+}
+
+impl ReferenceOperatorCapabilities {
+    pub const fn worksheet_legacy() -> Self {
+        Self {
+            range: true,
+            union: true,
+            intersection: true,
+            spill: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ReferenceValidity {
+    ValidNow,
+    ValidAfterInstantiation,
+    InvalidStatic,
+    InvalidForCurrentPlacement,
+    DynamicOrHostSensitive,
+    Unsupported,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ReferenceSourceInfo {
+    pub source_channel: FormulaChannelKind,
+    pub source_span: TextSpan,
+    pub source_text: String,
+    pub parsed_qualifier: Option<String>,
+    pub address_fidelity: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ProfilePayload {
+    pub payload_kind: String,
+    pub encoding: String,
+    pub data: String,
+}
+
+impl ProfilePayload {
+    pub fn textual(payload_kind: impl Into<String>, data: impl Into<String>) -> Self {
+        Self {
+            payload_kind: payload_kind.into(),
+            encoding: "text".to_string(),
+            data: data.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ProfileReferenceRecord {
+    pub profile_id: String,
+    pub profile_version: ProfileVersion,
+    pub source_info: ReferenceSourceInfo,
+    pub profile_payload: ProfilePayload,
+    pub normal_form_key: ReferenceNormalFormKey,
+    pub render_hint: Option<String>,
+    pub validity: ReferenceValidity,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceProfileFingerprintContext {
+    pub workbook_id: String,
+    pub sheet_id: String,
+    pub caller_row: u32,
+    pub caller_col: u32,
+    pub structure_context_version: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceAtomBindRequest {
+    pub source_channel: FormulaChannelKind,
+    pub source_span: TextSpan,
+    pub source_text: String,
+    pub parsed_qualifier: Option<String>,
+    pub workbook_id: String,
+    pub sheet_id: String,
+    pub caller_row: u32,
+    pub caller_col: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReferenceAtomBindResult {
+    Bound(ProfileReferenceRecord),
+    LegacyCompatibility,
+    Rejected {
+        validity: ReferenceValidity,
+        message: String,
+    },
+    Unsupported,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReferenceDependencyEnvelope {
+    None,
+    Static {
+        profile_id: String,
+        dependency_key: String,
+    },
+    Dynamic {
+        profile_id: String,
+        request_key: String,
+    },
+    HostSensitive {
+        profile_id: String,
+        reason: String,
+    },
+    Unsupported {
+        reason: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReferenceTransformKind {
+    StructuralEdit,
+    RenderModeChange,
+    HostSpecific(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceTransformRequest {
+    pub reference: ProfileReferenceRecord,
+    pub transform_kind: ReferenceTransformKind,
+    pub payload: Option<ProfilePayload>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReferenceTransformOutcome {
+    Unchanged,
+    Shifted,
+    Expanded,
+    Shrunk,
+    Split,
+    PartiallyInvalid,
+    FullyInvalid,
+    DynamicOrHostSensitive,
+    Unsupported,
+    GeometryCoupledOpaqueConflict,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceTransformResult {
+    pub outcome: ReferenceTransformOutcome,
+    pub reference: Option<ProfileReferenceRecord>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceRenderRequest {
+    pub reference: ProfileReferenceRecord,
+    pub target_channel: FormulaChannelKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceRenderResult {
+    pub rendered_text: Option<String>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceInstantiationRequest {
+    pub bound_reference: ProfileReferenceRecord,
+    pub runtime_host_formula_context: RuntimeHostFormulaContext,
+    pub purpose: ReferenceInstantiationPurpose,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeHostFormulaContext {
+    pub profile_id: String,
+    pub context_payload: Option<ProfilePayload>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReferenceInstantiationPurpose {
+    StaticDependencyExtraction,
+    RuntimeEvaluation,
+    Rendering,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InstantiatedReference {
+    ReferenceLike {
+        profile_id: String,
+        identity_key: String,
+    },
+    StaticDependencyEnvelope(ReferenceDependencyEnvelope),
+    DynamicDependencyRequest(ReferenceDependencyEnvelope),
+    RefError,
+    Unsupported {
+        reason: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FormulaSourceIdentity {
+    pub key: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FormulaTemplateIdentity {
+    pub key: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlacedFormulaIdentity {
+    pub key: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeDependencyIdentity {
+    pub key: String,
+}
+
+pub trait ReferenceBindProfile {
+    fn profile_id(&self) -> &str;
+
+    fn profile_version(&self) -> ProfileVersion {
+        ProfileVersion::v1()
+    }
+
+    fn reference_policy(&self) -> ReferencePolicy {
+        ReferencePolicy::LegacyCompatibility
+    }
+
+    fn fingerprint_policy(&self) -> ReferenceFingerprintPolicy {
+        ReferenceFingerprintPolicy::IncludeCallerAnchor
+    }
+
+    fn fingerprint(
+        &self,
+        _context: &ReferenceProfileFingerprintContext,
+    ) -> ReferenceProfileFingerprint {
+        ReferenceProfileFingerprint(format!(
+            "{}:{}",
+            self.profile_id(),
+            self.profile_version().0
+        ))
+    }
+
+    fn operator_capabilities(&self) -> ReferenceOperatorCapabilities {
+        ReferenceOperatorCapabilities::worksheet_legacy()
+    }
+
+    fn bind_atom(&self, _request: &ReferenceAtomBindRequest) -> ReferenceAtomBindResult {
+        ReferenceAtomBindResult::LegacyCompatibility
+    }
+
+    fn normal_form_key(
+        &self,
+        reference: &ProfileReferenceRecord,
+        _context: &ReferenceProfileFingerprintContext,
+    ) -> ReferenceNormalFormKey {
+        reference.normal_form_key.clone()
+    }
+
+    fn dependency_hints(
+        &self,
+        _reference: &ProfileReferenceRecord,
+        _context: &ReferenceProfileFingerprintContext,
+    ) -> ReferenceDependencyEnvelope {
+        ReferenceDependencyEnvelope::None
+    }
+
+    fn transform_reference(&self, request: &ReferenceTransformRequest) -> ReferenceTransformResult {
+        ReferenceTransformResult {
+            outcome: ReferenceTransformOutcome::Unsupported,
+            reference: Some(request.reference.clone()),
+            diagnostics: vec!["reference transform is not supported by this profile".to_string()],
+        }
+    }
+
+    fn render_reference(&self, request: &ReferenceRenderRequest) -> ReferenceRenderResult {
+        ReferenceRenderResult {
+            rendered_text: request.reference.render_hint.clone(),
+            diagnostics: Vec::new(),
+        }
+    }
+}

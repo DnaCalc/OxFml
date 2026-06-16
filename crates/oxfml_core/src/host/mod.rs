@@ -9,7 +9,8 @@ use oxfunc_core::locale_format::LocaleFormatContext;
 use oxfunc_core::value::{CalcValue, CoreValue, ExcelText, ReferenceLike, WorksheetErrorCode};
 
 use crate::binding::{
-    BindContext, BindDiagnostic, BindRequest, BoundFormula, NameKind, bind_formula_incremental,
+    BindContext, BindDiagnostic, BindRequest, BoundFormula, NameKind, ReferenceBindProfile,
+    bind_formula_incremental,
 };
 use crate::eval::{
     CallableDefinedNameBinding, DefinedNameBinding, EvaluationBackend, EvaluationContext,
@@ -90,6 +91,7 @@ pub struct SingleFormulaHost {
     pub trace_mode: EvaluationTraceMode,
     next_session_id: u64,
     next_commit_attempt_id: u64,
+    reference_bind_profile_signature: Option<String>,
     cached_artifacts: Option<CachedHostArtifacts>,
 }
 
@@ -227,6 +229,10 @@ pub struct EmpiricalOracleScenario {
     pub host_query_profile: Option<String>,
 }
 
+fn reference_bind_profile_debug_signature(profile: &dyn ReferenceBindProfile) -> String {
+    format!("{}:{}", profile.profile_id(), profile.profile_version().0)
+}
+
 impl SingleFormulaHost {
     pub fn new(formula_stable_id: impl Into<String>, formula_text: impl Into<String>) -> Self {
         Self {
@@ -254,6 +260,7 @@ impl SingleFormulaHost {
             trace_mode: EvaluationTraceMode::default(),
             next_session_id: 1,
             next_commit_attempt_id: 1,
+            reference_bind_profile_signature: None,
             cached_artifacts: None,
         }
     }
@@ -408,6 +415,29 @@ impl SingleFormulaHost {
         library_context_view: PinnedLibraryContextView<'_>,
         verification_publication_context: Option<&VerificationPublicationContext>,
     ) -> Result<HostRecalcOutput, String> {
+        self.recalc_with_library_context_view_and_reference_bind_profile(
+            backend,
+            query_bundle,
+            library_context_view,
+            verification_publication_context,
+            None,
+        )
+    }
+
+    pub fn recalc_with_library_context_view_and_reference_bind_profile(
+        &mut self,
+        backend: EvaluationBackend,
+        query_bundle: TypedContextQueryBundle<'_>,
+        library_context_view: PinnedLibraryContextView<'_>,
+        verification_publication_context: Option<&VerificationPublicationContext>,
+        reference_bind_profile: Option<&dyn ReferenceBindProfile>,
+    ) -> Result<HostRecalcOutput, String> {
+        let reference_bind_profile_signature =
+            reference_bind_profile.map(reference_bind_profile_debug_signature);
+        if self.reference_bind_profile_signature != reference_bind_profile_signature {
+            self.reference_bind_profile_signature = reference_bind_profile_signature.clone();
+            self.cached_artifacts = None;
+        }
         let effective_query_bundle = effective_query_bundle(query_bundle, self);
         let canonical_locale_ctx = effective_query_bundle
             .locale_ctx
@@ -489,6 +519,8 @@ impl SingleFormulaHost {
                 },
 
                 host_name_resolver: None,
+
+                reference_bind_profile,
             },
             cached_artifacts.map(|artifacts| &artifacts.bound_formula),
         );

@@ -1,3 +1,4 @@
+mod profile;
 mod reference;
 
 use std::collections::BTreeMap;
@@ -5,6 +6,18 @@ use std::collections::BTreeSet;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
+pub use profile::{
+    BindProfile, FormulaSourceIdentity, FormulaTemplateIdentity, InstantiatedReference,
+    PlacedFormulaIdentity, ProfilePayload, ProfileReferenceRecord, ProfileVersion,
+    ReferenceAtomBindRequest, ReferenceAtomBindResult, ReferenceBindProfile,
+    ReferenceDependencyEnvelope, ReferenceFingerprintPolicy, ReferenceInstantiationPurpose,
+    ReferenceInstantiationRequest, ReferenceNormalFormKey, ReferenceOperatorCapabilities,
+    ReferencePolicy, ReferenceProfileFingerprint, ReferenceProfileFingerprintContext,
+    ReferenceRenderRequest, ReferenceRenderResult, ReferenceSourceInfo,
+    ReferenceSyntaxCapabilities, ReferenceTransformKind, ReferenceTransformOutcome,
+    ReferenceTransformRequest, ReferenceTransformResult, ReferenceValidity,
+    RuntimeDependencyIdentity, RuntimeHostFormulaContext,
+};
 pub use reference::{
     AddressMode, AreaRef, CellCoord, CellRef, ErrorRef, ExternalRef, NameKind, NameRef,
     NormalizedReference, ReferenceExpr, StructuredEmptyAreaRef, StructuredRef,
@@ -228,6 +241,10 @@ pub struct BoundFormula {
     pub structure_context_version: String,
     pub bind_context_fingerprint: String,
     pub bind_hash: String,
+    pub formula_source_identity: FormulaSourceIdentity,
+    pub formula_template_identity: FormulaTemplateIdentity,
+    pub placed_formula_identity: PlacedFormulaIdentity,
+    pub runtime_dependency_identity: RuntimeDependencyIdentity,
     pub root: BoundExpr,
     pub root_expression_is_grouped: bool,
     pub normalized_references: Vec<NormalizedReference>,
@@ -285,6 +302,7 @@ pub struct BindRequest<'a> {
     pub red_projection: RedProjection,
     pub context: BindContext,
     pub host_name_resolver: Option<&'a dyn HostNameResolver>,
+    pub reference_bind_profile: Option<&'a dyn ReferenceBindProfile>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -299,25 +317,26 @@ pub struct IncrementalBindResult {
 }
 
 pub fn bind_formula(request: BindRequest<'_>) -> BindResult {
-    let bind_context_fingerprint = hash_debug(&(
-        request.context.workbook_id.clone(),
-        request.context.sheet_id.clone(),
-        request.context.caller_row,
-        request.context.caller_col,
-        request.context.formula_token.0.clone(),
-        request.context.structure_context_version.0.clone(),
-        request.context.names.clone(),
-        request.context.name_caller_context_dependencies.clone(),
-        request.context.host_name_bind_records.clone(),
-        request.context.table_catalog.clone(),
-        request.context.enclosing_table_ref.clone(),
-        request.context.caller_table_region.clone(),
-    ));
+    let profile_context = reference_profile_fingerprint_context(&request.context);
+    let profile_fingerprint =
+        reference_profile_fingerprint(request.reference_bind_profile, &profile_context);
+    let fingerprint_policy = request
+        .reference_bind_profile
+        .map(|profile| profile.fingerprint_policy())
+        .unwrap_or(ReferenceFingerprintPolicy::IncludeCallerAnchor);
+    let bind_context_fingerprint = bind_context_fingerprint_for(
+        &request.context,
+        profile_fingerprint.as_ref(),
+        fingerprint_policy,
+    );
+    let formula_source_identity =
+        formula_source_identity_for(&request.source, request.reference_bind_profile);
 
     let mut binder = Binder {
         source: request.source.clone(),
         context: request.context,
         host_name_resolver: request.host_name_resolver,
+        reference_bind_profile: request.reference_bind_profile,
         formula_channel_kind: request.source.formula_channel_kind,
         diagnostics: Vec::new(),
         normalized_references: Vec::new(),
@@ -352,6 +371,19 @@ pub fn bind_formula(request: BindRequest<'_>) -> BindResult {
             &binder.structured_reference_bind_records,
         ))
     };
+    let formula_template_identity = formula_template_identity_for(
+        &request.source,
+        request.reference_bind_profile,
+        profile_fingerprint.as_ref(),
+        &bind_hash,
+        &root,
+    );
+    let placed_formula_identity = placed_formula_identity_for(
+        &formula_template_identity,
+        &binder.context,
+        profile_fingerprint.as_ref(),
+    );
+    let runtime_dependency_identity = runtime_dependency_identity_for(&placed_formula_identity);
 
     BindResult {
         bound_formula: BoundFormula {
@@ -360,6 +392,10 @@ pub fn bind_formula(request: BindRequest<'_>) -> BindResult {
             structure_context_version: binder.context.structure_context_version.0.clone(),
             bind_context_fingerprint,
             bind_hash,
+            formula_source_identity,
+            formula_template_identity,
+            placed_formula_identity,
+            runtime_dependency_identity,
             root,
             root_expression_is_grouped,
             normalized_references: binder.normalized_references,
@@ -378,28 +414,34 @@ pub fn bind_formula_incremental(
     request: BindRequest<'_>,
     previous_bound_formula: Option<&BoundFormula>,
 ) -> IncrementalBindResult {
-    let bind_context_fingerprint = hash_debug(&(
-        request.context.workbook_id.clone(),
-        request.context.sheet_id.clone(),
-        request.context.caller_row,
-        request.context.caller_col,
-        request.context.formula_token.0.clone(),
-        request.context.structure_context_version.0.clone(),
-        request.context.names.clone(),
-        request.context.name_caller_context_dependencies.clone(),
-        request.context.host_name_bind_records.clone(),
-        request.context.table_catalog.clone(),
-        request.context.enclosing_table_ref.clone(),
-        request.context.caller_table_region.clone(),
-    ));
+    let profile_context = reference_profile_fingerprint_context(&request.context);
+    let profile_fingerprint =
+        reference_profile_fingerprint(request.reference_bind_profile, &profile_context);
+    let fingerprint_policy = request
+        .reference_bind_profile
+        .map(|profile| profile.fingerprint_policy())
+        .unwrap_or(ReferenceFingerprintPolicy::IncludeCallerAnchor);
+    let bind_context_fingerprint = bind_context_fingerprint_for(
+        &request.context,
+        profile_fingerprint.as_ref(),
+        fingerprint_policy,
+    );
 
     if let Some(previous_bound_formula) = previous_bound_formula {
         if previous_bound_formula.formula_stable_id == request.source.formula_stable_id.0
             && previous_bound_formula.green_tree_key == request.green_tree.green_tree_key
             && previous_bound_formula.bind_context_fingerprint == bind_context_fingerprint
         {
+            let mut bound_formula = previous_bound_formula.clone();
+            bound_formula.placed_formula_identity = placed_formula_identity_for(
+                &bound_formula.formula_template_identity,
+                &request.context,
+                profile_fingerprint.as_ref(),
+            );
+            bound_formula.runtime_dependency_identity =
+                runtime_dependency_identity_for(&bound_formula.placed_formula_identity);
             return IncrementalBindResult {
-                bound_formula: previous_bound_formula.clone(),
+                bound_formula,
                 reused_bound_formula: true,
             };
         }
@@ -416,6 +458,7 @@ struct Binder<'a> {
     source: FormulaSourceRecord,
     context: BindContext,
     host_name_resolver: Option<&'a dyn HostNameResolver>,
+    reference_bind_profile: Option<&'a dyn ReferenceBindProfile>,
     formula_channel_kind: FormulaChannelKind,
     diagnostics: Vec<BindDiagnostic>,
     normalized_references: Vec<NormalizedReference>,
@@ -609,6 +652,11 @@ impl Binder<'_> {
                 .push_host_name_bind_record(&host_name, node.span)
                 .map(BoundExpr::HostReference)
                 .unwrap_or_else(|| BoundExpr::Reference(ReferenceExpr::Atom(normalized)));
+        }
+        let sheet_id = self.context.sheet_id.clone();
+        if let Some(bound) = self.try_bind_profile_reference_atom(&text, node.span, &sheet_id, None)
+        {
+            return bound;
         }
         if let Some(structured) = bind_structured_reference_text(
             &text,
@@ -873,6 +921,7 @@ impl Binder<'_> {
         match target.kind {
             SyntaxKind::IdentifierExpr | SyntaxKind::QuotedIdentifierExpr => {
                 let text = self.first_token_text(target).unwrap_or_default();
+                let source_text = node_source_text(node);
                 if qualifier.is_external {
                     let normalized = NormalizedReference::External(ExternalRef {
                         external_target_id: qualifier
@@ -888,9 +937,16 @@ impl Binder<'_> {
                         .push("external_reference".to_string());
                     self.push_reference_seed(&normalized);
                     BoundExpr::Reference(ReferenceExpr::Atom(normalized))
+                } else if let Some(bound) = self.try_bind_profile_reference_atom(
+                    &source_text,
+                    node.span,
+                    &qualifier.sheet_id,
+                    Some(qualifier.raw.clone()),
+                ) {
+                    bound
                 } else if let Some(structured) = bind_structured_reference_text_with_sheet(
                     &text,
-                    &node_source_text(node),
+                    &source_text,
                     &qualifier.sheet_id,
                     &self.context,
                     node.span,
@@ -943,9 +999,11 @@ impl Binder<'_> {
         let left_node = child_nodes.next().expect("range left");
         let right_node = child_nodes.next().expect("range right");
 
-        if let Some(normalized) = self.try_bind_simple_reference_range(left_node, right_node) {
-            self.push_reference_seed(&normalized);
-            return BoundExpr::Reference(ReferenceExpr::Atom(normalized));
+        if !self.profile_uses_symbolic_references() {
+            if let Some(normalized) = self.try_bind_simple_reference_range(left_node, right_node) {
+                self.push_reference_seed(&normalized);
+                return BoundExpr::Reference(ReferenceExpr::Atom(normalized));
+            }
         }
 
         let left = self.bind_expr(left_node);
@@ -1248,6 +1306,72 @@ impl Binder<'_> {
         self.dependency_seeds.pop();
     }
 
+    fn profile_uses_symbolic_references(&self) -> bool {
+        self.reference_bind_profile
+            .map(|profile| matches!(profile.reference_policy(), ReferencePolicy::ProfileSymbolic))
+            .unwrap_or(false)
+    }
+
+    fn try_bind_profile_reference_atom(
+        &mut self,
+        source_text: &str,
+        source_span: TextSpan,
+        sheet_id: &str,
+        parsed_qualifier: Option<String>,
+    ) -> Option<BoundExpr> {
+        let profile = self.reference_bind_profile?;
+        let request = ReferenceAtomBindRequest {
+            source_channel: self.formula_channel_kind,
+            source_span,
+            source_text: source_text.to_string(),
+            parsed_qualifier,
+            workbook_id: self.context.workbook_id.clone(),
+            sheet_id: sheet_id.to_string(),
+            caller_row: self.context.caller_row,
+            caller_col: self.context.caller_col,
+        };
+        match profile.bind_atom(&request) {
+            ReferenceAtomBindResult::Bound(record) => {
+                let normalized = NormalizedReference::ProfileSymbolic(record);
+                self.push_reference_seed(&normalized);
+                Some(BoundExpr::Reference(ReferenceExpr::Atom(normalized)))
+            }
+            ReferenceAtomBindResult::Rejected { validity, message } => {
+                self.diagnostics.push(BindDiagnostic {
+                    message: format!(
+                        "reference profile '{}' rejected '{}': {message} ({validity:?})",
+                        profile.profile_id(),
+                        source_text
+                    ),
+                    span: source_span,
+                });
+                Some(BoundExpr::Reference(ReferenceExpr::Atom(
+                    NormalizedReference::Error(ErrorRef {
+                        error_class: "#REF!".to_string(),
+                        source_text: source_text.to_string(),
+                    }),
+                )))
+            }
+            ReferenceAtomBindResult::Unsupported => {
+                self.diagnostics.push(BindDiagnostic {
+                    message: format!(
+                        "reference profile '{}' does not support reference atom '{}'",
+                        profile.profile_id(),
+                        source_text
+                    ),
+                    span: source_span,
+                });
+                Some(BoundExpr::Reference(ReferenceExpr::Atom(
+                    NormalizedReference::Error(ErrorRef {
+                        error_class: "#REF!".to_string(),
+                        source_text: source_text.to_string(),
+                    }),
+                )))
+            }
+            ReferenceAtomBindResult::LegacyCompatibility => None,
+        }
+    }
+
     fn bind_reference_pair(
         &mut self,
         node: &GreenNode,
@@ -1474,53 +1598,62 @@ impl Binder<'_> {
             });
             self.push_reference_seed(&normalized);
             BoundExpr::Reference(ReferenceExpr::Atom(normalized))
-        } else if let Some(structured) = bind_structured_reference_text(
-            text,
-            text,
-            &self.context,
-            TextSpan::new(0, 0),
-            self.formula_channel_kind,
-            &mut self.diagnostics,
-            &mut self.unresolved_references,
-            &mut self.structured_reference_bind_records,
-        ) {
-            self.push_reference_seed(&structured);
-            BoundExpr::Reference(ReferenceExpr::Atom(structured))
-        } else if let Some(cell_ref) = parse_cell_reference(
-            text,
-            &self.context.sheet_id,
-            &self.context,
-            self.formula_channel_kind,
-        ) {
-            let normalized = NormalizedReference::Cell(cell_ref);
-            self.push_reference_seed(&normalized);
-            BoundExpr::Reference(ReferenceExpr::Atom(normalized))
-        } else if let Some(kind) = self.context_name_kind(text, source_span) {
-            let caller_context_dependent = self.name_caller_context_dependent(text);
-            let normalized = NormalizedReference::Name(NameRef {
-                name: text.to_string(),
-                workbook_id: self.context.workbook_id.clone(),
-                sheet_id: self.context.sheet_id.clone(),
-                kind,
-                caller_context_dependent,
-            });
-            self.push_reference_seed(&normalized);
-            self.push_host_name_bind_record(text, source_span)
-                .map(BoundExpr::HostReference)
-                .unwrap_or_else(|| BoundExpr::Reference(ReferenceExpr::Atom(normalized)))
         } else {
-            self.unresolved_references.push(UnresolvedReferenceRecord {
-                source_text: text.to_string(),
-                reason: "unknown identifier or name".to_string(),
-            });
-            self.diagnostics.push(BindDiagnostic {
-                message: format!("unresolved identifier '{text}'"),
-                span: TextSpan::new(0, 0),
-            });
-            BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Error(ErrorRef {
-                error_class: "#NAME?".to_string(),
-                source_text: text.to_string(),
-            })))
+            let sheet_id = self.context.sheet_id.clone();
+            if let Some(bound) =
+                self.try_bind_profile_reference_atom(text, source_span, &sheet_id, None)
+            {
+                return bound;
+            }
+
+            if let Some(structured) = bind_structured_reference_text(
+                text,
+                text,
+                &self.context,
+                TextSpan::new(0, 0),
+                self.formula_channel_kind,
+                &mut self.diagnostics,
+                &mut self.unresolved_references,
+                &mut self.structured_reference_bind_records,
+            ) {
+                self.push_reference_seed(&structured);
+                BoundExpr::Reference(ReferenceExpr::Atom(structured))
+            } else if let Some(cell_ref) = parse_cell_reference(
+                text,
+                &self.context.sheet_id,
+                &self.context,
+                self.formula_channel_kind,
+            ) {
+                let normalized = NormalizedReference::Cell(cell_ref);
+                self.push_reference_seed(&normalized);
+                BoundExpr::Reference(ReferenceExpr::Atom(normalized))
+            } else if let Some(kind) = self.context_name_kind(text, source_span) {
+                let caller_context_dependent = self.name_caller_context_dependent(text);
+                let normalized = NormalizedReference::Name(NameRef {
+                    name: text.to_string(),
+                    workbook_id: self.context.workbook_id.clone(),
+                    sheet_id: self.context.sheet_id.clone(),
+                    kind,
+                    caller_context_dependent,
+                });
+                self.push_reference_seed(&normalized);
+                self.push_host_name_bind_record(text, source_span)
+                    .map(BoundExpr::HostReference)
+                    .unwrap_or_else(|| BoundExpr::Reference(ReferenceExpr::Atom(normalized)))
+            } else {
+                self.unresolved_references.push(UnresolvedReferenceRecord {
+                    source_text: text.to_string(),
+                    reason: "unknown identifier or name".to_string(),
+                });
+                self.diagnostics.push(BindDiagnostic {
+                    message: format!("unresolved identifier '{text}'"),
+                    span: source_span,
+                });
+                BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Error(ErrorRef {
+                    error_class: "#NAME?".to_string(),
+                    source_text: text.to_string(),
+                })))
+            }
         }
     }
 }
@@ -1583,7 +1716,8 @@ fn builtin_reference_locator_argument_is_reference_like(expr: &BoundExpr) -> boo
             | ReferenceExpr::Atom(NormalizedReference::WholeRow(_))
             | ReferenceExpr::Atom(NormalizedReference::WholeColumn(_))
             | ReferenceExpr::Atom(NormalizedReference::Structured(_))
-            | ReferenceExpr::Atom(NormalizedReference::External(_)) => true,
+            | ReferenceExpr::Atom(NormalizedReference::External(_))
+            | ReferenceExpr::Atom(NormalizedReference::ProfileSymbolic(_)) => true,
             ReferenceExpr::Atom(NormalizedReference::Name(name)) => {
                 matches!(
                     name.kind,
@@ -3058,6 +3192,130 @@ fn column_to_index(text: &str) -> Option<u32> {
             .checked_add((upper as u32) - ('A' as u32) + 1)?;
     }
     Some(result)
+}
+
+fn reference_profile_fingerprint_context(
+    context: &BindContext,
+) -> ReferenceProfileFingerprintContext {
+    ReferenceProfileFingerprintContext {
+        workbook_id: context.workbook_id.clone(),
+        sheet_id: context.sheet_id.clone(),
+        caller_row: context.caller_row,
+        caller_col: context.caller_col,
+        structure_context_version: context.structure_context_version.0.clone(),
+    }
+}
+
+fn reference_profile_fingerprint(
+    profile: Option<&dyn ReferenceBindProfile>,
+    context: &ReferenceProfileFingerprintContext,
+) -> Option<ReferenceProfileFingerprint> {
+    profile.map(|profile| profile.fingerprint(context))
+}
+
+fn bind_context_fingerprint_for(
+    context: &BindContext,
+    profile_fingerprint: Option<&ReferenceProfileFingerprint>,
+    fingerprint_policy: ReferenceFingerprintPolicy,
+) -> String {
+    let caller_anchor = match fingerprint_policy {
+        ReferenceFingerprintPolicy::IncludeCallerAnchor => {
+            Some((context.caller_row, context.caller_col))
+        }
+        ReferenceFingerprintPolicy::ExcludeCallerAnchorForTemplate => None,
+    };
+
+    hash_debug(&(
+        context.workbook_id.clone(),
+        context.sheet_id.clone(),
+        caller_anchor,
+        context.formula_token.0.clone(),
+        context.structure_context_version.0.clone(),
+        context.names.clone(),
+        context.name_caller_context_dependencies.clone(),
+        context.host_name_bind_records.clone(),
+        context.table_catalog.clone(),
+        context.enclosing_table_ref.clone(),
+        context.caller_table_region.clone(),
+        profile_fingerprint.map(|fingerprint| fingerprint.0.clone()),
+    ))
+}
+
+fn formula_source_identity_for(
+    source: &FormulaSourceRecord,
+    profile: Option<&dyn ReferenceBindProfile>,
+) -> FormulaSourceIdentity {
+    FormulaSourceIdentity {
+        key: hash_debug(&(
+            source.formula_stable_id.0.clone(),
+            source.formula_text_version.0,
+            source.formula_channel_kind,
+            source.entered_formula_text.clone(),
+            source.stored_formula_text.clone(),
+            profile.map(|profile| {
+                (
+                    profile.profile_id().to_string(),
+                    profile.profile_version().0,
+                    profile.reference_policy(),
+                )
+            }),
+        )),
+    }
+}
+
+fn formula_template_identity_for(
+    source: &FormulaSourceRecord,
+    profile: Option<&dyn ReferenceBindProfile>,
+    profile_fingerprint: Option<&ReferenceProfileFingerprint>,
+    bind_hash: &str,
+    root: &BoundExpr,
+) -> FormulaTemplateIdentity {
+    FormulaTemplateIdentity {
+        key: hash_debug(&(
+            source.formula_channel_kind,
+            source.entered_formula_text.clone(),
+            source.stored_formula_text.clone(),
+            profile.map(|profile| {
+                (
+                    profile.profile_id().to_string(),
+                    profile.profile_version().0,
+                    profile.reference_policy(),
+                )
+            }),
+            profile_fingerprint.map(|fingerprint| fingerprint.0.clone()),
+            bind_hash,
+            root,
+        )),
+    }
+}
+
+fn placed_formula_identity_for(
+    template_identity: &FormulaTemplateIdentity,
+    context: &BindContext,
+    profile_fingerprint: Option<&ReferenceProfileFingerprint>,
+) -> PlacedFormulaIdentity {
+    PlacedFormulaIdentity {
+        key: hash_debug(&(
+            template_identity.key.clone(),
+            context.workbook_id.clone(),
+            context.sheet_id.clone(),
+            context.caller_row,
+            context.caller_col,
+            context.structure_context_version.0.clone(),
+            context.names.clone(),
+            context.host_name_bind_records.clone(),
+            context.table_catalog.clone(),
+            profile_fingerprint.map(|fingerprint| fingerprint.0.clone()),
+        )),
+    }
+}
+
+fn runtime_dependency_identity_for(
+    placed_identity: &PlacedFormulaIdentity,
+) -> RuntimeDependencyIdentity {
+    RuntimeDependencyIdentity {
+        key: hash_debug(&(placed_identity.key.clone(), "runtime-dependency:v1")),
+    }
 }
 
 fn hash_debug<T: std::fmt::Debug>(value: &T) -> String {

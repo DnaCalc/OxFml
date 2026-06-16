@@ -1,5 +1,6 @@
 use std::fmt;
 
+use crate::binding::profile::ProfileReferenceRecord;
 use crate::syntax::token::TextSpan;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -180,6 +181,7 @@ pub enum NormalizedReference {
     Name(NameRef),
     External(ExternalRef),
     Structured(StructuredRef),
+    ProfileSymbolic(ProfileReferenceRecord),
     Error(ErrorRef),
 }
 
@@ -245,6 +247,11 @@ impl fmt::Display for NormalizedReference {
                     StructuredSelectorKind::SectionColumn => "SectionColumn",
                 },
                 structured.selected_column_ids.join("|")
+            ),
+            Self::ProfileSymbolic(record) => write!(
+                f,
+                "profile-symbolic:{}:{}",
+                record.profile_id, record.normal_form_key.0
             ),
             Self::Error(error) => write!(f, "error:{}", error.error_class),
         }

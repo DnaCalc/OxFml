@@ -58,6 +58,8 @@ pub fn compile_formula_with_library_context(
         },
 
         host_name_resolver: None,
+
+        reference_bind_profile: None,
     });
 
     let semantic_plan = compile_semantic_plan(CompileSemanticPlanRequest {

@@ -44,14 +44,16 @@ use oxfunc_core::resolver::{
 };
 use oxfunc_core::value::{
     CalcArray, CalcValue, CallableArityShape as OxCallableArityShape,
-    CallableValue as OxCallableValue, CoreValue, ExcelText, OpaqueCallable, ReferenceKind,
-    ReferenceLike, WorksheetErrorCode,
+    CallableValue as OxCallableValue, CoreValue, ExcelText, OpaqueCallable, ReferenceDisplay,
+    ReferenceHandle, ReferenceHandleId, ReferenceKind, ReferenceLike, ReferenceSystemId,
+    WorksheetErrorCode,
 };
 use stacker::maybe_grow;
 
 use crate::binding::{
     AreaRef, BinaryOp, BoundExpr, BoundFormula, CellRef, ErrorRef, NameKind, NameRef,
-    NormalizedReference, ReferenceExpr, StructuredResolvedRef, StructuredSectionKind,
+    NormalizedReference, ProfileReferenceRecord, ReferenceExpr, StructuredResolvedRef,
+    StructuredSectionKind,
 };
 use crate::interface::{
     HostFunctionInvocation, HostFunctionProvider, ReturnedValueSurface, TypedContextQueryBundle,
@@ -3528,6 +3530,14 @@ fn evaluate_reference_as_call_arg(
                 reference_system_provider,
             )
         }
+        CompiledReferenceExpr::Atom(NormalizedReference::ProfileSymbolic(record)) => {
+            call_arg_for_reference_like(
+                reference_like_for_profile_symbolic(record),
+                preserve_reference,
+                context,
+                reference_system_provider,
+            )
+        }
         CompiledReferenceExpr::Atom(NormalizedReference::External(external)) => {
             let prepared_call_index = push_special_prepared_call(
                 trace,
@@ -6124,6 +6134,22 @@ fn reference_like_for_structured(structured: &crate::binding::StructuredRef) -> 
             ),
         ),
     }
+}
+
+fn reference_like_for_profile_symbolic(record: &ProfileReferenceRecord) -> ReferenceLike {
+    let display_text = record
+        .render_hint
+        .clone()
+        .unwrap_or_else(|| record.normal_form_key.0.clone());
+    ReferenceLike::opaque(
+        ReferenceSystemId(record.profile_id.clone()),
+        ReferenceHandle {
+            id: ReferenceHandleId::from_bytes(record.normal_form_key.0.clone().into_bytes()),
+        },
+        Some(ReferenceDisplay {
+            text: ExcelText::from_interop_assignment(&display_text),
+        }),
+    )
 }
 
 fn column_letters(mut col: u32) -> String {

@@ -362,6 +362,8 @@ fn bind_formula_text(
         },
 
         host_name_resolver: None,
+
+        reference_bind_profile: None,
     });
     bind.bound_formula
 }

@@ -790,6 +790,8 @@ fn compile(formula: &str) -> oxfml_core::SemanticPlan {
         },
 
         host_name_resolver: None,
+
+        reference_bind_profile: None,
     });
 
     compile_semantic_plan(CompileSemanticPlanRequest {
@@ -1123,6 +1125,8 @@ fn evaluate_fixture_formula(
         },
 
         host_name_resolver: None,
+
+        reference_bind_profile: None,
     });
 
     let plan = compile_semantic_plan(CompileSemanticPlanRequest {

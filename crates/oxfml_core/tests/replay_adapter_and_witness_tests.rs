@@ -757,6 +757,8 @@ fn replay_execution_contract_case(
         },
 
         host_name_resolver: None,
+
+        reference_bind_profile: None,
     });
     let plan = compile_semantic_plan(CompileSemanticPlanRequest {
         bound_formula: bind.bound_formula,
@@ -791,6 +793,8 @@ fn compile_prepare_request(formula: &str, with_input_name: bool) -> PrepareReque
         },
 
         host_name_resolver: None,
+
+        reference_bind_profile: None,
     });
     let plan = compile_semantic_plan(CompileSemanticPlanRequest {
         bound_formula: bind.bound_formula.clone(),
