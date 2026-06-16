@@ -341,6 +341,61 @@ pub trait ReferenceBindProfile {
         ReferenceDependencyEnvelope::None
     }
 
+    fn instantiate_reference(
+        &self,
+        request: &ReferenceInstantiationRequest,
+    ) -> InstantiatedReference {
+        if request.runtime_host_formula_context.profile_id != self.profile_id() {
+            return InstantiatedReference::Unsupported {
+                reason: format!(
+                    "runtime host formula context profile '{}' does not match reference profile '{}'",
+                    request.runtime_host_formula_context.profile_id,
+                    self.profile_id()
+                ),
+            };
+        }
+
+        match request.bound_reference.validity {
+            ReferenceValidity::ValidNow | ReferenceValidity::ValidAfterInstantiation => {
+                match request.purpose {
+                    ReferenceInstantiationPurpose::StaticDependencyExtraction => {
+                        InstantiatedReference::StaticDependencyEnvelope(
+                            ReferenceDependencyEnvelope::Static {
+                                profile_id: self.profile_id().to_string(),
+                                dependency_key: request.bound_reference.normal_form_key.0.clone(),
+                            },
+                        )
+                    }
+                    ReferenceInstantiationPurpose::RuntimeEvaluation
+                    | ReferenceInstantiationPurpose::Rendering => {
+                        InstantiatedReference::ReferenceLike {
+                            profile_id: self.profile_id().to_string(),
+                            identity_key: request.bound_reference.normal_form_key.0.clone(),
+                        }
+                    }
+                }
+            }
+            ReferenceValidity::DynamicOrHostSensitive => {
+                InstantiatedReference::DynamicDependencyRequest(
+                    ReferenceDependencyEnvelope::Dynamic {
+                        profile_id: self.profile_id().to_string(),
+                        request_key: request.bound_reference.normal_form_key.0.clone(),
+                    },
+                )
+            }
+            ReferenceValidity::InvalidStatic | ReferenceValidity::InvalidForCurrentPlacement => {
+                InstantiatedReference::RefError
+            }
+            ReferenceValidity::Unsupported => InstantiatedReference::Unsupported {
+                reason: format!(
+                    "reference '{}' is unsupported by profile '{}'",
+                    request.bound_reference.normal_form_key.0,
+                    self.profile_id()
+                ),
+            },
+        }
+    }
+
     fn transform_reference(&self, request: &ReferenceTransformRequest) -> ReferenceTransformResult {
         ReferenceTransformResult {
             outcome: ReferenceTransformOutcome::Unsupported,

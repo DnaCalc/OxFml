@@ -6,12 +6,14 @@ use oxfml_core::consumer::runtime::{
 };
 use oxfml_core::{
     BindContext, BindRequest, BoundExpr, BoundFormula, CompileSemanticPlanRequest,
-    FormulaSourceRecord, NormalizedReference, PlacedFormulaIdentity, ProfilePayload,
-    ProfileReferenceRecord, ProfileVersion, ReferenceAtomBindRequest, ReferenceAtomBindResult,
-    ReferenceBindProfile, ReferenceExpr, ReferenceFingerprintPolicy, ReferenceNormalFormKey,
-    ReferencePolicy, ReferenceProfileFingerprint, ReferenceProfileFingerprintContext,
-    ReferenceSourceInfo, ReferenceValidity, StructureContextVersion, bind_formula,
-    bind_formula_incremental, compile_semantic_plan,
+    FormulaSourceRecord, InstantiatedReference, NormalizedReference, PlacedFormulaIdentity,
+    ProfilePayload, ProfileReferenceRecord, ProfileVersion, ReferenceAtomBindRequest,
+    ReferenceAtomBindResult, ReferenceBindProfile, ReferenceDependencyEnvelope, ReferenceExpr,
+    ReferenceFingerprintPolicy, ReferenceInstantiationPurpose, ReferenceInstantiationRequest,
+    ReferenceNormalFormKey, ReferencePolicy, ReferenceProfileFingerprint,
+    ReferenceProfileFingerprintContext, ReferenceSourceInfo, ReferenceValidity,
+    RuntimeHostFormulaContext, StructureContextVersion, bind_formula, bind_formula_incremental,
+    compile_semantic_plan,
 };
 use oxfml_core::{EvaluationContext, evaluate_formula};
 use oxfml_core::{ParseRequest, parse_formula};
@@ -263,6 +265,90 @@ fn runtime_environment_supplies_reference_profile_through_execution() {
     );
 }
 
+#[test]
+fn default_profile_instantiation_returns_reference_like_and_static_dependency() {
+    let profile = FakeSymbolicProfile;
+    let bound = bind_formula_for("profile-instantiation", "=A1", 2, 2, Some(&profile));
+    let record = profile_symbolic_record(&bound).clone();
+    let host_context = RuntimeHostFormulaContext {
+        profile_id: profile.profile_id().to_string(),
+        context_payload: None,
+    };
+
+    let runtime = profile.instantiate_reference(&ReferenceInstantiationRequest {
+        bound_reference: record.clone(),
+        runtime_host_formula_context: host_context.clone(),
+        purpose: ReferenceInstantiationPurpose::RuntimeEvaluation,
+    });
+    assert_eq!(
+        runtime,
+        InstantiatedReference::ReferenceLike {
+            profile_id: "fake.symbolic.v1".to_string(),
+            identity_key: "fake-cell:A1".to_string(),
+        }
+    );
+
+    let dependency = profile.instantiate_reference(&ReferenceInstantiationRequest {
+        bound_reference: record,
+        runtime_host_formula_context: host_context,
+        purpose: ReferenceInstantiationPurpose::StaticDependencyExtraction,
+    });
+    assert_eq!(
+        dependency,
+        InstantiatedReference::StaticDependencyEnvelope(ReferenceDependencyEnvelope::Static {
+            profile_id: "fake.symbolic.v1".to_string(),
+            dependency_key: "fake-cell:A1".to_string(),
+        })
+    );
+}
+
+#[test]
+fn default_profile_instantiation_classifies_dynamic_invalid_and_mismatched_context() {
+    let profile = FakeSymbolicProfile;
+    let bound = bind_formula_for("profile-instantiation-classes", "=A1", 2, 2, Some(&profile));
+    let mut record = profile_symbolic_record(&bound).clone();
+    let host_context = RuntimeHostFormulaContext {
+        profile_id: profile.profile_id().to_string(),
+        context_payload: None,
+    };
+
+    record.validity = ReferenceValidity::DynamicOrHostSensitive;
+    let dynamic = profile.instantiate_reference(&ReferenceInstantiationRequest {
+        bound_reference: record.clone(),
+        runtime_host_formula_context: host_context.clone(),
+        purpose: ReferenceInstantiationPurpose::RuntimeEvaluation,
+    });
+    assert_eq!(
+        dynamic,
+        InstantiatedReference::DynamicDependencyRequest(ReferenceDependencyEnvelope::Dynamic {
+            profile_id: "fake.symbolic.v1".to_string(),
+            request_key: "fake-cell:A1".to_string(),
+        })
+    );
+
+    record.validity = ReferenceValidity::InvalidForCurrentPlacement;
+    let invalid = profile.instantiate_reference(&ReferenceInstantiationRequest {
+        bound_reference: record.clone(),
+        runtime_host_formula_context: host_context,
+        purpose: ReferenceInstantiationPurpose::RuntimeEvaluation,
+    });
+    assert_eq!(invalid, InstantiatedReference::RefError);
+
+    record.validity = ReferenceValidity::ValidAfterInstantiation;
+    let mismatched = profile.instantiate_reference(&ReferenceInstantiationRequest {
+        bound_reference: record,
+        runtime_host_formula_context: RuntimeHostFormulaContext {
+            profile_id: "other.profile.v1".to_string(),
+            context_payload: None,
+        },
+        purpose: ReferenceInstantiationPurpose::RuntimeEvaluation,
+    });
+    assert!(matches!(
+        mismatched,
+        InstantiatedReference::Unsupported { .. }
+    ));
+}
+
 fn bind_formula_for(
     stable_id: &str,
     formula: &str,
@@ -341,10 +427,15 @@ fn looks_like_fake_cell_ref(text: &str) -> bool {
 
 fn assert_profile_symbolic_normalized_reference(bound: &BoundFormula, expected_key: &str) {
     assert_eq!(bound.normalized_references.len(), 1);
+    assert_eq!(
+        profile_symbolic_record(bound).normal_form_key.0,
+        expected_key
+    );
+}
+
+fn profile_symbolic_record(bound: &BoundFormula) -> &ProfileReferenceRecord {
     match &bound.normalized_references[0] {
-        NormalizedReference::ProfileSymbolic(record) => {
-            assert_eq!(record.normal_form_key.0, expected_key);
-        }
+        NormalizedReference::ProfileSymbolic(record) => record,
         other => panic!("expected profile symbolic reference, got {other:?}"),
     }
 }
