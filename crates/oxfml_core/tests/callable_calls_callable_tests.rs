@@ -119,8 +119,6 @@ fn bind_body_formula(case_id: &str, formula: &str, names: BTreeMap<String, NameK
             ..BindContext::default()
         },
 
-        host_name_resolver: None,
-
         reference_bind_profile: None,
     });
     bind.bound_formula.root

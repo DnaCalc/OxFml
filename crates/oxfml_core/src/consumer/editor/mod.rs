@@ -1,4 +1,4 @@
-use crate::binding::{BindContext, ReferenceBindProfile};
+use crate::binding::{BindContext, ReferenceBindProfile, ReferenceSelectorKind};
 use crate::consumer::ConsumerLibraryContextState;
 use crate::interface::LibraryContextProvider;
 use crate::language_service::{
@@ -364,10 +364,8 @@ impl<'a> EditorEditService<'a> {
         analysis_stage: EditorAnalysisStage,
         plan_options: Option<EditorPlanOptions>,
     ) -> Result<EditorHostReferenceInsertionResult, EditorHostReferenceInsertionError> {
-        let inserted_text = compose_host_reference_text(
-            &request.target,
-            &self.environment.bind_context.host_reference_syntax,
-        )?;
+        let inserted_text =
+            compose_host_reference_text(&request.target, self.environment.reference_bind_profile)?;
         let application = self.validate_completion(
             document,
             request.replacement_span,
@@ -386,7 +384,7 @@ impl<'a> EditorEditService<'a> {
 
 fn compose_host_reference_text(
     target: &EditorHostReferenceTarget,
-    host_reference_syntax: &crate::syntax::parser::HostReferenceSyntaxProfile,
+    reference_bind_profile: Option<&dyn ReferenceBindProfile>,
 ) -> Result<String, EditorHostReferenceInsertionError> {
     match target {
         EditorHostReferenceTarget::HostName { canonical_name } => compose_host_name(canonical_name),
@@ -397,20 +395,23 @@ fn compose_host_reference_text(
             if collection_family.is_empty() {
                 return Err(EditorHostReferenceInsertionError::EmptySelectorFamily);
             }
-            let token = host_reference_syntax
-                .collection_members
-                .iter()
-                .find(|member| member.collection_family == *collection_family)
-                .map(|member| member.token_text.as_str())
+            let token = reference_bind_profile
+                .into_iter()
+                .flat_map(|profile| profile.selector_syntax())
+                .find(|selector| {
+                    selector.selector_kind == ReferenceSelectorKind::Collection
+                        && selector.selector_family == *collection_family
+                })
+                .map(|selector| selector.token_text)
                 .ok_or_else(|| {
                     EditorHostReferenceInsertionError::UnknownCollectionFamily(
                         collection_family.clone(),
                     )
                 })?;
-            let selector_text = compose_member_selector_token(token);
+            let selector_text = compose_member_selector_token(&token);
             match base_canonical_name {
                 Some(base) => Ok(format!("{}.{}", compose_host_name(base)?, selector_text)),
-                None => Ok(compose_owner_relative_selector_token(token)),
+                None => Ok(compose_owner_relative_selector_token(&token)),
             }
         }
         EditorHostReferenceTarget::HostStructuralSelector {
@@ -420,11 +421,14 @@ fn compose_host_reference_text(
             if selector_family.is_empty() {
                 return Err(EditorHostReferenceInsertionError::EmptySelectorFamily);
             }
-            let token = host_reference_syntax
-                .structural_selectors
-                .iter()
-                .find(|selector| selector.selector_family == *selector_family)
-                .map(|selector| selector.token_text.as_str())
+            let token = reference_bind_profile
+                .into_iter()
+                .flat_map(|profile| profile.selector_syntax())
+                .find(|selector| {
+                    selector.selector_kind == ReferenceSelectorKind::StructuralSelector
+                        && selector.selector_family == *selector_family
+                })
+                .map(|selector| selector.token_text)
                 .ok_or_else(|| {
                     EditorHostReferenceInsertionError::UnknownStructuralSelectorFamily(
                         selector_family.clone(),
@@ -433,7 +437,7 @@ fn compose_host_reference_text(
             Ok(format!(
                 "{}.{}",
                 compose_host_name(base_canonical_name)?,
-                compose_member_selector_token(token)
+                compose_member_selector_token(&token)
             ))
         }
     }

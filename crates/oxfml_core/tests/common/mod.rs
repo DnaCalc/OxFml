@@ -57,8 +57,6 @@ pub fn compile_formula_with_library_context(
             ..BindContext::default()
         },
 
-        host_name_resolver: None,
-
         reference_bind_profile: None,
     });
 

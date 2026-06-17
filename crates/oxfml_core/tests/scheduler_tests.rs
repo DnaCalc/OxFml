@@ -148,8 +148,6 @@ fn contract_for(formula: &str) -> oxfml_core::ExecutionContract {
             ..BindContext::default()
         },
 
-        host_name_resolver: None,
-
         reference_bind_profile: None,
     });
 

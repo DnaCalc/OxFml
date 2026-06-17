@@ -789,8 +789,6 @@ fn compile(formula: &str) -> oxfml_core::SemanticPlan {
             ..BindContext::default()
         },
 
-        host_name_resolver: None,
-
         reference_bind_profile: None,
     });
 
@@ -1123,8 +1121,6 @@ fn evaluate_fixture_formula(
             names: name_kinds,
             ..BindContext::default()
         },
-
-        host_name_resolver: None,
 
         reference_bind_profile: None,
     });

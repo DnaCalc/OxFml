@@ -793,8 +793,6 @@ fn bind_with_table_context(formula: &str, context: BindContext) -> oxfml_core::B
             ..context
         },
 
-        host_name_resolver: None,
-
         reference_bind_profile: None,
     })
     .bound_formula

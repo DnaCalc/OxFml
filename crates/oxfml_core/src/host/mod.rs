@@ -44,8 +44,8 @@ use crate::semantics::{CompileSemanticPlanRequest, SemanticPlan, compile_semanti
 use crate::source::{FormulaSourceRecord, StructureContextVersion};
 use crate::syntax::green::GreenTreeRoot;
 use crate::syntax::parser::{
-    HostReferenceSyntaxProfile, ParseRequest, parse_formula_incremental,
-    parse_formula_with_host_reference_syntax,
+    ParseRequest, ReferenceSelectorSyntaxProfile,
+    parse_formula_incremental_with_reference_selector_syntax,
 };
 use crate::syntax::token::SyntaxDiagnostic;
 
@@ -86,7 +86,6 @@ pub struct SingleFormulaHost {
     pub table_catalog: Vec<TableDescriptor>,
     pub enclosing_table_ref: Option<TableRef>,
     pub caller_table_region: Option<TableCallerRegion>,
-    pub host_reference_syntax: HostReferenceSyntaxProfile,
     pub now_serial: Option<f64>,
     pub trace_mode: EvaluationTraceMode,
     next_session_id: u64,
@@ -255,7 +254,6 @@ impl SingleFormulaHost {
             table_catalog: Vec::new(),
             enclosing_table_ref: None,
             caller_table_region: None,
-            host_reference_syntax: HostReferenceSyntaxProfile::default(),
             now_serial: Some(46000.0),
             trace_mode: EvaluationTraceMode::default(),
             next_session_id: 1,
@@ -457,24 +455,16 @@ impl SingleFormulaHost {
             source = source.with_stored_formula_text(stored_formula_text.clone());
         }
         let cached_artifacts = self.cached_artifacts.as_ref();
-        let (green_tree, green_tree_reused) =
-            if self.host_reference_syntax == HostReferenceSyntaxProfile::default() {
-                let parse = parse_formula_incremental(
-                    ParseRequest {
-                        source: source.clone(),
-                    },
-                    cached_artifacts.map(|artifacts| &artifacts.green_tree),
-                );
-                (parse.green_tree, parse.reused_green_tree)
-            } else {
-                let parse = parse_formula_with_host_reference_syntax(
-                    ParseRequest {
-                        source: source.clone(),
-                    },
-                    &self.host_reference_syntax,
-                );
-                (parse.green_tree, false)
-            };
+        let selector_syntax =
+            ReferenceSelectorSyntaxProfile::from_bind_profile(reference_bind_profile);
+        let parse = parse_formula_incremental_with_reference_selector_syntax(
+            ParseRequest {
+                source: source.clone(),
+            },
+            cached_artifacts.map(|artifacts| &artifacts.green_tree),
+            &selector_syntax,
+        );
+        let (green_tree, green_tree_reused) = (parse.green_tree, parse.reused_green_tree);
         let red = project_red_view_incremental(
             source.formula_stable_id.clone(),
             &green_tree,
@@ -517,9 +507,6 @@ impl SingleFormulaHost {
                     caller_table_region: self.caller_table_region.clone(),
                     ..BindContext::default()
                 },
-
-                host_name_resolver: None,
-
                 reference_bind_profile,
             },
             cached_artifacts.map(|artifacts| &artifacts.bound_formula),

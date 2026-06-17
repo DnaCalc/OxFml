@@ -72,8 +72,6 @@ fn parse_and_bind_fixtures_match_initial_w002_slice() {
                 ..BindContext::default()
             },
 
-            host_name_resolver: None,
-
             reference_bind_profile: None,
         });
 
@@ -137,8 +135,6 @@ fn unresolved_identifier_becomes_typed_bind_diagnostic() {
         red_projection: red,
         context: BindContext::default(),
 
-        host_name_resolver: None,
-
         reference_bind_profile: None,
     });
 
@@ -164,8 +160,6 @@ fn incremental_parse_red_and_bind_reuse_same_immutable_artifacts() {
             ..BindContext::default()
         },
 
-        host_name_resolver: None,
-
         reference_bind_profile: None,
     });
 
@@ -194,8 +188,6 @@ fn incremental_parse_red_and_bind_reuse_same_immutable_artifacts() {
                 formula_token: source.formula_token(),
                 ..BindContext::default()
             },
-
-            host_name_resolver: None,
 
             reference_bind_profile: None,
         },
@@ -221,8 +213,6 @@ fn incremental_reference_breadth_reuse_keeps_whole_row_bindings() {
             ..BindContext::default()
         },
 
-        host_name_resolver: None,
-
         reference_bind_profile: None,
     });
 
@@ -252,8 +242,6 @@ fn incremental_reference_breadth_reuse_keeps_whole_row_bindings() {
                 ..BindContext::default()
             },
 
-            host_name_resolver: None,
-
             reference_bind_profile: None,
         },
         Some(&bind.bound_formula),
@@ -278,8 +266,6 @@ fn incremental_bind_invalidates_when_bind_context_changes() {
             ..BindContext::default()
         },
 
-        host_name_resolver: None,
-
         reference_bind_profile: None,
     });
 
@@ -299,8 +285,6 @@ fn incremental_bind_invalidates_when_bind_context_changes() {
                 names,
                 ..BindContext::default()
             },
-
-            host_name_resolver: None,
 
             reference_bind_profile: None,
         },
@@ -325,8 +309,6 @@ fn bind_inherits_explicit_sheet_qualifier_across_simple_a1_range() {
             formula_token: source.formula_token(),
             ..BindContext::default()
         },
-
-        host_name_resolver: None,
 
         reference_bind_profile: None,
     });
@@ -361,8 +343,6 @@ fn bind_preserves_array_literal_multiplied_by_unary_negative_literal_shape() {
             formula_token: source.formula_token(),
             ..BindContext::default()
         },
-
-        host_name_resolver: None,
 
         reference_bind_profile: None,
     });
@@ -407,8 +387,6 @@ fn bind_prefers_builtin_function_over_colliding_helper_local_in_call_position() 
             formula_token: source.formula_token(),
             ..BindContext::default()
         },
-
-        host_name_resolver: None,
 
         reference_bind_profile: None,
     });
@@ -466,8 +444,6 @@ fn bind_surfaces_t_builtin_arity_authoring_reject_for_ftc_0444() {
             ..BindContext::default()
         },
 
-        host_name_resolver: None,
-
         reference_bind_profile: None,
     });
 
@@ -515,8 +491,6 @@ fn bind_surfaces_generic_builtin_arity_authoring_reject_for_plain_gcd_zero_arity
             ..BindContext::default()
         },
 
-        host_name_resolver: None,
-
         reference_bind_profile: None,
     });
 
@@ -558,8 +532,6 @@ fn bind_accepts_error_literal_inside_array_call_for_ftc_0837() {
             formula_token: source.formula_token(),
             ..BindContext::default()
         },
-
-        host_name_resolver: None,
 
         reference_bind_profile: None,
     });
@@ -618,8 +590,6 @@ fn bind_accepts_filterxml_embedded_quoted_xml_string_for_ftc_1041() {
             formula_token: source.formula_token(),
             ..BindContext::default()
         },
-
-        host_name_resolver: None,
 
         reference_bind_profile: None,
     });
@@ -680,8 +650,6 @@ fn parse_rejects_unbalanced_deep_parenthesis_family_for_ftc_0916_and_ftc_0987() 
             ..BindContext::default()
         },
 
-        host_name_resolver: None,
-
         reference_bind_profile: None,
     });
 
@@ -709,8 +677,6 @@ fn bind_prefers_helper_local_name_over_cell_like_reference_text() {
             formula_token: source.formula_token(),
             ..BindContext::default()
         },
-
-        host_name_resolver: None,
 
         reference_bind_profile: None,
     });

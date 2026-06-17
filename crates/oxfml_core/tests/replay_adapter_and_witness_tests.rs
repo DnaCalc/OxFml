@@ -756,8 +756,6 @@ fn replay_execution_contract_case(
             ..BindContext::default()
         },
 
-        host_name_resolver: None,
-
         reference_bind_profile: None,
     });
     let plan = compile_semantic_plan(CompileSemanticPlanRequest {
@@ -791,8 +789,6 @@ fn compile_prepare_request(formula: &str, with_input_name: bool) -> PrepareReque
             names,
             ..BindContext::default()
         },
-
-        host_name_resolver: None,
 
         reference_bind_profile: None,
     });

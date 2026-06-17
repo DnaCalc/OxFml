@@ -59,7 +59,7 @@ use oxfunc_core::resolver::{
     ReferenceEnumerationRequest, ReferenceResolutionError, ReferenceSystemProvider,
     ResolvedReferenceCell, ResolvedReferenceExtent, ResolvedReferenceValues,
 };
-use oxfunc_core::value::{ArrayShape, ReferenceKind, ReferenceLike};
+use oxfunc_core::value::{ArrayShape, ReferenceKind, ReferenceLike, WorksheetErrorCode};
 use oxfunc_core::value::{CalcArray, CalcValue};
 use oxfunc_core::value::{CoreValue, ExcelText};
 
@@ -133,6 +133,29 @@ fn runtime_environment_evaluates_non_formula_worksheet_entries() {
         );
     }
 }
+
+#[test]
+fn runtime_formula_only_without_host_provider_runs_pure_formulas_and_rejects_indirect_refs() {
+    let pure = RuntimeEnvironment::new()
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new("runtime:formula-only:pure", 1, "=1+2"),
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("pure formula should run without a host reference provider");
+    assert_eq!(pure.evaluation.oxfunc_value, CalcValue::number(3.0));
+
+    let reference = RuntimeEnvironment::new()
+        .execute(RuntimeFormulaRequest::new(
+            FormulaSourceRecord::new("runtime:formula-only:indirect", 1, "=INDIRECT(\"A1\")"),
+            TypedContextQueryBundle::default(),
+        ))
+        .expect("reference operation should return a worksheet error");
+    assert_eq!(
+        reference.evaluation.oxfunc_value,
+        CalcValue::error(WorksheetErrorCode::Ref)
+    );
+}
+
 use serde_json::Value;
 
 #[test]

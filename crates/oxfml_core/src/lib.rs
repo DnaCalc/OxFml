@@ -58,24 +58,23 @@ pub use oxfunc_core::functions::call_register_id_family::{
 
 pub use binding::{
     BindContext, BindDiagnostic, BindProfile, BindRequest, BindResult, BoundExpr, BoundFormula,
-    BoundHostReferenceCollection, BoundHostStructuralSelector, FormulaSourceIdentity,
-    FormulaTemplateIdentity, HostNameBindRecord, HostReferenceCollectionResolveRequest,
-    HostReferenceCollectionResolveResult, HostStructuralSelectorResolveRequest,
-    HostStructuralSelectorResolveResult, IncrementalBindResult, InstantiatedReference,
+    FormulaSourceIdentity, FormulaTemplateIdentity, IncrementalBindResult, InstantiatedReference,
     NormalizedReference, PlacedFormulaIdentity, ProfilePayload, ProfileReferenceRecord,
     ProfileVersion, ReferenceAtomBindRequest, ReferenceAtomBindResult, ReferenceBindProfile,
     ReferenceCompletionProposal, ReferenceCompletionRequest, ReferenceCompletionResult,
     ReferenceDependencyEnvelope, ReferenceEditorContext, ReferenceExpr, ReferenceFingerprintPolicy,
-    ReferenceInstantiationPurpose, ReferenceInstantiationRequest, ReferenceNormalFormKey,
-    ReferenceOperatorCapabilities, ReferencePolicy, ReferenceProfileFingerprint,
-    ReferenceProfileFingerprintContext, ReferenceRangeBindRequest, ReferenceRangeBindResult,
-    ReferenceRangeEndpointBindRequest, ReferenceRenderRequest, ReferenceRenderResult,
-    ReferenceSourceInfo, ReferenceSyntaxCapabilities, ReferenceTransformKind,
-    ReferenceTransformOutcome, ReferenceTransformRequest, ReferenceTransformResult,
-    ReferenceValidity, RuntimeDependencyIdentity, RuntimeHostFormulaContext,
-    StructuredReferenceBindDiagnosticLink, StructuredReferenceBindRecord,
-    StructuredReferenceSelectedRegion, StructuredReferenceSourceTokenKind, StructuredSectionKind,
-    bind_formula, bind_formula_incremental,
+    ReferenceInstantiationPurpose, ReferenceInstantiationRequest, ReferenceNameBindRequest,
+    ReferenceNormalFormKey, ReferenceOperatorCapabilities, ReferencePolicy,
+    ReferenceProfileFingerprint, ReferenceProfileFingerprintContext, ReferenceRangeBindRequest,
+    ReferenceRangeBindResult, ReferenceRangeEndpointBindRequest, ReferenceRenderRequest,
+    ReferenceRenderResult, ReferenceSelectorBindRequest, ReferenceSelectorKind,
+    ReferenceSelectorSyntax, ReferenceSourceInfo, ReferenceStructuredBindRequest,
+    ReferenceSyntaxCapabilities, ReferenceTransformKind, ReferenceTransformOutcome,
+    ReferenceTransformRequest, ReferenceTransformResult, ReferenceValidity,
+    RuntimeDependencyIdentity, RuntimeHostFormulaContext, StructuredReferenceBindDiagnosticLink,
+    StructuredReferenceBindRecord, StructuredReferenceSelectedRegion,
+    StructuredReferenceSourceTokenKind, StructuredSectionKind, bind_formula,
+    bind_formula_incremental,
 };
 pub use carrier::{
     CarrierRestrictionCode, CarrierValidationDisposition, ConditionalFormattingCarrierSpec,
@@ -142,8 +141,8 @@ pub use source::{
 };
 pub use syntax::green::{GreenTreeRoot, SyntaxKind};
 pub use syntax::parser::{
-    HostReferenceCollectionSyntax, HostReferenceStructuralSelectorSyntax,
-    HostReferenceSyntaxProfile, IncrementalParseResult, ParseRequest, ParseResult, parse_formula,
-    parse_formula_incremental, parse_formula_incremental_with_host_reference_syntax,
-    parse_formula_with_host_reference_syntax,
+    IncrementalParseResult, ParseRequest, ParseResult, ReferenceSelectorSyntaxProfile,
+    parse_formula, parse_formula_incremental,
+    parse_formula_incremental_with_reference_selector_syntax,
+    parse_formula_with_reference_selector_syntax,
 };

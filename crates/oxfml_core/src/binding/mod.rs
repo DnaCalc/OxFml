@@ -12,13 +12,15 @@ pub use profile::{
     ReferenceAtomBindRequest, ReferenceAtomBindResult, ReferenceBindProfile,
     ReferenceCompletionProposal, ReferenceCompletionRequest, ReferenceCompletionResult,
     ReferenceDependencyEnvelope, ReferenceEditorContext, ReferenceFingerprintPolicy,
-    ReferenceInstantiationPurpose, ReferenceInstantiationRequest, ReferenceNormalFormKey,
-    ReferenceOperatorCapabilities, ReferencePolicy, ReferenceProfileFingerprint,
-    ReferenceProfileFingerprintContext, ReferenceRangeBindRequest, ReferenceRangeBindResult,
-    ReferenceRangeEndpointBindRequest, ReferenceRenderRequest, ReferenceRenderResult,
-    ReferenceSourceInfo, ReferenceSyntaxCapabilities, ReferenceTransformKind,
-    ReferenceTransformOutcome, ReferenceTransformRequest, ReferenceTransformResult,
-    ReferenceValidity, RuntimeDependencyIdentity, RuntimeHostFormulaContext,
+    ReferenceInstantiationPurpose, ReferenceInstantiationRequest, ReferenceNameBindRequest,
+    ReferenceNormalFormKey, ReferenceOperatorCapabilities, ReferencePolicy,
+    ReferenceProfileFingerprint, ReferenceProfileFingerprintContext, ReferenceRangeBindRequest,
+    ReferenceRangeBindResult, ReferenceRangeEndpointBindRequest, ReferenceRenderRequest,
+    ReferenceRenderResult, ReferenceSelectorBindRequest, ReferenceSelectorKind,
+    ReferenceSelectorSyntax, ReferenceSourceInfo, ReferenceStructuredBindRequest,
+    ReferenceSyntaxCapabilities, ReferenceTransformKind, ReferenceTransformOutcome,
+    ReferenceTransformRequest, ReferenceTransformResult, ReferenceValidity,
+    RuntimeDependencyIdentity, RuntimeHostFormulaContext,
 };
 pub use reference::{
     AddressMode, AreaRef, CellCoord, CellRef, ErrorRef, ExternalRef, NameKind, NameRef,
@@ -37,7 +39,6 @@ use crate::source::{
     FormulaChannelKind, FormulaSourceRecord, FormulaToken, StructureContextVersion,
 };
 use crate::syntax::green::{GreenChild, GreenNode, GreenTreeRoot, SyntaxKind};
-use crate::syntax::parser::HostReferenceSyntaxProfile;
 use crate::syntax::token::TextSpan;
 use oxfunc_core::function::{ArgPreparationProfile, FecDependencyProfile, FunctionMeta};
 
@@ -98,69 +99,6 @@ pub struct BoundHostReferenceCollection {
     pub caller_context_dependent: bool,
     pub diagnostics: Vec<String>,
     pub replay_identity_contribution: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HostNameResolveRequest {
-    pub source: FormulaSourceRecord,
-    pub source_span: TextSpan,
-    pub source_token_text: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HostNameResolveResult {
-    pub kind: NameKind,
-    pub bind_record: HostNameBindRecord,
-}
-
-pub trait HostNameResolver {
-    fn resolve_host_name(&self, request: &HostNameResolveRequest) -> Option<HostNameResolveResult>;
-
-    fn resolve_host_reference_collection(
-        &self,
-        _request: &HostReferenceCollectionResolveRequest,
-    ) -> Option<HostReferenceCollectionResolveResult> {
-        None
-    }
-
-    fn resolve_host_structural_selector(
-        &self,
-        _request: &HostStructuralSelectorResolveRequest,
-    ) -> Option<HostStructuralSelectorResolveResult> {
-        None
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HostReferenceCollectionResolveRequest {
-    pub source: FormulaSourceRecord,
-    pub collection_handle: String,
-    pub collection_family: String,
-    pub base: Option<BoundExpr>,
-    pub source_span: TextSpan,
-    pub source_token_text: String,
-    pub member_token_text: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HostReferenceCollectionResolveResult {
-    pub collection: BoundHostReferenceCollection,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HostStructuralSelectorResolveRequest {
-    pub source: FormulaSourceRecord,
-    pub selector_handle: String,
-    pub selector_family: String,
-    pub base: BoundExpr,
-    pub source_span: TextSpan,
-    pub source_token_text: String,
-    pub member_token_text: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HostStructuralSelectorResolveResult {
-    pub selector: BoundHostStructuralSelector,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -274,7 +212,6 @@ pub struct BindContext {
     pub table_catalog: Vec<TableDescriptor>,
     pub enclosing_table_ref: Option<TableRef>,
     pub caller_table_region: Option<TableCallerRegion>,
-    pub host_reference_syntax: HostReferenceSyntaxProfile,
 }
 
 impl Default for BindContext {
@@ -293,7 +230,6 @@ impl Default for BindContext {
             table_catalog: Vec::new(),
             enclosing_table_ref: None,
             caller_table_region: None,
-            host_reference_syntax: HostReferenceSyntaxProfile::default(),
         }
     }
 }
@@ -303,7 +239,6 @@ pub struct BindRequest<'a> {
     pub green_tree: GreenTreeRoot,
     pub red_projection: RedProjection,
     pub context: BindContext,
-    pub host_name_resolver: Option<&'a dyn HostNameResolver>,
     pub reference_bind_profile: Option<&'a dyn ReferenceBindProfile>,
 }
 
@@ -335,9 +270,7 @@ pub fn bind_formula(request: BindRequest<'_>) -> BindResult {
         formula_source_identity_for(&request.source, request.reference_bind_profile);
 
     let mut binder = Binder {
-        source: request.source.clone(),
         context: request.context,
-        host_name_resolver: request.host_name_resolver,
         reference_bind_profile: request.reference_bind_profile,
         formula_channel_kind: request.source.formula_channel_kind,
         diagnostics: Vec::new(),
@@ -457,9 +390,7 @@ pub fn bind_formula_incremental(
 }
 
 struct Binder<'a> {
-    source: FormulaSourceRecord,
     context: BindContext,
-    host_name_resolver: Option<&'a dyn HostNameResolver>,
     reference_bind_profile: Option<&'a dyn ReferenceBindProfile>,
     formula_channel_kind: FormulaChannelKind,
     diagnostics: Vec<BindDiagnostic>,
@@ -638,6 +569,23 @@ impl Binder<'_> {
                 },
             )));
         }
+        if self.is_helper_local_name(&text) {
+            let normalized = NormalizedReference::Name(NameRef {
+                name: text,
+                workbook_id: self.context.workbook_id.clone(),
+                sheet_id: self.context.sheet_id.clone(),
+                kind: NameKind::HelperLocal,
+                caller_context_dependent: false,
+            });
+            self.push_reference_seed(&normalized);
+            return BoundExpr::Reference(ReferenceExpr::Atom(normalized));
+        }
+        let sheet_id = self.context.sheet_id.clone();
+        if let Some(host_name) = bracketed_host_name_text(&text)
+            && let Some(bound) = self.try_bind_profile_name(&host_name, node.span, &sheet_id, None)
+        {
+            return bound;
+        }
         if let Some(host_name) = bracketed_host_name_text(&text)
             && let Some(kind) = self.context_name_kind(&host_name, node.span)
         {
@@ -655,10 +603,18 @@ impl Binder<'_> {
                 .map(BoundExpr::HostReference)
                 .unwrap_or_else(|| BoundExpr::Reference(ReferenceExpr::Atom(normalized)));
         }
-        let sheet_id = self.context.sheet_id.clone();
+        if let Some(bound) = self.try_bind_profile_name(&text, node.span, &sheet_id, None) {
+            return bound;
+        }
         if let Some(bound) = self.try_bind_profile_reference_atom(&text, node.span, &sheet_id, None)
         {
             return bound;
+        }
+        if let Some(bound) = self.try_bind_profile_structured_reference(&text, node.span) {
+            return bound;
+        }
+        if self.profile_uses_symbolic_references() {
+            return self.profile_unresolved_identifier_error(&text, node.span);
         }
         if let Some(structured) = bind_structured_reference_text(
             &text,
@@ -672,16 +628,6 @@ impl Binder<'_> {
         ) {
             self.push_reference_seed(&structured);
             BoundExpr::Reference(ReferenceExpr::Atom(structured))
-        } else if self.is_helper_local_name(&text) {
-            let normalized = NormalizedReference::Name(NameRef {
-                name: text,
-                workbook_id: self.context.workbook_id.clone(),
-                sheet_id: self.context.sheet_id.clone(),
-                kind: NameKind::HelperLocal,
-                caller_context_dependent: false,
-            });
-            self.push_reference_seed(&normalized);
-            BoundExpr::Reference(ReferenceExpr::Atom(normalized))
         } else if let Some(cell_ref) = parse_cell_reference(
             &text,
             &self.context.sheet_id,
@@ -748,47 +694,22 @@ impl Binder<'_> {
             })
             .unwrap_or_default();
         let member = bracketed_host_name_text(&member).unwrap_or(member);
-        let selector_family = self.host_reference_collection_family(&member);
-        let selector_handle = format!("hostref_selector_{}_{}", node.span.start, node.span.len);
         let source_token_text = node_source_text(node);
-        if let Some(resolver) = self.host_name_resolver
-            && let Some(result) =
-                resolver.resolve_host_structural_selector(&HostStructuralSelectorResolveRequest {
-                    source: self.source.clone(),
-                    selector_handle: selector_handle.clone(),
-                    selector_family: selector_family.clone(),
-                    base: base.clone(),
-                    source_span: node.span,
-                    source_token_text: source_token_text.clone(),
-                    member_token_text: member.clone(),
-                })
-        {
-            self.push_reference_seed(&host_reference_handle_normalized_reference(
-                &result.selector.selector_handle,
-                result.selector.caller_context_dependent,
-            ));
-            return BoundExpr::HostStructuralSelector(result.selector);
+        let selector_kind = if token_text(node, "@").is_some() {
+            ReferenceSelectorKind::Collection
+        } else {
+            ReferenceSelectorKind::StructuralSelector
+        };
+        if let Some(bound) = self.try_bind_profile_selector(
+            &source_token_text,
+            node.span,
+            &member,
+            selector_kind,
+            Some(&base),
+        ) {
+            return bound;
         }
-        self.push_reference_seed(&host_reference_handle_normalized_reference(
-            &selector_handle,
-            true,
-        ));
-        BoundExpr::HostStructuralSelector(BoundHostStructuralSelector {
-            selector_handle,
-            selector_family,
-            base: Box::new(base),
-            members: Vec::new(),
-            source_span: node.span,
-            source_token_text,
-            resolution_layer: "host_member_reference_syntax".to_string(),
-            shape_hint: Some("host_structural_selector".to_string()),
-            caller_context_dependent: true,
-            diagnostics: Vec::new(),
-            replay_identity_contribution: format!(
-                "host-member-selector:v1:span={}:{};member={member}",
-                node.span.start, node.span.len
-            ),
-        })
+        self.profile_unresolved_reference_error(&source_token_text, node.span)
     }
 
     fn bind_host_reference_collection(&mut self, node: &GreenNode) -> BoundExpr {
@@ -811,55 +732,17 @@ impl Binder<'_> {
             })
             .unwrap_or_default();
         let member = bracketed_host_name_text(&member).unwrap_or(member);
-        let collection_family = self.host_reference_collection_family(&member);
-        let collection_handle = format!("hostref_collection_{}_{}", node.span.start, node.span.len);
         let source_token_text = node_source_text(node);
-        if let Some(resolver) = self.host_name_resolver
-            && let Some(result) =
-                resolver.resolve_host_reference_collection(&HostReferenceCollectionResolveRequest {
-                    source: self.source.clone(),
-                    collection_handle: collection_handle.clone(),
-                    collection_family: collection_family.clone(),
-                    base: None,
-                    source_span: node.span,
-                    source_token_text: source_token_text.clone(),
-                    member_token_text: member.clone(),
-                })
-        {
-            self.push_reference_seed(&host_reference_handle_normalized_reference(
-                &result.collection.collection_handle,
-                result.collection.caller_context_dependent,
-            ));
-            return BoundExpr::HostReferenceCollection(result.collection);
+        if let Some(bound) = self.try_bind_profile_selector(
+            &source_token_text,
+            node.span,
+            &member,
+            ReferenceSelectorKind::Collection,
+            None,
+        ) {
+            return bound;
         }
-        self.push_reference_seed(&host_reference_handle_normalized_reference(
-            &collection_handle,
-            true,
-        ));
-        BoundExpr::HostReferenceCollection(BoundHostReferenceCollection {
-            collection_handle,
-            collection_family,
-            base: None,
-            members: Vec::new(),
-            source_span: node.span,
-            source_token_text,
-            resolution_layer: "host_reference_collection_syntax".to_string(),
-            shape_hint: Some("host_reference_collection".to_string()),
-            caller_context_dependent: true,
-            diagnostics: Vec::new(),
-            replay_identity_contribution: format!(
-                "host-reference-collection:v1:span={}:{};member={member}",
-                node.span.start, node.span.len
-            ),
-        })
-    }
-
-    fn host_reference_collection_family(&self, member: &str) -> String {
-        self.context
-            .host_reference_syntax
-            .host_selector_family_for(member)
-            .unwrap_or(member)
-            .to_ascii_lowercase()
+        self.profile_unresolved_reference_error(&source_token_text, node.span)
     }
 
     fn bind_array_literal(&mut self, node: &GreenNode) -> BoundExpr {
@@ -939,6 +822,13 @@ impl Binder<'_> {
                         .push("external_reference".to_string());
                     self.push_reference_seed(&normalized);
                     BoundExpr::Reference(ReferenceExpr::Atom(normalized))
+                } else if let Some(bound) = self.try_bind_profile_name(
+                    &source_text,
+                    node.span,
+                    &qualifier.sheet_id,
+                    Some(qualifier.raw.clone()),
+                ) {
+                    bound
                 } else if let Some(bound) = self.try_bind_profile_reference_atom(
                     &source_text,
                     node.span,
@@ -946,6 +836,12 @@ impl Binder<'_> {
                     Some(qualifier.raw.clone()),
                 ) {
                     bound
+                } else if let Some(bound) =
+                    self.try_bind_profile_structured_reference(&source_text, node.span)
+                {
+                    bound
+                } else if self.profile_uses_symbolic_references() {
+                    self.profile_unresolved_reference_error(&source_text, node.span)
                 } else if let Some(structured) = bind_structured_reference_text_with_sheet(
                     &text,
                     &source_text,
@@ -1209,14 +1105,19 @@ impl Binder<'_> {
         let builtin_function_meta = lookup_function_meta(&uppercase_function_name);
         let builtin_function_match = builtin_function_meta.is_some();
         let host_reference_name_match = context_name_kind.is_some() && !builtin_function_match;
+        let profile_reference_name_match = !builtin_function_match
+            && !host_reference_name_match
+            && self.profile_can_bind_name(&function_name, callee_span);
         let _udf_function_match = !builtin_function_match
             && !host_reference_name_match
+            && !profile_reference_name_match
             && matches!(
                 self.function_surface_kind(&uppercase_function_name),
                 Some(BindFunctionSurfaceKind::Udf)
             );
-        let binds_as_invocation =
-            (helper_local_match && !builtin_function_match) || host_reference_name_match;
+        let binds_as_invocation = (helper_local_match && !builtin_function_match)
+            || host_reference_name_match
+            || profile_reference_name_match;
 
         if !binds_as_invocation
             && let Some(meta) = builtin_function_meta.as_ref()
@@ -1318,6 +1219,35 @@ impl Binder<'_> {
             .unwrap_or(false)
     }
 
+    fn try_bind_profile_name(
+        &mut self,
+        source_text: &str,
+        source_span: TextSpan,
+        sheet_id: &str,
+        parsed_qualifier: Option<String>,
+    ) -> Option<BoundExpr> {
+        let profile = self.reference_bind_profile?;
+        let request = ReferenceAtomBindRequest {
+            source_channel: self.formula_channel_kind,
+            source_span,
+            source_text: source_text.to_string(),
+            parsed_qualifier,
+            workbook_id: self.context.workbook_id.clone(),
+            sheet_id: sheet_id.to_string(),
+            caller_row: self.context.caller_row,
+            caller_col: self.context.caller_col,
+        };
+        let profile_id = profile.profile_id().to_string();
+        let result = profile.bind_name(&ReferenceNameBindRequest::from_atom(&request));
+        self.profile_atom_bind_result_to_bound(
+            &profile_id,
+            "name",
+            source_text,
+            source_span,
+            result,
+        )
+    }
+
     fn try_bind_profile_reference_atom(
         &mut self,
         source_text: &str,
@@ -1336,7 +1266,95 @@ impl Binder<'_> {
             caller_row: self.context.caller_row,
             caller_col: self.context.caller_col,
         };
-        match profile.bind_atom(&request) {
+        let profile_id = profile.profile_id().to_string();
+        let result = profile.bind_atom(&request);
+        self.profile_atom_bind_result_to_bound(
+            &profile_id,
+            "reference atom",
+            source_text,
+            source_span,
+            result,
+        )
+    }
+
+    fn try_bind_profile_structured_reference(
+        &mut self,
+        source_text: &str,
+        source_span: TextSpan,
+    ) -> Option<BoundExpr> {
+        let profile = self.reference_bind_profile?;
+        let request = ReferenceStructuredBindRequest {
+            source_channel: self.formula_channel_kind,
+            source_span,
+            source_text: source_text.to_string(),
+            workbook_id: self.context.workbook_id.clone(),
+            sheet_id: self.context.sheet_id.clone(),
+            caller_row: self.context.caller_row,
+            caller_col: self.context.caller_col,
+        };
+        let profile_id = profile.profile_id().to_string();
+        let result = profile.bind_structured_reference(&request);
+        self.profile_atom_bind_result_to_bound(
+            &profile_id,
+            "structured reference",
+            source_text,
+            source_span,
+            result,
+        )
+    }
+
+    fn try_bind_profile_selector(
+        &mut self,
+        source_text: &str,
+        source_span: TextSpan,
+        selector_token_text: &str,
+        selector_kind: ReferenceSelectorKind,
+        base: Option<&BoundExpr>,
+    ) -> Option<BoundExpr> {
+        let profile = self.reference_bind_profile?;
+        let selector_family = profile
+            .selector_syntax()
+            .into_iter()
+            .find(|selector| {
+                selector.selector_kind == selector_kind
+                    && normalized_reference_selector_token(&selector.token_text)
+                        == normalized_reference_selector_token(selector_token_text)
+            })
+            .map(|selector| selector.selector_family)
+            .unwrap_or_else(|| selector_token_text.to_ascii_lowercase());
+        let request = ReferenceSelectorBindRequest {
+            source_channel: self.formula_channel_kind,
+            source_span,
+            source_text: source_text.to_string(),
+            selector_token_text: selector_token_text.to_string(),
+            selector_family,
+            selector_kind,
+            base: base.and_then(profile_reference_record_from_bound_expr),
+            workbook_id: self.context.workbook_id.clone(),
+            sheet_id: self.context.sheet_id.clone(),
+            caller_row: self.context.caller_row,
+            caller_col: self.context.caller_col,
+        };
+        let profile_id = profile.profile_id().to_string();
+        let result = profile.bind_selector(&request);
+        self.profile_atom_bind_result_to_bound(
+            &profile_id,
+            "selector",
+            source_text,
+            source_span,
+            result,
+        )
+    }
+
+    fn profile_atom_bind_result_to_bound(
+        &mut self,
+        profile_id: &str,
+        reference_class: &str,
+        source_text: &str,
+        source_span: TextSpan,
+        result: ReferenceAtomBindResult,
+    ) -> Option<BoundExpr> {
+        match result {
             ReferenceAtomBindResult::Bound(record) => {
                 let normalized = NormalizedReference::ProfileSymbolic(record);
                 self.push_reference_seed(&normalized);
@@ -1345,9 +1363,7 @@ impl Binder<'_> {
             ReferenceAtomBindResult::Rejected { validity, message } => {
                 self.diagnostics.push(BindDiagnostic {
                     message: format!(
-                        "reference profile '{}' rejected '{}': {message} ({validity:?})",
-                        profile.profile_id(),
-                        source_text
+                        "reference profile '{profile_id}' rejected {reference_class} '{source_text}': {message} ({validity:?})"
                     ),
                     span: source_span,
                 });
@@ -1359,23 +1375,77 @@ impl Binder<'_> {
                 )))
             }
             ReferenceAtomBindResult::Unsupported => {
-                self.diagnostics.push(BindDiagnostic {
-                    message: format!(
-                        "reference profile '{}' does not support reference atom '{}'",
-                        profile.profile_id(),
-                        source_text
-                    ),
-                    span: source_span,
-                });
-                Some(BoundExpr::Reference(ReferenceExpr::Atom(
-                    NormalizedReference::Error(ErrorRef {
-                        error_class: "#REF!".to_string(),
-                        source_text: source_text.to_string(),
-                    }),
-                )))
+                let _ = (profile_id, reference_class, source_text, source_span);
+                None
             }
             ReferenceAtomBindResult::LegacyCompatibility => None,
         }
+    }
+
+    fn profile_can_bind_name(&self, source_text: &str, source_span: TextSpan) -> bool {
+        let Some(profile) = self.reference_bind_profile else {
+            return false;
+        };
+        let request = ReferenceNameBindRequest {
+            source_channel: self.formula_channel_kind,
+            source_span,
+            source_text: source_text.to_string(),
+            parsed_qualifier: None,
+            workbook_id: self.context.workbook_id.clone(),
+            sheet_id: self.context.sheet_id.clone(),
+            caller_row: self.context.caller_row,
+            caller_col: self.context.caller_col,
+        };
+        matches!(
+            profile.bind_name(&request),
+            ReferenceAtomBindResult::Bound(_)
+        )
+    }
+
+    fn profile_unresolved_reference_error(
+        &mut self,
+        source_text: &str,
+        source_span: TextSpan,
+    ) -> BoundExpr {
+        let profile_id = self
+            .reference_bind_profile
+            .map(|profile| profile.profile_id().to_string())
+            .unwrap_or_else(|| "formula-only".to_string());
+        self.unresolved_references.push(UnresolvedReferenceRecord {
+            source_text: source_text.to_string(),
+            reason: format!("reference profile '{profile_id}' did not bind this reference"),
+        });
+        self.diagnostics.push(BindDiagnostic {
+            message: format!("reference profile '{profile_id}' did not bind '{source_text}'"),
+            span: source_span,
+        });
+        BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Error(ErrorRef {
+            error_class: "#NAME?".to_string(),
+            source_text: source_text.to_string(),
+        })))
+    }
+
+    fn profile_unresolved_identifier_error(
+        &mut self,
+        source_text: &str,
+        source_span: TextSpan,
+    ) -> BoundExpr {
+        let profile_id = self
+            .reference_bind_profile
+            .map(|profile| profile.profile_id().to_string())
+            .unwrap_or_else(|| "formula-only".to_string());
+        self.unresolved_references.push(UnresolvedReferenceRecord {
+            source_text: source_text.to_string(),
+            reason: format!("reference profile '{profile_id}' did not bind this identifier"),
+        });
+        self.diagnostics.push(BindDiagnostic {
+            message: format!("unresolved identifier '{source_text}'"),
+            span: source_span,
+        });
+        BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Error(ErrorRef {
+            error_class: "#NAME?".to_string(),
+            source_text: source_text.to_string(),
+        })))
     }
 
     fn try_bind_profile_reference_range(
@@ -1612,28 +1682,8 @@ impl Binder<'_> {
         {
             return Some(kind);
         }
-        let resolver = self.host_name_resolver?;
-        let resolved = resolver.resolve_host_name(&HostNameResolveRequest {
-            source: self.source.clone(),
-            source_span,
-            source_token_text: text.to_string(),
-        })?;
-        self.context.names.insert(
-            resolved.bind_record.canonical_name.clone(),
-            resolved.kind.clone(),
-        );
-        self.context.name_caller_context_dependencies.insert(
-            resolved.bind_record.canonical_name.clone(),
-            resolved.bind_record.caller_context_dependent,
-        );
-        self.context.host_name_bind_records.insert(
-            resolved.bind_record.canonical_name.clone(),
-            resolved.bind_record,
-        );
-        self.context
-            .names
-            .iter()
-            .find_map(|(name, kind)| name.eq_ignore_ascii_case(text).then_some(kind.clone()))
+        let _ = source_span;
+        None
     }
 
     fn push_host_name_bind_record(
@@ -1668,10 +1718,19 @@ impl Binder<'_> {
             BoundExpr::Reference(ReferenceExpr::Atom(normalized))
         } else {
             let sheet_id = self.context.sheet_id.clone();
+            if let Some(bound) = self.try_bind_profile_name(text, source_span, &sheet_id, None) {
+                return bound;
+            }
             if let Some(bound) =
                 self.try_bind_profile_reference_atom(text, source_span, &sheet_id, None)
             {
                 return bound;
+            }
+            if let Some(bound) = self.try_bind_profile_structured_reference(text, source_span) {
+                return bound;
+            }
+            if self.profile_uses_symbolic_references() {
+                return self.profile_unresolved_identifier_error(text, source_span);
             }
 
             if let Some(structured) = bind_structured_reference_text(
@@ -1870,6 +1929,19 @@ fn node_source_text(node: &GreenNode) -> String {
     text
 }
 
+fn profile_reference_record_from_bound_expr(expr: &BoundExpr) -> Option<ProfileReferenceRecord> {
+    match expr {
+        BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::ProfileSymbolic(record))) => {
+            Some(record.clone())
+        }
+        _ => None,
+    }
+}
+
+fn normalized_reference_selector_token(text: &str) -> String {
+    text.trim_start_matches('@').to_ascii_uppercase()
+}
+
 fn append_node_source_text(node: &GreenNode, text: &mut String) {
     for child in &node.children {
         match child {
@@ -1877,19 +1949,6 @@ fn append_node_source_text(node: &GreenNode, text: &mut String) {
             GreenChild::Token(token) => text.push_str(&token.text),
         }
     }
-}
-
-fn host_reference_handle_normalized_reference(
-    handle: &str,
-    caller_context_dependent: bool,
-) -> NormalizedReference {
-    NormalizedReference::Name(NameRef {
-        name: handle.to_string(),
-        workbook_id: String::new(),
-        sheet_id: String::new(),
-        kind: NameKind::ReferenceLike,
-        caller_context_dependent,
-    })
 }
 
 #[derive(Debug, Clone)]

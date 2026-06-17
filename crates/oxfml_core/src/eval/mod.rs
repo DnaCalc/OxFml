@@ -5186,16 +5186,32 @@ fn lambda_binding_for_defined_name_callee(
     defined_names: &BTreeMap<String, DefinedNameBinding>,
     callable_registry: &RefCell<CallableRegistry>,
 ) -> Option<LambdaBinding> {
+    defined_name_keys_for_callable_callee(callee)
+        .into_iter()
+        .find_map(|key| match defined_names.get(&key) {
+            Some(DefinedNameBinding::Callable(binding)) => Some(
+                lambda_binding_from_defined_name_binding(binding, callable_registry),
+            ),
+            _ => None,
+        })
+}
+
+fn defined_name_keys_for_callable_callee(callee: &CompiledExpr) -> Vec<String> {
     match callee {
         CompiledExpr::Reference(CompiledReferenceExpr::Atom(NormalizedReference::Name(name))) => {
-            match defined_names.get(&name.name) {
-                Some(DefinedNameBinding::Callable(binding)) => Some(
-                    lambda_binding_from_defined_name_binding(binding, callable_registry),
-                ),
-                _ => None,
-            }
+            vec![name.name.clone()]
         }
-        _ => None,
+        CompiledExpr::Reference(CompiledReferenceExpr::Atom(
+            NormalizedReference::ProfileSymbolic(record),
+        )) => vec![
+            format!(
+                "profile-symbolic:{}:{}",
+                record.profile_id, record.normal_form_key.0
+            ),
+            record.normal_form_key.0.clone(),
+            record.source_info.source_text.clone(),
+        ],
+        _ => Vec::new(),
     }
 }
 

@@ -1,4 +1,10 @@
-use oxfml_core::binding::{BoundExpr, HostNameBindRecord, NameKind};
+use oxfml_core::binding::{
+    BoundExpr, NormalizedReference, ProfilePayload, ProfileReferenceRecord, ProfileVersion,
+    ReferenceAtomBindResult, ReferenceBindProfile, ReferenceExpr, ReferenceNameBindRequest,
+    ReferenceNormalFormKey, ReferenceOperatorCapabilities, ReferencePolicy,
+    ReferenceProfileFingerprint, ReferenceProfileFingerprintContext, ReferenceSelectorBindRequest,
+    ReferenceSelectorSyntax, ReferenceSourceInfo, ReferenceValidity,
+};
 use oxfml_core::consumer::editor::{
     EditorAnalysisStage, EditorEditService, EditorEnvironment, EditorHostReferenceInsertionRequest,
     EditorHostReferenceTarget, EditorPlanOptions,
@@ -9,9 +15,8 @@ use oxfml_core::semantics::{
 };
 use oxfml_core::syntax::token::TextSpan;
 use oxfml_core::{
-    BindContext, FormulaChannelKind, FormulaSourceRecord, HostReferenceCollectionSyntax,
-    HostReferenceStructuralSelectorSyntax, HostReferenceSyntaxProfile,
-    InMemoryLibraryContextProvider, LibraryContextProvider, LibraryContextSnapshotRef,
+    BindContext, FormulaChannelKind, FormulaSourceRecord, InMemoryLibraryContextProvider,
+    LibraryContextProvider, LibraryContextSnapshotRef,
 };
 
 #[test]
@@ -116,7 +121,9 @@ fn editor_edit_service_interaction_uses_registry_for_completion_and_snapshot_for
 
 #[test]
 fn editor_insert_host_reference_composes_profile_selector_and_rebinds() {
-    let environment = EditorEnvironment::new(treecalc_bind_context(["Base"]));
+    let profile = TestEditorReferenceProfile;
+    let environment =
+        EditorEnvironment::new(BindContext::default()).with_reference_bind_profile(&profile);
     let service = EditorEditService::new(environment);
     let document = service.open_document(
         FormulaSourceRecord::new("editor:host-ref-insert", 1, "=SUM()"),
@@ -155,19 +162,17 @@ fn editor_insert_host_reference_composes_profile_selector_and_rebinds() {
     let BoundExpr::FunctionCall { args, .. } = bound.root else {
         panic!("expected SUM call");
     };
-    assert!(matches!(
-        args.as_slice(),
-        [BoundExpr::HostStructuralSelector(selector)]
-            if selector.selector_family == "parent"
-                && selector.source_token_text == "Base.@PARENT"
-                && matches!(&*selector.base, BoundExpr::HostReference(record)
-                    if record.canonical_name == "Base")
-    ));
+    let record = profile_record_from_bound_expr(&args[0]).expect("profile selector");
+    assert_eq!(record.source_info.source_text, "Base.@PARENT");
+    assert!(record.profile_payload.data.contains("family=parent"));
+    assert!(record.profile_payload.data.contains("base=name:Base"));
 }
 
 #[test]
 fn editor_insert_host_reference_escapes_bracketed_host_name_and_rebinds() {
-    let environment = EditorEnvironment::new(treecalc_bind_context(["Net Revenue"]));
+    let profile = TestEditorReferenceProfile;
+    let environment =
+        EditorEnvironment::new(BindContext::default()).with_reference_bind_profile(&profile);
     let service = EditorEditService::new(environment);
     let document = service.open_document(
         FormulaSourceRecord::new("editor:escaped-host-ref-insert", 1, "=SUM()"),
@@ -205,17 +210,16 @@ fn editor_insert_host_reference_escapes_bracketed_host_name_and_rebinds() {
     let BoundExpr::FunctionCall { args, .. } = bound.root else {
         panic!("expected SUM call");
     };
-    assert!(matches!(
-        args.as_slice(),
-        [BoundExpr::HostReference(record)]
-            if record.canonical_name == "Net Revenue"
-                && record.source_token_text == "Net Revenue"
-    ));
+    let record = profile_record_from_bound_expr(&args[0]).expect("profile name");
+    assert_eq!(record.profile_payload.payload_kind, "name");
+    assert_eq!(record.source_info.source_text, "Net Revenue");
 }
 
 #[test]
 fn editor_insert_host_reference_composes_collection_token_from_profile() {
-    let environment = EditorEnvironment::new(treecalc_bind_context(["Base"]));
+    let profile = TestEditorReferenceProfile;
+    let environment =
+        EditorEnvironment::new(BindContext::default()).with_reference_bind_profile(&profile);
     let service = EditorEditService::new(environment);
     let document = service.open_document(
         FormulaSourceRecord::new("editor:host-ref-collection-insert", 1, "=SUM()"),
@@ -246,22 +250,18 @@ fn editor_insert_host_reference_composes_collection_token_from_profile() {
     let BoundExpr::FunctionCall { args, .. } = bound.root else {
         panic!("expected SUM call");
     };
-    assert!(matches!(
-        args.as_slice(),
-        [BoundExpr::HostStructuralSelector(selector)]
-            if selector.selector_family == "children"
-                && selector.source_token_text == "Base.@CHILDREN"
-    ));
+    let record = profile_record_from_bound_expr(&args[0]).expect("profile collection");
+    assert_eq!(record.source_info.source_text, "Base.@CHILDREN");
+    assert!(record.profile_payload.data.contains("family=children"));
+    assert!(record.profile_payload.data.contains("base=name:Base"));
 }
 
 #[test]
 fn editor_insert_host_reference_composes_star_collection_without_double_dot() {
-    let mut context = treecalc_bind_context(["Base"]);
-    context.host_reference_syntax =
-        HostReferenceSyntaxProfile::with_collection_members([HostReferenceCollectionSyntax::new(
-            "*", "children",
-        )]);
-    let service = EditorEditService::new(EditorEnvironment::new(context));
+    let profile = TestEditorStarReferenceProfile;
+    let service = EditorEditService::new(
+        EditorEnvironment::new(BindContext::default()).with_reference_bind_profile(&profile),
+    );
     let document = service.open_document(
         FormulaSourceRecord::new("editor:host-ref-star-collection-insert", 1, "=SUM(0)"),
         None,
@@ -319,46 +319,147 @@ fn editor_snapshot_v1() -> LibraryContextSnapshot {
     }
 }
 
-fn treecalc_bind_context<const N: usize>(host_names: [&str; N]) -> BindContext {
-    let mut context = BindContext {
-        host_reference_syntax: HostReferenceSyntaxProfile::with_members_and_structural_selectors(
-            [
-                HostReferenceCollectionSyntax::new("CHILDREN", "children"),
-                HostReferenceCollectionSyntax::new("*", "children"),
-            ],
-            [
-                HostReferenceStructuralSelectorSyntax::new("PARENT", "parent"),
-                HostReferenceStructuralSelectorSyntax::new("SELF", "self"),
-                HostReferenceStructuralSelectorSyntax::new("PREV", "previous"),
-                HostReferenceStructuralSelectorSyntax::new("NEXT", "next"),
-            ],
-        ),
-        ..BindContext::default()
-    };
-    for name in host_names {
-        context
-            .names
-            .insert(name.to_string(), NameKind::ReferenceLike);
-        context
-            .host_name_bind_records
-            .insert(name.to_string(), host_name_bind_record(name));
+struct TestEditorReferenceProfile;
+
+impl ReferenceBindProfile for TestEditorReferenceProfile {
+    fn profile_id(&self) -> &str {
+        "editor.test.profile"
     }
-    context
+
+    fn profile_version(&self) -> ProfileVersion {
+        ProfileVersion::v1()
+    }
+
+    fn reference_policy(&self) -> ReferencePolicy {
+        ReferencePolicy::ProfileSymbolic
+    }
+
+    fn fingerprint(
+        &self,
+        _context: &ReferenceProfileFingerprintContext,
+    ) -> ReferenceProfileFingerprint {
+        ReferenceProfileFingerprint("editor-test-profile".to_string())
+    }
+
+    fn operator_capabilities(&self) -> ReferenceOperatorCapabilities {
+        ReferenceOperatorCapabilities::worksheet_legacy()
+    }
+
+    fn selector_syntax(&self) -> Vec<ReferenceSelectorSyntax> {
+        vec![
+            ReferenceSelectorSyntax::collection("CHILDREN", "children"),
+            ReferenceSelectorSyntax::collection("PARENT", "parent"),
+            ReferenceSelectorSyntax::collection("NEXT", "next"),
+        ]
+    }
+
+    fn bind_name(&self, request: &ReferenceNameBindRequest) -> ReferenceAtomBindResult {
+        ReferenceAtomBindResult::Bound(test_editor_profile_record(
+            "name",
+            &request.source_text,
+            &format!("name:{}", request.source_text),
+            request.source_channel,
+            request.source_span,
+        ))
+    }
+
+    fn bind_selector(&self, request: &ReferenceSelectorBindRequest) -> ReferenceAtomBindResult {
+        bind_editor_selector(request)
+    }
 }
 
-fn host_name_bind_record(name: &str) -> HostNameBindRecord {
-    HostNameBindRecord {
-        host_name_handle: format!("host-name:{name}"),
-        canonical_name: name.to_string(),
-        host_dependency_key: Some(format!("tree-node:{name}")),
-        source_span: TextSpan::new(0, 0),
-        source_token_text: name.to_string(),
-        resolution_layer: "treecalc_host_name".to_string(),
-        binding_kind: "tree_node_reference".to_string(),
-        shape_hint: Some("scalar_node_value".to_string()),
-        caller_context_dependent: false,
-        diagnostics: Vec::new(),
-        replay_identity_contribution: format!("host-name:{name}:replay"),
+struct TestEditorStarReferenceProfile;
+
+impl ReferenceBindProfile for TestEditorStarReferenceProfile {
+    fn profile_id(&self) -> &str {
+        "editor.test.star-profile"
+    }
+
+    fn profile_version(&self) -> ProfileVersion {
+        ProfileVersion::v1()
+    }
+
+    fn reference_policy(&self) -> ReferencePolicy {
+        ReferencePolicy::ProfileSymbolic
+    }
+
+    fn fingerprint(
+        &self,
+        _context: &ReferenceProfileFingerprintContext,
+    ) -> ReferenceProfileFingerprint {
+        ReferenceProfileFingerprint("editor-test-star-profile".to_string())
+    }
+
+    fn operator_capabilities(&self) -> ReferenceOperatorCapabilities {
+        ReferenceOperatorCapabilities::worksheet_legacy()
+    }
+
+    fn selector_syntax(&self) -> Vec<ReferenceSelectorSyntax> {
+        vec![ReferenceSelectorSyntax::collection("*", "children")]
+    }
+
+    fn bind_name(&self, request: &ReferenceNameBindRequest) -> ReferenceAtomBindResult {
+        ReferenceAtomBindResult::Bound(test_editor_profile_record(
+            "name",
+            &request.source_text,
+            &format!("name:{}", request.source_text),
+            request.source_channel,
+            request.source_span,
+        ))
+    }
+
+    fn bind_selector(&self, request: &ReferenceSelectorBindRequest) -> ReferenceAtomBindResult {
+        bind_editor_selector(request)
+    }
+}
+
+fn bind_editor_selector(request: &ReferenceSelectorBindRequest) -> ReferenceAtomBindResult {
+    let base = request
+        .base
+        .as_ref()
+        .map(|record| record.normal_form_key.0.clone())
+        .unwrap_or_else(|| "owner".to_string());
+    let mut record = test_editor_profile_record(
+        "selector",
+        &request.source_text,
+        &format!("selector:{}:{base}", request.selector_family),
+        request.source_channel,
+        request.source_span,
+    );
+    record.profile_payload.data = format!("family={};base={base}", request.selector_family);
+    ReferenceAtomBindResult::Bound(record)
+}
+
+fn test_editor_profile_record(
+    payload_kind: &str,
+    source_text: &str,
+    normal_form_key: &str,
+    source_channel: FormulaChannelKind,
+    source_span: TextSpan,
+) -> ProfileReferenceRecord {
+    ProfileReferenceRecord {
+        profile_id: "editor.test.profile".to_string(),
+        profile_version: ProfileVersion::v1(),
+        source_info: ReferenceSourceInfo {
+            source_channel,
+            source_span,
+            source_text: source_text.to_string(),
+            parsed_qualifier: None,
+            address_fidelity: None,
+        },
+        profile_payload: ProfilePayload::textual(payload_kind, source_text),
+        normal_form_key: ReferenceNormalFormKey(normal_form_key.to_string()),
+        render_hint: Some(source_text.to_string()),
+        validity: ReferenceValidity::ValidNow,
+    }
+}
+
+fn profile_record_from_bound_expr(expr: &BoundExpr) -> Option<&ProfileReferenceRecord> {
+    match expr {
+        BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::ProfileSymbolic(record))) => {
+            Some(record)
+        }
+        _ => None,
     }
 }
 

@@ -159,6 +159,93 @@ pub struct ReferenceAtomBindRequest {
     pub caller_col: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ReferenceSelectorKind {
+    Collection,
+    StructuralSelector,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ReferenceSelectorSyntax {
+    pub token_text: String,
+    pub selector_family: String,
+    pub selector_kind: ReferenceSelectorKind,
+}
+
+impl ReferenceSelectorSyntax {
+    pub fn collection(token_text: impl Into<String>, selector_family: impl Into<String>) -> Self {
+        Self {
+            token_text: token_text.into(),
+            selector_family: selector_family.into(),
+            selector_kind: ReferenceSelectorKind::Collection,
+        }
+    }
+
+    pub fn structural_selector(
+        token_text: impl Into<String>,
+        selector_family: impl Into<String>,
+    ) -> Self {
+        Self {
+            token_text: token_text.into(),
+            selector_family: selector_family.into(),
+            selector_kind: ReferenceSelectorKind::StructuralSelector,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceNameBindRequest {
+    pub source_channel: FormulaChannelKind,
+    pub source_span: TextSpan,
+    pub source_text: String,
+    pub parsed_qualifier: Option<String>,
+    pub workbook_id: String,
+    pub sheet_id: String,
+    pub caller_row: u32,
+    pub caller_col: u32,
+}
+
+impl ReferenceNameBindRequest {
+    pub fn from_atom(request: &ReferenceAtomBindRequest) -> Self {
+        Self {
+            source_channel: request.source_channel,
+            source_span: request.source_span,
+            source_text: request.source_text.clone(),
+            parsed_qualifier: request.parsed_qualifier.clone(),
+            workbook_id: request.workbook_id.clone(),
+            sheet_id: request.sheet_id.clone(),
+            caller_row: request.caller_row,
+            caller_col: request.caller_col,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceSelectorBindRequest {
+    pub source_channel: FormulaChannelKind,
+    pub source_span: TextSpan,
+    pub source_text: String,
+    pub selector_token_text: String,
+    pub selector_family: String,
+    pub selector_kind: ReferenceSelectorKind,
+    pub base: Option<ProfileReferenceRecord>,
+    pub workbook_id: String,
+    pub sheet_id: String,
+    pub caller_row: u32,
+    pub caller_col: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReferenceStructuredBindRequest {
+    pub source_channel: FormulaChannelKind,
+    pub source_span: TextSpan,
+    pub source_text: String,
+    pub workbook_id: String,
+    pub sheet_id: String,
+    pub caller_row: u32,
+    pub caller_col: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReferenceAtomBindResult {
     Bound(ProfileReferenceRecord),
@@ -393,6 +480,25 @@ pub trait ReferenceBindProfile {
     }
 
     fn bind_atom(&self, _request: &ReferenceAtomBindRequest) -> ReferenceAtomBindResult {
+        ReferenceAtomBindResult::LegacyCompatibility
+    }
+
+    fn bind_name(&self, _request: &ReferenceNameBindRequest) -> ReferenceAtomBindResult {
+        ReferenceAtomBindResult::LegacyCompatibility
+    }
+
+    fn selector_syntax(&self) -> Vec<ReferenceSelectorSyntax> {
+        Vec::new()
+    }
+
+    fn bind_selector(&self, _request: &ReferenceSelectorBindRequest) -> ReferenceAtomBindResult {
+        ReferenceAtomBindResult::LegacyCompatibility
+    }
+
+    fn bind_structured_reference(
+        &self,
+        _request: &ReferenceStructuredBindRequest,
+    ) -> ReferenceAtomBindResult {
         ReferenceAtomBindResult::LegacyCompatibility
     }
 

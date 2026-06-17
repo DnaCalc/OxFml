@@ -11,8 +11,8 @@ use oxfunc_core::value::{CalcValue, CoreValue, ExcelText, WorksheetErrorCode};
 
 use crate::binding::{
     BindContext, BindDiagnostic, BindFunctionSurfaceKind, BoundFormula, HostNameBindRecord,
-    HostNameResolver, NameKind, NormalizedReference, ReferenceBindProfile,
-    StructuredReferenceBindRecord, bind_formula,
+    NameKind, NormalizedReference, ReferenceBindProfile, StructuredReferenceBindRecord,
+    bind_formula,
 };
 use crate::consumer::ConsumerLibraryContextState;
 use crate::eval::{
@@ -48,26 +48,11 @@ use crate::session::{
 };
 use crate::source::{FormulaSourceRecord, StructureContextVersion};
 use crate::syntax::parser::{
-    HostReferenceSyntaxProfile, ParseRequest, parse_formula_with_host_reference_syntax,
+    ParseRequest, ReferenceSelectorSyntaxProfile, parse_formula_with_reference_selector_syntax,
 };
 use crate::syntax::token::{SyntaxDiagnostic, TextSpan};
 use oxfunc_core::functions::call_register_id_family::RegisteredExternalProviderError;
 use oxfunc_core::functions::surface_dispatch::FUNC_ID_OP_DIVIDE;
-
-pub use crate::binding::{
-    HostNameResolveRequest as RuntimeHostNameResolveRequest,
-    HostNameResolveResult as RuntimeHostNameResolveResult,
-    HostNameResolver as RuntimeHostNameResolver,
-    HostReferenceCollectionResolveRequest as RuntimeHostReferenceCollectionResolveRequest,
-    HostReferenceCollectionResolveResult as RuntimeHostReferenceCollectionResolveResult,
-    HostStructuralSelectorResolveRequest as RuntimeHostStructuralSelectorResolveRequest,
-    HostStructuralSelectorResolveResult as RuntimeHostStructuralSelectorResolveResult,
-};
-pub use crate::syntax::parser::{
-    HostReferenceCollectionSyntax as RuntimeHostReferenceCollectionSyntax,
-    HostReferenceStructuralSelectorSyntax as RuntimeHostReferenceStructuralSelectorSyntax,
-    HostReferenceSyntaxProfile as RuntimeHostReferenceSyntaxProfile,
-};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RuntimeAuthoredInputResult {
@@ -168,7 +153,6 @@ pub struct RuntimeEnvironment<'a> {
     formal_input_bindings: Vec<RuntimeFormalInputBinding>,
     host_formula_context: Option<RuntimeHostFormulaContext>,
     host_name_bindings: Vec<RuntimeHostNameBinding>,
-    host_name_resolver: Option<&'a dyn HostNameResolver>,
     reference_bind_profile: Option<&'a dyn ReferenceBindProfile>,
     host_reference_bind_results: Vec<RuntimeHostReferenceBindResult>,
     table_catalog: Vec<TableDescriptor>,
@@ -179,7 +163,6 @@ pub struct RuntimeEnvironment<'a> {
     function_registry: &'a FunctionRegistry,
     function_registry_explicit: bool,
     capability_overlay: Option<&'a CapabilityOverlay>,
-    host_reference_syntax: HostReferenceSyntaxProfile,
 }
 
 impl<'a> RuntimeEnvironment<'a> {
@@ -199,7 +182,6 @@ impl<'a> RuntimeEnvironment<'a> {
             formal_input_bindings: Vec::new(),
             host_formula_context: None,
             host_name_bindings: Vec::new(),
-            host_name_resolver: None,
             reference_bind_profile: None,
             host_reference_bind_results: Vec::new(),
             table_catalog: Vec::new(),
@@ -210,7 +192,6 @@ impl<'a> RuntimeEnvironment<'a> {
             function_registry: builtin_registry(),
             function_registry_explicit: false,
             capability_overlay: None,
-            host_reference_syntax: HostReferenceSyntaxProfile::default(),
         }
     }
 
@@ -223,11 +204,13 @@ impl<'a> RuntimeEnvironment<'a> {
     }
 
     pub fn formula_drill_trace_for_source(&self, source: FormulaSourceRecord) -> FormulaDrillTrace {
-        let parse = parse_formula_with_host_reference_syntax(
+        let selector_syntax =
+            ReferenceSelectorSyntaxProfile::from_bind_profile(self.reference_bind_profile);
+        let parse = parse_formula_with_reference_selector_syntax(
             ParseRequest {
                 source: source.clone(),
             },
-            &self.host_reference_syntax,
+            &selector_syntax,
         );
         build_formula_drill_trace(
             &source,
@@ -247,11 +230,13 @@ impl<'a> RuntimeEnvironment<'a> {
             ));
         }
 
-        let parse = parse_formula_with_host_reference_syntax(
+        let selector_syntax =
+            ReferenceSelectorSyntaxProfile::from_bind_profile(self.reference_bind_profile);
+        let parse = parse_formula_with_reference_selector_syntax(
             ParseRequest {
                 source: source.clone(),
             },
-            &self.host_reference_syntax,
+            &selector_syntax,
         );
         let syntax_diagnostics = parse.green_tree.diagnostics.clone();
         if !syntax_diagnostics.is_empty() {
@@ -267,7 +252,6 @@ impl<'a> RuntimeEnvironment<'a> {
             green_tree: parse.green_tree,
             red_projection,
             context: self.bind_context_for_source(&source),
-            host_name_resolver: self.host_name_resolver,
             reference_bind_profile: self.reference_bind_profile,
         });
         RuntimeAuthoredInputResult::Formula(bind.bound_formula)
@@ -284,11 +268,13 @@ impl<'a> RuntimeEnvironment<'a> {
             };
         }
 
-        let parse = parse_formula_with_host_reference_syntax(
+        let selector_syntax =
+            ReferenceSelectorSyntaxProfile::from_bind_profile(self.reference_bind_profile);
+        let parse = parse_formula_with_reference_selector_syntax(
             ParseRequest {
                 source: source.clone(),
             },
-            &self.host_reference_syntax,
+            &selector_syntax,
         );
         let syntax_diagnostics = parse.green_tree.diagnostics.clone();
         if !syntax_diagnostics.is_empty() {
@@ -307,7 +293,6 @@ impl<'a> RuntimeEnvironment<'a> {
             green_tree: parse.green_tree,
             red_projection,
             context: self.bind_context_for_source(&source),
-            host_name_resolver: self.host_name_resolver,
             reference_bind_profile: self.reference_bind_profile,
         });
         let profile_violations = self.dry_bind_profile_violations(&bind.bound_formula);
@@ -452,24 +437,11 @@ impl<'a> RuntimeEnvironment<'a> {
         self
     }
 
-    pub fn with_host_name_resolver(mut self, host_name_resolver: &'a dyn HostNameResolver) -> Self {
-        self.host_name_resolver = Some(host_name_resolver);
-        self
-    }
-
     pub fn with_reference_bind_profile(
         mut self,
         reference_bind_profile: &'a dyn ReferenceBindProfile,
     ) -> Self {
         self.reference_bind_profile = Some(reference_bind_profile);
-        self
-    }
-
-    pub fn with_host_reference_syntax(
-        mut self,
-        host_reference_syntax: HostReferenceSyntaxProfile,
-    ) -> Self {
-        self.host_reference_syntax = host_reference_syntax;
         self
     }
 
@@ -667,7 +639,6 @@ impl<'a> RuntimeEnvironment<'a> {
             table_catalog: self.table_catalog.clone(),
             enclosing_table_ref: self.enclosing_table_ref.clone(),
             caller_table_region: self.caller_table_region.clone(),
-            host_reference_syntax: self.host_reference_syntax.clone(),
             ..BindContext::default()
         }
     }
@@ -695,7 +666,6 @@ impl<'a> RuntimeEnvironment<'a> {
         host.table_catalog = self.table_catalog.clone();
         host.enclosing_table_ref = self.enclosing_table_ref.clone();
         host.caller_table_region = self.caller_table_region.clone();
-        host.host_reference_syntax = self.host_reference_syntax.clone();
     }
 
     fn has_active_registry_view(&self) -> bool {
@@ -3666,11 +3636,13 @@ fn compile_runtime_prepare_request(
     request: &RuntimeFormulaRequest<'_>,
 ) -> Result<CompiledRuntimePrepareRequest, String> {
     let source = request.source().clone();
-    let parse = parse_formula_with_host_reference_syntax(
+    let selector_syntax =
+        ReferenceSelectorSyntaxProfile::from_bind_profile(environment.reference_bind_profile);
+    let parse = parse_formula_with_reference_selector_syntax(
         ParseRequest {
             source: source.clone(),
         },
-        &environment.host_reference_syntax,
+        &selector_syntax,
     );
     let syntax_diagnostics = parse.green_tree.diagnostics.clone();
     let red_projection = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
@@ -3679,7 +3651,6 @@ fn compile_runtime_prepare_request(
         green_tree: parse.green_tree,
         red_projection,
         context: environment.bind_context_for_source(&source),
-        host_name_resolver: environment.host_name_resolver,
         reference_bind_profile: environment.reference_bind_profile,
     });
     let library_context_view = environment.library_context.pinned_view();
@@ -3859,6 +3830,14 @@ fn syntax_diagnostic_execution_error(diagnostics: &[SyntaxDiagnostic]) -> String
 mod tests {
     use super::*;
     use crate::BoundExpr;
+    use crate::binding::{
+        ProfilePayload, ProfileReferenceRecord, ProfileVersion, ReferenceAtomBindResult,
+        ReferenceExpr, ReferenceNameBindRequest, ReferenceNormalFormKey,
+        ReferenceOperatorCapabilities, ReferencePolicy, ReferenceProfileFingerprint,
+        ReferenceProfileFingerprintContext, ReferenceSelectorBindRequest, ReferenceSelectorSyntax,
+        ReferenceSourceInfo, ReferenceValidity,
+    };
+    use crate::source::FormulaChannelKind;
     use oxfunc_core::function::{
         ArgPreparationProfile, Arity, CoercionLiftProfile, DeterminismClass, FecDependencyProfile,
         HostInteractionClass, KernelSignatureClass, ThreadSafetyClass, VolatilityClass,
@@ -3986,224 +3965,203 @@ mod tests {
     }
 
     #[test]
-    fn bound_formula_preserves_host_name_bind_record() {
-        let binding = RuntimeHostNameBinding {
-            bind_result: RuntimeHostNameBindResult {
-                host_name_handle: "host-name:node-a".to_string(),
-                canonical_name: "NodeA".to_string(),
-                host_dependency_key: None,
-                source_span: TextSpan::new(0, 0),
-                source_token_text: "NodeA".to_string(),
-                resolution_layer: "treecalc_host_name".to_string(),
-                binding_kind: "defined_name_value_like".to_string(),
-                shape_hint: Some("scalar_node_value".to_string()),
-                caller_context_dependent: false,
-                diagnostics: Vec::new(),
-                replay_identity_contribution: "host-name:node-a:replay".to_string(),
-            },
-            binding: DefinedNameBinding::Value(CalcValue::number(1.0)),
-        };
-
+    fn runtime_profile_binds_bare_names_to_profile_symbolic() {
+        let profile = TestRuntimeReferenceProfile;
         let bound = bound_formula_from(
-            RuntimeEnvironment::new().with_host_name_bindings(vec![binding]),
-            "=NodeA(12)",
+            RuntimeEnvironment::new().with_reference_bind_profile(&profile),
+            "=NodeA",
         );
 
-        assert!(matches!(bound.root, BoundExpr::Invocation { .. }));
-        assert_eq!(bound.host_name_bind_records.len(), 1);
-        let record = &bound.host_name_bind_records[0];
-        assert_eq!(record.host_name_handle, "host-name:node-a");
-        assert_eq!(record.canonical_name, "NodeA");
-        assert_eq!(record.source_token_text, "NodeA");
-        assert_eq!(record.source_span, TextSpan::new(1, 5));
-    }
-
-    struct SingleNameResolver;
-
-    impl RuntimeHostNameResolver for SingleNameResolver {
-        fn resolve_host_name(
-            &self,
-            request: &RuntimeHostNameResolveRequest,
-        ) -> Option<RuntimeHostNameResolveResult> {
-            if !request.source_token_text.eq_ignore_ascii_case("NodeA") {
-                return None;
-            }
-            Some(RuntimeHostNameResolveResult {
-                kind: NameKind::ValueLike,
-                bind_record: HostNameBindRecord {
-                    host_name_handle: "host-name:resolver-node-a".to_string(),
-                    canonical_name: "NodeA".to_string(),
-                    host_dependency_key: None,
-                    source_span: request.source_span,
-                    source_token_text: request.source_token_text.clone(),
-                    resolution_layer: "treecalc_host_name".to_string(),
-                    binding_kind: "defined_name_value_like".to_string(),
-                    shape_hint: Some("scalar_node_value".to_string()),
-                    caller_context_dependent: false,
-                    diagnostics: Vec::new(),
-                    replay_identity_contribution: "host-name:resolver-node-a:replay".to_string(),
-                },
-            })
-        }
+        let record = profile_record_from_bound_expr(&bound.root).expect("profile record");
+        assert_eq!(record.profile_id, "runtime.test.profile");
+        assert_eq!(record.source_info.source_text, "NodeA");
+        assert_eq!(record.profile_payload.payload_kind, "name");
+        assert_eq!(record.profile_payload.data, "NodeA");
     }
 
     #[test]
-    fn runtime_environment_resolves_host_names_by_callback() {
-        let resolver = SingleNameResolver;
-
+    fn parser_binds_profile_member_selector_without_projection() {
+        let profile = TestRuntimeReferenceProfile;
         let bound = bound_formula_from(
-            RuntimeEnvironment::new().with_host_name_resolver(&resolver),
-            "=NodeA(12)",
-        );
-
-        assert!(matches!(bound.root, BoundExpr::Invocation { .. }));
-        assert_eq!(bound.host_name_bind_records.len(), 1);
-        assert_eq!(
-            bound.host_name_bind_records[0].host_name_handle,
-            "host-name:resolver-node-a"
-        );
-    }
-
-    #[test]
-    fn parser_binds_host_member_selector_without_projection() {
-        let resolver = SingleNameResolver;
-
-        let bound = bound_formula_from(
-            RuntimeEnvironment::new()
-                .with_host_name_resolver(&resolver)
-                .with_host_reference_syntax(test_host_reference_syntax()),
+            RuntimeEnvironment::new().with_reference_bind_profile(&profile),
             "=SUM(NodeA.@CHILDREN)",
         );
 
         let BoundExpr::FunctionCall { args, .. } = &bound.root else {
             panic!("expected SUM call");
         };
-        assert!(matches!(
-            args.as_slice(),
-            [BoundExpr::HostStructuralSelector(selector)]
-                if selector.selector_family == "children"
-                    && matches!(&*selector.base, BoundExpr::HostReference(record)
-                        if record.canonical_name == "NodeA")
-        ));
+        let record = profile_record_from_bound_expr(&args[0]).expect("profile selector");
+        assert_eq!(record.profile_payload.payload_kind, "selector");
+        assert!(record.profile_payload.data.contains("family=children"));
+        assert!(record.profile_payload.data.contains("base=name:NodeA"));
     }
 
     #[test]
-    fn parser_binds_bracketed_host_member_selector_without_structured_reference() {
-        struct RegionResolver;
-
-        impl RuntimeHostNameResolver for RegionResolver {
-            fn resolve_host_name(
-                &self,
-                request: &RuntimeHostNameResolveRequest,
-            ) -> Option<RuntimeHostNameResolveResult> {
-                if !request.source_token_text.eq_ignore_ascii_case("Region") {
-                    return None;
-                }
-                Some(RuntimeHostNameResolveResult {
-                    kind: NameKind::ValueLike,
-                    bind_record: HostNameBindRecord {
-                        host_name_handle: "host-name:region".to_string(),
-                        canonical_name: "Region".to_string(),
-                        host_dependency_key: None,
-                        source_span: request.source_span,
-                        source_token_text: request.source_token_text.clone(),
-                        resolution_layer: "treecalc_host_name".to_string(),
-                        binding_kind: "defined_name_value_like".to_string(),
-                        shape_hint: Some("scalar_node_value".to_string()),
-                        caller_context_dependent: false,
-                        diagnostics: Vec::new(),
-                        replay_identity_contribution: "host-name:region:replay".to_string(),
-                    },
-                })
-            }
-        }
-
-        let resolver = RegionResolver;
+    fn parser_binds_bracketed_profile_member_selector_without_structured_reference() {
+        let profile = TestRuntimeReferenceProfile;
         let bound = bound_formula_from(
-            RuntimeEnvironment::new()
-                .with_host_name_resolver(&resolver)
-                .with_host_reference_syntax(test_host_reference_syntax()),
+            RuntimeEnvironment::new().with_reference_bind_profile(&profile),
             "=SUM(Region.[Net Revenue])",
         );
 
         let BoundExpr::FunctionCall { args, .. } = &bound.root else {
             panic!("expected SUM call");
         };
-        assert!(
-            matches!(
-            args.as_slice(),
-            [BoundExpr::HostStructuralSelector(selector)]
-                if selector.selector_family == "net revenue"
-                    && matches!(&*selector.base, BoundExpr::HostReference(record)
-                        if record.canonical_name == "Region")
-            ),
-            "args={args:?}; diagnostics={:?}; structured={:?}",
-            bound.diagnostics,
-            bound.structured_reference_bind_records
-        );
+        let record = profile_record_from_bound_expr(&args[0]).expect("profile selector");
+        assert_eq!(record.profile_payload.payload_kind, "selector");
+        assert!(record.profile_payload.data.contains("family=net revenue"));
+        assert!(record.profile_payload.data.contains("base=name:Region"));
         assert!(bound.diagnostics.is_empty(), "{:?}", bound.diagnostics);
         assert!(bound.structured_reference_bind_records.is_empty());
     }
 
     #[test]
-    fn parser_binds_owner_relative_host_reference_collections() {
+    fn parser_binds_owner_relative_profile_reference_collections() {
+        let profile = TestRuntimeReferenceProfile;
         for source in ["=SUM(@CHILDREN)", "=SUM(.*)"] {
             let bound = bound_formula_from(
-                RuntimeEnvironment::new().with_host_reference_syntax(test_host_reference_syntax()),
+                RuntimeEnvironment::new().with_reference_bind_profile(&profile),
                 source,
             );
 
             let BoundExpr::FunctionCall { args, .. } = &bound.root else {
                 panic!("expected SUM call for {source}");
             };
-            assert!(matches!(
-                args.as_slice(),
-                [BoundExpr::HostReferenceCollection(collection)]
-                    if collection.collection_family == "children"
-                        && collection.base.is_none()
-            ));
+            let record = profile_record_from_bound_expr(&args[0]).expect("profile collection");
+            assert_eq!(record.profile_payload.payload_kind, "selector");
+            assert!(record.profile_payload.data.contains("family=children"));
+            assert!(record.profile_payload.data.contains("base=owner"));
         }
     }
 
     #[test]
-    fn parser_binds_host_structural_selector_profile_members() {
-        let resolver = SingleNameResolver;
-
+    fn parser_binds_profile_structural_selector_members() {
+        let profile = TestRuntimeReferenceProfile;
         let bound = bound_formula_from(
-            RuntimeEnvironment::new()
-                .with_host_name_resolver(&resolver)
-                .with_host_reference_syntax(test_host_reference_syntax()),
+            RuntimeEnvironment::new().with_reference_bind_profile(&profile),
             "=SUM(NodeA.@PARENT, @NEXT)",
         );
 
         let BoundExpr::FunctionCall { args, .. } = &bound.root else {
             panic!("expected SUM call");
         };
-        assert!(matches!(
-            args.as_slice(),
-            [
-                BoundExpr::HostStructuralSelector(parent),
-                BoundExpr::HostReferenceCollection(next)
-            ] if parent.selector_family == "parent"
-                && next.collection_family == "next"
-                && matches!(&*parent.base, BoundExpr::HostReference(record)
-                    if record.canonical_name == "NodeA")
-        ));
+        let parent = profile_record_from_bound_expr(&args[0]).expect("profile parent");
+        let next = profile_record_from_bound_expr(&args[1]).expect("profile next");
+        assert!(parent.profile_payload.data.contains("family=parent"));
+        assert!(parent.profile_payload.data.contains("base=name:NodeA"));
+        assert!(next.profile_payload.data.contains("family=next"));
+        assert!(next.profile_payload.data.contains("base=owner"));
     }
 
-    fn test_host_reference_syntax() -> HostReferenceSyntaxProfile {
-        HostReferenceSyntaxProfile::with_members_and_structural_selectors(
-            [
-                RuntimeHostReferenceCollectionSyntax::new("CHILDREN", "children"),
-                RuntimeHostReferenceCollectionSyntax::new("*", "children"),
-            ],
-            [
-                RuntimeHostReferenceStructuralSelectorSyntax::new("PARENT", "parent"),
-                RuntimeHostReferenceStructuralSelectorSyntax::new("SELF", "self"),
-                RuntimeHostReferenceStructuralSelectorSyntax::new("PREV", "previous"),
-                RuntimeHostReferenceStructuralSelectorSyntax::new("NEXT", "next"),
-            ],
-        )
+    struct TestRuntimeReferenceProfile;
+
+    impl ReferenceBindProfile for TestRuntimeReferenceProfile {
+        fn profile_id(&self) -> &str {
+            "runtime.test.profile"
+        }
+
+        fn profile_version(&self) -> ProfileVersion {
+            ProfileVersion::v1()
+        }
+
+        fn reference_policy(&self) -> ReferencePolicy {
+            ReferencePolicy::ProfileSymbolic
+        }
+
+        fn fingerprint(
+            &self,
+            _context: &ReferenceProfileFingerprintContext,
+        ) -> ReferenceProfileFingerprint {
+            ReferenceProfileFingerprint("runtime-test-profile".to_string())
+        }
+
+        fn operator_capabilities(&self) -> ReferenceOperatorCapabilities {
+            ReferenceOperatorCapabilities::worksheet_legacy()
+        }
+
+        fn selector_syntax(&self) -> Vec<ReferenceSelectorSyntax> {
+            vec![
+                ReferenceSelectorSyntax::collection("CHILDREN", "children"),
+                ReferenceSelectorSyntax::collection("*", "children"),
+                ReferenceSelectorSyntax::collection("PARENT", "parent"),
+                ReferenceSelectorSyntax::collection("NEXT", "next"),
+            ]
+        }
+
+        fn bind_name(&self, request: &ReferenceNameBindRequest) -> ReferenceAtomBindResult {
+            match request.source_text.as_str() {
+                "NodeA" | "Region" => ReferenceAtomBindResult::Bound(test_profile_record(
+                    "name",
+                    &request.source_text,
+                    &format!("name:{}", request.source_text),
+                    request.source_channel,
+                    request.source_span,
+                )),
+                _ => ReferenceAtomBindResult::Unsupported,
+            }
+        }
+
+        fn bind_selector(&self, request: &ReferenceSelectorBindRequest) -> ReferenceAtomBindResult {
+            let base = request
+                .base
+                .as_ref()
+                .map(|record| record.normal_form_key.0.clone())
+                .unwrap_or_else(|| "owner".to_string());
+            ReferenceAtomBindResult::Bound(
+                test_profile_record(
+                    "selector",
+                    &request.source_text,
+                    &format!("selector:{}:{base}", request.selector_family),
+                    request.source_channel,
+                    request.source_span,
+                )
+                .with_payload_data(format!("family={};base={base}", request.selector_family)),
+            )
+        }
+    }
+
+    trait TestProfileRecordExt {
+        fn with_payload_data(self, data: String) -> Self;
+    }
+
+    impl TestProfileRecordExt for ProfileReferenceRecord {
+        fn with_payload_data(mut self, data: String) -> Self {
+            self.profile_payload.data = data;
+            self
+        }
+    }
+
+    fn test_profile_record(
+        payload_kind: &str,
+        source_text: &str,
+        normal_form_key: &str,
+        source_channel: FormulaChannelKind,
+        source_span: TextSpan,
+    ) -> ProfileReferenceRecord {
+        ProfileReferenceRecord {
+            profile_id: "runtime.test.profile".to_string(),
+            profile_version: ProfileVersion::v1(),
+            source_info: ReferenceSourceInfo {
+                source_channel,
+                source_span,
+                source_text: source_text.to_string(),
+                parsed_qualifier: None,
+                address_fidelity: None,
+            },
+            profile_payload: ProfilePayload::textual(payload_kind, source_text),
+            normal_form_key: ReferenceNormalFormKey(normal_form_key.to_string()),
+            render_hint: Some(source_text.to_string()),
+            validity: ReferenceValidity::ValidNow,
+        }
+    }
+
+    fn profile_record_from_bound_expr(expr: &BoundExpr) -> Option<&ProfileReferenceRecord> {
+        match expr {
+            BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::ProfileSymbolic(
+                record,
+            ))) => Some(record),
+            _ => None,
+        }
     }
 
     #[test]

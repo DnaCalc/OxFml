@@ -1,3 +1,4 @@
+use crate::binding::{ReferenceBindProfile, ReferenceSelectorKind, ReferenceSelectorSyntax};
 use crate::source::FormulaSourceRecord;
 use crate::syntax::green::{GreenChild, GreenNode, GreenTreeRoot, SyntaxKind};
 use crate::syntax::lexer::lex;
@@ -11,84 +12,48 @@ pub struct ParseRequest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct HostReferenceSyntaxProfile {
-    pub collection_members: Vec<HostReferenceCollectionSyntax>,
-    pub structural_selectors: Vec<HostReferenceStructuralSelectorSyntax>,
+pub struct ReferenceSelectorSyntaxProfile {
+    pub selectors: Vec<ReferenceSelectorSyntax>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HostReferenceCollectionSyntax {
-    pub token_text: String,
-    pub collection_family: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HostReferenceStructuralSelectorSyntax {
-    pub token_text: String,
-    pub selector_family: String,
-}
-
-impl HostReferenceSyntaxProfile {
-    pub fn with_collection_members(
-        collection_members: impl IntoIterator<Item = HostReferenceCollectionSyntax>,
-    ) -> Self {
+impl ReferenceSelectorSyntaxProfile {
+    pub fn from_selectors(selectors: impl IntoIterator<Item = ReferenceSelectorSyntax>) -> Self {
         Self {
-            collection_members: collection_members.into_iter().collect(),
-            structural_selectors: Vec::new(),
+            selectors: selectors.into_iter().collect(),
         }
     }
 
-    pub fn with_members_and_structural_selectors(
-        collection_members: impl IntoIterator<Item = HostReferenceCollectionSyntax>,
-        structural_selectors: impl IntoIterator<Item = HostReferenceStructuralSelectorSyntax>,
-    ) -> Self {
-        Self {
-            collection_members: collection_members.into_iter().collect(),
-            structural_selectors: structural_selectors.into_iter().collect(),
-        }
+    pub fn from_bind_profile(profile: Option<&dyn ReferenceBindProfile>) -> Self {
+        profile
+            .map(|profile| Self::from_selectors(profile.selector_syntax()))
+            .unwrap_or_default()
     }
 
     pub fn collection_family_for(&self, token_text: &str) -> Option<&str> {
-        let normalized = normalize_host_reference_collection_token(token_text);
-        self.collection_members
-            .iter()
-            .find(|member| {
-                normalize_host_reference_collection_token(&member.token_text) == normalized
-            })
-            .map(|member| member.collection_family.as_str())
-    }
-
-    pub fn structural_selector_family_for(&self, token_text: &str) -> Option<&str> {
-        let normalized = normalize_host_reference_collection_token(token_text);
-        self.structural_selectors
+        let normalized = normalize_reference_selector_token(token_text);
+        self.selectors
             .iter()
             .find(|selector| {
-                normalize_host_reference_collection_token(&selector.token_text) == normalized
+                selector.selector_kind == ReferenceSelectorKind::Collection
+                    && normalize_reference_selector_token(&selector.token_text) == normalized
             })
             .map(|selector| selector.selector_family.as_str())
     }
 
-    pub fn host_selector_family_for(&self, token_text: &str) -> Option<&str> {
+    pub fn structural_selector_family_for(&self, token_text: &str) -> Option<&str> {
+        let normalized = normalize_reference_selector_token(token_text);
+        self.selectors
+            .iter()
+            .find(|selector| {
+                selector.selector_kind == ReferenceSelectorKind::StructuralSelector
+                    && normalize_reference_selector_token(&selector.token_text) == normalized
+            })
+            .map(|selector| selector.selector_family.as_str())
+    }
+
+    pub fn selector_family_for(&self, token_text: &str) -> Option<&str> {
         self.collection_family_for(token_text)
             .or_else(|| self.structural_selector_family_for(token_text))
-    }
-}
-
-impl HostReferenceCollectionSyntax {
-    pub fn new(token_text: impl Into<String>, collection_family: impl Into<String>) -> Self {
-        Self {
-            token_text: token_text.into(),
-            collection_family: collection_family.into(),
-        }
-    }
-}
-
-impl HostReferenceStructuralSelectorSyntax {
-    pub fn new(token_text: impl Into<String>, selector_family: impl Into<String>) -> Self {
-        Self {
-            token_text: token_text.into(),
-            selector_family: selector_family.into(),
-        }
     }
 }
 
@@ -104,12 +69,15 @@ pub struct IncrementalParseResult {
 }
 
 pub fn parse_formula(request: ParseRequest) -> ParseResult {
-    parse_formula_with_host_reference_syntax(request, &HostReferenceSyntaxProfile::default())
+    parse_formula_with_reference_selector_syntax(
+        request,
+        &ReferenceSelectorSyntaxProfile::default(),
+    )
 }
 
-pub fn parse_formula_with_host_reference_syntax(
+pub fn parse_formula_with_reference_selector_syntax(
     request: ParseRequest,
-    host_reference_syntax: &HostReferenceSyntaxProfile,
+    reference_selector_syntax: &ReferenceSelectorSyntaxProfile,
 ) -> ParseResult {
     let full_tokens = lex(&request.source.entered_formula_text);
     if let Some(root) = worksheet_cell_entry_literal_root(&request.source, &full_tokens) {
@@ -118,7 +86,7 @@ pub fn parse_formula_with_host_reference_syntax(
         };
     }
 
-    let mut parser = Parser::new(full_tokens.clone(), host_reference_syntax.clone());
+    let mut parser = Parser::new(full_tokens.clone(), reference_selector_syntax.clone());
     let root = attach_trivia_to_green_tree(parser.parse_formula_root(), &full_tokens);
     ParseResult {
         green_tree: GreenTreeRoot::from_parts(root, full_tokens, parser.diagnostics),
@@ -129,17 +97,17 @@ pub fn parse_formula_incremental(
     request: ParseRequest,
     previous_green_tree: Option<&GreenTreeRoot>,
 ) -> IncrementalParseResult {
-    parse_formula_incremental_with_host_reference_syntax(
+    parse_formula_incremental_with_reference_selector_syntax(
         request,
         previous_green_tree,
-        &HostReferenceSyntaxProfile::default(),
+        &ReferenceSelectorSyntaxProfile::default(),
     )
 }
 
-pub fn parse_formula_incremental_with_host_reference_syntax(
+pub fn parse_formula_incremental_with_reference_selector_syntax(
     request: ParseRequest,
     previous_green_tree: Option<&GreenTreeRoot>,
-    host_reference_syntax: &HostReferenceSyntaxProfile,
+    reference_selector_syntax: &ReferenceSelectorSyntaxProfile,
 ) -> IncrementalParseResult {
     if let Some(previous_green_tree) = previous_green_tree {
         let previous_text = previous_green_tree
@@ -156,7 +124,7 @@ pub fn parse_formula_incremental_with_host_reference_syntax(
         }
     }
 
-    let parse = parse_formula_with_host_reference_syntax(request, host_reference_syntax);
+    let parse = parse_formula_with_reference_selector_syntax(request, reference_selector_syntax);
     IncrementalParseResult {
         green_tree: parse.green_tree,
         reused_green_tree: false,
@@ -258,16 +226,16 @@ struct Parser {
     tokens: Vec<Token>,
     index: usize,
     diagnostics: Vec<SyntaxDiagnostic>,
-    host_reference_syntax: HostReferenceSyntaxProfile,
+    reference_selector_syntax: ReferenceSelectorSyntaxProfile,
 }
 
 impl Parser {
-    fn new(tokens: Vec<Token>, host_reference_syntax: HostReferenceSyntaxProfile) -> Self {
+    fn new(tokens: Vec<Token>, reference_selector_syntax: ReferenceSelectorSyntaxProfile) -> Self {
         Self {
             tokens,
             index: 0,
             diagnostics: Vec::new(),
-            host_reference_syntax,
+            reference_selector_syntax,
         }
     }
 
@@ -450,8 +418,10 @@ impl Parser {
             let at = self.bump();
             self.skip_whitespace();
             if self.at(TokenKind::Identifier) || self.at(TokenKind::Star) {
-                let member = self.bump_host_member_token();
-                if let Some((selector, dot, tail)) = self.split_host_selector_tail_token(&member) {
+                let member = self.bump_reference_selector_token();
+                if let Some((selector, dot, tail)) =
+                    self.split_reference_selector_tail_token(&member)
+                {
                     let base = GreenNode::new(
                         SyntaxKind::HostReferenceCollectionExpr,
                         vec![GreenChild::Token(at), GreenChild::Token(selector)],
@@ -466,14 +436,15 @@ impl Parser {
                     );
                 }
                 if self
-                    .host_reference_syntax
-                    .host_selector_family_for(&member.text)
+                    .reference_selector_syntax
+                    .selector_family_for(&member.text)
                     .is_some()
                 {
-                    return GreenNode::new(
+                    let base = GreenNode::new(
                         SyntaxKind::HostReferenceCollectionExpr,
                         vec![GreenChild::Token(at), GreenChild::Token(member)],
                     );
+                    return self.parse_host_member_reference_tails(base);
                 }
                 let expr =
                     GreenNode::new(SyntaxKind::IdentifierExpr, vec![GreenChild::Token(member)]);
@@ -497,9 +468,9 @@ impl Parser {
             let at = self.at(TokenKind::At).then(|| self.bump());
             self.skip_whitespace();
             if self.at(TokenKind::Identifier) || self.at(TokenKind::Star) {
-                let member = self.bump_host_member_token();
+                let member = self.bump_reference_selector_token();
                 if let Some((selector, split_dot, tail)) =
-                    self.split_host_selector_tail_token(&member)
+                    self.split_reference_selector_tail_token(&member)
                 {
                     let mut children = vec![GreenChild::Token(dot)];
                     if let Some(at) = at {
@@ -517,8 +488,8 @@ impl Parser {
                     );
                 }
                 if self
-                    .host_reference_syntax
-                    .host_selector_family_for(&member.text)
+                    .reference_selector_syntax
+                    .selector_family_for(&member.text)
                     .is_some()
                 {
                     let mut children = vec![GreenChild::Token(dot)];
@@ -583,13 +554,13 @@ impl Parser {
                     || self.at(TokenKind::Star)
                     || self.at(TokenKind::BracketedQualifier)
                 {
-                    self.bump_host_member_token()
+                    self.bump_reference_selector_token()
                 } else {
                     self.expect(TokenKind::Identifier, "expected host member selector")
                 };
                 if let Some(at_token) = at {
                     if let Some((selector, split_dot, tail)) =
-                        self.split_host_selector_tail_token(&member)
+                        self.split_reference_selector_tail_token(&member)
                     {
                         let first = GreenNode::new(
                             SyntaxKind::HostMemberReferenceExpr,
@@ -627,6 +598,62 @@ impl Parser {
             }
         }
         node
+    }
+
+    fn parse_host_member_reference_tails(&mut self, mut node: GreenNode) -> GreenNode {
+        loop {
+            self.skip_whitespace();
+            if !self.at(TokenKind::Dot) {
+                return node;
+            }
+            let dot = self.bump();
+            self.skip_whitespace();
+            let at = self.at(TokenKind::At).then(|| self.bump());
+            self.skip_whitespace();
+            let member = if self.at(TokenKind::Identifier)
+                || self.at(TokenKind::Star)
+                || self.at(TokenKind::BracketedQualifier)
+            {
+                self.bump_reference_selector_token()
+            } else {
+                self.expect(TokenKind::Identifier, "expected host member selector")
+            };
+            if let Some(at_token) = at {
+                if let Some((selector, split_dot, tail)) =
+                    self.split_reference_selector_tail_token(&member)
+                {
+                    let first = GreenNode::new(
+                        SyntaxKind::HostMemberReferenceExpr,
+                        vec![
+                            GreenChild::Node(Box::new(node)),
+                            GreenChild::Token(dot),
+                            GreenChild::Token(at_token),
+                            GreenChild::Token(selector),
+                        ],
+                    );
+                    node = GreenNode::new(
+                        SyntaxKind::HostMemberReferenceExpr,
+                        vec![
+                            GreenChild::Node(Box::new(first)),
+                            GreenChild::Token(split_dot),
+                            GreenChild::Token(tail),
+                        ],
+                    );
+                    continue;
+                }
+                let mut children = vec![
+                    GreenChild::Node(Box::new(node)),
+                    GreenChild::Token(dot),
+                    GreenChild::Token(at_token),
+                ];
+                children.push(GreenChild::Token(member));
+                node = GreenNode::new(SyntaxKind::HostMemberReferenceExpr, children);
+                continue;
+            }
+            let mut children = vec![GreenChild::Node(Box::new(node)), GreenChild::Token(dot)];
+            children.push(GreenChild::Token(member));
+            node = GreenNode::new(SyntaxKind::HostMemberReferenceExpr, children);
+        }
     }
 
     fn parse_prefix(&mut self, allow_union_comma: bool) -> GreenNode {
@@ -667,7 +694,7 @@ impl Parser {
             let dot = self.bump();
             self.skip_whitespace();
             let member = if self.at(TokenKind::Identifier) || self.at(TokenKind::Star) {
-                self.bump_host_member_token()
+                self.bump_reference_selector_token()
             } else {
                 self.expect(TokenKind::Identifier, "expected host member selector")
             };
@@ -683,12 +710,12 @@ impl Parser {
         node
     }
 
-    fn split_host_selector_tail_token(&self, token: &Token) -> Option<(Token, Token, Token)> {
+    fn split_reference_selector_tail_token(&self, token: &Token) -> Option<(Token, Token, Token)> {
         let (head, tail) = token.text.split_once('.')?;
         if tail.is_empty()
             || self
-                .host_reference_syntax
-                .host_selector_family_for(head)
+                .reference_selector_syntax
+                .selector_family_for(head)
                 .is_none()
         {
             return None;
@@ -711,13 +738,13 @@ impl Parser {
         Some((selector, dot, tail))
     }
 
-    fn bump_host_member_token(&mut self) -> Token {
+    fn bump_reference_selector_token(&mut self) -> Token {
         let first = self.bump();
         if first.kind != TokenKind::Star
             || !self.at(TokenKind::Star)
             || self
-                .host_reference_syntax
-                .host_selector_family_for("**")
+                .reference_selector_syntax
+                .selector_family_for("**")
                 .is_none()
         {
             return first;
@@ -918,7 +945,7 @@ impl Parser {
     }
 }
 
-fn normalize_host_reference_collection_token(text: &str) -> String {
+fn normalize_reference_selector_token(text: &str) -> String {
     text.trim_start_matches('@').to_ascii_uppercase()
 }
 
