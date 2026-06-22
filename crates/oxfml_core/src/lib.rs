@@ -48,6 +48,11 @@ pub mod test_support {
         pub static FIXED_RANDOM_PROVIDER_05: FixedRandomProvider =
             FixedRandomProvider { value: 0.5 };
     }
+
+    /// Test-only A1 grid reference profile + provider. Compiled out of
+    /// production builds so OxFml core ships zero built-in reference grammar.
+    #[cfg(any(test, feature = "test-support"))]
+    pub mod grid;
 }
 
 pub use oxfunc_core::functions::call_register_id_family::{

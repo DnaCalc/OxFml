@@ -8,6 +8,12 @@ license = "MIT"
 name = "oxfml_core"
 path = "src/lib.rs"
 
+[features]
+# Exposes the test-only A1 grid reference profile/provider
+# (oxfml_core::test_support::grid) to external test crates. Off in production
+# builds so core ships no built-in reference grammar.
+test-support = []
+
 [dependencies]
 oxfunc_core = { path = "../../../OxFunc/crates/oxfunc_core" }
 serde_json = "1"
