@@ -37,10 +37,12 @@ use oxfunc_core::host_info::HostInfoProvider;
 use oxfunc_core::locale_format::LocaleFormatContext;
 use oxfunc_core::resolver::resolve_eval_value as resolve_oxfunc_eval_value;
 use oxfunc_core::resolver::{
-    CallerContext, NULL_REFERENCE_SYSTEM_PROVIDER, ReferenceDereferenceRequest,
-    ReferenceEnumerationRequest, ReferenceResolutionError, ReferenceSystemError,
+    CallerContext, NULL_REFERENCE_SYSTEM_PROVIDER, ReferenceComposeRequest,
+    ReferenceDereferenceRequest, ReferenceEnumerationRequest, ReferenceFacts,
+    ReferenceFactsRequest, ReferenceResolutionError, ReferenceSystemError,
     ReferenceSystemOperation, ReferenceSystemProvider, ReferenceTextResolveRequest,
-    ResolvedReferenceCell, ResolvedReferenceExtent, ResolvedReferenceValues,
+    ReferenceTransformRequest, ResolvedReferenceCell, ResolvedReferenceExtent,
+    ResolvedReferenceValues,
 };
 use oxfunc_core::value::{
     CalcArray, CalcValue, CallableArityShape as OxCallableArityShape,
@@ -1872,6 +1874,40 @@ impl ReferenceSystemProvider for EvaluationLocalReferenceSystemProvider<'_> {
         }
         Err(ReferenceSystemError::Unsupported {
             operation: ReferenceSystemOperation::ResolveText,
+        })
+    }
+
+    fn facts(
+        &self,
+        request: &ReferenceFactsRequest,
+    ) -> Result<ReferenceFacts, ReferenceSystemError> {
+        if let Some(upstream) = self.upstream {
+            return upstream.facts(request);
+        }
+        Ok(oxfunc_core::resolver::reference_facts(&request.reference))
+    }
+
+    fn transform_reference(
+        &self,
+        request: &ReferenceTransformRequest,
+    ) -> Result<ReferenceLike, ReferenceSystemError> {
+        if let Some(upstream) = self.upstream {
+            return upstream.transform_reference(request);
+        }
+        Err(ReferenceSystemError::Unsupported {
+            operation: ReferenceSystemOperation::Transform,
+        })
+    }
+
+    fn compose_references(
+        &self,
+        request: &ReferenceComposeRequest,
+    ) -> Result<ReferenceLike, ReferenceSystemError> {
+        if let Some(upstream) = self.upstream {
+            return upstream.compose_references(request);
+        }
+        Err(ReferenceSystemError::Unsupported {
+            operation: ReferenceSystemOperation::Compose,
         })
     }
 

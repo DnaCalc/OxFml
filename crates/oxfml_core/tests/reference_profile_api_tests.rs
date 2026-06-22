@@ -19,9 +19,12 @@ use oxfml_core::{EvaluationContext, evaluate_formula};
 use oxfml_core::{ParseRequest, parse_formula};
 use oxfml_core::{project_red_view, source::FormulaToken};
 use oxfunc_core::resolver::{
-    ReferenceDereferenceRequest, ReferenceResolutionError, ReferenceSystemProvider,
+    ReferenceComposeOperation, ReferenceComposeRequest, ReferenceDereferenceRequest,
+    ReferenceResolutionError, ReferenceSystemError, ReferenceSystemProvider,
 };
-use oxfunc_core::value::{CalcValue, ReferenceIdentity, ReferenceLike, ReferenceSystemId};
+use oxfunc_core::value::{
+    CalcValue, ReferenceIdentity, ReferenceKind, ReferenceLike, ReferenceSystemId,
+};
 
 struct FakeSymbolicProfile;
 
@@ -324,6 +327,47 @@ fn runtime_environment_supplies_reference_profile_through_execution() {
 }
 
 #[test]
+fn runtime_environment_forwards_profile_range_composition_to_reference_provider() {
+    let profile = FakeSymbolicProfile;
+    let provider = ComposingProvider::default();
+    let runtime = RuntimeEnvironment::new().with_reference_bind_profile(&profile);
+    let request = RuntimeFormulaRequest::new(
+        FormulaSourceRecord::new(
+            "runtime-profile-range-compose",
+            1,
+            "=SUM(A1:B1)".to_string(),
+        ),
+        TypedContextQueryBundle::default().with_reference_system_provider(Some(&provider)),
+    );
+
+    let result = runtime
+        .execute(request)
+        .expect("runtime profile range composition should execute");
+
+    assert_eq!(result.published_worksheet_value, CalcValue::number(5.0));
+    let composed = provider.composed.borrow();
+    assert!(!composed.is_empty());
+    for request in composed.iter() {
+        assert_eq!(request.operation, ReferenceComposeOperation::Range);
+        assert_eq!(
+            request.lhs.system,
+            ReferenceSystemId("fake.symbolic.v1".to_string())
+        );
+        assert_eq!(
+            request.rhs.system,
+            ReferenceSystemId("fake.symbolic.v1".to_string())
+        );
+    }
+    assert!(
+        provider
+            .dereferenced
+            .borrow()
+            .iter()
+            .any(|reference| reference.target() == "fake-range:A1:B1")
+    );
+}
+
+#[test]
 fn default_profile_instantiation_returns_reference_like_and_static_dependency() {
     let profile = FakeSymbolicProfile;
     let bound = bind_formula_for("profile-instantiation", "=A1", 2, 2, Some(&profile));
@@ -469,6 +513,42 @@ impl ReferenceSystemProvider for RecordingProvider {
     ) -> Result<CalcValue, ReferenceResolutionError> {
         self.seen.borrow_mut().push(request.reference.clone());
         Ok(CalcValue::number(42.0))
+    }
+}
+
+#[derive(Default)]
+struct ComposingProvider {
+    composed: RefCell<Vec<ReferenceComposeRequest>>,
+    dereferenced: RefCell<Vec<ReferenceLike>>,
+}
+
+impl ReferenceSystemProvider for ComposingProvider {
+    fn dereference(
+        &self,
+        request: &ReferenceDereferenceRequest,
+    ) -> Result<CalcValue, ReferenceResolutionError> {
+        self.dereferenced
+            .borrow_mut()
+            .push(request.reference.clone());
+        if request.reference.target() == "fake-range:A1:B1" {
+            return Ok(CalcValue::number(5.0));
+        }
+        Err(ReferenceResolutionError::UnresolvedReference {
+            target: request.reference.target().to_string(),
+        })
+    }
+
+    fn compose_references(
+        &self,
+        request: &ReferenceComposeRequest,
+    ) -> Result<ReferenceLike, ReferenceSystemError> {
+        self.composed.borrow_mut().push(request.clone());
+        if request.operation == ReferenceComposeOperation::Range {
+            return Ok(ReferenceLike::new(ReferenceKind::Area, "fake-range:A1:B1"));
+        }
+        Err(ReferenceSystemError::ProviderFailure {
+            detail: "fake_profile_unexpected_compose".to_string(),
+        })
     }
 }
 

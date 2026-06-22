@@ -348,8 +348,8 @@ impl ReferenceBindProfile for TestEditorReferenceProfile {
     fn selector_syntax(&self) -> Vec<ReferenceSelectorSyntax> {
         vec![
             ReferenceSelectorSyntax::collection("CHILDREN", "children"),
-            ReferenceSelectorSyntax::collection("PARENT", "parent"),
-            ReferenceSelectorSyntax::collection("NEXT", "next"),
+            ReferenceSelectorSyntax::structural_selector("PARENT", "parent"),
+            ReferenceSelectorSyntax::structural_selector("NEXT", "next"),
         ]
     }
 
