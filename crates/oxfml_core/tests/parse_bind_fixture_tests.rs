@@ -293,39 +293,9 @@ fn incremental_bind_invalidates_when_bind_context_changes() {
     assert!(!incremental_bind.reused_bound_formula);
 }
 
-#[test]
-fn bind_inherits_explicit_sheet_qualifier_across_simple_a1_range() {
-    let source = FormulaSourceRecord::new("fixture-sheet-qualified-range", 1, "=SUM(Alpha!A1:A2)");
-    let parse = parse_formula(ParseRequest {
-        source: source.clone(),
-    });
-    let red = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
-    let bind = bind_formula(BindRequest {
-        source: source.clone(),
-        green_tree: parse.green_tree,
-        red_projection: red,
-        context: BindContext {
-            structure_context_version: StructureContextVersion("fixture-struct-v1".to_string()),
-            formula_token: source.formula_token(),
-            ..BindContext::default()
-        },
-
-        reference_bind_profile: None,
-    });
-
-    assert!(bind.bound_formula.diagnostics.is_empty());
-    assert_eq!(bind.bound_formula.normalized_references.len(), 1);
-    match &bind.bound_formula.normalized_references[0] {
-        NormalizedReference::Area(area) => {
-            assert_eq!(area.sheet_id, "Alpha");
-            assert_eq!(area.top_left.row, 1);
-            assert_eq!(area.top_left.col, 1);
-            assert_eq!(area.height, 2);
-            assert_eq!(area.width, 1);
-        }
-        other => panic!("expected normalized area reference, got {other:?}"),
-    }
-}
+// Sheet-qualified A1 range binding (→ grid Area) now lives in OxCalc's
+// strict-excel-grid profile (`strict_profile_binds_*` tests). OxFml core no
+// longer parses grid references.
 
 #[test]
 fn bind_preserves_array_literal_multiplied_by_unary_negative_literal_shape() {

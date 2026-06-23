@@ -10,6 +10,8 @@ use oxfml_core::eval::{
 };
 use oxfml_core::format::oxfml_en_us_locale_context;
 use oxfml_core::test_support::host::SingleFormulaHost;
+use oxfml_core::test_support::minimal::MINIMAL_REFERENCE_PROFILE;
+use oxfml_core::{EvaluationBackend, PinnedLibraryContextView, TypedContextQueryBundle};
 use oxfunc_core::value::{CoreValue, RichValue, WorksheetErrorCode};
 
 #[test]
@@ -440,34 +442,46 @@ fn array_literal_bodied_lambda_with_capture_surfaces_payload() {
 }
 
 #[test]
-fn cell_captured_reference_uses_display_identity_and_no_defined_name_binding() {
-    // Finding #5: a body capturing a cell reference. A cell is not a defined name,
-    // so `name`/`identity` use the reference Display form and `binding` is None
-    // (the host tracks it as a cell-keyed dependency, not a defined-name lookup).
+fn cell_captured_reference_uses_display_identity_and_no_defined_name_binding_under_minimal_profile() {
+    // Re-added non-grid version: a LAMBDA body capturing a bare same-sheet A1
+    // reference (bound via the auto-wired minimal test reference profile). A
+    // reference is not a defined name, so `name`/`identity` use the reference
+    // Display form and `binding` is None. SingleFormulaHost does not auto-wire
+    // the minimal profile via recalc(), so we pass it explicitly.
     let mut host = SingleFormulaHost::new("portable:cell-capture", "=LAMBDA(x,MIN(x,A1))");
+    let locale = oxfml_en_us_locale_context();
     let output = host
-        .recalc(None, Some(&oxfml_en_us_locale_context()))
+        .recalc_with_library_context_view_and_reference_bind_profile(
+            EvaluationBackend::OxFuncBacked,
+            TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
+            PinnedLibraryContextView::new(None, None, None),
+            None,
+            Some(&MINIMAL_REFERENCE_PROFILE),
+        )
         .expect("recalc should succeed");
 
     let portable = output
         .portable_callable
         .as_ref()
-        .expect("cell-capturing LAMBDA should surface a portable payload");
+        .expect("reference-capturing LAMBDA should surface a portable payload");
     assert_eq!(portable.captured_refs.len(), 1);
     let captured = &portable.captured_refs[0];
+    eprintln!(
+        "DISCOVER captured: name={:?} identity={:?} binding={:?}",
+        captured.name, captured.identity, captured.binding
+    );
     assert_eq!(
         captured.name, captured.identity,
         "a non-name reference uses its Display form for both name and identity"
     );
     assert!(
         !captured.identity.starts_with("name:"),
-        "a cell capture is not a defined-name identity"
-    );
-    assert!(
-        captured.identity.contains('!'),
-        "a cell identity is sheet-qualified (got {})",
+        "a reference capture is not a defined-name identity (got {})",
         captured.identity
     );
+    // NOTE: the old grid assertion `captured.identity.contains('!')` (sheet
+    // qualification) is dropped: the minimal profile produces a bare same-sheet
+    // A1 Display form with no sheet qualifier.
     assert_eq!(captured.binding, None);
     // No baked closure regardless of reference kind.
     assert!(portable.binding.closure.is_empty());

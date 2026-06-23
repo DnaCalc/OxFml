@@ -57,7 +57,7 @@ pub fn compile_formula_with_library_context(
             ..BindContext::default()
         },
 
-        reference_bind_profile: None,
+        reference_bind_profile: Some(&oxfml_core::test_support::minimal::MINIMAL_REFERENCE_PROFILE),
     });
 
     let semantic_plan = compile_semantic_plan(CompileSemanticPlanRequest {

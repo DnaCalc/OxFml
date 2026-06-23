@@ -3,11 +3,13 @@ use oxfunc_core::functions::call_register_id_family::{
     RegisteredExternalProvider, RegisteredExternalProviderError, RegisteredExternalTarget,
     RegisteredProcedureSpec,
 };
-use oxfunc_core::value::{CoreValue, ExcelText, ReferenceKind, ReferenceLike};
+use oxfunc_core::value::{CoreValue, ExcelText};
 use std::cell::RefCell;
 
 use oxfml_core::EvaluationTraceMode;
 use oxfml_core::TypedContextQueryBundleSpec;
+use oxfml_core::test_support::minimal::MINIMAL_REFERENCE_PROFILE;
+use oxfml_core::{EvaluationBackend, PinnedLibraryContextView};
 use oxfml_core::interface::{
     RegisteredExternalCatalogController, RegisteredExternalCatalogMutationRequest,
     RegisteredExternalCatalogMutationResult, RegisteredExternalHostRegistrationRequest,
@@ -169,7 +171,12 @@ fn host_executes_call_by_register_id_through_lookup_lane() {
 }
 
 #[test]
-fn host_preserves_reference_visible_call_argument_for_registered_external_invocation() {
+fn host_preserves_reference_visible_call_argument_for_registered_external_invocation_under_minimal_profile()
+{
+    // Re-added non-grid version: a reference-typed CALL argument (bare same-sheet
+    // A1, bound via the auto-wired minimal test reference profile) must reach the
+    // registered-external provider AS a reference (CoreValue::Reference) rather
+    // than a dereferenced scalar value.
     let provider = RecordingRegisteredExternalProvider::default();
     let mut host = SingleFormulaHost::new(
         "formula:call-ref",
@@ -177,18 +184,35 @@ fn host_preserves_reference_visible_call_argument_for_registered_external_invoca
     );
     host.set_cell_value("A1", CalcValue::number(7.0));
 
+    // SingleFormulaHost does not auto-wire the minimal reference profile (only
+    // common::compile_formula and RuntimeEnvironment::new() do), so bind A1 via
+    // the minimal profile explicitly while still routing the registered-external
+    // provider through the typed query bundle.
     let output = host
-        .recalc_with_registered_external_provider(None, Some(&provider), None, None)
+        .recalc_with_library_context_view_and_reference_bind_profile(
+            EvaluationBackend::OxFuncBacked,
+            TypedContextQueryBundle::default()
+                .with_registered_external_provider(Some(&provider)),
+            PinnedLibraryContextView::new(None, None, None),
+            None,
+            Some(&MINIMAL_REFERENCE_PROFILE),
+        )
         .expect("call with reference host recalc");
 
     assert_eq!(output.published_worksheet_value, CalcValue::number(99.0));
     let (_, args) = provider.last_invoke.borrow().clone().expect("invoke");
-    assert_eq!(
-        args,
-        vec![CalcValue::reference(ReferenceLike::new(
-            ReferenceKind::A1,
-            "A1"
-        ))]
+    assert_eq!(args.len(), 1, "single reference argument reaches provider");
+    // Abstract assertion: the argument is preserved as a reference, not coerced
+    // to the cell's scalar value (7.0).
+    assert!(
+        matches!(args[0].core, CoreValue::Reference(_)),
+        "reference-typed call argument must be passed through as a reference, got {:?}",
+        args[0].core
+    );
+    assert_ne!(
+        args[0],
+        CalcValue::number(7.0),
+        "argument must NOT be the dereferenced cell value"
     );
 }
 

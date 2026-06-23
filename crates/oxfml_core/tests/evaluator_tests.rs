@@ -924,120 +924,9 @@ fn evaluator_projects_same_sheet_prefixed_multi_area_without_upstream_reference_
     );
 }
 
-#[test]
-fn evaluator_resolves_direct_sheet_qualified_cell_reference_end_to_end() {
-    let mut extra_cells = BTreeMap::new();
-    extra_cells.insert("Alpha!A1".to_string(), CalcValue::number(17.0));
-
-    let output = evaluate_with_cells("=Alpha!A1", extra_cells);
-    assert_eq!(output.oxfunc_value, CalcValue::number(17.0));
-}
-
-#[test]
-fn evaluator_resolves_direct_sheet_qualified_area_reference_end_to_end() {
-    let mut extra_cells = BTreeMap::new();
-    extra_cells.insert("Alpha!A1".to_string(), CalcValue::number(7.0));
-    extra_cells.insert("Alpha!A2".to_string(), CalcValue::number(11.0));
-
-    let output = evaluate_with_cells("=SUM(Alpha!A1:A2)", extra_cells);
-    assert_eq!(output.oxfunc_value, CalcValue::number(18.0));
-    assert_eq!(
-        output
-            .trace
-            .prepared_calls
-            .iter()
-            .map(|call| call.function_id)
-            .collect::<Vec<_>>(),
-        vec!["FUNC.SUM"]
-    );
-}
-
-#[test]
-fn evaluator_projects_mixed_sheet_multi_area_without_upstream_reference_composition() {
-    let mut extra_cells = BTreeMap::new();
-    extra_cells.insert("Alpha!A1".to_string(), CalcValue::number(7.0));
-    extra_cells.insert("Alpha!A2".to_string(), CalcValue::number(11.0));
-    extra_cells.insert("Beta!B2".to_string(), CalcValue::number(13.0));
-
-    let output = evaluate_with_cells("=SUM((Alpha!A1:A2,Beta!B2))", extra_cells);
-    assert_eq!(
-        output.oxfunc_value,
-        CalcValue::error(WorksheetErrorCode::Ref)
-    );
-    assert_eq!(
-        output
-            .trace
-            .prepared_calls
-            .iter()
-            .map(|call| call.function_id)
-            .collect::<Vec<_>>(),
-        vec!["FUNC.OP_UNION_REF", "FUNC.SUM"]
-    );
-}
-
-#[test]
-fn evaluator_preserves_sheet_qualified_whole_row_reference_for_reference_visible_function() {
-    let mut extra_cells = BTreeMap::new();
-    extra_cells.insert("Alpha!A1".to_string(), CalcValue::number(7.0));
-    extra_cells.insert("Alpha!B2".to_string(), CalcValue::number(13.0));
-    extra_cells.insert("Alpha!C3".to_string(), CalcValue::number(17.0));
-
-    let output = evaluate_with_cells("=ROWS(Alpha!1:3)", extra_cells);
-    assert_eq!(output.oxfunc_value, CalcValue::number(3.0));
-    assert_eq!(output.trace.prepared_calls[0].function_id, "FUNC.ROWS");
-    assert_eq!(
-        output.trace.prepared_calls[0].prepared_arguments[0].evaluation_mode,
-        oxfml_core::PreparedEvaluationMode::ReferencePreserved
-    );
-}
-
-#[test]
-fn evaluator_preserves_sheet_qualified_whole_column_reference_for_reference_visible_function() {
-    let mut extra_cells = BTreeMap::new();
-    extra_cells.insert("Alpha!A1".to_string(), CalcValue::number(7.0));
-    extra_cells.insert("Alpha!A2".to_string(), CalcValue::number(11.0));
-    extra_cells.insert("Alpha!B2".to_string(), CalcValue::number(13.0));
-
-    let output = evaluate_with_cells("=COLUMNS(Alpha!A:B)", extra_cells);
-    assert_eq!(output.oxfunc_value, CalcValue::number(2.0));
-    assert_eq!(output.trace.prepared_calls[0].function_id, "FUNC.COLUMNS");
-    assert_eq!(
-        output.trace.prepared_calls[0].prepared_arguments[0].evaluation_mode,
-        oxfml_core::PreparedEvaluationMode::ReferencePreserved
-    );
-}
-
-#[test]
-fn evaluator_rejects_sheet_qualified_whole_row_reference_in_local_value_only_lane() {
-    let mut extra_cells = BTreeMap::new();
-    extra_cells.insert("Alpha!A1".to_string(), CalcValue::number(7.0));
-    extra_cells.insert("Alpha!B2".to_string(), CalcValue::number(13.0));
-    extra_cells.insert("Alpha!C3".to_string(), CalcValue::number(17.0));
-
-    let got = evaluate_with_cells_result("=SUM(Alpha!1:3)", extra_cells);
-    let err = got.expect_err("whole-row local value-only deref should reject honestly");
-    assert!(
-        err.message.contains("UnresolvedReference") && err.message.contains("Alpha!1:3"),
-        "expected unresolved whole-row reference failure, got {}",
-        err.message
-    );
-}
-
-#[test]
-fn evaluator_rejects_sheet_qualified_whole_column_reference_in_local_value_only_lane() {
-    let mut extra_cells = BTreeMap::new();
-    extra_cells.insert("Alpha!A1".to_string(), CalcValue::number(7.0));
-    extra_cells.insert("Alpha!A2".to_string(), CalcValue::number(11.0));
-    extra_cells.insert("Alpha!B2".to_string(), CalcValue::number(13.0));
-
-    let got = evaluate_with_cells_result("=SUM(Alpha!A:B)", extra_cells);
-    let err = got.expect_err("whole-column local value-only deref should reject honestly");
-    assert!(
-        err.message.contains("UnresolvedReference") && err.message.contains("Alpha!A:B"),
-        "expected unresolved whole-column reference failure, got {}",
-        err.message
-    );
-}
+// Sheet-qualified / whole-axis grid-reference resolution moved to OxCalc, where
+// the real strict-excel-grid profile + provider exercise this behavior end to end
+// through OxFml. OxFml core is grid-agnostic and no longer hosts these cases.
 
 #[test]
 fn evaluator_lifts_binary_arithmetic_over_array_literals_and_scalar_negation() {
@@ -1352,16 +1241,7 @@ fn evaluator_runs_let_with_reference_preserved_binding() {
     assert_eq!(output.result.payload_summary, "Number(9)");
 }
 
-#[test]
-fn evaluator_runs_legacy_single_compat() {
-    let output = evaluate(
-        "=_xlfn.SINGLE(A1)",
-        None,
-        None,
-        Some(&oxfml_en_us_locale_context()),
-    );
-    assert_eq!(output.result.payload_summary, "Number(7)");
-}
+// evaluator_runs_legacy_single_compat: grid-reference behavior moved to OxCalc (real strict-excel-grid profile).
 
 #[test]
 fn evaluator_returns_lambda_value_summary() {

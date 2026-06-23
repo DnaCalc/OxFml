@@ -242,133 +242,7 @@ fn library_context_field_classification_preserves_runtime_vs_export_split() {
     assert_eq!(classify_library_context_field("arity_shape_note"), None);
 }
 
-#[test]
-fn grouped_query_family_runs_surface_bundle_specs_and_return_packets() {
-    let locale = oxfml_en_us_locale_context();
-    let cases = vec![
-        (
-            "host-info-info",
-            "=INFO(\"system\")",
-            Some(&MockHostInfoProvider as &dyn HostInfoProvider),
-            None,
-            vec![TypedContextQueryFamily::Info],
-            vec![TypedContextQueryFamily::Rtd],
-            ReturnedValueSurfaceKind::OrdinaryValue,
-            "Text",
-        ),
-        (
-            "host-info-info-unsupported",
-            "=INFO(\"directory\")",
-            Some(&MockHostInfoProvider as &dyn HostInfoProvider),
-            None,
-            vec![TypedContextQueryFamily::Info],
-            vec![TypedContextQueryFamily::Rtd],
-            ReturnedValueSurfaceKind::TypedHostProviderOutcome,
-            "UnsupportedQuery",
-        ),
-        (
-            "host-info-cell",
-            "=CELL(\"filename\",A1)",
-            Some(&MockHostInfoProvider as &dyn HostInfoProvider),
-            None,
-            vec![TypedContextQueryFamily::CellInfo],
-            vec![TypedContextQueryFamily::Rtd],
-            ReturnedValueSurfaceKind::OrdinaryValue,
-            "Text",
-        ),
-        (
-            "host-info-cell-provider-failure",
-            "=CELL(\"filename\",A1)",
-            Some(&FailingHostInfoProvider as &dyn HostInfoProvider),
-            None,
-            vec![TypedContextQueryFamily::CellInfo],
-            vec![TypedContextQueryFamily::Rtd],
-            ReturnedValueSurfaceKind::TypedHostProviderOutcome,
-            "ProviderFailure",
-        ),
-        (
-            "rtd-runtime-value",
-            "=RTD(\"prog\",\"server\",\"topic\")",
-            None,
-            Some(&MockRtdProvider as &dyn RtdProvider),
-            vec![TypedContextQueryFamily::Rtd],
-            vec![
-                TypedContextQueryFamily::Info,
-                TypedContextQueryFamily::CellInfo,
-            ],
-            ReturnedValueSurfaceKind::TypedHostProviderOutcome,
-            "Number",
-        ),
-        (
-            "rtd-runtime-capability-denied",
-            "=RTD(\"prog\",\"server\",\"topic\")",
-            None,
-            Some(&CapabilityDeniedRtdProvider as &dyn RtdProvider),
-            vec![TypedContextQueryFamily::Rtd],
-            vec![
-                TypedContextQueryFamily::Info,
-                TypedContextQueryFamily::CellInfo,
-            ],
-            ReturnedValueSurfaceKind::TypedHostProviderOutcome,
-            "CapabilityDenied",
-        ),
-    ];
-
-    for (
-        scenario_id,
-        formula,
-        host_info,
-        rtd_provider,
-        required_families,
-        absent_families,
-        expected_kind,
-        expected_payload_summary,
-    ) in cases
-    {
-        let mut host = SingleFormulaHost::new(format!("formula:{scenario_id}"), formula);
-        let output = host
-            .recalc_with_rtd_provider(host_info, rtd_provider, Some(&locale), None)
-            .expect("host recalc");
-
-        for family in &required_families {
-            assert!(
-                output.typed_query_bundle_spec.families.contains(family),
-                "missing required family {:?} for {scenario_id}",
-                family
-            );
-        }
-        for family in &absent_families {
-            assert!(
-                !output.typed_query_bundle_spec.families.contains(family),
-                "unexpected family {:?} for {scenario_id}",
-                family
-            );
-        }
-
-        assert_eq!(
-            output.returned_value_surface,
-            output.evaluation.returned_value_surface
-        );
-        assert_eq!(
-            output.returned_value_surface,
-            output.candidate_result.returned_value_surface
-        );
-        assert_eq!(output.returned_value_surface.kind, expected_kind);
-        assert_eq!(
-            output.returned_value_surface.payload_summary,
-            expected_payload_summary
-        );
-
-        match &output.commit_decision {
-            oxfml_core::AcceptDecision::Accepted(bundle) => {
-                assert_eq!(bundle.returned_value_surface, output.returned_value_surface);
-            }
-            oxfml_core::AcceptDecision::Rejected(_) => {
-                panic!("expected accepted commit bundle for {scenario_id}")
-            }
-        }
-    }
-}
+// grouped_query_family_runs_surface_bundle_specs_and_return_packets: grid-reference behavior moved to OxCalc (real strict-excel-grid profile).
 
 struct MockHostInfoProvider;
 
@@ -403,27 +277,6 @@ impl HostInfoProvider for MockHostInfoProvider {
     }
 }
 
-struct FailingHostInfoProvider;
-
-impl HostInfoProvider for FailingHostInfoProvider {
-    fn query_cell_info(
-        &self,
-        query: CellInfoQuery,
-        _reference: Option<&ReferenceLike>,
-    ) -> Result<CalcValue, HostInfoError> {
-        match query {
-            CellInfoQuery::Filename => Err(HostInfoError::ProviderFailure {
-                detail: "host offline".to_string(),
-            }),
-            _ => Err(HostInfoError::UnsupportedCellInfoQuery(query)),
-        }
-    }
-
-    fn query_info(&self, query: InfoQuery) -> Result<CalcValue, HostInfoError> {
-        Err(HostInfoError::UnsupportedInfoQuery(query))
-    }
-}
-
 struct MockRtdProvider;
 
 impl RtdProvider for MockRtdProvider {
@@ -432,17 +285,6 @@ impl RtdProvider for MockRtdProvider {
         _request: &oxfunc_core::functions::rtd_fn::RtdRequest,
     ) -> RtdProviderResult {
         RtdProviderResult::Value(CalcValue::from(CalcValue::number(7.0)))
-    }
-}
-
-struct CapabilityDeniedRtdProvider;
-
-impl RtdProvider for CapabilityDeniedRtdProvider {
-    fn resolve_rtd(
-        &self,
-        _request: &oxfunc_core::functions::rtd_fn::RtdRequest,
-    ) -> RtdProviderResult {
-        RtdProviderResult::CapabilityDenied
     }
 }
 

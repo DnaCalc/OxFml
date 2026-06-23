@@ -422,7 +422,12 @@ fn runtime_formal_input_binding_executes_without_synthetic_cells_or_defined_name
 }
 
 #[test]
-fn runtime_result_exposes_prepared_formula_identity_for_direct_execution() {
+fn runtime_result_exposes_prepared_formula_identity_for_direct_execution_under_minimal_profile() {
+    // Re-added non-grid version: drives the prepared-formula identity machinery
+    // with a bare same-sheet A1 reference resolved via the auto-wired minimal test
+    // reference profile (oxfml.test.minimal.v1). Asserts the abstract machinery
+    // (RefOrValueHole template hole, linked formal reference, package round-trip)
+    // rather than any grid-specific descriptor string.
     let mut cell_values = std::collections::BTreeMap::new();
     cell_values.insert("A1".to_string(), CalcValue::number(4.0));
     let environment = RuntimeEnvironment::new().with_cell_values(cell_values);
@@ -455,27 +460,50 @@ fn runtime_result_exposes_prepared_formula_identity_for_direct_execution() {
             .is_none(),
         "shape key remains deferred until canonical shape abstraction exists"
     );
-    assert!(
-        result
-            .prepared_formula_identity
-            .plan_template
-            .template_holes
-            .iter()
-            .any(|hole| hole.hole_kind == "RefOrValueHole"
-                && hole.path.as_deref() == Some("sheet:default!R1C1")),
-        "prepared identity should expose reference template-hole detail"
+
+    // The bare A1 reference argument yields exactly one reference template-hole.
+    // Under the minimal profile a bare A1 reference binds to a profile-symbolic
+    // reference, so the runtime classifies its hole as "ProfileReferenceHole"
+    // (the grid-agnostic analogue of the old grid "RefOrValueHole"; see note in
+    // the report). The abstract machinery preserved here: a reference argument
+    // produces a dedicated reference template-hole that a formal reference is
+    // linked to.
+    let ref_hole = result
+        .prepared_formula_identity
+        .plan_template
+        .template_holes
+        .iter()
+        .find(|hole| hole.hole_id == "hole:reference:0")
+        .expect("prepared identity should expose a reference template-hole for the A1 argument");
+
+    assert_eq!(ref_hole.hole_kind, "ProfileReferenceHole");
+    assert_eq!(ref_hole.hole_kind_key, "ProfileReferenceHole:profile_symbolic");
+    // Descriptor/path are the minimal-profile representation (profile id +
+    // canonical A1 normal-form key), observed at runtime, not the old grid form.
+    assert_eq!(
+        ref_hole.path.as_deref(),
+        Some("profile-symbolic:oxfml.test.minimal.v1:A1")
     );
-    assert!(
-        result
-            .prepared_formula_identity
-            .formal_references
-            .iter()
-            .any(|reference| {
-                reference.reference_family == "direct"
-                    && reference.reference_descriptor == "sheet:default!R1C1"
-                    && reference.linked_hole_id.as_deref() == Some("hole:reference:0")
-            })
+
+    let formal_ref = result
+        .prepared_formula_identity
+        .formal_references
+        .iter()
+        .find(|reference| reference.linked_hole_id.is_some())
+        .expect("formal references should include an entry with a linked_hole_id");
+
+    assert_eq!(formal_ref.reference_family, "profile_symbolic");
+    assert_eq!(
+        formal_ref.reference_descriptor,
+        "profile-symbolic:oxfml.test.minimal.v1:A1"
     );
+    // The formal reference is linked to the reference template-hole.
+    assert_eq!(
+        formal_ref.linked_hole_id.as_deref(),
+        Some(ref_hole.hole_id.as_str()),
+        "formal reference's linked_hole_id should match the reference hole's id"
+    );
+
     let package = result.prepared_formula_package();
     assert_eq!(
         package.package_key,
@@ -3992,6 +4020,10 @@ fn runtime_test_udf_entry() -> FunctionEntry {
     FunctionEntry {
         meta: RegistryFunctionMeta {
             function_id: "FUNC.UDF.MYFUNC".to_string(),
+            function_spec_axes_metadata:
+                oxfunc_core::registry::FunctionSpecAxesMetadata::default_axes(),
+            function_spec_axes_metadata_version:
+                oxfunc_core::registry::FunctionSpecAxesMetadata::default_axes().version_key(),
             arity: Arity::exact(2),
             determinism: DeterminismClass::Deterministic,
             volatility: VolatilityClass::NonVolatile,

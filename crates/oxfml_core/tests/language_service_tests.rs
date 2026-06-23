@@ -1535,6 +1535,10 @@ fn test_udf_entry() -> FunctionEntry {
     FunctionEntry {
         meta: RegistryFunctionMeta {
             function_id: "FUNC.UDF.MYFUNC".to_string(),
+            function_spec_axes_metadata:
+                oxfunc_core::registry::FunctionSpecAxesMetadata::default_axes(),
+            function_spec_axes_metadata_version:
+                oxfunc_core::registry::FunctionSpecAxesMetadata::default_axes().version_key(),
             arity: Arity::exact(2),
             determinism: DeterminismClass::Deterministic,
             volatility: VolatilityClass::NonVolatile,
