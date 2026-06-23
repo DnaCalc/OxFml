@@ -92,6 +92,7 @@ name = "oxfml_core"
 version = "0.1.0"
 dependencies = [
  "csv",
+ "oxfml_core",
  "oxfunc_core",
  "serde",
  "serde_json",
