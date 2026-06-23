@@ -1,27 +1,29 @@
-//! Test-only A1 grid reference profile and provider.
+//! Minimal, deliberately non-grid reference profile + provider for OxFml's tests.
 //!
 //! OxFml core is reference-meaning agnostic: it owns the binding lifecycle and
-//! the profile seam, but it does not know what an `A1` reference means. The grid
+//! the profile seam, but it does not know what a reference means. Real grid
 //! meaning lives downstream in OxCalc's `strict-excel-grid` profile (see
 //! `CORE_ENGINE_REFERENCE_PROFILE_CONTRACT.md` §8). OxFml's own test suite,
-//! however, needs *some* reference language to exercise binding and evaluation
-//! without depending on OxCalc.
+//! however, needs *some* reference language to exercise the abstract plumbing.
 //!
-//! This module supplies that language as an ordinary downstream profile so the
+//! This module is that minimal language — an ordinary downstream profile so the
 //! core crate carries zero built-in grammar in production builds. It is compiled
-//! only under `cfg(test)` or the `test-support` feature.
+//! only under `cfg(test)` or the `test-support` feature. It is NOT a grid
+//! provider: A1-style tokens are used only as a convenient opaque key, with no
+//! R1C1, sheet-qualified, whole-axis, `$`-anchor, or spill semantics. Anything
+//! grid-shaped belongs in OxCalc, tested against the real provider.
 //!
-//! - [`DefaultGridReferenceProfile`] parses minimal A1 cell/range syntax at bind
-//!   time and emits opaque profile-symbolic records keyed by canonical A1 text.
-//! - [`DefaultGridReferenceSystemProvider`] resolves those records at eval time
-//!   against an in-memory `A1 -> CalcValue` store.
+//! - [`MinimalReferenceProfile`] parses bare same-sheet A1 cell/range tokens at
+//!   bind time and emits opaque profile-symbolic records keyed by canonical text.
+//! - [`MinimalReferenceSystemProvider`] resolves those records at eval time
+//!   against an in-memory key -> `CalcValue` store.
 
 use std::collections::BTreeMap;
 
 use crate::binding::{
     ProfilePayload, ProfileReferenceRecord, ProfileVersion, ReferenceAtomBindRequest,
     ReferenceAtomBindResult, ReferenceBindProfile, ReferenceDependencyEnvelope,
-    ReferenceNormalFormKey, ReferencePolicy, ReferenceProfileFingerprintContext,
+    ReferenceNormalFormKey, ReferenceProfileFingerprintContext,
     ReferenceRangeBindRequest, ReferenceRangeBindResult, ReferenceSourceInfo, ReferenceValidity,
 };
 use oxfunc_core::resolver::{
@@ -31,17 +33,17 @@ use oxfunc_core::value::{
     ArrayShape, CalcArray, CalcValue, ReferenceIdentity, ReferenceLike,
 };
 
-/// Profile id for the test-only A1 grid reference language.
-pub const DEFAULT_GRID_PROFILE_ID: &str = "oxfml.test.grid.v1";
+/// Profile id for the minimal test-only reference language.
+pub const MINIMAL_REFERENCE_PROFILE_ID: &str = "oxfml.test.minimal.v1";
 
 /// Minimal A1 reference profile used by OxFml's own test suite.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct DefaultGridReferenceProfile;
+pub struct MinimalReferenceProfile;
 
-/// Singleton instance, convenient for `with_reference_bind_profile(&DEFAULT_GRID_PROFILE)`.
-pub static DEFAULT_GRID_PROFILE: DefaultGridReferenceProfile = DefaultGridReferenceProfile;
+/// Singleton instance, convenient for `with_reference_bind_profile(&MINIMAL_REFERENCE_PROFILE)`.
+pub static MINIMAL_REFERENCE_PROFILE: MinimalReferenceProfile = MinimalReferenceProfile;
 
-impl DefaultGridReferenceProfile {
+impl MinimalReferenceProfile {
     fn record(
         &self,
         key: String,
@@ -49,10 +51,10 @@ impl DefaultGridReferenceProfile {
         source_info: ReferenceSourceInfo,
     ) -> ProfileReferenceRecord {
         ProfileReferenceRecord {
-            profile_id: DEFAULT_GRID_PROFILE_ID.to_string(),
+            profile_id: MINIMAL_REFERENCE_PROFILE_ID.to_string(),
             profile_version: ProfileVersion::v1(),
             source_info,
-            profile_payload: ProfilePayload::textual("oxfml-test-grid-reference", key.clone()),
+            profile_payload: ProfilePayload::textual("oxfml-test-minimal-reference", key.clone()),
             normal_form_key: ReferenceNormalFormKey(key),
             render_hint: Some(request_source_text),
             validity: ReferenceValidity::ValidNow,
@@ -60,14 +62,17 @@ impl DefaultGridReferenceProfile {
     }
 }
 
-impl ReferenceBindProfile for DefaultGridReferenceProfile {
+impl ReferenceBindProfile for MinimalReferenceProfile {
     fn profile_id(&self) -> &str {
-        DEFAULT_GRID_PROFILE_ID
+        MINIMAL_REFERENCE_PROFILE_ID
     }
 
-    fn reference_policy(&self) -> ReferencePolicy {
-        ReferencePolicy::ProfileSymbolic
-    }
+    // Deliberately keeps the default `LegacyCompatibility` policy rather than
+    // `ProfileSymbolic`: this profile binds bare A1 tokens via `bind_atom` but
+    // lets unbound identifiers (e.g. defined names in `BindContext::names`) fall
+    // through to the binder's legacy name path, which the OxFml test suite relies
+    // on. Real grid profiles (OxCalc) use `ProfileSymbolic` so they fully own
+    // reference + name binding.
 
     fn bind_atom(&self, request: &ReferenceAtomBindRequest) -> ReferenceAtomBindResult {
         let Some(cell) = parse_cell(&request.source_text) else {
@@ -116,20 +121,20 @@ impl ReferenceBindProfile for DefaultGridReferenceProfile {
         _context: &ReferenceProfileFingerprintContext,
     ) -> ReferenceDependencyEnvelope {
         ReferenceDependencyEnvelope::Static {
-            profile_id: DEFAULT_GRID_PROFILE_ID.to_string(),
+            profile_id: MINIMAL_REFERENCE_PROFILE_ID.to_string(),
             dependency_key: reference.normal_form_key.0.clone(),
         }
     }
 }
 
-/// Test-only provider that resolves [`DefaultGridReferenceProfile`] references
+/// Test-only provider that resolves [`MinimalReferenceProfile`] references
 /// against an in-memory `A1 -> CalcValue` store.
 #[derive(Debug, Clone, Default)]
-pub struct DefaultGridReferenceSystemProvider {
+pub struct MinimalReferenceSystemProvider {
     cells: BTreeMap<String, CalcValue>,
 }
 
-impl DefaultGridReferenceSystemProvider {
+impl MinimalReferenceSystemProvider {
     /// Build a provider from canonical-A1-keyed cell values (e.g. `"A1" -> 5`).
     #[must_use]
     pub fn new(cells: BTreeMap<String, CalcValue>) -> Self {
@@ -156,13 +161,13 @@ impl DefaultGridReferenceSystemProvider {
         let shape = ArrayShape { rows, cols };
         CalcArray::new(shape, cells).map(CalcValue::array).ok_or(
             ReferenceResolutionError::ProviderFailure {
-                detail: "oxfml_test_grid_area_shape_invalid".to_string(),
+                detail: "oxfml_test_minimal_area_shape_invalid".to_string(),
             },
         )
     }
 }
 
-impl ReferenceSystemProvider for DefaultGridReferenceSystemProvider {
+impl ReferenceSystemProvider for MinimalReferenceSystemProvider {
     fn dereference(
         &self,
         request: &ReferenceDereferenceRequest,
@@ -287,7 +292,7 @@ mod tests {
 
     fn opaque_ref(key: &str) -> ReferenceLike {
         ReferenceLike::opaque(
-            ReferenceSystemId(DEFAULT_GRID_PROFILE_ID.to_string()),
+            ReferenceSystemId(MINIMAL_REFERENCE_PROFILE_ID.to_string()),
             ReferenceHandle {
                 id: ReferenceHandleId::from_bytes(key.as_bytes().to_vec()),
             },
@@ -313,11 +318,11 @@ mod tests {
 
     #[test]
     fn bind_atom_emits_canonical_symbolic_record() {
-        let profile = DefaultGridReferenceProfile;
+        let profile = MinimalReferenceProfile;
         let result = profile.bind_atom(&atom_request("$a$1"));
         match result {
             ReferenceAtomBindResult::Bound(record) => {
-                assert_eq!(record.profile_id, DEFAULT_GRID_PROFILE_ID);
+                assert_eq!(record.profile_id, MINIMAL_REFERENCE_PROFILE_ID);
                 assert_eq!(record.normal_form_key.0, "A1");
             }
             other => panic!("expected Bound, got {other:?}"),
@@ -333,7 +338,7 @@ mod tests {
         let mut cells = BTreeMap::new();
         cells.insert("A1".to_string(), CalcValue::number(2.0));
         cells.insert("B1".to_string(), CalcValue::number(3.0));
-        let provider = DefaultGridReferenceSystemProvider::new(cells);
+        let provider = MinimalReferenceSystemProvider::new(cells);
 
         let cell = provider
             .dereference(&ReferenceDereferenceRequest {

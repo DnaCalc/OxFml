@@ -628,15 +628,6 @@ impl Binder<'_> {
         ) {
             self.push_reference_seed(&structured);
             BoundExpr::Reference(ReferenceExpr::Atom(structured))
-        } else if let Some(cell_ref) = parse_cell_reference(
-            &text,
-            &self.context.sheet_id,
-            &self.context,
-            self.formula_channel_kind,
-        ) {
-            let normalized = NormalizedReference::Cell(cell_ref);
-            self.push_reference_seed(&normalized);
-            BoundExpr::Reference(ReferenceExpr::Atom(normalized))
         } else if let Some(kind) = self.context_name_kind(&text, node.span) {
             let caller_context_dependent = self.name_caller_context_dependent(&text);
             let normalized = NormalizedReference::Name(NameRef {
@@ -855,15 +846,6 @@ impl Binder<'_> {
                 ) {
                     self.push_reference_seed(&structured);
                     BoundExpr::Reference(ReferenceExpr::Atom(structured))
-                } else if let Some(cell_ref) = parse_cell_reference(
-                    &text,
-                    &qualifier.sheet_id,
-                    &self.context,
-                    self.formula_channel_kind,
-                ) {
-                    let normalized = NormalizedReference::Cell(cell_ref);
-                    self.push_reference_seed(&normalized);
-                    BoundExpr::Reference(ReferenceExpr::Atom(normalized))
                 } else {
                     let normalized = NormalizedReference::Name(NameRef {
                         name: format!("{}!{text}", qualifier.sheet_id),
@@ -901,42 +883,10 @@ impl Binder<'_> {
             return bound;
         }
 
-        if !self.profile_uses_symbolic_references() {
-            if let Some(normalized) = self.try_bind_simple_reference_range(left_node, right_node) {
-                self.push_reference_seed(&normalized);
-                return BoundExpr::Reference(ReferenceExpr::Atom(normalized));
-            }
-        }
-
         let left = self.bind_expr(left_node);
         let right = self.bind_expr(right_node);
 
         match (left, right) {
-            (
-                BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Cell(start))),
-                BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Cell(end))),
-            ) if start.workbook_id == end.workbook_id && start.sheet_id == end.sheet_id => {
-                self.pop_recent_reference_seed();
-                self.pop_recent_reference_seed();
-                let top_row = start.coord.row.min(end.coord.row);
-                let left_col = start.coord.col.min(end.coord.col);
-                let bottom_row = start.coord.row.max(end.coord.row);
-                let right_col = start.coord.col.max(end.coord.col);
-                let area = NormalizedReference::Area(AreaRef {
-                    workbook_id: start.workbook_id.clone(),
-                    sheet_id: start.sheet_id.clone(),
-                    top_left: CellCoord {
-                        row: top_row,
-                        col: left_col,
-                    },
-                    height: bottom_row - top_row + 1,
-                    width: right_col - left_col + 1,
-                    address_mode: AddressMode::default(),
-                    caller_anchor_used: start.caller_anchor_used || end.caller_anchor_used,
-                });
-                self.push_reference_seed(&area);
-                BoundExpr::Reference(ReferenceExpr::Atom(area))
-            }
             (BoundExpr::Reference(start), BoundExpr::Reference(end)) => {
                 BoundExpr::Reference(ReferenceExpr::Range {
                     start: Box::new(start),
@@ -954,81 +904,6 @@ impl Binder<'_> {
                 })))
             }
         }
-    }
-
-    fn try_bind_simple_reference_range(
-        &mut self,
-        left_node: &GreenNode,
-        right_node: &GreenNode,
-    ) -> Option<NormalizedReference> {
-        let (left_simple, right_simple) =
-            harmonize_simple_reference_fragments(left_node, right_node, &self.context)?;
-
-        if let (Some(start_row), Some(end_row)) = (
-            parse_row_reference(&left_simple.target_text, self.formula_channel_kind),
-            parse_row_reference(&right_simple.target_text, self.formula_channel_kind),
-        ) {
-            let top_row = start_row.min(end_row);
-            let bottom_row = start_row.max(end_row);
-            return Some(NormalizedReference::WholeRow(WholeRowRef {
-                workbook_id: self.context.workbook_id.clone(),
-                sheet_id: left_simple.qualifier.sheet_id,
-                row_start: top_row,
-                row_count: bottom_row - top_row + 1,
-                address_mode: AddressMode::default(),
-            }));
-        }
-
-        if let (Some(start_col), Some(end_col)) = (
-            parse_column_reference(&left_simple.target_text, self.formula_channel_kind),
-            parse_column_reference(&right_simple.target_text, self.formula_channel_kind),
-        ) {
-            let left_col = start_col.min(end_col);
-            let right_col = start_col.max(end_col);
-            return Some(NormalizedReference::WholeColumn(WholeColumnRef {
-                workbook_id: self.context.workbook_id.clone(),
-                sheet_id: left_simple.qualifier.sheet_id,
-                col_start: left_col,
-                col_count: right_col - left_col + 1,
-                address_mode: AddressMode::default(),
-            }));
-        }
-
-        if let (Some(start), Some(end)) = (
-            parse_cell_reference(
-                &left_simple.target_text,
-                &left_simple.qualifier.sheet_id,
-                &self.context,
-                self.formula_channel_kind,
-            ),
-            parse_cell_reference(
-                &right_simple.target_text,
-                &right_simple.qualifier.sheet_id,
-                &self.context,
-                self.formula_channel_kind,
-            ),
-        ) {
-            if start.workbook_id == end.workbook_id && start.sheet_id == end.sheet_id {
-                let top_row = start.coord.row.min(end.coord.row);
-                let left_col = start.coord.col.min(end.coord.col);
-                let bottom_row = start.coord.row.max(end.coord.row);
-                let right_col = start.coord.col.max(end.coord.col);
-                return Some(NormalizedReference::Area(AreaRef {
-                    workbook_id: start.workbook_id,
-                    sheet_id: start.sheet_id,
-                    top_left: CellCoord {
-                        row: top_row,
-                        col: left_col,
-                    },
-                    height: bottom_row - top_row + 1,
-                    width: right_col - left_col + 1,
-                    address_mode: AddressMode::default(),
-                    caller_anchor_used: start.caller_anchor_used || end.caller_anchor_used,
-                }));
-            }
-        }
-
-        None
     }
 
     fn bind_union(&mut self, node: &GreenNode) -> BoundExpr {
@@ -1206,17 +1081,6 @@ impl Binder<'_> {
         self.dependency_seeds.push(DependencySeed {
             summary: normalized.to_string(),
         });
-    }
-
-    fn pop_recent_reference_seed(&mut self) {
-        self.normalized_references.pop();
-        self.dependency_seeds.pop();
-    }
-
-    fn profile_uses_symbolic_references(&self) -> bool {
-        self.reference_bind_profile
-            .map(|profile| matches!(profile.reference_policy(), ReferencePolicy::ProfileSymbolic))
-            .unwrap_or(false)
     }
 
     fn try_bind_profile_name(
@@ -1402,27 +1266,13 @@ impl Binder<'_> {
         )
     }
 
-    fn profile_unresolved_reference_error(
-        &mut self,
-        source_text: &str,
-        source_span: TextSpan,
-    ) -> BoundExpr {
-        let profile_id = self
-            .reference_bind_profile
-            .map(|profile| profile.profile_id().to_string())
-            .unwrap_or_else(|| "formula-only".to_string());
-        self.unresolved_references.push(UnresolvedReferenceRecord {
-            source_text: source_text.to_string(),
-            reason: format!("reference profile '{profile_id}' did not bind this reference"),
-        });
-        self.diagnostics.push(BindDiagnostic {
-            message: format!("reference profile '{profile_id}' did not bind '{source_text}'"),
-            span: source_span,
-        });
-        BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Error(ErrorRef {
-            error_class: "#NAME?".to_string(),
-            source_text: source_text.to_string(),
-        })))
+    /// A symbolic-policy profile owns reference AND name binding: if it did not
+    /// bind an identifier, the binder must NOT fall through to the legacy
+    /// `context_name_kind` host-name path. Used to gate that fallthrough.
+    fn profile_uses_symbolic_references(&self) -> bool {
+        self.reference_bind_profile
+            .map(|profile| matches!(profile.reference_policy(), ReferencePolicy::ProfileSymbolic))
+            .unwrap_or(false)
     }
 
     fn profile_unresolved_identifier_error(
@@ -1440,6 +1290,29 @@ impl Binder<'_> {
         });
         self.diagnostics.push(BindDiagnostic {
             message: format!("unresolved identifier '{source_text}'"),
+            span: source_span,
+        });
+        BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Error(ErrorRef {
+            error_class: "#NAME?".to_string(),
+            source_text: source_text.to_string(),
+        })))
+    }
+
+    fn profile_unresolved_reference_error(
+        &mut self,
+        source_text: &str,
+        source_span: TextSpan,
+    ) -> BoundExpr {
+        let profile_id = self
+            .reference_bind_profile
+            .map(|profile| profile.profile_id().to_string())
+            .unwrap_or_else(|| "formula-only".to_string());
+        self.unresolved_references.push(UnresolvedReferenceRecord {
+            source_text: source_text.to_string(),
+            reason: format!("reference profile '{profile_id}' did not bind this reference"),
+        });
+        self.diagnostics.push(BindDiagnostic {
+            message: format!("reference profile '{profile_id}' did not bind '{source_text}'"),
             span: source_span,
         });
         BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Error(ErrorRef {
@@ -1732,7 +1605,6 @@ impl Binder<'_> {
             if self.profile_uses_symbolic_references() {
                 return self.profile_unresolved_identifier_error(text, source_span);
             }
-
             if let Some(structured) = bind_structured_reference_text(
                 text,
                 text,
@@ -1745,15 +1617,6 @@ impl Binder<'_> {
             ) {
                 self.push_reference_seed(&structured);
                 BoundExpr::Reference(ReferenceExpr::Atom(structured))
-            } else if let Some(cell_ref) = parse_cell_reference(
-                text,
-                &self.context.sheet_id,
-                &self.context,
-                self.formula_channel_kind,
-            ) {
-                let normalized = NormalizedReference::Cell(cell_ref);
-                self.push_reference_seed(&normalized);
-                BoundExpr::Reference(ReferenceExpr::Atom(normalized))
             } else if let Some(kind) = self.context_name_kind(text, source_span) {
                 let caller_context_dependent = self.name_caller_context_dependent(text);
                 let normalized = NormalizedReference::Name(NameRef {
@@ -1838,11 +1701,7 @@ fn builtin_reference_locator_authoring_diagnostic(builtin_name: &str) -> String 
 fn builtin_reference_locator_argument_is_reference_like(expr: &BoundExpr) -> bool {
     match expr {
         BoundExpr::Reference(reference) => match reference {
-            ReferenceExpr::Atom(NormalizedReference::Cell(_))
-            | ReferenceExpr::Atom(NormalizedReference::Area(_))
-            | ReferenceExpr::Atom(NormalizedReference::WholeRow(_))
-            | ReferenceExpr::Atom(NormalizedReference::WholeColumn(_))
-            | ReferenceExpr::Atom(NormalizedReference::Structured(_))
+            ReferenceExpr::Atom(NormalizedReference::Structured(_))
             | ReferenceExpr::Atom(NormalizedReference::External(_))
             | ReferenceExpr::Atom(NormalizedReference::ProfileSymbolic(_)) => true,
             ReferenceExpr::Atom(NormalizedReference::Name(name)) => {
@@ -3239,26 +3098,6 @@ fn parse_cell_reference(
     })
 }
 
-fn parse_row_reference(text: &str, formula_channel_kind: FormulaChannelKind) -> Option<u32> {
-    if formula_channel_kind == FormulaChannelKind::WorksheetR1C1 {
-        return parse_r1c1_row_reference(text);
-    }
-    if text.is_empty() || !text.chars().all(|ch| ch.is_ascii_digit()) {
-        return None;
-    }
-    text.parse::<u32>().ok()
-}
-
-fn parse_column_reference(text: &str, formula_channel_kind: FormulaChannelKind) -> Option<u32> {
-    if formula_channel_kind == FormulaChannelKind::WorksheetR1C1 {
-        return parse_r1c1_column_reference(text);
-    }
-    if text.is_empty() || text.len() > 3 || !text.chars().all(|ch| ch.is_ascii_alphabetic()) {
-        return None;
-    }
-    column_to_index(text)
-}
-
 fn parse_r1c1_cell_reference(text: &str, sheet_id: &str, context: &BindContext) -> Option<CellRef> {
     let (row, row_absolute, row_anchor_used, rest) =
         parse_r1c1_axis(text, 'R', context.caller_row)?;
@@ -3278,22 +3117,6 @@ fn parse_r1c1_cell_reference(text: &str, sheet_id: &str, context: &BindContext) 
         },
         caller_anchor_used: row_anchor_used || col_anchor_used,
     })
-}
-
-fn parse_r1c1_row_reference(text: &str) -> Option<u32> {
-    let remainder = text.strip_prefix('R')?;
-    if remainder.starts_with('[') || remainder.is_empty() {
-        return None;
-    }
-    remainder.parse::<u32>().ok()
-}
-
-fn parse_r1c1_column_reference(text: &str) -> Option<u32> {
-    let remainder = text.strip_prefix('C')?;
-    if remainder.starts_with('[') || remainder.is_empty() {
-        return None;
-    }
-    remainder.parse::<u32>().ok()
 }
 
 fn parse_r1c1_axis<'a>(

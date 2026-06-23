@@ -49,10 +49,12 @@ pub mod test_support {
             FixedRandomProvider { value: 0.5 };
     }
 
-    /// Test-only A1 grid reference profile + provider. Compiled out of
-    /// production builds so OxFml core ships zero built-in reference grammar.
+    /// Test-only minimal (non-grid) reference profile + provider. Compiled out
+    /// of production builds so OxFml core ships zero built-in reference grammar.
+    /// Real grid references are tested in OxCalc against the strict-excel-grid
+    /// provider.
     #[cfg(any(test, feature = "test-support"))]
-    pub mod grid;
+    pub mod minimal;
 }
 
 pub use oxfunc_core::functions::call_register_id_family::{

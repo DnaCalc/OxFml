@@ -174,10 +174,6 @@ pub struct StructuredReferenceBindRecord {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NormalizedReference {
-    Cell(CellRef),
-    Area(AreaRef),
-    WholeRow(WholeRowRef),
-    WholeColumn(WholeColumnRef),
     Name(NameRef),
     External(ExternalRef),
     Structured(StructuredRef),
@@ -208,32 +204,6 @@ pub enum ReferenceExpr {
 impl fmt::Display for NormalizedReference {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Cell(cell) => {
-                write!(
-                    f,
-                    "{}!R{}C{}",
-                    cell.sheet_id, cell.coord.row, cell.coord.col
-                )
-            }
-            Self::Area(area) => write!(
-                f,
-                "{}!R{}C{}:{}x{}",
-                area.sheet_id, area.top_left.row, area.top_left.col, area.height, area.width
-            ),
-            Self::WholeRow(rows) => write!(
-                f,
-                "{}!R{}:R{}",
-                rows.sheet_id,
-                rows.row_start,
-                rows.row_start + rows.row_count - 1
-            ),
-            Self::WholeColumn(columns) => write!(
-                f,
-                "{}!C{}:C{}",
-                columns.sheet_id,
-                columns.col_start,
-                columns.col_start + columns.col_count - 1
-            ),
             Self::Name(name) => write!(f, "name:{}", name.name),
             Self::External(external) => write!(f, "external:{}", external.target_summary),
             Self::Structured(structured) => write!(

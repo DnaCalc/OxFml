@@ -20,5 +20,8 @@ serde_json = "1"
 stacker = "0.1"
 
 [dev-dependencies]
+# Self-reference enabling test-support so integration tests link the test-only
+# grid reference profile/provider and the cfg-gated runtime default.
+oxfml_core = { path = ".", features = ["test-support"] }
 csv = "1"
 serde = { version = "1", features = ["derive"] }

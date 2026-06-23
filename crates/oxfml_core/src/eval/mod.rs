@@ -1829,14 +1829,17 @@ impl ReferenceSystemProvider for EvaluationLocalReferenceSystemProvider<'_> {
         &self,
         request: &ReferenceDereferenceRequest,
     ) -> Result<CalcValue, ReferenceResolutionError> {
+        // An injected provider (e.g. OxCalc's grid/tree reference system) is
+        // authoritative for its own references. The local `cell_values` store is
+        // OxFml-only test scaffolding, used only when no provider is supplied.
+        if let Some(upstream) = self.upstream {
+            return upstream.dereference(request);
+        }
         if let Some(value) = self.local_value(&request.reference) {
             return Ok(value);
         }
         if let Some(value) = self.local_area_value(&request.reference) {
             return Ok(value);
-        }
-        if let Some(upstream) = self.upstream {
-            return upstream.dereference(request);
         }
         if looks_like_single_cell_reference(request.reference.target()) {
             return Ok(CalcValue::empty());
@@ -1850,6 +1853,9 @@ impl ReferenceSystemProvider for EvaluationLocalReferenceSystemProvider<'_> {
         &self,
         request: &ReferenceEnumerationRequest,
     ) -> Result<Option<ResolvedReferenceValues>, ReferenceResolutionError> {
+        if let Some(upstream) = self.upstream {
+            return upstream.enumerate_values(request);
+        }
         if let Some(value) = self.local_value(&request.reference) {
             return Ok(Some(resolved_values_from_calc_value(
                 request.reference.target(),
@@ -1858,9 +1864,6 @@ impl ReferenceSystemProvider for EvaluationLocalReferenceSystemProvider<'_> {
         }
         if let Some(values) = self.local_area_values(&request.reference) {
             return Ok(Some(values));
-        }
-        if let Some(upstream) = self.upstream {
-            return upstream.enumerate_values(request);
         }
         Ok(None)
     }
@@ -1924,15 +1927,32 @@ impl ReferenceSystemProvider for EvaluationLocalReferenceSystemProvider<'_> {
 
 impl EvaluationLocalReferenceSystemProvider<'_> {
     fn local_value(&self, reference: &ReferenceLike) -> Option<CalcValue> {
-        self.cell_values.get(reference.target()).cloned()
+        self.cell_values
+            .get(&reference_resolution_key(reference))
+            .cloned()
     }
 
     fn local_area_value(&self, reference: &ReferenceLike) -> Option<CalcValue> {
-        calc_array_from_local_area(reference.target(), self.cell_values).map(CalcValue::array)
+        calc_array_from_local_area(&reference_resolution_key(reference), self.cell_values)
+            .map(CalcValue::array)
     }
 
     fn local_area_values(&self, reference: &ReferenceLike) -> Option<ResolvedReferenceValues> {
-        resolved_values_from_local_area(reference.target(), self.cell_values)
+        resolved_values_from_local_area(&reference_resolution_key(reference), self.cell_values)
+    }
+}
+
+/// The string key a local cell store is addressed by for a reference: the
+/// opaque profile handle bytes when present (a profile-symbolic reference such
+/// as the test grid profile's canonical A1 key), otherwise the textual target.
+/// In production the local store is empty, so this only affects test/host
+/// resolution against `with_cell_values`.
+fn reference_resolution_key(reference: &ReferenceLike) -> String {
+    match &reference.identity {
+        oxfunc_core::value::ReferenceIdentity::Opaque(handle) => {
+            String::from_utf8_lossy(&handle.id.bytes).into_owned()
+        }
+        _ => reference.target().to_string(),
     }
 }
 
@@ -3496,38 +3516,6 @@ fn evaluate_reference_as_call_arg(
     trace: &mut EvaluationTrace,
 ) -> Result<CalcValue, EvaluationError> {
     match reference {
-        CompiledReferenceExpr::Atom(NormalizedReference::Cell(cell)) => {
-            call_arg_for_reference_like(
-                reference_like_for_cell(cell),
-                preserve_reference,
-                context,
-                reference_system_provider,
-            )
-        }
-        CompiledReferenceExpr::Atom(NormalizedReference::Area(area)) => {
-            call_arg_for_reference_like(
-                reference_like_for_area(area),
-                preserve_reference,
-                context,
-                reference_system_provider,
-            )
-        }
-        CompiledReferenceExpr::Atom(NormalizedReference::WholeRow(rows)) => {
-            call_arg_for_reference_like(
-                ReferenceLike::new(ReferenceKind::Area, whole_row_target(rows)),
-                preserve_reference,
-                context,
-                reference_system_provider,
-            )
-        }
-        CompiledReferenceExpr::Atom(NormalizedReference::WholeColumn(columns)) => {
-            call_arg_for_reference_like(
-                ReferenceLike::new(ReferenceKind::Area, whole_column_target(columns)),
-                preserve_reference,
-                context,
-                reference_system_provider,
-            )
-        }
         CompiledReferenceExpr::Atom(NormalizedReference::Name(name)) => call_arg_for_name(
             name,
             preserve_reference,
@@ -5700,18 +5688,6 @@ fn prepared_source_class(expr: &CompiledExpr) -> PreparedSourceClass {
         }
         CompiledExpr::ImplicitIntersection { .. } => PreparedSourceClass::ImplicitIntersection,
         CompiledExpr::Reference(reference) => match reference {
-            CompiledReferenceExpr::Atom(NormalizedReference::Cell(_)) => {
-                PreparedSourceClass::CellReference
-            }
-            CompiledReferenceExpr::Atom(NormalizedReference::Area(_)) => {
-                PreparedSourceClass::AreaReference
-            }
-            CompiledReferenceExpr::Atom(NormalizedReference::WholeRow(_)) => {
-                PreparedSourceClass::WholeRowReference
-            }
-            CompiledReferenceExpr::Atom(NormalizedReference::WholeColumn(_)) => {
-                PreparedSourceClass::WholeColumnReference
-            }
             CompiledReferenceExpr::Atom(NormalizedReference::Name(_)) => {
                 PreparedSourceClass::NameReference
             }
@@ -6138,23 +6114,6 @@ fn a1_for_area(area: &AreaRef) -> String {
     let end_row = area.top_left.row + area.height - 1;
     let end = format!("{}{}", column_letters(end_col), end_row);
     qualified_reference_target(&area.sheet_id, format!("{start}:{end}"))
-}
-
-fn whole_row_target(rows: &crate::binding::WholeRowRef) -> String {
-    let row_end = rows.row_start + rows.row_count - 1;
-    qualified_reference_target(&rows.sheet_id, format!("{}:{}", rows.row_start, row_end))
-}
-
-fn whole_column_target(columns: &crate::binding::WholeColumnRef) -> String {
-    let end_col = columns.col_start + columns.col_count - 1;
-    qualified_reference_target(
-        &columns.sheet_id,
-        format!(
-            "{}:{}",
-            column_letters(columns.col_start),
-            column_letters(end_col)
-        ),
-    )
 }
 
 fn reference_like_for_cell(cell: &CellRef) -> ReferenceLike {

@@ -182,6 +182,13 @@ impl<'a> RuntimeEnvironment<'a> {
             formal_input_bindings: Vec::new(),
             host_formula_context: None,
             host_name_bindings: Vec::new(),
+            // Under the test build, default to the minimal test reference profile
+            // so the suite's `with_cell_values` formulas keep binding references
+            // after core's built-in grammar was removed. Production carries no
+            // profile (real grid references come from OxCalc's grid profile).
+            #[cfg(any(test, feature = "test-support"))]
+            reference_bind_profile: Some(&crate::test_support::minimal::MINIMAL_REFERENCE_PROFILE),
+            #[cfg(not(any(test, feature = "test-support")))]
             reference_bind_profile: None,
             host_reference_bind_results: Vec::new(),
             table_catalog: Vec::new(),
@@ -3292,11 +3299,7 @@ fn runtime_structured_reference_record_handle_for_reference(
             *cursor += 1;
             Some(record.bind_record_handle.clone())
         }
-        NormalizedReference::Cell(_)
-        | NormalizedReference::Area(_)
-        | NormalizedReference::WholeRow(_)
-        | NormalizedReference::WholeColumn(_)
-        | NormalizedReference::Name(_)
+        NormalizedReference::Name(_)
         | NormalizedReference::External(_)
         | NormalizedReference::ProfileSymbolic(_) => None,
     }
@@ -3357,24 +3360,16 @@ fn runtime_unresolved_hole_id(index: usize) -> String {
 
 fn runtime_template_hole_kind(reference: &NormalizedReference) -> &'static str {
     match reference {
-        NormalizedReference::WholeRow(_)
-        | NormalizedReference::WholeColumn(_)
-        | NormalizedReference::Structured(_) => "ShapeSensitiveHole",
+        NormalizedReference::Structured(_) => "ShapeSensitiveHole",
         NormalizedReference::External(_) => "RichValueHole",
         NormalizedReference::Error(_) => "UnresolvedReferenceHole",
         NormalizedReference::ProfileSymbolic(_) => "ProfileReferenceHole",
-        NormalizedReference::Cell(_)
-        | NormalizedReference::Area(_)
-        | NormalizedReference::Name(_) => "RefOrValueHole",
+        NormalizedReference::Name(_) => "RefOrValueHole",
     }
 }
 
 fn runtime_reference_family(reference: &NormalizedReference) -> &'static str {
     match reference {
-        NormalizedReference::Cell(_) | NormalizedReference::Area(_) => "direct",
-        NormalizedReference::WholeRow(_) | NormalizedReference::WholeColumn(_) => {
-            "shape_topology_sensitive"
-        }
         NormalizedReference::Name(name) if name.caller_context_dependent => {
             "relative_or_caller_sensitive"
         }
@@ -3394,13 +3389,9 @@ fn runtime_reference_family(reference: &NormalizedReference) -> &'static str {
 
 fn runtime_reference_caller_context_dependent(reference: &NormalizedReference) -> bool {
     match reference {
-        NormalizedReference::Cell(cell) => cell.caller_anchor_used,
-        NormalizedReference::Area(area) => area.caller_anchor_used,
         NormalizedReference::Name(name) => name.caller_context_dependent,
         NormalizedReference::Structured(structured) => structured.caller_row_sensitive,
-        NormalizedReference::WholeRow(_)
-        | NormalizedReference::WholeColumn(_)
-        | NormalizedReference::External(_)
+        NormalizedReference::External(_)
         | NormalizedReference::ProfileSymbolic(_)
         | NormalizedReference::Error(_) => false,
     }
