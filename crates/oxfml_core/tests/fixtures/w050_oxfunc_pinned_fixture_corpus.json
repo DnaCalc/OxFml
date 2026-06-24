@@ -503,27 +503,27 @@
     {
       "scenario_id": "B01",
       "seam_family": "implicit_intersection",
-      "defer_reason": "Blocked by pre-existing '@'-over-range/-call parser precedence (does not parse: unexpected trailing token). Reference-migration Workstream B."
+      "defer_reason": "Parses after the @-precedence fix (b1dab42) but still needs a reference-bind profile to resolve, and @ (implicit intersection) over a reference is not yet correctly evaluated (e.g. @A1 -> #VALUE! even via the real provider). Pending @-evaluation follow-up (Workstream B / OxCalc)."
     },
     {
       "scenario_id": "B02",
       "seam_family": "implicit_intersection",
-      "defer_reason": "Blocked by pre-existing '@'-over-range/-call parser precedence (does not parse: unexpected trailing token). Reference-migration Workstream B."
+      "defer_reason": "Parses after the @-precedence fix (b1dab42) but still needs a reference-bind profile to resolve, and @ (implicit intersection) over a reference is not yet correctly evaluated (e.g. @A1 -> #VALUE! even via the real provider). Pending @-evaluation follow-up (Workstream B / OxCalc)."
     },
     {
       "scenario_id": "B04",
       "seam_family": "implicit_intersection",
-      "defer_reason": "Blocked by pre-existing '@'-over-range/-call parser precedence (does not parse: unexpected trailing token). Reference-migration Workstream B."
+      "defer_reason": "Parses after the @-precedence fix (b1dab42) but still needs a reference-bind profile to resolve, and @ (implicit intersection) over a reference is not yet correctly evaluated (e.g. @A1 -> #VALUE! even via the real provider). Pending @-evaluation follow-up (Workstream B / OxCalc)."
     },
     {
       "scenario_id": "B06",
       "seam_family": "implicit_intersection",
-      "defer_reason": "Blocked by pre-existing '@'-over-range/-call parser precedence (does not parse: unexpected trailing token). Reference-migration Workstream B."
+      "defer_reason": "Parses after the @-precedence fix (b1dab42) but still needs a reference-bind profile to resolve, and @ (implicit intersection) over a reference is not yet correctly evaluated (e.g. @A1 -> #VALUE! even via the real provider). Pending @-evaluation follow-up (Workstream B / OxCalc)."
     },
     {
       "scenario_id": "B07",
       "seam_family": "implicit_intersection",
-      "defer_reason": "Blocked by pre-existing '@' implicit-intersection over a single reference: evaluates to #VALUE! even via the real grid provider. Reference-migration Workstream B."
+      "defer_reason": "Parses after the @-precedence fix (b1dab42) but still needs a reference-bind profile to resolve, and @ (implicit intersection) over a reference is not yet correctly evaluated (e.g. @A1 -> #VALUE! even via the real provider). Pending @-evaluation follow-up (Workstream B / OxCalc)."
     },
     {
       "scenario_id": "F01",
@@ -543,7 +543,7 @@
     {
       "scenario_id": "F04",
       "seam_family": "cross_seam",
-      "defer_reason": "Blocked by pre-existing '@'-over-range/-call parser precedence (does not parse: unexpected trailing token). Reference-migration Workstream B."
+      "defer_reason": "Parses after the @-precedence fix (b1dab42) but still needs a reference-bind profile to resolve, and @ (implicit intersection) over a reference is not yet correctly evaluated (e.g. @A1 -> #VALUE! even via the real provider). Pending @-evaluation follow-up (Workstream B / OxCalc)."
     },
     {
       "scenario_id": "F05",
