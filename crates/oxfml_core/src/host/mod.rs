@@ -746,6 +746,43 @@ impl SingleFormulaHost {
         )
     }
 
+    pub fn recalc_with_reference_bind_profile(
+        &mut self,
+        host_info: Option<&dyn HostInfoProvider>,
+        locale_ctx: Option<&LocaleFormatContext<'_>>,
+        reference_bind_profile: Option<&dyn ReferenceBindProfile>,
+    ) -> Result<HostRecalcOutput, String> {
+        let query_bundle =
+            TypedContextQueryBundle::new(host_info, None, locale_ctx, self.now_serial, None);
+        self.recalc_with_library_context_view_and_reference_bind_profile(
+            EvaluationBackend::OxFuncBacked,
+            query_bundle,
+            PinnedLibraryContextView::new(None, None, None),
+            None,
+            reference_bind_profile,
+        )
+    }
+
+    pub fn recalc_with_registered_external_provider_and_reference_bind_profile(
+        &mut self,
+        host_info: Option<&dyn HostInfoProvider>,
+        registered_external_provider: Option<&dyn RegisteredExternalProvider>,
+        locale_ctx: Option<&LocaleFormatContext<'_>>,
+        library_context_provider: Option<&dyn LibraryContextProvider>,
+        reference_bind_profile: Option<&dyn ReferenceBindProfile>,
+    ) -> Result<HostRecalcOutput, String> {
+        let query_bundle =
+            TypedContextQueryBundle::new(host_info, None, locale_ctx, self.now_serial, None)
+                .with_registered_external_provider(registered_external_provider);
+        self.recalc_with_library_context_view_and_reference_bind_profile(
+            EvaluationBackend::OxFuncBacked,
+            query_bundle,
+            PinnedLibraryContextView::new(library_context_provider, None, None),
+            None,
+            reference_bind_profile,
+        )
+    }
+
     pub fn apply_registered_external_catalog_mutation(
         &self,
         controller: &dyn RegisteredExternalCatalogController,
