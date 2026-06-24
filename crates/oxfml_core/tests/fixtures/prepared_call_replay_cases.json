@@ -210,6 +210,38 @@
     }
   },
   {
+    "case_id": "prepared_006_legacy_single_trace",
+    "formula": "=_xlfn.SINGLE(A1)",
+    "defined_names": {},
+    "host_query_profile": null,
+    "expected": {
+      "prepared_calls": [
+        {
+          "function_id": "SPECIAL.LEGACY_SINGLE",
+          "prepared_arguments": [
+            {
+              "structure_class": "ReferenceVisible",
+              "source_class": "ProfileReference",
+              "evaluation_mode": "ReferencePreserved",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        }
+      ],
+      "result_class": "Scalar",
+      "result_structure_class": "DirectScalar",
+      "payload_summary": "Number(7)",
+      "blankness_class": "NonBlank",
+      "format_hint": null,
+      "publication_hint": null,
+      "capability_dependencies": [
+        "caller_context",
+        "legacy_single_compat"
+      ]
+    }
+  },
+  {
     "case_id": "prepared_007_lambda_trace",
     "formula": "=LAMBDA(x,x+1)",
     "defined_names": {},
