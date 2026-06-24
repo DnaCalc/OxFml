@@ -72,7 +72,14 @@ fn parse_and_bind_fixtures_match_initial_w002_slice() {
                 ..BindContext::default()
             },
 
-            reference_bind_profile: None,
+            // Core is grid-agnostic: references bind only through a profile. The
+            // minimal (same-sheet A1) test profile resolves same-sheet references
+            // to opaque profile-symbolic references; sheet-qualified / external /
+            // whole-axis references it does not own remain unresolved. Real grid
+            // reference binding is covered in OxCalc against the grid provider.
+            reference_bind_profile: Some(
+                &oxfml_core::test_support::minimal::MINIMAL_REFERENCE_PROFILE,
+            ),
         });
 
         assert_eq!(

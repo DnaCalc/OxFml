@@ -81,6 +81,10 @@ pub enum PreparedSourceClass {
     WholeColumnReference,
     NameReference,
     ExternalReference,
+    /// An opaque profile-symbolic reference (e.g. a downstream grid profile's
+    /// reference, or OxFml's minimal test profile). The core does not know its
+    /// grid shape, so it is deliberately not classified as Cell/Area/etc.
+    ProfileReference,
     SpillReference,
     ImplicitIntersection,
     BinaryExpression,
@@ -5702,6 +5706,9 @@ fn prepared_source_class(expr: &CompiledExpr) -> PreparedSourceClass {
             }
             CompiledReferenceExpr::Atom(NormalizedReference::External(_)) => {
                 PreparedSourceClass::ExternalReference
+            }
+            CompiledReferenceExpr::Atom(NormalizedReference::ProfileSymbolic(_)) => {
+                PreparedSourceClass::ProfileReference
             }
             CompiledReferenceExpr::Spill { .. } => PreparedSourceClass::SpillReference,
             _ => PreparedSourceClass::FunctionCall,

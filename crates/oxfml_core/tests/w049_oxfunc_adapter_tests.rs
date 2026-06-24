@@ -128,11 +128,12 @@ fn adapter_projects_direct_scalar_and_array_like_preparation_artifacts_under_min
     // source_class is the minimal-profile representation, observed at runtime.
     // A bound A1:A2 is a profile-symbolic reference (the old grid Structured/Area
     // NormalizedReference variant no longer exists), which the prepared-argument
-    // source classifier maps to FunctionCall rather than the old grid
-    // PreparedSourceClass::AreaReference.
+    // source classifier maps to the opaque PreparedSourceClass::ProfileReference
+    // rather than the old grid PreparedSourceClass::AreaReference (the core does
+    // not know the profile reference's grid shape).
     assert_eq!(
         prepared_argument.source_class,
-        PreparedSourceClass::FunctionCall
+        PreparedSourceClass::ProfileReference
     );
     // The reference resolved to its cell values: SUM(10, 20) = 30.
     assert_eq!(area_output.evaluation.result.payload_summary, "Number(30)");

@@ -1006,6 +1006,7 @@ fn prepared_source_class_name(class: oxfml_core::PreparedSourceClass) -> String 
         oxfml_core::PreparedSourceClass::WholeColumnReference => "WholeColumnReference",
         oxfml_core::PreparedSourceClass::NameReference => "NameReference",
         oxfml_core::PreparedSourceClass::ExternalReference => "ExternalReference",
+        oxfml_core::PreparedSourceClass::ProfileReference => "ProfileReference",
         oxfml_core::PreparedSourceClass::SpillReference => "SpillReference",
         oxfml_core::PreparedSourceClass::ImplicitIntersection => "ImplicitIntersection",
         oxfml_core::PreparedSourceClass::BinaryExpression => "BinaryExpression",
@@ -1122,7 +1123,10 @@ fn evaluate_fixture_formula(
             ..BindContext::default()
         },
 
-        reference_bind_profile: None,
+        // Grid-agnostic core: bind same-sheet A1 references via the minimal test
+        // profile so the reference-taking fixtures resolve against cell_values
+        // below. Grid-specific reference behavior is OxCalc's.
+        reference_bind_profile: Some(&oxfml_core::test_support::minimal::MINIMAL_REFERENCE_PROFILE),
     });
 
     let plan = compile_semantic_plan(CompileSemanticPlanRequest {

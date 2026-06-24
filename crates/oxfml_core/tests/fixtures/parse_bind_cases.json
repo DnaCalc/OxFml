@@ -1,194 +1,182 @@
 [
   {
     "case_id": "pb_001",
-    "formula": "=1+2",
-    "expected_root_kind": "BinaryExpr",
-    "expected_parse_diagnostics": 0,
+    "expected_bind_diagnostics": 0,
     "expected_bound_root_kind": "Binary",
+    "expected_normalized_references": [],
+    "expected_parse_diagnostics": 0,
     "expected_reference_count": 0,
-    "expected_bind_diagnostics": 0
+    "expected_root_kind": "BinaryExpr",
+    "expected_unresolved_reasons": [],
+    "formula": "=1+2"
   },
   {
     "case_id": "pb_002",
-    "formula": "=A1",
-    "expected_root_kind": "IdentifierExpr",
-    "expected_parse_diagnostics": 0,
-    "expected_bound_root_kind": "Reference",
-    "expected_reference_count": 1,
     "expected_bind_diagnostics": 0,
+    "expected_bound_root_kind": "Reference",
     "expected_normalized_references": [
-      "sheet:default!R1C1"
-    ]
+      "profile-symbolic:oxfml.test.minimal.v1:A1"
+    ],
+    "expected_parse_diagnostics": 0,
+    "expected_reference_count": 1,
+    "expected_root_kind": "IdentifierExpr",
+    "expected_unresolved_reasons": [],
+    "formula": "=A1"
   },
   {
     "case_id": "pb_003",
-    "formula": "=A1:B2",
-    "expected_root_kind": "RangeExpr",
-    "expected_parse_diagnostics": 0,
+    "expected_bind_diagnostics": 0,
     "expected_bound_root_kind": "Reference",
+    "expected_normalized_references": [
+      "profile-symbolic:oxfml.test.minimal.v1:A1:B2"
+    ],
+    "expected_parse_diagnostics": 0,
     "expected_reference_count": 1,
-    "expected_bind_diagnostics": 0
+    "expected_root_kind": "RangeExpr",
+    "expected_unresolved_reasons": [],
+    "formula": "=A1:B2"
   },
   {
     "case_id": "pb_004",
-    "formula": "=@A1#",
-    "expected_root_kind": "PrefixExpr",
-    "expected_parse_diagnostics": 0,
+    "expected_bind_diagnostics": 0,
     "expected_bound_root_kind": "ImplicitIntersection",
+    "expected_normalized_references": [
+      "profile-symbolic:oxfml.test.minimal.v1:A1"
+    ],
+    "expected_parse_diagnostics": 0,
     "expected_reference_count": 1,
-    "expected_bind_diagnostics": 0
+    "expected_root_kind": "PrefixExpr",
+    "expected_unresolved_reasons": [],
+    "formula": "=@A1#"
   },
   {
     "case_id": "pb_005",
-    "formula": "=SUM(A1,2)",
-    "expected_root_kind": "CallExpr",
-    "expected_parse_diagnostics": 0,
+    "expected_bind_diagnostics": 0,
     "expected_bound_root_kind": "FunctionCall",
+    "expected_normalized_references": [
+      "profile-symbolic:oxfml.test.minimal.v1:A1"
+    ],
+    "expected_parse_diagnostics": 0,
     "expected_reference_count": 1,
-    "expected_bind_diagnostics": 0
+    "expected_root_kind": "CallExpr",
+    "expected_unresolved_reasons": [],
+    "formula": "=SUM(A1,2)"
   },
   {
     "case_id": "pb_006",
-    "formula": "=A1,B2",
-    "expected_root_kind": "UnionExpr",
-    "expected_parse_diagnostics": 0,
+    "expected_bind_diagnostics": 0,
     "expected_bound_root_kind": "Reference",
+    "expected_normalized_references": [
+      "profile-symbolic:oxfml.test.minimal.v1:A1",
+      "profile-symbolic:oxfml.test.minimal.v1:B2"
+    ],
+    "expected_parse_diagnostics": 0,
     "expected_reference_count": 2,
-    "expected_bind_diagnostics": 0
+    "expected_root_kind": "UnionExpr",
+    "expected_unresolved_reasons": [],
+    "formula": "=A1,B2"
   },
   {
     "case_id": "pb_007",
-    "formula": "=A1 B2",
-    "expected_root_kind": "IntersectionExpr",
-    "expected_parse_diagnostics": 0,
+    "expected_bind_diagnostics": 0,
     "expected_bound_root_kind": "Reference",
+    "expected_normalized_references": [
+      "profile-symbolic:oxfml.test.minimal.v1:A1",
+      "profile-symbolic:oxfml.test.minimal.v1:B2"
+    ],
+    "expected_parse_diagnostics": 0,
     "expected_reference_count": 2,
-    "expected_bind_diagnostics": 0
+    "expected_root_kind": "IntersectionExpr",
+    "expected_unresolved_reasons": [],
+    "formula": "=A1 B2"
   },
   {
     "case_id": "pb_008",
-    "formula": "=LAMBDA(x,x+1)(2)",
-    "expected_root_kind": "InvokeExpr",
-    "expected_parse_diagnostics": 0,
+    "expected_bind_diagnostics": 0,
     "expected_bound_root_kind": "Invocation",
-    "expected_reference_count": 1,
-    "expected_bind_diagnostics": 0
-  },
-  {
-    "case_id": "pb_009",
-    "formula": "=Sheet2!A1",
-    "expected_root_kind": "QualifiedReferenceExpr",
-    "expected_parse_diagnostics": 0,
-    "expected_bound_root_kind": "Reference",
-    "expected_reference_count": 1,
-    "expected_bind_diagnostics": 0,
     "expected_normalized_references": [
-      "Sheet2!R1C1"
-    ]
-  },
-  {
-    "case_id": "pb_010",
-    "formula": "=Sheet2!A1:Sheet2!B2",
-    "expected_root_kind": "RangeExpr",
+      "name:x"
+    ],
     "expected_parse_diagnostics": 0,
-    "expected_bound_root_kind": "Reference",
     "expected_reference_count": 1,
-    "expected_bind_diagnostics": 0,
-    "expected_normalized_references": [
-      "Sheet2!R1C1:2x2"
-    ]
+    "expected_root_kind": "InvokeExpr",
+    "expected_unresolved_reasons": [],
+    "formula": "=LAMBDA(x,x+1)(2)"
   },
   {
     "case_id": "pb_011",
-    "formula": "=Sheet2!InputValue",
-    "expected_root_kind": "QualifiedReferenceExpr",
-    "expected_parse_diagnostics": 0,
-    "expected_bound_root_kind": "Reference",
-    "expected_reference_count": 1,
     "expected_bind_diagnostics": 0,
+    "expected_bound_root_kind": "Reference",
     "expected_normalized_references": [
       "name:Sheet2!InputValue"
-    ]
-  },
-  {
-    "case_id": "pb_012",
-    "formula": "=Sheet2!(A1)",
-    "expected_root_kind": "QualifiedReferenceExpr",
+    ],
     "expected_parse_diagnostics": 0,
-    "expected_bound_root_kind": "Reference",
-    "expected_reference_count": 0,
-    "expected_bind_diagnostics": 1
+    "expected_reference_count": 1,
+    "expected_root_kind": "QualifiedReferenceExpr",
+    "expected_unresolved_reasons": [],
+    "formula": "=Sheet2!InputValue"
   },
   {
     "case_id": "pb_013",
-    "formula": "=1:3",
-    "expected_root_kind": "RangeExpr",
-    "expected_parse_diagnostics": 0,
+    "expected_bind_diagnostics": 1,
     "expected_bound_root_kind": "Reference",
-    "expected_reference_count": 1,
-    "expected_bind_diagnostics": 0,
-    "expected_normalized_references": [
-      "sheet:default!R1:R3"
-    ]
+    "expected_normalized_references": [],
+    "expected_parse_diagnostics": 0,
+    "expected_reference_count": 0,
+    "expected_root_kind": "RangeExpr",
+    "expected_unresolved_reasons": [],
+    "formula": "=1:3"
   },
   {
     "case_id": "pb_014",
-    "formula": "=A:C",
+    "expected_bind_diagnostics": 2,
+    "expected_bound_root_kind": "Reference",
+    "expected_normalized_references": [],
+    "expected_parse_diagnostics": 0,
+    "expected_reference_count": 0,
     "expected_root_kind": "RangeExpr",
-    "expected_parse_diagnostics": 0,
-    "expected_bound_root_kind": "Reference",
-    "expected_reference_count": 1,
-    "expected_bind_diagnostics": 0,
-    "expected_normalized_references": [
-      "sheet:default!C1:C3"
-    ]
-  },
-  {
-    "case_id": "pb_015",
-    "formula": "='Annual Data'!A1",
-    "expected_root_kind": "QualifiedReferenceExpr",
-    "expected_parse_diagnostics": 0,
-    "expected_bound_root_kind": "Reference",
-    "expected_reference_count": 1,
-    "expected_bind_diagnostics": 0,
-    "expected_normalized_references": [
-      "Annual Data!R1C1"
-    ]
+    "expected_unresolved_reasons": [
+      "unknown identifier or name",
+      "unknown identifier or name"
+    ],
+    "formula": "=A:C"
   },
   {
     "case_id": "pb_016",
-    "formula": "='Annual Data'!1:'Annual Data'!3",
-    "expected_root_kind": "RangeExpr",
-    "expected_parse_diagnostics": 0,
+    "expected_bind_diagnostics": 2,
     "expected_bound_root_kind": "Reference",
-    "expected_reference_count": 1,
-    "expected_bind_diagnostics": 0,
-    "expected_normalized_references": [
-      "Annual Data!R1:R3"
-    ]
+    "expected_normalized_references": [],
+    "expected_parse_diagnostics": 0,
+    "expected_reference_count": 0,
+    "expected_root_kind": "RangeExpr",
+    "expected_unresolved_reasons": [],
+    "formula": "='Annual Data'!1:'Annual Data'!3"
   },
   {
     "case_id": "pb_017",
-    "formula": "='Annual Data'!A:'Annual Data'!C",
-    "expected_root_kind": "RangeExpr",
-    "expected_parse_diagnostics": 0,
-    "expected_bound_root_kind": "Reference",
-    "expected_reference_count": 1,
     "expected_bind_diagnostics": 0,
+    "expected_bound_root_kind": "Reference",
     "expected_normalized_references": [
-      "Annual Data!C1:C3"
-    ]
+      "name:Annual Data!A",
+      "name:Annual Data!C"
+    ],
+    "expected_parse_diagnostics": 0,
+    "expected_reference_count": 2,
+    "expected_root_kind": "RangeExpr",
+    "expected_unresolved_reasons": [],
+    "formula": "='Annual Data'!A:'Annual Data'!C"
   },
   {
     "case_id": "pb_018",
-    "formula": "=[Book.xlsx]Sheet2!A1",
-    "expected_root_kind": "QualifiedReferenceExpr",
-    "expected_parse_diagnostics": 0,
-    "expected_bound_root_kind": "Reference",
-    "expected_reference_count": 1,
     "expected_bind_diagnostics": 0,
+    "expected_bound_root_kind": "Reference",
     "expected_normalized_references": [
       "external:[Book.xlsx]Sheet2!A1"
-    ]
+    ],
+    "expected_parse_diagnostics": 0,
+    "expected_reference_count": 1,
+    "expected_root_kind": "QualifiedReferenceExpr",
+    "expected_unresolved_reasons": [],
+    "formula": "=[Book.xlsx]Sheet2!A1"
   }
 ]
