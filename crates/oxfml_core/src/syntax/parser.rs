@@ -446,11 +446,12 @@ impl Parser {
                     );
                     return self.parse_host_member_reference_tails(base);
                 }
-                let expr =
+                let primary =
                     GreenNode::new(SyntaxKind::IdentifierExpr, vec![GreenChild::Token(member)]);
+                let operand = self.parse_range_from_primary(primary);
                 return GreenNode::new(
                     SyntaxKind::PrefixExpr,
-                    vec![GreenChild::Token(at), GreenChild::Node(Box::new(expr))],
+                    vec![GreenChild::Token(at), GreenChild::Node(Box::new(operand))],
                 );
             }
             let expr = self.parse_range(allow_union_comma);
@@ -528,7 +529,36 @@ impl Parser {
     }
 
     fn parse_postfix(&mut self) -> GreenNode {
-        let mut node = self.parse_primary();
+        let node = self.parse_primary();
+        self.parse_postfix_from(node)
+    }
+
+    /// Continue a range expression (`:` chains, with each operand carrying its
+    /// `#`/`(`/`.` postfixes) from an already-parsed primary node. Lets the `@`
+    /// implicit-intersection prefix apply to a full reference expression
+    /// (`@A1:A3`, `@A1#`, `@SEQUENCE(3)`) rather than only the leading atom.
+    fn parse_range_from_primary(&mut self, primary: GreenNode) -> GreenNode {
+        let mut left = self.parse_postfix_from(primary);
+        loop {
+            if self.at(TokenKind::Colon) {
+                let colon = self.bump();
+                self.skip_whitespace();
+                let right = self.parse_postfix();
+                left = GreenNode::new(
+                    SyntaxKind::RangeExpr,
+                    vec![
+                        GreenChild::Node(Box::new(left)),
+                        GreenChild::Token(colon),
+                        GreenChild::Node(Box::new(right)),
+                    ],
+                );
+            } else {
+                return left;
+            }
+        }
+    }
+
+    fn parse_postfix_from(&mut self, mut node: GreenNode) -> GreenNode {
         loop {
             if self.at(TokenKind::Hash) {
                 let hash = self.bump();
