@@ -1901,9 +1901,23 @@ impl ReferenceSystemProvider for EvaluationLocalReferenceSystemProvider<'_> {
         if let Some(upstream) = self.upstream {
             return upstream.transform_reference(request);
         }
-        Err(ReferenceSystemError::Unsupported {
-            operation: ReferenceSystemOperation::Transform,
-        })
+        match &request.transform {
+            oxfunc_core::resolver::ReferenceTransformKind::Offset {
+                row_offset,
+                col_offset,
+                height,
+                width,
+            } => local_offset_reference(
+                &request.reference,
+                *row_offset,
+                *col_offset,
+                *height,
+                *width,
+            ),
+            _ => Err(ReferenceSystemError::Unsupported {
+                operation: ReferenceSystemOperation::Transform,
+            }),
+        }
     }
 
     fn compose_references(
@@ -1958,6 +1972,62 @@ fn reference_resolution_key(reference: &ReferenceLike) -> String {
         }
         _ => reference.target().to_string(),
     }
+}
+
+/// OFFSET support for the no-upstream local test resolver: shift a same-sheet A1
+/// cell/range reference by (row, col) and optionally resize, returning a textual
+/// A1 reference the local store re-resolves. Off-grid results map to #REF!.
+fn local_offset_reference(
+    reference: &ReferenceLike,
+    row_offset: i64,
+    col_offset: i64,
+    height: Option<usize>,
+    width: Option<usize>,
+) -> Result<ReferenceLike, ReferenceSystemError> {
+    let key = reference_resolution_key(reference);
+    let (start_row, start_col, base_rows, base_cols) =
+        if let Some(area) = parse_local_area_target(&key) {
+            (
+                area.start_row,
+                area.start_col,
+                area.row_count(),
+                area.col_count(),
+            )
+        } else if let Some((col, row)) = parse_a1_cell(&key) {
+            (row, col, 1, 1)
+        } else {
+            return Err(ReferenceSystemError::Unsupported {
+                operation: ReferenceSystemOperation::Transform,
+            });
+        };
+    let new_row = start_row as i64 + row_offset;
+    let new_col = start_col as i64 + col_offset;
+    let new_rows = height.map_or(base_rows as i64, |value| value as i64);
+    let new_cols = width.map_or(base_cols as i64, |value| value as i64);
+    if new_row < 1 || new_col < 1 || new_rows < 1 || new_cols < 1 {
+        return Err(ReferenceSystemError::ProviderFailure {
+            detail: "oxfml_local_offset_out_of_bounds".to_string(),
+        });
+    }
+    let top = new_row as usize;
+    let left = new_col as usize;
+    let bottom = top + new_rows as usize - 1;
+    let right = left + new_cols as usize - 1;
+    let target = if new_rows == 1 && new_cols == 1 {
+        format!("{}{}", column_label(left), top)
+    } else {
+        format!(
+            "{}{}:{}{}",
+            column_label(left),
+            top,
+            column_label(right),
+            bottom
+        )
+    };
+    Ok(ReferenceLike::new(
+        oxfunc_core::value::ReferenceKind::A1,
+        target,
+    ))
 }
 
 fn resolved_values_from_calc_value(target: &str, value: CalcValue) -> ResolvedReferenceValues {

@@ -527,6 +527,51 @@
     }
   },
   {
+    "case_id": "prepared_014_offset_reference_result",
+    "formula": "=OFFSET(A1,0,0)",
+    "defined_names": {},
+    "host_query_profile": null,
+    "expected": {
+      "prepared_calls": [
+        {
+          "function_id": "FUNC.OFFSET",
+          "prepared_arguments": [
+            {
+              "structure_class": "ReferenceVisible",
+              "source_class": "ProfileReference",
+              "evaluation_mode": "ReferencePreserved",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "Literal",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            },
+            {
+              "structure_class": "DirectScalar",
+              "source_class": "Literal",
+              "evaluation_mode": "EagerValue",
+              "blankness_class": "NonBlank",
+              "caller_context_sensitive": false
+            }
+          ]
+        }
+      ],
+      "result_class": "Scalar",
+      "result_structure_class": "DirectScalar",
+      "payload_summary": "Number(7)",
+      "blankness_class": "NonBlank",
+      "format_hint": null,
+      "publication_hint": null,
+      "capability_dependencies": [
+        "caller_context"
+      ]
+    }
+  },
+  {
     "case_id": "prepared_015_iferror_fallback",
     "formula": "=IFERROR(UnknownName,2)",
     "defined_names": {},
