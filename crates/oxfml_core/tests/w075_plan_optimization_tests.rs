@@ -48,8 +48,11 @@ fn w075_context_free_precompute_keeps_runtime_context_sensitive_calls_dynamic() 
     second.now_serial = Some(456.0);
     let second = evaluate_formula(second).expect("second evaluation should succeed");
 
-    assert_eq!(first.oxfunc_value, CalcValue::number(123.0));
-    assert_eq!(second.oxfunc_value, CalcValue::number(456.0));
+    // NOW() now attaches a DateLike presentation hint, so compare the core value:
+    // the point here is that the result tracks now_serial (stays runtime-dynamic),
+    // not the presentation hint.
+    assert_eq!(first.oxfunc_value.core(), &CoreValue::Number(123.0));
+    assert_eq!(second.oxfunc_value.core(), &CoreValue::Number(456.0));
 }
 
 #[test]
