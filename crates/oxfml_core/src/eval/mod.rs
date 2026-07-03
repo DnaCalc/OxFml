@@ -2578,8 +2578,7 @@ fn dereference_final_output_value(
 ) -> Result<CalcValue, EvaluationError> {
     match value.core {
         CoreValue::Reference(reference) => {
-            resolve_oxfunc_eval_value(reference_system_provider, &reference)
-                .map_err(map_resolution_error)
+            resolve_oxfunc_eval_value_or_name_error(reference_system_provider, &reference)
         }
         _ => Ok(value),
     }
@@ -3799,9 +3798,8 @@ fn call_arg_from_reference_operator_value(
             Ok(CalcValue::reference(reference))
         }
         CoreValue::Reference(reference) => {
-            resolve_oxfunc_eval_value(reference_system_provider, &reference)
+            resolve_oxfunc_eval_value_or_name_error(reference_system_provider, &reference)
                 .map(call_arg_from_resolved_reference_value)
-                .map_err(map_resolution_error)
         }
         _ => Ok(value),
     }
@@ -3816,9 +3814,8 @@ fn call_arg_for_reference_like(
     if preserve_reference || context.reference_system_provider.is_some() {
         Ok(CalcValue::reference(reference))
     } else {
-        resolve_oxfunc_eval_value(reference_system_provider, &reference)
+        resolve_oxfunc_eval_value_or_name_error(reference_system_provider, &reference)
             .map(call_arg_from_resolved_reference_value)
-            .map_err(map_resolution_error)
     }
 }
 
@@ -4112,8 +4109,7 @@ fn call_arg_for_name(
             if preserve_reference || context.reference_system_provider.is_some() {
                 Ok(CalcValue::reference(reference.clone()))
             } else {
-                resolve_oxfunc_eval_value(reference_system_provider, reference)
-                    .map_err(map_resolution_error)
+                resolve_oxfunc_eval_value_or_name_error(reference_system_provider, reference)
             }
         }
         DefinedNameBinding::Callable(binding) => {
@@ -4160,9 +4156,8 @@ fn call_arg_for_helper_binding(
             if preserve_reference {
                 Ok(CalcValue::reference(reference.clone()))
             } else {
-                resolve_oxfunc_eval_value(reference_system_provider, reference)
+                resolve_oxfunc_eval_value_or_name_error(reference_system_provider, reference)
                     .map(call_arg_from_resolved_reference_value)
-                    .map_err(map_resolution_error)
             }
         }
         HelperBinding::Arg(other) | HelperBinding::EmptyHstackCarrier(other) => Ok(other.clone()),
@@ -4436,8 +4431,7 @@ fn coerce_excel_if_text_condition(
             }
         }
         CoreValue::Reference(reference) => {
-            resolve_oxfunc_eval_value(reference_system_provider, reference)
-                .map_err(map_resolution_error)
+            resolve_oxfunc_eval_value_or_name_error(reference_system_provider, reference)
                 .and_then(|value| coerce_excel_if_text_condition(&value, reference_system_provider))
         }
         _ => Ok(None),
@@ -5670,8 +5664,7 @@ fn materialize_call_arg(
         CoreValue::Missing => Ok(CalcValue::error(WorksheetErrorCode::Value)),
         CoreValue::Empty => Ok(CalcValue::number(0.0)),
         CoreValue::Reference(reference) => {
-            resolve_oxfunc_eval_value(reference_system_provider, &reference)
-                .map_err(map_resolution_error)
+            resolve_oxfunc_eval_value_or_name_error(reference_system_provider, &reference)
         }
         _ => Ok(arg),
     }
@@ -6155,6 +6148,23 @@ fn decode_string_literal(text: &str) -> String {
 fn map_resolution_error(error: ReferenceResolutionError) -> EvaluationError {
     EvaluationError {
         message: format!("reference resolution failed: {error:?}"),
+    }
+}
+
+/// Resolve a reference to its value, diverting an `UnresolvedName` resolution
+/// failure into a `#NAME?` error value instead of a hard `EvaluationError`.
+/// Every other resolution failure keeps its existing `map_resolution_error`
+/// behavior (surfacing as `#VALUE!` further up the call chain).
+fn resolve_oxfunc_eval_value_or_name_error(
+    reference_system_provider: &dyn ReferenceSystemProvider,
+    reference: &ReferenceLike,
+) -> Result<CalcValue, EvaluationError> {
+    match resolve_oxfunc_eval_value(reference_system_provider, reference) {
+        Ok(value) => Ok(value),
+        Err(error) if matches!(error, ReferenceResolutionError::UnresolvedName { .. }) => {
+            Ok(CalcValue::error(error.worksheet_error_code()))
+        }
+        Err(error) => Err(map_resolution_error(error)),
     }
 }
 

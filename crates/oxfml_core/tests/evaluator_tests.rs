@@ -1220,6 +1220,43 @@ fn evaluator_uses_defined_name_reference_for_cell_contents() {
 }
 
 #[test]
+fn evaluator_direct_deref_of_unresolved_name_yields_name_error_value() {
+    let mut bindings = BTreeMap::new();
+    bindings.insert(
+        "Missing".to_string(),
+        DefinedNameBinding::Reference(ReferenceLike::new(ReferenceKind::A1, "Missing")),
+    );
+
+    let provider = NameClassReferenceSystemProvider::unresolved_name("Missing");
+    let output =
+        evaluate_with_defined_names_and_reference_system_provider("=Missing", bindings, &provider)
+            .expect("unresolved name should evaluate to a #NAME? value, not an Err");
+
+    assert_eq!(
+        output.oxfunc_value,
+        CalcValue::error(WorksheetErrorCode::Name)
+    );
+}
+
+#[test]
+fn evaluator_direct_deref_of_non_name_resolution_failure_still_errors() {
+    let mut bindings = BTreeMap::new();
+    bindings.insert(
+        "Broken".to_string(),
+        DefinedNameBinding::Reference(ReferenceLike::new(ReferenceKind::A1, "Broken")),
+    );
+
+    let provider = NameClassReferenceSystemProvider::provider_failure("Broken");
+    let result =
+        evaluate_with_defined_names_and_reference_system_provider("=Broken", bindings, &provider);
+
+    assert!(
+        result.is_err(),
+        "non-name resolution failures should still surface as a hard EvaluationError (#VALUE! upstream), got {result:?}"
+    );
+}
+
+#[test]
 fn evaluator_runs_let_with_helper_bindings() {
     let output = evaluate(
         "=LET(x,1,x+2)",
@@ -2540,6 +2577,93 @@ fn evaluate_with_reference_system_provider(
     context.set_trace_mode(EvaluationTraceMode::PreparedCalls);
 
     evaluate_formula(context).expect("evaluation should succeed")
+}
+
+/// Test-only provider that resolves one designated reference target to a
+/// chosen [`ReferenceResolutionError`] class, modeling the grid-provider
+/// seam where a dynamic/bound name's target can no longer be found (e.g. the
+/// name was deleted downstream) versus any other provider failure.
+struct NameClassReferenceSystemProvider {
+    target: String,
+    error: ReferenceResolutionError,
+}
+
+impl NameClassReferenceSystemProvider {
+    fn unresolved_name(target: &str) -> Self {
+        Self {
+            target: target.to_string(),
+            error: ReferenceResolutionError::UnresolvedName {
+                target: target.to_string(),
+            },
+        }
+    }
+
+    fn provider_failure(target: &str) -> Self {
+        Self {
+            target: target.to_string(),
+            error: ReferenceResolutionError::ProviderFailure {
+                detail: format!("unmapped reference {target}"),
+            },
+        }
+    }
+}
+
+impl ReferenceSystemProvider for NameClassReferenceSystemProvider {
+    fn dereference(
+        &self,
+        request: &ReferenceDereferenceRequest,
+    ) -> Result<CalcValue, ReferenceResolutionError> {
+        if request.reference.target() == self.target {
+            Err(self.error.clone())
+        } else {
+            Err(ReferenceResolutionError::ProviderFailure {
+                detail: format!("unmapped reference {}", request.reference.target()),
+            })
+        }
+    }
+}
+
+fn evaluate_with_defined_names_and_reference_system_provider(
+    formula: &str,
+    defined_names: BTreeMap<String, DefinedNameBinding>,
+    reference_system_provider: &dyn ReferenceSystemProvider,
+) -> Result<oxfml_core::EvaluationOutput, oxfml_core::eval::EvaluationError> {
+    let mut names = BTreeMap::new();
+    for (name, binding) in &defined_names {
+        names.insert(
+            name.clone(),
+            match binding {
+                DefinedNameBinding::Value(_) => NameKind::ValueLike,
+                DefinedNameBinding::Reference(_) => NameKind::ReferenceLike,
+                DefinedNameBinding::Callable(_) => NameKind::ValueLike,
+            },
+        );
+    }
+
+    let compiled = common::compile_formula(
+        "eval-fixture",
+        formula,
+        names,
+        "eval-struct-v1",
+        "oxfunc:test",
+    );
+
+    let mut context = EvaluationContext::new(&compiled.bound_formula, &compiled.semantic_plan);
+    context.defined_names = defined_names;
+    let locale = oxfml_en_us_locale_context();
+    context.apply_typed_context_query_bundle(
+        TypedContextQueryBundle::new(
+            None,
+            None,
+            Some(&locale),
+            Some(46000.0),
+            Some(&oxfml_core::test_support::random::FIXED_RANDOM_PROVIDER_025),
+        )
+        .with_reference_system_provider(Some(reference_system_provider)),
+    );
+    context.set_trace_mode(EvaluationTraceMode::PreparedCalls);
+
+    evaluate_formula(context)
 }
 
 fn evaluate_with_cells(
