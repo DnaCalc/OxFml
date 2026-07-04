@@ -3065,21 +3065,22 @@ fn parse_cell_reference(
         return parse_r1c1_cell_reference(text, sheet_id, context);
     }
 
+    // A1 form is `[$]<column letters>[$]<row digits>`. A leading `$` before the letters
+    // marks the column absolute; a `$` between the letters and digits marks the row
+    // absolute. Consume each `$` only in its own segment so `A$1` records row-absolute
+    // (not column-absolute) and `$A1` records column-absolute (not row-absolute).
     let mut chars = text.chars().peekable();
+
+    let col_absolute = chars.next_if_eq(&'$').is_some();
     let mut col_text = String::new();
-    while matches!(chars.peek(), Some(c) if c.is_ascii_alphabetic() || *c == '$') {
-        let ch = chars.next().unwrap();
-        if ch != '$' {
-            col_text.push(ch);
-        }
+    while matches!(chars.peek(), Some(c) if c.is_ascii_alphabetic()) {
+        col_text.push(chars.next().unwrap());
     }
 
+    let row_absolute = chars.next_if_eq(&'$').is_some();
     let mut row_text = String::new();
-    while matches!(chars.peek(), Some(c) if c.is_ascii_digit() || *c == '$') {
-        let ch = chars.next().unwrap();
-        if ch != '$' {
-            row_text.push(ch);
-        }
+    while matches!(chars.peek(), Some(c) if c.is_ascii_digit()) {
+        row_text.push(chars.next().unwrap());
     }
 
     if col_text.is_empty() || row_text.is_empty() || chars.next().is_some() {
@@ -3093,7 +3094,10 @@ fn parse_cell_reference(
         workbook_id: context.workbook_id.clone(),
         sheet_id: sheet_id.to_string(),
         coord: CellCoord { row, col },
-        address_mode: AddressMode::default(),
+        address_mode: AddressMode {
+            row_absolute,
+            col_absolute,
+        },
         caller_anchor_used: true,
     })
 }
@@ -3294,4 +3298,70 @@ fn hash_debug<T: std::fmt::Debug>(value: &T) -> String {
     let mut hasher = DefaultHasher::new();
     format!("{value:?}").hash(&mut hasher);
     format!("{:016x}", hasher.finish())
+}
+
+#[cfg(test)]
+mod a1_dollar_fidelity_tests {
+    //! Unit coverage for `parse_cell_reference` A1 `$` fidelity.
+    //!
+    //! `parse_cell_reference`, `CellRef`, and `AddressMode` are crate-internal and are
+    //! not reachable from an integration test (`tests/`), because plain A1 atoms bind as
+    //! `NormalizedReference::Name` and the sole caller `parse_area_target` collapses the
+    //! endpoints' `address_mode` back to `AddressMode::default()`. These in-crate unit
+    //! tests are therefore the assertable surface for the recorded fidelity. See
+    //! `tests/reference_a1_dollar_fidelity_tests.rs` for the public no-regression witness.
+
+    use super::*;
+
+    fn parse(text: &str) -> CellRef {
+        let context = BindContext::default();
+        parse_cell_reference(text, "Sheet1", &context, FormulaChannelKind::WorksheetA1)
+            .unwrap_or_else(|| panic!("expected `{text}` to parse as an A1 cell reference"))
+    }
+
+    #[test]
+    fn relative_a1_records_no_absolute_axes() {
+        let cell = parse("A1");
+        assert_eq!(cell.coord, CellCoord { row: 1, col: 1 });
+        assert!(!cell.address_mode.col_absolute);
+        assert!(!cell.address_mode.row_absolute);
+    }
+
+    #[test]
+    fn column_absolute_a1_records_col_absolute_only() {
+        let cell = parse("$A1");
+        assert_eq!(cell.coord, CellCoord { row: 1, col: 1 });
+        assert!(cell.address_mode.col_absolute);
+        assert!(!cell.address_mode.row_absolute);
+    }
+
+    #[test]
+    fn row_absolute_a1_records_row_absolute_only() {
+        let cell = parse("A$1");
+        assert_eq!(cell.coord, CellCoord { row: 1, col: 1 });
+        assert!(!cell.address_mode.col_absolute);
+        assert!(cell.address_mode.row_absolute);
+    }
+
+    #[test]
+    fn fully_absolute_a1_records_both_axes_absolute() {
+        let cell = parse("$A$1");
+        assert_eq!(cell.coord, CellCoord { row: 1, col: 1 });
+        assert!(cell.address_mode.col_absolute);
+        assert!(cell.address_mode.row_absolute);
+    }
+
+    #[test]
+    fn dollar_fidelity_does_not_shift_resolved_coordinates() {
+        // Absoluteness is recorded fidelity only; the resolved coordinate is identical
+        // across all `$` decorations of the same cell.
+        for text in ["B12", "$B12", "B$12", "$B$12"] {
+            let cell = parse(text);
+            assert_eq!(
+                cell.coord,
+                CellCoord { row: 12, col: 2 },
+                "`{text}` must resolve to the same coordinate regardless of `$`"
+            );
+        }
+    }
 }
