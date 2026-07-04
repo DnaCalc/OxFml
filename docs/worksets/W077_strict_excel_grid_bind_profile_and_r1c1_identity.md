@@ -88,8 +88,12 @@ packet shape. As of OxCalc HEAD, `StrictExcelGridReferenceProfile` implements th
   profile deliberately rebinds per placement, so A1 template identity differs across cells
   (witnessed by `strict_profile_a1_incremental_bind_rebinds_when_caller_anchor_changes`).
   The `ExcludeCallerAnchorForTemplate` policy remains an available OxFml primitive (and is
-  exercised by the OxFml-side `FakeSymbolicProfile` tests); OxCalc's shipped profile simply
-  chose the R1C1-normal-form route to the same caller-independence goal.
+  exercised by the OxFml-side `FakeSymbolicProfile` tests); the strict-excel-grid profile
+  simply chose the R1C1-normal-form route to the same caller-independence goal. Note that
+  OxCalc DOES ship profiles that consume `ExcludeCallerAnchorForTemplate` directly —
+  `TreeCalcReferenceBindProfile` and `TreeCalcContextReferenceBindProfile`
+  (`OxCalc/src/oxcalc-core/src/tree_reference_system.rs` ~lines 144, 232) — so the policy
+  is used by shipped profiles, not only test fakes.
 - OxCalc owns the grid-semantic side of the seam (its `ExcelGridBounds` and the
   out-of-bounds `#REF!` contract) — see the GridBounds ratification below.
 

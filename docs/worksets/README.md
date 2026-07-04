@@ -160,6 +160,7 @@ Current baseline sequence after `W001`:
 73. `W075` compiled formula plan and hot-loop optimization
 74. `W076` formula drill trace model
 75. `W077` strict Excel grid BindProfile and R1C1 identity
+76. `W078` three-dimensional sheet-range reference grammar
 
 This sequence is the current planning baseline.
 It may be refined, but new worksets should preserve dependency clarity rather than bypass it informally.
