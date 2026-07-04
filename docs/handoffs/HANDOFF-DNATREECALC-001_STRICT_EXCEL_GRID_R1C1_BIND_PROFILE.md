@@ -1,6 +1,6 @@
 # HANDOFF-DNATREECALC-001_STRICT_EXCEL_GRID_R1C1_BIND_PROFILE
 
-Status: Open
+Status: Processed (W077 built and consumer-consumed; item 6 superseded — see below)
 Direction: inbound
 Source: DnaTreeCalc grid-planning promotion
 Target: OxFml
@@ -24,7 +24,7 @@ Evidence from recon:
 3. **Caller-independent identity**: under symbolic grid bind, exclude caller anchor from bind fingerprint/hash for anchor-relative formulas, so one `BoundFormula` and semantic plan can serve a template region.
 4. **Compiled-plan caching**: cache `CompiledFormulaPlan` by bind hash plus catalog identity and instantiate per cell by caller coordinates; prepare cost scales with distinct templates, not cells.
 5. **A1 `$` fidelity and caller-relative A1**: preserve per-axis absolute/relative flags from A1 entry and make R1C1 normal form derivable from A1 text.
-6. **Grid bounds**: `GridBounds { max_row: 1_048_576, max_col: 16_384 }`; out-of-bounds entry or translation yields `#REF!` per OxCalc grid model.
+6. ~~**Grid bounds**: `GridBounds { max_row: 1_048_576, max_col: 16_384 }`; out-of-bounds entry or translation yields `#REF!` per OxCalc grid model.~~ **SUPERSEDED (owner ratification, fml-7t6.1)**: bounds semantics stay consumer-side. OxCalc owns `ExcelGridBounds` and the out-of-bounds `#REF!` contract; OxFml does not carry grid dimension constants or the `#REF!` rule. See the "GridBounds ratification" section of `docs/worksets/W077_strict_excel_grid_bind_profile_and_r1c1_identity.md`.
 7. **Translation/rebind API**: given a bound artifact and coordinate delta, produce the translated artifact or `#REF!`-substituted result for fill, paste, region stamping, and insert/delete shifting.
 8. **Profile-parity housekeeping**: fix non-default syntax-profile reuse penalties and keep `FormulaChannelKind` orthogonal to profile selection.
 

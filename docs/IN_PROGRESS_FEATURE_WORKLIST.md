@@ -226,6 +226,6 @@ Last updated: 2026-05-24.
 - **Canonical owner**: `W073` tracking packet.
 
 ## W077 strict Excel grid BindProfile and R1C1 identity
-- **Current floor**: planning/intake. `HANDOFF-DNATREECALC-001` has been registered as the OxFml intake for OxCalc `strict-excel-grid` formula identity. Existing R1C1 channel support remains the default behavior floor.
-- **Remaining gaps**: typed `BindProfile`, symbolic relative references, A1 `$` fidelity, grid bounds to `#REF!`, caller-independent bind identity, compiled-plan caching, and translation/rebind APIs.
-- **Canonical owner**: `docs/worksets/W077_strict_excel_grid_bind_profile_and_r1c1_identity.md`.
+- **Current floor**: built and consumer-consumed. The typed `BindProfile` seam (`ReferenceBindProfile` trait, `ReferenceFingerprintPolicy::ExcludeCallerAnchorForTemplate`, symbolic reference records, transform/instantiate/identity types) is implemented in `crates/oxfml_core/src/binding/profile.rs` and honored by `bind_context_fingerprint_for` in `binding/mod.rs`. Acceptance and default-anchor guardrail tests pass (`reference_profile_api_tests`, 13/13). OxCalc's `StrictExcelGridReferenceProfile` consumes the seam end-to-end.
+- **Remaining gaps**: none blocking. GridBounds/`#REF!` semantics are intentionally consumer-side in OxCalc (supersedes `HANDOFF-DNATREECALC-001` item 6). Legacy A1 `$` fidelity in `parse_cell_reference` and OxFml-side transform-outcome coverage were closed under `fml-7t6.2` / `fml-7t6.4`. Compiled-plan caching and full translation/rebind API breadth remain future-facing but are unblocked.
+- **Canonical owner**: `docs/worksets/W077_strict_excel_grid_bind_profile_and_r1c1_identity.md` (freeze section records exact as-built public names).
