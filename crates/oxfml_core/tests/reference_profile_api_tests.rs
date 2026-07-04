@@ -12,7 +12,8 @@ use oxfml_core::{
     ReferenceFingerprintPolicy, ReferenceInstantiationPurpose, ReferenceInstantiationRequest,
     ReferenceNormalFormKey, ReferencePolicy, ReferenceProfileFingerprint,
     ReferenceProfileFingerprintContext, ReferenceRangeBindRequest, ReferenceRangeBindResult,
-    ReferenceSourceInfo, ReferenceValidity, RuntimeHostFormulaContext, StructureContextVersion,
+    ReferenceSourceInfo, ReferenceTransformKind, ReferenceTransformOutcome, ReferenceTransformRequest,
+    ReferenceTransformResult, ReferenceValidity, RuntimeHostFormulaContext, StructureContextVersion,
     bind_formula, bind_formula_incremental, compile_semantic_plan,
 };
 use oxfml_core::{EvaluationContext, evaluate_formula};
@@ -112,6 +113,51 @@ impl ReferenceBindProfile for FakeSymbolicProfile {
             render_hint: Some(request.source_text.clone()),
             validity: ReferenceValidity::ValidAfterInstantiation,
         })
+    }
+
+    /// Exercise the transform seam at the OxFml trait level. The outcome is driven by the
+    /// transform payload's `data` so a test can pin `Shifted` vs `PartiallyInvalid` vs
+    /// `FullyInvalid` deterministically. A structural edit that keeps the reference valid
+    /// shifts it (and rewrites the normal-form key); an edit that clips part of the target
+    /// is partially invalid; an edit that deletes the whole target is fully invalid.
+    fn transform_reference(&self, request: &ReferenceTransformRequest) -> ReferenceTransformResult {
+        let directive = request
+            .payload
+            .as_ref()
+            .map(|payload| payload.data.as_str())
+            .unwrap_or("");
+
+        match (&request.transform_kind, directive) {
+            (ReferenceTransformKind::StructuralEdit, "shift") => {
+                let mut shifted = request.reference.clone();
+                shifted.normal_form_key =
+                    ReferenceNormalFormKey(format!("{}+shift", shifted.normal_form_key.0));
+                ReferenceTransformResult {
+                    outcome: ReferenceTransformOutcome::Shifted,
+                    reference: Some(shifted),
+                    diagnostics: Vec::new(),
+                }
+            }
+            (ReferenceTransformKind::StructuralEdit, "clip") => {
+                let mut clipped = request.reference.clone();
+                clipped.validity = ReferenceValidity::InvalidForCurrentPlacement;
+                ReferenceTransformResult {
+                    outcome: ReferenceTransformOutcome::PartiallyInvalid,
+                    reference: Some(clipped),
+                    diagnostics: vec!["partial target overlap after structural edit".to_string()],
+                }
+            }
+            (ReferenceTransformKind::StructuralEdit, "delete") => ReferenceTransformResult {
+                outcome: ReferenceTransformOutcome::FullyInvalid,
+                reference: None,
+                diagnostics: vec!["target fully deleted by structural edit".to_string()],
+            },
+            _ => ReferenceTransformResult {
+                outcome: ReferenceTransformOutcome::Unchanged,
+                reference: Some(request.reference.clone()),
+                diagnostics: Vec::new(),
+            },
+        }
     }
 }
 
@@ -449,6 +495,129 @@ fn default_profile_instantiation_classifies_dynamic_invalid_and_mismatched_conte
         mismatched,
         InstantiatedReference::Unsupported { .. }
     ));
+}
+
+#[test]
+fn profile_transform_reference_shifts_valid_structural_edit() {
+    let profile = FakeSymbolicProfile;
+    let bound = bind_formula_for("profile-transform-shift", "=A1", 2, 2, Some(&profile));
+    let record = profile_symbolic_record(&bound).clone();
+
+    let result = profile.transform_reference(&ReferenceTransformRequest {
+        reference: record,
+        transform_kind: ReferenceTransformKind::StructuralEdit,
+        payload: Some(ProfilePayload::textual("edit", "shift")),
+    });
+
+    assert_eq!(result.outcome, ReferenceTransformOutcome::Shifted);
+    let shifted = result
+        .reference
+        .expect("a shifted transform must yield a rewritten reference");
+    assert_eq!(shifted.normal_form_key.0, "fake-cell:A1+shift");
+    assert!(result.diagnostics.is_empty());
+}
+
+#[test]
+fn profile_transform_reference_reports_partially_invalid_clip() {
+    let profile = FakeSymbolicProfile;
+    let bound = bind_formula_for("profile-transform-clip", "=A1", 2, 2, Some(&profile));
+    let record = profile_symbolic_record(&bound).clone();
+
+    let result = profile.transform_reference(&ReferenceTransformRequest {
+        reference: record,
+        transform_kind: ReferenceTransformKind::StructuralEdit,
+        payload: Some(ProfilePayload::textual("edit", "clip")),
+    });
+
+    assert_eq!(result.outcome, ReferenceTransformOutcome::PartiallyInvalid);
+    let clipped = result
+        .reference
+        .expect("a partially-invalid transform still yields the surviving reference");
+    assert_eq!(clipped.validity, ReferenceValidity::InvalidForCurrentPlacement);
+    assert!(!result.diagnostics.is_empty());
+}
+
+#[test]
+fn profile_transform_reference_reports_fully_invalid_delete() {
+    let profile = FakeSymbolicProfile;
+    let bound = bind_formula_for("profile-transform-delete", "=A1", 2, 2, Some(&profile));
+    let record = profile_symbolic_record(&bound).clone();
+
+    let result = profile.transform_reference(&ReferenceTransformRequest {
+        reference: record,
+        transform_kind: ReferenceTransformKind::StructuralEdit,
+        payload: Some(ProfilePayload::textual("edit", "delete")),
+    });
+
+    assert_eq!(result.outcome, ReferenceTransformOutcome::FullyInvalid);
+    assert!(
+        result.reference.is_none(),
+        "a fully-invalid transform drops the reference"
+    );
+    assert!(!result.diagnostics.is_empty());
+}
+
+/// Regression for HANDOFF-DNATREECALC-001 item 8: a non-default host-reference syntax
+/// profile must NOT pay a plan-reuse penalty across placements. Plan reuse in
+/// `bind_formula_incremental` keys off `(formula_stable_id, green_tree_key,
+/// bind_context_fingerprint)`. Under the default `IncludeCallerAnchor` policy the
+/// fingerprint folds in the caller anchor, so the same formula at a different cell
+/// re-binds from scratch (the penalty). Under a profile whose `fingerprint_policy` is
+/// `ExcludeCallerAnchorForTemplate`, the caller anchor is dropped from the fingerprint,
+/// so a placement at a new anchor REUSES the bound artifact (and its downstream compiled
+/// plan) while refreshing only the placed identity.
+#[test]
+fn non_default_syntax_profile_reuses_plan_across_placements() {
+    let profile = FakeSymbolicProfile;
+    let source = FormulaSourceRecord::new("profile-reuse-penalty", 1, "=A1+1".to_string());
+
+    let first = bind_formula_request(source.clone(), 2, 2, Some(&profile), None);
+    let previous_placed = first.bound_formula.placed_formula_identity.clone();
+
+    // Same formula, different caller cell, under the non-default syntax profile.
+    let second = bind_formula_request(source, 40, 11, Some(&profile), Some(&first.bound_formula));
+
+    // No penalty: the bound artifact (and thus the compiled plan keyed off its template
+    // identity) is reused rather than re-bound.
+    assert!(
+        second.reused_bound_formula,
+        "non-default syntax profile must reuse the bound artifact across placements"
+    );
+    assert_eq!(
+        first.bound_formula.formula_template_identity,
+        second.bound_formula.formula_template_identity,
+        "template identity (the plan cache key input) must be shared across placements"
+    );
+    assert_eq!(
+        first.bound_formula.bind_context_fingerprint,
+        second.bound_formula.bind_context_fingerprint,
+        "caller anchor must be excluded from the bind fingerprint under the profile"
+    );
+    // Placement still refreshes so per-cell identity stays distinct.
+    assert_ne!(
+        previous_placed,
+        second.bound_formula.placed_formula_identity,
+        "placed identity must still refresh per caller cell"
+    );
+}
+
+/// Companion to the regression above: prove the penalty is real under the DEFAULT path,
+/// so the profile's reuse is a genuine improvement and not a vacuous assertion.
+#[test]
+fn default_syntax_pays_plan_reuse_penalty_across_placements() {
+    let source = FormulaSourceRecord::new("default-reuse-penalty", 1, "=A1+1".to_string());
+
+    let first = bind_formula_request(source.clone(), 2, 2, None, None);
+    let second = bind_formula_request(source, 40, 11, None, Some(&first.bound_formula));
+
+    assert!(
+        !second.reused_bound_formula,
+        "default path must NOT reuse across placements (caller anchor is in the fingerprint)"
+    );
+    assert_ne!(
+        first.bound_formula.bind_context_fingerprint,
+        second.bound_formula.bind_context_fingerprint
+    );
 }
 
 fn bind_formula_for(

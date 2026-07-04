@@ -65,6 +65,50 @@ The public seam is built in `crates/oxfml_core/src/binding/profile.rs` and consu
 `StrictExcelGridReferenceProfile` (sibling repo, `crates/.../grid/reference_engine.rs`)
 already consumes the seam end-to-end.
 
+## OxCalc seam acknowledgement (closure clause)
+
+The closure condition requires that OxCalc has acknowledged and consumed the public
+packet shape. As of OxCalc HEAD, `StrictExcelGridReferenceProfile` implements the
+`ReferenceBindProfile` seam **end-to-end**:
+
+- Implementation: `OxCalc/src/oxcalc-core/src/grid/reference_engine.rs`
+  (`impl ReferenceBindProfile for StrictExcelGridReferenceProfile`), with the transform
+  arm in `OxCalc/src/oxcalc-core/src/grid/reference_engine/transform.rs`.
+- It consumes the frozen shape directly: `reference_policy()` returns `ProfileSymbolic`,
+  `bind_atom`/`bind_range` emit `ProfileReferenceRecord`s, and `transform_reference`
+  returns the OxFml `ReferenceTransformOutcome` variants (`Shifted`, `Expanded`, `Shrunk`,
+  `FullyInvalid`, etc.).
+- **Its caller-independence mechanism.** OxCalc's `fingerprint_policy()` returns
+  `IncludeCallerAnchor` (verified: `reference_engine.rs` ~line 622) — it does **not** use
+  `ExcludeCallerAnchorForTemplate`. Caller-independent template identity is achieved on the
+  **R1C1** channel, where the relative offsets are already caller-independent in the normal
+  form: two placements of the same R1C1 formula share `formula_template_identity` while
+  refreshing `placed_formula_identity` (witnessed by
+  `strict_profile_r1c1_template_identity_is_caller_independent`). On the **A1** channel the
+  profile deliberately rebinds per placement, so A1 template identity differs across cells
+  (witnessed by `strict_profile_a1_incremental_bind_rebinds_when_caller_anchor_changes`).
+  The `ExcludeCallerAnchorForTemplate` policy remains an available OxFml primitive (and is
+  exercised by the OxFml-side `FakeSymbolicProfile` tests); OxCalc's shipped profile simply
+  chose the R1C1-normal-form route to the same caller-independence goal.
+- OxCalc owns the grid-semantic side of the seam (its `ExcelGridBounds` and the
+  out-of-bounds `#REF!` contract) — see the GridBounds ratification below.
+
+OxCalc test coverage witnessing the seam (in `grid/reference_engine.rs`):
+`strict_profile_binds_a1_cells_with_dollar_fidelity`,
+`strict_profile_r1c1_template_identity_is_caller_independent`,
+`strict_profile_a1_incremental_bind_rebinds_when_caller_anchor_changes`,
+`strict_profile_rejects_absolute_a1_out_of_bounds`,
+`strict_profile_structural_insert_expands_area_reference`,
+`strict_profile_structural_delete_shrinks_area_reference` (asserts the `Shrunk` outcome),
+`strict_profile_structural_delete_turns_deleted_point_into_ref_error` (asserts the
+`FullyInvalid` outcome).
+
+At the OxFml seam, the trait-level transform outcomes (`Shifted`, `PartiallyInvalid`,
+`FullyInvalid`) and the plan-reuse regression for `HANDOFF-DNATREECALC-001` item 8 are
+covered by `tests/reference_profile_api_tests.rs`
+(`profile_transform_reference_*`, `non_default_syntax_profile_reuses_plan_across_placements`,
+`default_syntax_pays_plan_reuse_penalty_across_placements`).
+
 ## Frozen public shape (exact as-built names)
 
 The closure condition requires the exact public type/API names to be recorded before
