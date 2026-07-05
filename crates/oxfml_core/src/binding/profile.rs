@@ -49,6 +49,20 @@ impl ReferenceSyntaxCapabilities {
             spill_references: true,
         }
     }
+
+    /// Every reference shape admitted. This is the binder-routing default (the
+    /// `ReferenceBindProfile::syntax_capabilities` trait default): a profile that
+    /// does not opt into gating has every parsed shape routed to it exactly as
+    /// before capability gating existed (W062 D2 §3, default-preserving).
+    pub const fn all() -> Self {
+        Self {
+            a1_references: true,
+            r1c1_references: true,
+            host_references: true,
+            structured_references: true,
+            spill_references: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -477,6 +491,19 @@ pub trait ReferenceBindProfile {
 
     fn operator_capabilities(&self) -> ReferenceOperatorCapabilities {
         ReferenceOperatorCapabilities::worksheet_legacy()
+    }
+
+    /// Syntax-capability facts the binder consults as routing gates (W062 D2 §3).
+    ///
+    /// These are *not* lexer/parser forks: the shared grammar always parses
+    /// every shape. The binder consults this method before routing a parsed
+    /// reference shape to a `bind_*` method; a shape whose capability is `false`
+    /// is not offered to the profile and takes the typed unsupported/rejection
+    /// path instead. The default admits every shape (`all()`), so a profile that
+    /// does not override this method sees exactly today's routing behavior — the
+    /// hard default-preserving requirement of D2 §3.
+    fn syntax_capabilities(&self) -> ReferenceSyntaxCapabilities {
+        ReferenceSyntaxCapabilities::all()
     }
 
     fn bind_atom(&self, _request: &ReferenceAtomBindRequest) -> ReferenceAtomBindResult {

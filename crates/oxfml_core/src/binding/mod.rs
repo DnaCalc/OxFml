@@ -455,19 +455,34 @@ impl Binder<'_> {
                     .expect("postfix should have child");
                 let bound_child = self.bind_expr(child);
                 if token_text(node, "#").is_some() {
-                    match bound_child {
-                        BoundExpr::Reference(reference) => {
-                            BoundExpr::Reference(ReferenceExpr::Spill {
-                                anchor: Box::new(reference),
-                            })
-                        }
-                        other => {
-                            self.diagnostics.push(BindDiagnostic {
-                                message: "spill suffix applied to non-reference expression"
-                                    .to_string(),
-                                span: node.span,
-                            });
-                            other
+                    // Routing gate (D2 §3): the `#` spill-selector routing is
+                    // suppressed for a profile whose `spill_references`
+                    // capability is off. The postfix `#` still parses; the binder
+                    // routes it to a typed capability diagnostic instead of a
+                    // Spill node, leaving the anchor bound as an ordinary
+                    // reference.
+                    if !self.profile_syntax_capabilities().spill_references {
+                        self.diagnostics.push(BindDiagnostic {
+                            message: "spill reference '#' is not supported by the active reference profile"
+                                .to_string(),
+                            span: node.span,
+                        });
+                        bound_child
+                    } else {
+                        match bound_child {
+                            BoundExpr::Reference(reference) => {
+                                BoundExpr::Reference(ReferenceExpr::Spill {
+                                    anchor: Box::new(reference),
+                                })
+                            }
+                            other => {
+                                self.diagnostics.push(BindDiagnostic {
+                                    message: "spill suffix applied to non-reference expression"
+                                        .to_string(),
+                                    span: node.span,
+                                });
+                                other
+                            }
                         }
                     }
                 } else if token_text(node, "%").is_some() {
@@ -1120,6 +1135,20 @@ impl Binder<'_> {
         parsed_qualifier: Option<String>,
     ) -> Option<BoundExpr> {
         let profile = self.reference_bind_profile?;
+        // Routing gate (D2 §3): the active channel's address form must be
+        // admitted by the profile's capabilities before an address atom is
+        // offered to `bind_atom`. `r1c1_references: false` rejects the R1C1
+        // channel bind; `a1_references: false` rejects the A1 channel bind. The
+        // shared grammar parsed the atom identically; only routing changes, and
+        // the rejection is the existing typed capability-diagnostic path.
+        let capabilities = profile.syntax_capabilities();
+        let channel_admitted = match self.formula_channel_kind {
+            FormulaChannelKind::WorksheetR1C1 => capabilities.r1c1_references,
+            _ => capabilities.a1_references,
+        };
+        if !channel_admitted {
+            return Some(self.profile_channel_capability_rejection(source_text, source_span));
+        }
         let request = ReferenceAtomBindRequest {
             source_channel: self.formula_channel_kind,
             source_span,
@@ -1141,12 +1170,47 @@ impl Binder<'_> {
         )
     }
 
+    /// Typed capability-rejection for an address atom whose channel address form
+    /// is not admitted by the active profile (D2 §3). Mirrors the existing
+    /// `Rejected` atom outcome: a `#REF!` reference with a bind diagnostic.
+    fn profile_channel_capability_rejection(
+        &mut self,
+        source_text: &str,
+        source_span: TextSpan,
+    ) -> BoundExpr {
+        let form = match self.formula_channel_kind {
+            FormulaChannelKind::WorksheetR1C1 => "R1C1",
+            _ => "A1",
+        };
+        let profile_id = self
+            .reference_bind_profile
+            .map(|profile| profile.profile_id().to_string())
+            .unwrap_or_else(|| "formula-only".to_string());
+        self.diagnostics.push(BindDiagnostic {
+            message: format!(
+                "reference profile '{profile_id}' does not admit {form} address references '{source_text}'"
+            ),
+            span: source_span,
+        });
+        BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Error(ErrorRef {
+            error_class: "#REF!".to_string(),
+            source_text: source_text.to_string(),
+        })))
+    }
+
     fn try_bind_profile_structured_reference(
         &mut self,
         source_text: &str,
         source_span: TextSpan,
     ) -> Option<BoundExpr> {
         let profile = self.reference_bind_profile?;
+        // Routing gate (D2 §3): a profile whose `structured_references`
+        // capability is off is never offered the `[...]` structured shape; it
+        // falls through to the name/error path (a typed diagnostic for symbolic
+        // profiles). The shared grammar still parsed the construct identically.
+        if !profile.syntax_capabilities().structured_references {
+            return None;
+        }
         let request = ReferenceStructuredBindRequest {
             source_channel: self.formula_channel_kind,
             source_span,
@@ -1176,6 +1240,12 @@ impl Binder<'_> {
         base: Option<&BoundExpr>,
     ) -> Option<BoundExpr> {
         let profile = self.reference_bind_profile?;
+        // Routing gate (D2 §3): host-extended selector atoms are not offered to
+        // a profile whose `host_references` capability is off. The `Foo[@member]`
+        // / `Foo[member]` shapes still parse identically; only routing changes.
+        if !profile.syntax_capabilities().host_references {
+            return None;
+        }
         let selector_family = profile
             .selector_syntax()
             .into_iter()
@@ -1264,6 +1334,15 @@ impl Binder<'_> {
             profile.bind_name(&request),
             ReferenceAtomBindResult::Bound(_)
         )
+    }
+
+    /// Syntax-capability facts of the active profile, consulted as binder-routing
+    /// gates (W062 D2 §3). Absent a profile every shape is admitted (`all()`),
+    /// so the no-profile path keeps exactly today's routing behavior.
+    fn profile_syntax_capabilities(&self) -> ReferenceSyntaxCapabilities {
+        self.reference_bind_profile
+            .map(|profile| profile.syntax_capabilities())
+            .unwrap_or_else(ReferenceSyntaxCapabilities::all)
     }
 
     /// A symbolic-policy profile owns reference AND name binding: if it did not
