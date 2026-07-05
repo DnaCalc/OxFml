@@ -54,8 +54,8 @@ use stacker::maybe_grow;
 
 use crate::binding::{
     AreaRef, BinaryOp, BoundExpr, BoundFormula, CellRef, ErrorRef, NameKind, NameRef,
-    NormalizedReference, ProfileReferenceRecord, ReferenceExpr, StructuredResolvedRef,
-    StructuredSectionKind,
+    NormalizedReference, ProfileReferenceRecord, ReferenceExpr, SheetSpan3DRef,
+    StructuredResolvedRef, StructuredSectionKind,
 };
 use crate::interface::{
     HostFunctionInvocation, HostFunctionProvider, ReturnedValueSurface, TypedContextQueryBundle,
@@ -3697,9 +3697,21 @@ fn evaluate_reference_as_call_arg(
         }
         CompiledReferenceExpr::Atom(NormalizedReference::SheetSpan3D(span)) => {
             // Across-sheet materialization of a 3D span is OxCalc-owned
-            // (W062 R3.9/R4.12); OxFml only parses/normalizes/fingerprints it.
-            // With no consumer resolver wired here, the span evaluates to a
-            // deferred `#REF!` value, mirroring the external-reference deferral.
+            // (W062 R4.12); OxFml parses/normalizes/fingerprints the span and,
+            // when a consumer reference-system provider is wired, hands it an
+            // opaque span-descriptor `ReferenceLike` to resolve — the consumer
+            // expands the member sheets against the current sheet order and
+            // aggregates. With no provider wired the span still defers to a
+            // `#REF!` value (mirroring the external-reference deferral), so the
+            // stand-alone OxFml behavior is unchanged.
+            if context.reference_system_provider.is_some() {
+                return call_arg_for_reference_like(
+                    reference_like_for_sheet_span_3d(span),
+                    preserve_reference,
+                    context,
+                    reference_system_provider,
+                );
+            }
             let prepared_call_index = push_special_prepared_call(
                 trace,
                 "SHEET_SPAN_3D_REFERENCE_DEFERRED",
@@ -6366,6 +6378,48 @@ fn reference_like_for_profile_symbolic(record: &ProfileReferenceRecord) -> Refer
         ReferenceSystemId(record.profile_id.clone()),
         ReferenceHandle {
             id: ReferenceHandleId::from_bytes(record.normal_form_key.0.clone().into_bytes()),
+        },
+        Some(ReferenceDisplay {
+            text: ExcelText::from_interop_assignment(&display_text),
+        }),
+    )
+}
+
+/// The reference-system id an evaluated 3D sheet-span reference carries when
+/// OxFml hands it to a consumer resolver (W062 R4.12). The consumer (OxCalc)
+/// recognizes this id to route the span through its member-sheet expansion; the
+/// handle bytes carry the span descriptor (see [`reference_like_for_sheet_span_3d`]).
+pub const SHEET_SPAN_3D_REFERENCE_SYSTEM_ID: &str = "sheet-span-3d";
+
+/// The unit-separator byte OxFml uses to delimit the span descriptor's fields in
+/// the [`reference_like_for_sheet_span_3d`] handle. Chosen because it cannot
+/// appear in a sheet name or A1 target, so the descriptor splits unambiguously.
+pub const SHEET_SPAN_3D_DESCRIPTOR_SEPARATOR: char = '\u{1f}';
+
+/// Build the opaque [`ReferenceLike`] a 3D sheet-span reference is resolved
+/// through when a consumer reference-system provider is wired (W062 R4.12).
+///
+/// The handle bytes encode the span descriptor
+/// `{workbook}␟{start_sheet}␟{end_sheet}␟{target}` (`␟` =
+/// [`SHEET_SPAN_3D_DESCRIPTOR_SEPARATOR`]); the consumer decodes it, expands the
+/// member sheets against the current sheet order, and aggregates. OxFml does not
+/// know the consumer's normal-form key format, so it hands the raw descriptor
+/// and lets the consumer rebuild its own key — keeping the span resolution
+/// entirely consumer-owned (D2 §4.2).
+fn reference_like_for_sheet_span_3d(span: &SheetSpan3DRef) -> ReferenceLike {
+    let descriptor = format!(
+        "{}{sep}{}{sep}{}{sep}{}",
+        span.workbook_id,
+        span.start_sheet,
+        span.end_sheet,
+        span.target,
+        sep = SHEET_SPAN_3D_DESCRIPTOR_SEPARATOR
+    );
+    let display_text = format!("{}:{}!{}", span.start_sheet, span.end_sheet, span.target);
+    ReferenceLike::opaque(
+        ReferenceSystemId(SHEET_SPAN_3D_REFERENCE_SYSTEM_ID.to_string()),
+        ReferenceHandle {
+            id: ReferenceHandleId::from_bytes(descriptor.into_bytes()),
         },
         Some(ReferenceDisplay {
             text: ExcelText::from_interop_assignment(&display_text),
