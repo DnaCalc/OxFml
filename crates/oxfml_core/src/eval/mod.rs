@@ -2287,12 +2287,20 @@ fn portable_callable_for_top_level_result(
         .into_iter()
         .map(|reference| {
             let (name, identity) = captured_ref_name_and_identity(&reference);
-            // The captured-ref *identity* is a dependency fact for the host; we do
-            // NOT bake the captured value into `closure`. Top-level defined names
-            // are re-resolved live at invocation time (see closure note below).
+            // Resolve the free reference to its defining-scope binding so the host
+            // gets the captured-ref dependency fact and, for callable captures, so
+            // it can be baked into the closure (see closure note below). A plain
+            // `Name` resolves by its name; a host that lowers free references to a
+            // profile-symbolic / handle form (e.g. OxCalc's tree profile keys its
+            // defined names as `profile-symbolic:…:treecalc.node:N`) keys
+            // `defined_names` by that same identity string, so the derived
+            // `name`/`identity` is used as the lookup key for non-`Name` kinds.
             let binding = match &reference {
                 NormalizedReference::Name(name_ref) => defined_names.get(&name_ref.name).cloned(),
-                _ => None,
+                _ => defined_names
+                    .get(&name)
+                    .or_else(|| defined_names.get(&identity))
+                    .cloned(),
             };
             CallableCapturedRef {
                 name,
@@ -2314,11 +2322,36 @@ fn portable_callable_for_top_level_result(
     let profile = callable_profile_detail_from_callable_value(&runtime_callable)?;
     let summary = runtime_callable.summary.clone();
 
-    // The re-supply payload carries params/body verbatim from the bound AST. The
-    // closure is intentionally empty: captured top-level defined names travel as
-    // `captured_refs` identities and are re-resolved live by the consuming host,
-    // not snapshotted here (which would shadow the consumer's live value).
-    let closure = BTreeMap::new();
+    // The re-supply payload carries params/body verbatim from the bound AST.
+    //
+    // Definition-site capture for *callable* free names (W062 R4.9 / D3 §8.3):
+    // a free name whose defining-scope binding is itself a callable IS lexically
+    // captured into the closure. Excel LAMBDA is lexically scoped, and unlike a
+    // plain value a captured callable is not something the consuming host can
+    // re-resolve live: when this callable is invoked from a foreign scope (e.g.
+    // `G=LAMBDA(y,F(y)*2)` invoked as `Result=G(2)`), that scope's own name
+    // bindings never mention `F`, so without carrying `F`'s binding here the
+    // body's `F(y)` has no callable to resolve (`captures=-`, the §0 defect).
+    // Carrying the callable binding also carries its own transitive closure, so
+    // `F`'s capture of `A` travels with it. Callable definitions are immutable
+    // for a given defining evaluation, so this snapshot cannot shadow a live
+    // consumer value the way a captured *value* would.
+    //
+    // Value and reference captures are deliberately NOT baked (closure stays
+    // empty for them): a top-level defined *value* like `Cap` must be re-resolved
+    // at invocation time in the consuming scope so the consumer's live value —
+    // not the producer's stale snapshot — is observed, and so the captured-ref
+    // invalidation edges remain meaningful. See
+    // `portable_callable_round_trip_resolves_capture_live_in_consuming_scope`.
+    let closure = captured_refs
+        .iter()
+        .filter_map(|captured| match &captured.binding {
+            Some(binding @ DefinedNameBinding::Callable(_)) => {
+                Some((captured.name.clone(), binding.clone()))
+            }
+            _ => None,
+        })
+        .collect::<BTreeMap<_, _>>();
 
     let binding = CallableDefinedNameBinding {
         summary,
@@ -5303,7 +5336,63 @@ fn lambda_binding_for_callee(
                 _ => None,
             }
         }
+        // A callable captured lexically (definition-site capture, W062 R4.9 /
+        // D3 §8.3) into the closure of an enclosing callable is installed into
+        // the invocation's helper frame under its host reference-identity key
+        // (e.g. a profile-symbolic reference for OxCalc's tree profile). Consult
+        // the carried environment for such a callee here — BEFORE the reference
+        // provider or the caller's defined names — so a callable invoked from a
+        // foreign scope still resolves the callables its body captured, even
+        // when that scope never (re-)supplies them. This is the invocation half
+        // of definition-site scoping: `G=LAMBDA(y,F(y)*2)` invoked as `G(2)` in a
+        // scope that only knows `G` still finds the captured `F`.
+        CompiledExpr::Reference(CompiledReferenceExpr::Atom(reference)) => {
+            reference_identity_keys_for_captured_callable(reference)
+                .into_iter()
+                .find_map(|key| match helper_binding_get(helper_bindings, &key) {
+                    Some(HelperBinding::Lambda {
+                        params,
+                        body,
+                        closure,
+                    }) => Some(LambdaBinding {
+                        origin_kind: CallableOriginKind::HelperLambda,
+                        params: params.clone(),
+                        body: body.clone(),
+                        closure: closure.clone(),
+                    }),
+                    Some(HelperBinding::Arg(value)) => {
+                        callable_value_from_eval_value(value).and_then(|callable| {
+                            let callable_token = callable_token_from_oxfunc_callable(&callable);
+                            callable_registry
+                                .borrow()
+                                .get(&callable_token)
+                                .map(|binding| binding.lambda.clone())
+                        })
+                    }
+                    _ => None,
+                })
+        }
         _ => None,
+    }
+}
+
+/// Identity keys under which a lexically-captured callable may live in the
+/// invocation helper frame, for a non-`Name` reference callee. Mirrors
+/// `defined_name_keys_for_callable_callee` so a callee resolves against the
+/// carried closure the same way it would against supplied defined names. A bare
+/// `Name(HelperLocal)` callee is handled by the dedicated arm above and returns
+/// no keys here.
+fn reference_identity_keys_for_captured_callable(reference: &NormalizedReference) -> Vec<String> {
+    match reference {
+        NormalizedReference::ProfileSymbolic(record) => vec![
+            format!(
+                "profile-symbolic:{}:{}",
+                record.profile_id, record.normal_form_key.0
+            ),
+            record.normal_form_key.0.clone(),
+            record.source_info.source_text.clone(),
+        ],
+        _ => Vec::new(),
     }
 }
 

@@ -612,3 +612,100 @@ fn resupplied_callable_under_arity_errors_no_partial_application() {
         "under-arity invocation must report an arity mismatch, got: {error}"
     );
 }
+
+// W062 R4.9 / D3 §8.3 — definition-site capture for *callable* free names.
+//
+// Producing `G=LAMBDA(y,F(y)*2)` in a scope where `F` is a callable must bake
+// `F`'s binding into `G`'s portable closure (unlike a value capture, which stays
+// live). Re-supplying `G` alone into a foreign consumer — one that never defines
+// `F` — must still resolve `F(y)` transitively, because `G` carries `F`'s
+// meaning (and `F`'s own capture facts) with it. This is the OxFml half of the
+// §0 transitive-callable defect fix. The value capture `A` inside `F` remains
+// live: the consumer supplies it, and its live value is observed.
+#[test]
+fn produced_callable_captures_callable_free_name_at_definition_site() {
+    // Produce F=LAMBDA(x,x+A) with A live in F's scope.
+    let mut f_producer = SingleFormulaHost::new("defsite:F", "=LAMBDA(x,x+A)");
+    f_producer.set_defined_name_value("A", CalcValue::number(3.0));
+    let f_binding = f_producer
+        .recalc(None, Some(&oxfml_en_us_locale_context()))
+        .expect("F producer recalc should succeed")
+        .portable_callable
+        .expect("F should surface a portable callable")
+        .binding;
+    // A is a *value* capture: it is NOT baked into F's closure (resolved live).
+    assert!(
+        f_binding.closure.is_empty(),
+        "F's value capture A must not be baked into its closure"
+    );
+
+    // Produce G=LAMBDA(y,F(y)*2) with F as a callable in G's defining scope.
+    let mut g_producer = SingleFormulaHost::new("defsite:G", "=LAMBDA(y,F(y)*2)");
+    g_producer.set_defined_name_callable("F", f_binding);
+    let g_binding = g_producer
+        .recalc(None, Some(&oxfml_en_us_locale_context()))
+        .expect("G producer recalc should succeed")
+        .portable_callable
+        .expect("G should surface a portable callable")
+        .binding;
+    // F is a *callable* capture: it MUST be baked into G's closure so the
+    // callable travels transitively out of its defining subtree.
+    assert!(
+        matches!(
+            g_binding.closure.get("F"),
+            Some(DefinedNameBinding::Callable(_))
+        ),
+        "G must capture the callable F into its closure at definition site; closure keys={:?}",
+        g_binding.closure.keys().collect::<Vec<_>>()
+    );
+
+    // Consumer invokes G(2) without ever defining F. A is supplied live (as the
+    // caller scope would), proving G carries F lexically while A resolves live.
+    let mut consumer = SingleFormulaHost::new("defsite:consumer", "=G(2)");
+    consumer.set_defined_name_callable("G", g_binding);
+    consumer.set_defined_name_value("A", CalcValue::number(3.0));
+    let output = consumer
+        .recalc(None, Some(&oxfml_en_us_locale_context()))
+        .expect("consumer recalc should succeed");
+    assert_eq!(
+        output.published_worksheet_value,
+        CalcValue::number(10.0),
+        "G(2)=F(2)*2=(2+A)*2=(2+3)*2=10, resolving captured callable F transitively"
+    );
+
+    // Editing A live to 10 in the consumer must be observed (A stays live):
+    // G(2)=(2+10)*2=24.
+    let mut consumer = SingleFormulaHost::new("defsite:consumer2", "=G(2)");
+    consumer.set_defined_name_callable(
+        "G",
+        produce_transitive_g_binding(),
+    );
+    consumer.set_defined_name_value("A", CalcValue::number(10.0));
+    let output = consumer
+        .recalc(None, Some(&oxfml_en_us_locale_context()))
+        .expect("consumer recalc should succeed");
+    assert_eq!(
+        output.published_worksheet_value,
+        CalcValue::number(24.0),
+        "with A live=10, G(2)=(2+10)*2=24 — the value capture A resolves live"
+    );
+}
+
+fn produce_transitive_g_binding() -> oxfml_core::eval::CallableDefinedNameBinding {
+    let mut f_producer = SingleFormulaHost::new("defsite:F2", "=LAMBDA(x,x+A)");
+    f_producer.set_defined_name_value("A", CalcValue::number(0.0));
+    let f_binding = f_producer
+        .recalc(None, Some(&oxfml_en_us_locale_context()))
+        .expect("F producer recalc should succeed")
+        .portable_callable
+        .expect("F should surface a portable callable")
+        .binding;
+    let mut g_producer = SingleFormulaHost::new("defsite:G2", "=LAMBDA(y,F(y)*2)");
+    g_producer.set_defined_name_callable("F", f_binding);
+    g_producer
+        .recalc(None, Some(&oxfml_en_us_locale_context()))
+        .expect("G producer recalc should succeed")
+        .portable_callable
+        .expect("G should surface a portable callable")
+        .binding
+}
