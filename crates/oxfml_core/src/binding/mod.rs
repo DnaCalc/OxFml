@@ -24,7 +24,7 @@ pub use profile::{
 };
 pub use reference::{
     AddressMode, AreaRef, CellCoord, CellRef, ErrorRef, ExternalRef, NameKind, NameRef,
-    NormalizedReference, ReferenceExpr, StructuredEmptyAreaRef, StructuredRef,
+    NormalizedReference, ReferenceExpr, SheetSpan3DRef, StructuredEmptyAreaRef, StructuredRef,
     StructuredReferenceBindDiagnosticLink, StructuredReferenceBindRecord,
     StructuredReferenceSelectedRegion, StructuredReferenceSourceTokenKind, StructuredResolvedRef,
     StructuredSectionKind, StructuredSelectorKind, WholeColumnRef, WholeRowRef,
@@ -420,6 +420,7 @@ impl Binder<'_> {
                 self.bind_identifier(node)
             }
             SyntaxKind::QualifiedReferenceExpr => self.bind_qualified_reference(node),
+            SyntaxKind::SheetSpan3DReferenceExpr => self.bind_sheet_span_3d(node),
             SyntaxKind::HostMemberReferenceExpr => self.bind_host_member_reference(node),
             SyntaxKind::HostReferenceCollectionExpr => self.bind_host_reference_collection(node),
             SyntaxKind::RangeExpr => self.bind_range(node),
@@ -884,6 +885,102 @@ impl Binder<'_> {
                 })))
             }
         }
+    }
+
+    /// Bind a 3D sheet-span reference `Sheet1:Sheet3!<target>` (W078). The
+    /// shared grammar always produced the `SheetSpan3DReferenceExpr` node; here
+    /// the binder consults the active profile's `sheet_span_3d_references`
+    /// capability as a routing gate (W062 D2 §3). Flag ON → a distinct
+    /// `NormalizedReference::SheetSpan3D` carrying both sheet ids plus the
+    /// cell/area target (never lowered to a range or a same-sheet multi-area).
+    /// Flag OFF → a typed `#REF!` capability rejection with a bind diagnostic,
+    /// never a silently-wrong range. The default no-profile path admits the
+    /// span (`all()`), so behavior without an opting profile is the bound span.
+    fn bind_sheet_span_3d(&mut self, node: &GreenNode) -> BoundExpr {
+        let source_text = node_source_text(node);
+        // The two sheet identifiers are the two leading qualifier tokens
+        // (Identifier / QuotedIdentifier) before the target node; the target is
+        // the single child node.
+        let sheet_tokens: Vec<String> = node
+            .children
+            .iter()
+            .filter_map(|child| match child {
+                GreenChild::Token(token)
+                    if matches!(
+                        token.kind,
+                        crate::syntax::token::TokenKind::Identifier
+                            | crate::syntax::token::TokenKind::QuotedIdentifier
+                    ) =>
+                {
+                    Some(token.text.clone())
+                }
+                _ => None,
+            })
+            .collect();
+        let target_node = node.children.iter().find_map(|child| match child {
+            GreenChild::Node(node) => Some(node.as_ref()),
+            GreenChild::Token(_) => None,
+        });
+
+        let (start_raw, end_raw, target_node) =
+            match (sheet_tokens.first(), sheet_tokens.get(1), target_node) {
+                (Some(start), Some(end), Some(target)) => (start, end, target),
+                _ => {
+                    self.diagnostics.push(BindDiagnostic {
+                        message: "3D sheet-span reference was structurally incomplete".to_string(),
+                        span: node.span,
+                    });
+                    return BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Error(
+                        ErrorRef {
+                            error_class: "#REF!".to_string(),
+                            source_text,
+                        },
+                    )));
+                }
+            };
+
+        // Routing gate (D2 §3): a profile whose `sheet_span_3d_references`
+        // capability is off never gets the parsed span routed to a bound 3D
+        // reference; it receives a typed capability rejection instead of a
+        // silently-wrong bind. The shared grammar still parsed the span node.
+        if !self.profile_syntax_capabilities().sheet_span_3d_references {
+            let profile_id = self
+                .reference_bind_profile
+                .map(|profile| profile.profile_id().to_string())
+                .unwrap_or_else(|| "formula-only".to_string());
+            self.diagnostics.push(BindDiagnostic {
+                message: format!(
+                    "reference profile '{profile_id}' does not admit 3D sheet-span references '{source_text}'"
+                ),
+                span: node.span,
+            });
+            self.unresolved_references.push(UnresolvedReferenceRecord {
+                source_text: source_text.clone(),
+                reason: format!(
+                    "reference profile '{profile_id}' does not admit 3D sheet-span references"
+                ),
+            });
+            return BoundExpr::Reference(ReferenceExpr::Atom(NormalizedReference::Error(
+                ErrorRef {
+                    error_class: "#REF!".to_string(),
+                    source_text,
+                },
+            )));
+        }
+
+        let start_sheet = parse_reference_qualifier(start_raw).sheet_id;
+        let end_sheet = parse_reference_qualifier(end_raw).sheet_id;
+        let target = node_source_text(target_node);
+        let normalized = NormalizedReference::SheetSpan3D(SheetSpan3DRef {
+            workbook_id: self.context.workbook_id.clone(),
+            start_sheet,
+            end_sheet,
+            target,
+        });
+        self.capability_requirements
+            .push("sheet_span_3d_reference".to_string());
+        self.push_reference_seed(&normalized);
+        BoundExpr::Reference(ReferenceExpr::Atom(normalized))
     }
 
     fn bind_range(&mut self, node: &GreenNode) -> BoundExpr {
@@ -1782,6 +1879,7 @@ fn builtin_reference_locator_argument_is_reference_like(expr: &BoundExpr) -> boo
         BoundExpr::Reference(reference) => match reference {
             ReferenceExpr::Atom(NormalizedReference::Structured(_))
             | ReferenceExpr::Atom(NormalizedReference::External(_))
+            | ReferenceExpr::Atom(NormalizedReference::SheetSpan3D(_))
             | ReferenceExpr::Atom(NormalizedReference::ProfileSymbolic(_)) => true,
             ReferenceExpr::Atom(NormalizedReference::Name(name)) => {
                 matches!(

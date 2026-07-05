@@ -12,6 +12,13 @@ pub enum SyntaxKind {
     IdentifierExpr,
     QuotedIdentifierExpr,
     QualifiedReferenceExpr,
+    /// A 3D sheet-range span reference `Sheet1:Sheet3!A1` (W078): a contiguous
+    /// run of sheets qualifying a cell/area target. Distinct from a bare
+    /// `RangeExpr` and from a same-sheet multi-area; the `:` between the two
+    /// sheet identifiers is *consumed by the span production* (via a bounded
+    /// `Colon Identifier Bang` lookahead) so the ordinary range loop never
+    /// splits on it. Children: `[start_sheet, colon, end_sheet, bang, target]`.
+    SheetSpan3DReferenceExpr,
     HostMemberReferenceExpr,
     HostReferenceCollectionExpr,
     CallExpr,

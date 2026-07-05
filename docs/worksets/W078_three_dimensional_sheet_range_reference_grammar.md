@@ -101,11 +101,65 @@ lowered to a sheet-spanning reference.
   bare-range parsing are byte-for-byte unchanged; the 3D kind is distinct from multi-area
   at the OxFunc seam; OxCalc W062 R3 can consume the 3D slice.
 
+## Implementation (landed)
+
+The fix direction above is now BUILT. Decisions taken where the doc left the grammar
+internals open:
+
+1. **Lexer-token vs post-parse question — resolved as parse-time, not a new lexer token.**
+   The span is detected in the *parser* (`parse_primary`'s Identifier arm), not the lexer.
+   A bounded, whitespace-skipping 3-token lookahead `at_sheet_span_tail()` /
+   `peek_significant_kinds(3)` checks for the exact sequence `Colon Identifier Bang`
+   immediately after the already-bumped leading identifier. Only on a match does the arm
+   consume `: end_sheet !` and emit `SyntaxKind::SheetSpan3DReferenceExpr`. The mandatory
+   trailing `!` is the ambiguity guard: `A1:A3`, `name:name`, `Sheet1:Sheet3` (no bang),
+   and `Sheet1!A1:B2` (single-sheet qualified range) are byte-for-byte unchanged because
+   none carries the `!` in that position.
+
+2. **Grammar production shape.** `SheetSpan3DReferenceExpr` children are
+   `[start_sheet, colon, end_sheet, bang, target]`. The target is a single primary (`A1`);
+   a trailing `:B2` (`Sheet1:Sheet3!A1:B2`) is left for the outer range loop, yielding
+   `RangeExpr(SheetSpan3DReferenceExpr, B2)` — the exact parallel of the qualified-range
+   `Sheet1!A1:B2` shape. **Grammar is unconditional (parse always, bind gated)** per the
+   W062 D2 stance: the shared grammar always produces the span node; only the binder gates.
+
+3. **Binder / normalized form.** `NormalizedReference::SheetSpan3D(SheetSpan3DRef)` carries
+   `{workbook_id, start_sheet, end_sheet, target}`; both sheet ids plus the target are part
+   of the normal-form key (`Display` → `sheet-span-3d:<wb>:<start>:<end>!<target>`), kept
+   **distinct** from `Name`, same-sheet multi-area, and range — never lowered to a range or
+   an area union (NOTES_FOR_OXFUNC.md 7.2 items 4-5). Evaluation defers to a `#REF!` value
+   (across-sheet materialization is OxCalc-owned, W062 R3.9/R4.12).
+
+4. **Flag default decision (RECORDED).** A new `ReferenceSyntaxCapabilities`
+   `sheet_span_3d_references` flag gates binder routing, following the R3.8 pattern
+   (commit 1ef6d19). Defaults: `all()` = **true** (the no-gating trait default —
+   `syntax_capabilities()` admits every parsed shape, so the no-profile path binds the
+   span, default-preserving); `worksheet_legacy()` = **false** (3D is opt-in per W062 D2 —
+   only a profile that explicitly supports across-sheet spans, the strict-Excel style,
+   turns it on). Flag OFF → typed `#REF!` capability rejection with a bind diagnostic
+   containing "3D sheet-span", never a silently-wrong range.
+
+### Typed limitations (in this landing)
+- **External-target start sheet** (`[wb]Sheet1:Sheet3!A1`) is NOT recognized as a 3D span:
+  its leading token lexes as a single `BracketedQualifier`, which the span gate (Identifier
+  / QuotedIdentifier start only) excludes, so it retains the pre-existing range shape. The
+  in-scope form is the unquoted-or-quoted contiguous `start:end` per Scope item 3
+  ("Non-contiguous or reordered sheet spans" are explicitly out of scope). A quoted *start*
+  sheet (`'My Sheet':Sheet3!A1`) IS handled. A quoted *end* sheet (`Sheet1:'Q2 Data'!A1`)
+  is NOT: the lookahead restricts the end sheet to a plain `Identifier` on purpose, because
+  admitting `QuotedIdentifier` there collides with the tested whole-column qualified-range
+  form `'Sheet'!A:'Sheet'!C` (the inner target `A` would eat the `:'Sheet'!` tail as a
+  bogus span). The quoted-end form fails safe to the pre-W078 range shape with no
+  diagnostic; broadening it needs a target-aware disambiguation and is left as a follow-up.
+- A degenerate `Sheet1:Sheet3!A1:Sheet5!B2` (a second `!`-bearing span in the target)
+  recursively nests span nodes; this is malformed input outside the contiguous
+  `start:end!target` grammar and is left as-is (no valid input reaches it).
+
 ## Status
-- execution_state: planned
-- scope_completeness: scope_partial
-- target_completeness: target_partial
-- integration_completeness: partial
-- open_lanes: grammar production, qualifier/binder lowering, OxFunc-seam classification
-- claim_confidence: draft (collision and anchors verified against code; fix direction is a
-  proposal, not yet implemented)
+- execution_state: complete
+- scope_completeness: scope_complete
+- target_completeness: target_complete
+- integration_completeness: integrated (oxfml_core suite green)
+- open_lanes: none (OxCalc W062 R3.9 across-sheet materialization is consumer-owned)
+- claim_confidence: verified (grammar, bind gating, distinctness, round-trip, and full
+  oxfml_core suite proven green; fresh-eyes reviewed)

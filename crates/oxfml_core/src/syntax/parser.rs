@@ -803,7 +803,39 @@ impl Parser {
             | TokenKind::QuotedIdentifier
             | TokenKind::BracketedQualifier => {
                 let ident = self.bump();
-                if self.at(TokenKind::Bang) {
+                if matches!(
+                    ident.kind,
+                    TokenKind::Identifier | TokenKind::QuotedIdentifier
+                ) && self.at_sheet_span_tail()
+                {
+                    // W078 — 3D sheet span `Sheet1:Sheet3!<target>`. The bounded
+                    // `Colon Identifier Bang` lookahead already confirmed the
+                    // shape, so consume `: end_sheet !` here: this claims the
+                    // `:` for the span production *before* the outer range loop
+                    // can split on it (the collision the workset documents). The
+                    // target is a single primary (`A1`); a trailing `:B2`
+                    // (`Sheet1:Sheet3!A1:B2`) is left for the range loop, which
+                    // then forms `RangeExpr(SheetSpan3D, B2)` — the exact
+                    // parallel of the qualified-range `Sheet1!A1:B2` shape.
+                    self.skip_whitespace();
+                    let colon = self.bump(); // Colon
+                    self.skip_whitespace();
+                    let end_sheet = self.bump(); // Identifier | QuotedIdentifier
+                    self.skip_whitespace();
+                    let bang = self.bump(); // Bang
+                    self.skip_whitespace();
+                    let target = self.parse_primary();
+                    GreenNode::new(
+                        SyntaxKind::SheetSpan3DReferenceExpr,
+                        vec![
+                            GreenChild::Token(ident),
+                            GreenChild::Token(colon),
+                            GreenChild::Token(end_sheet),
+                            GreenChild::Token(bang),
+                            GreenChild::Node(Box::new(target)),
+                        ],
+                    )
+                } else if self.at(TokenKind::Bang) {
                     let bang = self.bump();
                     self.skip_whitespace();
                     let target = self.parse_primary();
@@ -919,6 +951,49 @@ impl Parser {
 
     fn at(&self, kind: TokenKind) -> bool {
         self.current().kind == kind
+    }
+
+    /// The kinds of the next `count` significant (non-whitespace) tokens
+    /// starting at the current position, in order. Used for bounded,
+    /// whitespace-skipping lookahead (W078 sheet-span detection). Stops at
+    /// `Eof`; the returned vec may be shorter than `count` if the stream ends.
+    fn peek_significant_kinds(&self, count: usize) -> Vec<TokenKind> {
+        let mut kinds = Vec::with_capacity(count);
+        let mut i = self.index;
+        while kinds.len() < count && i < self.tokens.len() {
+            let kind = self.tokens[i].kind;
+            i += 1;
+            if kind == TokenKind::Whitespace {
+                continue;
+            }
+            if kind == TokenKind::Eof {
+                break;
+            }
+            kinds.push(kind);
+        }
+        kinds
+    }
+
+    /// True when the position immediately *after* an already-bumped leading
+    /// identifier begins a 3D sheet-span tail `: Identifier !` (whitespace
+    /// skipped). The trailing `!` is mandatory: it is what distinguishes a
+    /// sheet span from an ordinary `A1:A3` range or a `name:name` union member,
+    /// which never carry it. Bounded to exactly three significant tokens.
+    ///
+    /// The end sheet is restricted to a *plain* `Identifier` (not
+    /// `QuotedIdentifier`) on purpose: broadening it to admit a quoted end
+    /// sheet collides with the tested whole-column qualified-range form
+    /// `'Sheet'!A:'Sheet'!C`, whose inner target `A` would otherwise eat the
+    /// `:'Sheet'!` tail as a bogus span. A quoted *start* sheet is safe (it is
+    /// the already-bumped leading identifier, disambiguated by the trailing
+    /// `!`), so `'My Sheet':Sheet3!A1` parses as a span but the quoted-*end*
+    /// form `Sheet1:'Q2 Data'!A1` remains a typed limitation (see the W078
+    /// workset doc).
+    fn at_sheet_span_tail(&self) -> bool {
+        matches!(
+            self.peek_significant_kinds(3).as_slice(),
+            [TokenKind::Colon, TokenKind::Identifier, TokenKind::Bang]
+        )
     }
 
     fn skip_whitespace(&mut self) {

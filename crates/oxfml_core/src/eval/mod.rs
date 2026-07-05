@@ -3662,6 +3662,40 @@ fn evaluate_reference_as_call_arg(
             record_prepared_call_returned_value(trace, prepared_call_index, &returned);
             Ok(returned)
         }
+        CompiledReferenceExpr::Atom(NormalizedReference::SheetSpan3D(span)) => {
+            // Across-sheet materialization of a 3D span is OxCalc-owned
+            // (W062 R3.9/R4.12); OxFml only parses/normalizes/fingerprints it.
+            // With no consumer resolver wired here, the span evaluates to a
+            // deferred `#REF!` value, mirroring the external-reference deferral.
+            let prepared_call_index = push_special_prepared_call(
+                trace,
+                "SHEET_SPAN_3D_REFERENCE_DEFERRED",
+                SPECIAL_EXTERNAL_REFERENCE_DEFERRED_FUNCTION_ID,
+                ArgPreparationProfile::RefsVisibleInAdapter,
+                if context.records_prepared_calls() {
+                    vec![PreparedArgument {
+                        ordinal: 0,
+                        structure_class: PreparedStructureClass::ReferenceVisible,
+                        source_class: PreparedSourceClass::ExternalReference,
+                        evaluation_mode: PreparedEvaluationMode::ReferencePreserved,
+                        blankness_class: PreparedBlanknessClass::NonBlank,
+                        caller_context_sensitive: false,
+                        reference_target: Some(format!(
+                            "{}:{}!{}",
+                            span.start_sheet, span.end_sheet, span.target
+                        )),
+                        opaque_reason: Some("sheet_span_3d_reference_deferred".to_string()),
+                        resolved_value: None,
+                    }]
+                } else {
+                    Vec::new()
+                },
+                context,
+            );
+            let returned = CalcValue::error(WorksheetErrorCode::Ref);
+            record_prepared_call_returned_value(trace, prepared_call_index, &returned);
+            Ok(returned)
+        }
         CompiledReferenceExpr::Atom(NormalizedReference::Error(error)) => {
             Ok(CalcValue::error(error_code_for_error_ref(error)))
         }

@@ -37,6 +37,14 @@ pub struct ReferenceSyntaxCapabilities {
     pub host_references: bool,
     pub structured_references: bool,
     pub spill_references: bool,
+    /// Admit 3D sheet-span references (`Sheet1:Sheet3!A1`, W078). The shared
+    /// grammar always *parses* the span; this flag gates whether the binder
+    /// routes it to a bound 3D reference or emits a typed capability rejection.
+    /// Opt-in per W062 D2: `all()` admits it (no-gating default), but the
+    /// concrete `worksheet_legacy()` profile leaves it OFF — only a profile
+    /// that explicitly supports across-sheet spans (the strict-Excel style)
+    /// turns it on.
+    pub sheet_span_3d_references: bool,
 }
 
 impl ReferenceSyntaxCapabilities {
@@ -47,6 +55,7 @@ impl ReferenceSyntaxCapabilities {
             host_references: false,
             structured_references: true,
             spill_references: true,
+            sheet_span_3d_references: false,
         }
     }
 
@@ -61,6 +70,7 @@ impl ReferenceSyntaxCapabilities {
             host_references: true,
             structured_references: true,
             spill_references: true,
+            sheet_span_3d_references: true,
         }
     }
 }

@@ -3301,6 +3301,7 @@ fn runtime_structured_reference_record_handle_for_reference(
         }
         NormalizedReference::Name(_)
         | NormalizedReference::External(_)
+        | NormalizedReference::SheetSpan3D(_)
         | NormalizedReference::ProfileSymbolic(_) => None,
     }
 }
@@ -3364,6 +3365,7 @@ fn runtime_template_hole_kind(reference: &NormalizedReference) -> &'static str {
         NormalizedReference::External(_) => "RichValueHole",
         NormalizedReference::Error(_) => "UnresolvedReferenceHole",
         NormalizedReference::ProfileSymbolic(_) => "ProfileReferenceHole",
+        NormalizedReference::SheetSpan3D(_) => "SheetSpan3DReferenceHole",
         NormalizedReference::Name(_) => "RefOrValueHole",
     }
 }
@@ -3383,6 +3385,7 @@ fn runtime_reference_family(reference: &NormalizedReference) -> &'static str {
         }
         NormalizedReference::Structured(_) => "direct",
         NormalizedReference::ProfileSymbolic(_) => "profile_symbolic",
+        NormalizedReference::SheetSpan3D(_) => "sheet_span_3d",
         NormalizedReference::Error(_) => "unresolved",
     }
 }
@@ -3392,6 +3395,7 @@ fn runtime_reference_caller_context_dependent(reference: &NormalizedReference) -
         NormalizedReference::Name(name) => name.caller_context_dependent,
         NormalizedReference::Structured(structured) => structured.caller_row_sensitive,
         NormalizedReference::External(_)
+        | NormalizedReference::SheetSpan3D(_)
         | NormalizedReference::ProfileSymbolic(_)
         | NormalizedReference::Error(_) => false,
     }

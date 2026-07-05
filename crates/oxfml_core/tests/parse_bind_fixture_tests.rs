@@ -699,6 +699,7 @@ fn syntax_kind_name(kind: SyntaxKind) -> &'static str {
         SyntaxKind::IdentifierExpr => "IdentifierExpr",
         SyntaxKind::QuotedIdentifierExpr => "QuotedIdentifierExpr",
         SyntaxKind::QualifiedReferenceExpr => "QualifiedReferenceExpr",
+        SyntaxKind::SheetSpan3DReferenceExpr => "SheetSpan3DReferenceExpr",
         SyntaxKind::HostMemberReferenceExpr => "HostMemberReferenceExpr",
         SyntaxKind::HostReferenceCollectionExpr => "HostReferenceCollectionExpr",
         SyntaxKind::CallExpr => "CallExpr",

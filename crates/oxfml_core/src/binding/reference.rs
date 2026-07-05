@@ -85,6 +85,25 @@ pub struct ExternalRef {
     pub target_summary: String,
 }
 
+/// A 3D sheet-span reference `Sheet1:Sheet3!A1` (W078): a contiguous run of
+/// sheets, identified by their start and end sheet ids, qualifying a single
+/// cell/area target. This is a construct **distinct** from a same-sheet
+/// multi-area and from a bare range (NOTES_FOR_OXFUNC.md 7.2 items 4-5): it is
+/// never lowered to a range or an area union. OxFml parses, normalizes, and
+/// fingerprints the span; OxFunc owns the across-sheet materialization
+/// semantics. The `start_sheet`/`end_sheet` pair is part of the normal-form
+/// identity so two authored spans over the same sheets and target are equal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SheetSpan3DRef {
+    pub workbook_id: String,
+    pub start_sheet: String,
+    pub end_sheet: String,
+    /// The cell/area target text as authored (e.g. `A1`), address-fidelity
+    /// preserving. OxFml keeps this as the source-faithful target; grid
+    /// resolution of the target is the consumer's (OxCalc's) concern.
+    pub target: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StructuredSectionKind {
     All,
@@ -178,6 +197,9 @@ pub enum NormalizedReference {
     External(ExternalRef),
     Structured(StructuredRef),
     ProfileSymbolic(ProfileReferenceRecord),
+    /// A 3D sheet-span reference (`Sheet1:Sheet3!A1`, W078), kept distinct from
+    /// same-sheet multi-area at every layer.
+    SheetSpan3D(SheetSpan3DRef),
     Error(ErrorRef),
 }
 
@@ -222,6 +244,11 @@ impl fmt::Display for NormalizedReference {
                 f,
                 "profile-symbolic:{}:{}",
                 record.profile_id, record.normal_form_key.0
+            ),
+            Self::SheetSpan3D(span) => write!(
+                f,
+                "sheet-span-3d:{}:{}:{}!{}",
+                span.workbook_id, span.start_sheet, span.end_sheet, span.target
             ),
             Self::Error(error) => write!(f, "error:{}", error.error_class),
         }
