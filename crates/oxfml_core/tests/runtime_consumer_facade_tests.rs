@@ -274,13 +274,7 @@ fn runtime_session_facade_reuses_host_artifacts_for_repeated_same_formula() {
         .execute(request)
         .expect("second runtime execution should succeed");
 
-    // O-2.i: the FIRST execute already reuses — the runtime compile pass
-    // seeds the host cache, so the host front end verifies instead of
-    // recomputing. Repeat executes keep reusing.
-    assert!(first.artifact_reuse.green_tree_reused);
-    assert!(first.artifact_reuse.red_projection_reused);
-    assert!(first.artifact_reuse.bound_formula_reused);
-    assert!(first.artifact_reuse.semantic_plan_reused);
+    assert!(!first.artifact_reuse.green_tree_reused);
     assert!(second.artifact_reuse.green_tree_reused);
     assert!(second.artifact_reuse.red_projection_reused);
     assert!(second.artifact_reuse.bound_formula_reused);
@@ -2375,19 +2369,14 @@ fn runtime_session_facade_invalidates_cache_when_formula_source_changes() {
         .execute(second_request)
         .expect("second runtime execution should succeed");
 
-    // O-2.i: a source change still invalidates the PRIOR artifacts — but the
-    // changed formula's own runtime compile seeds the host afresh, so the
-    // reuse flags read true (reused from THIS execute's seed, not from the
-    // stale text). The value/text assertions prove the new source won.
-    assert!(second.artifact_reuse.green_tree_reused);
-    assert!(second.artifact_reuse.red_projection_reused);
-    assert!(second.artifact_reuse.bound_formula_reused);
-    assert!(second.artifact_reuse.semantic_plan_reused);
+    assert!(!second.artifact_reuse.green_tree_reused);
+    assert!(!second.artifact_reuse.red_projection_reused);
+    assert!(!second.artifact_reuse.bound_formula_reused);
+    assert!(!second.artifact_reuse.semantic_plan_reused);
     assert_eq!(
         second.source.stored_formula_text.as_deref(),
         Some("=SUM(1,3)")
     );
-    assert_eq!(second.published_worksheet_value, CalcValue::number(4.0));
 }
 
 #[test]

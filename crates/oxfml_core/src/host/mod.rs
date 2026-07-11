@@ -92,17 +92,6 @@ pub struct SingleFormulaHost {
     next_commit_attempt_id: u64,
     reference_bind_profile_signature: Option<String>,
     cached_artifacts: Option<CachedHostArtifacts>,
-    /// O-2.i: when set (by `RuntimeEnvironment`), recalc binds with EXACTLY
-    /// this context instead of rebuilding a narrower one from host fields.
-    /// The facade's context carries host-name bind records, function
-    /// surfaces, and formal-input names the host-built context lacked, so the
-    /// evaluated artifact and the prepared identity derive from the same
-    /// bind. `None` (standalone host use) keeps the historical host-built
-    /// context.
-    bind_context_override: Option<BindContext>,
-    /// O-2.i companion: the semantic-plan catalog identity to compile/reuse
-    /// under. `None` keeps the historical standalone-host identity.
-    semantic_plan_catalog_identity_override: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -271,63 +260,7 @@ impl SingleFormulaHost {
             next_commit_attempt_id: 1,
             reference_bind_profile_signature: None,
             cached_artifacts: None,
-            bind_context_override: None,
-            semantic_plan_catalog_identity_override: None,
         }
-    }
-
-    /// O-2.i: install (or clear) the caller-supplied bind context recalc
-    /// binds under. See the field doc for semantics.
-    pub fn set_bind_context_override(&mut self, context: Option<BindContext>) {
-        if self.bind_context_override != context {
-            // A different bind context invalidates bound/plan artifacts the
-            // same way a text edit does; the incremental gates would reject
-            // them anyway, this just keeps the cache honest.
-            self.cached_artifacts = None;
-        }
-        self.bind_context_override = context;
-    }
-
-    /// O-2.i: install (or clear) the semantic-plan catalog identity recalc
-    /// compiles and reuses plans under.
-    pub fn set_semantic_plan_catalog_identity_override(&mut self, identity: Option<String>) {
-        self.semantic_plan_catalog_identity_override = identity;
-    }
-
-    /// O-2.i: pre-populate the host's artifact cache with front-end artifacts
-    /// the caller already produced for this exact source (green tree, red
-    /// projection, bound formula, semantic plan). The next recalc's
-    /// incremental gates re-verify every reuse (text equality for the green
-    /// tree, `(stable_id, green_key, bind_context_fingerprint)` for the bind,
-    /// bind-hash + catalog identity + locale keys for the plan), so a seed
-    /// that does not match is recomputed, never trusted. The caller's
-    /// reference-bind-profile is recorded so the recalc's profile-signature
-    /// check does not wipe the seed.
-    #[allow(clippy::too_many_arguments)]
-    pub fn seed_cached_artifacts(
-        &mut self,
-        green_tree: GreenTreeRoot,
-        red_projection: RedProjection,
-        bound_formula: BoundFormula,
-        semantic_plan: SemanticPlan,
-        semantic_plan_catalog_identity: String,
-        locale_profile: Option<String>,
-        date_system: Option<String>,
-        format_profile: Option<String>,
-        reference_bind_profile: Option<&dyn ReferenceBindProfile>,
-    ) {
-        self.reference_bind_profile_signature =
-            reference_bind_profile.map(reference_bind_profile_debug_signature);
-        self.cached_artifacts = Some(CachedHostArtifacts {
-            green_tree,
-            red_projection,
-            bound_formula,
-            semantic_plan,
-            semantic_plan_catalog_identity,
-            locale_profile,
-            date_system,
-            format_profile,
-        });
     }
 
     pub fn set_trace_mode(&mut self, trace_mode: EvaluationTraceMode) {
@@ -541,56 +474,45 @@ impl SingleFormulaHost {
         if !syntax_diagnostics.is_empty() {
             return Err(syntax_diagnostic_execution_error(&syntax_diagnostics));
         }
-        // O-2.i: a caller-supplied bind context (the runtime facade's full
-        // context, carrying host-name bind records / function surfaces /
-        // formal-input names) takes precedence; the host-built context is the
-        // narrower standalone fallback.
-        let bind_context = self
-            .bind_context_override
-            .clone()
-            .unwrap_or_else(|| BindContext {
-                workbook_id: self.workbook_id.clone(),
-                sheet_id: self.primary_locus.sheet_id.clone(),
-                structure_context_version: StructureContextVersion(
-                    self.structure_context_version.clone(),
-                ),
-                caller_row: self.caller_row,
-                caller_col: self.caller_col,
-                formula_token: source.formula_token(),
-                names: self
-                    .defined_names
-                    .iter()
-                    .map(|(name, binding)| {
-                        (
-                            name.clone(),
-                            match binding {
-                                DefinedNameBinding::Value(_) => NameKind::ValueLike,
-                                DefinedNameBinding::Reference(_) => NameKind::ReferenceLike,
-                                DefinedNameBinding::Callable(_) => NameKind::ValueLike,
-                            },
-                        )
-                    })
-                    .collect(),
-                table_catalog: self.table_catalog.clone(),
-                enclosing_table_ref: self.enclosing_table_ref.clone(),
-                caller_table_region: self.caller_table_region.clone(),
-                ..BindContext::default()
-            });
         let bind = bind_formula_incremental(
             BindRequest {
                 source: source.clone(),
                 green_tree: green_tree.clone(),
                 red_projection: red.red_projection.clone(),
-                context: bind_context,
+                context: BindContext {
+                    workbook_id: self.workbook_id.clone(),
+                    sheet_id: self.primary_locus.sheet_id.clone(),
+                    structure_context_version: StructureContextVersion(
+                        self.structure_context_version.clone(),
+                    ),
+                    caller_row: self.caller_row,
+                    caller_col: self.caller_col,
+                    formula_token: source.formula_token(),
+                    names: self
+                        .defined_names
+                        .iter()
+                        .map(|(name, binding)| {
+                            (
+                                name.clone(),
+                                match binding {
+                                    DefinedNameBinding::Value(_) => NameKind::ValueLike,
+                                    DefinedNameBinding::Reference(_) => NameKind::ReferenceLike,
+                                    DefinedNameBinding::Callable(_) => NameKind::ValueLike,
+                                },
+                            )
+                        })
+                        .collect(),
+                    table_catalog: self.table_catalog.clone(),
+                    enclosing_table_ref: self.enclosing_table_ref.clone(),
+                    caller_table_region: self.caller_table_region.clone(),
+                    ..BindContext::default()
+                },
                 reference_bind_profile,
             },
             cached_artifacts.map(|artifacts| &artifacts.bound_formula),
         );
 
-        let semantic_plan_catalog_identity = self
-            .semantic_plan_catalog_identity_override
-            .clone()
-            .unwrap_or_else(|| "oxfunc:host".to_string());
+        let semantic_plan_catalog_identity = "oxfunc:host".to_string();
         let locale_profile = query_bundle
             .locale_ctx
             .map(|ctx| format!("{:?}", ctx.profile.id));

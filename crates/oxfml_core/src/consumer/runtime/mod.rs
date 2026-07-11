@@ -31,7 +31,7 @@ use crate::publication::{
     VerificationComparisonView, VerificationPublicationContext, VerificationPublicationSurface,
     build_verification_comparison_views,
 };
-use crate::red::{RedProjection, project_red_view};
+use crate::red::project_red_view;
 use crate::scheduler::ExecutionContract;
 use crate::seam::{
     AcceptDecision, AcceptedCandidateResult, ExecutionOutcomeSurface, FenceSnapshot, Locus,
@@ -47,7 +47,6 @@ use crate::session::{
     SessionService,
 };
 use crate::source::{FormulaSourceRecord, StructureContextVersion};
-use crate::syntax::green::GreenTreeRoot;
 use crate::syntax::parser::{
     ParseRequest, ReferenceSelectorSyntaxProfile, parse_formula_with_reference_selector_syntax,
 };
@@ -590,27 +589,6 @@ impl<'a> RuntimeEnvironment<'a> {
             &self.formal_input_bindings,
             &prepared_formula_identity,
         )?;
-        // O-2.i: hand the host the exact bind context and catalog identity
-        // this compile used, and seed its artifact cache with the front-end
-        // artifacts already produced above. The host's recalc then reuses
-        // (its incremental gates re-verify every artifact) instead of paying
-        // a second lex→parse→bind→plan pass. Identity is unchanged: the
-        // prepared identity above derives from these same artifacts.
-        host.set_bind_context_override(Some(compiled.bind_context.clone()));
-        host.set_semantic_plan_catalog_identity_override(Some(
-            "oxfunc:runtime-facade-session".to_string(),
-        ));
-        host.seed_cached_artifacts(
-            compiled.green_tree.clone(),
-            compiled.red_projection.clone(),
-            compiled.prepare_request.bound_formula.clone(),
-            compiled.prepare_request.semantic_plan.clone(),
-            "oxfunc:runtime-facade-session".to_string(),
-            compiled.locale_profile.clone(),
-            compiled.date_system.clone(),
-            compiled.format_profile.clone(),
-            self.reference_bind_profile,
-        );
         host.set_trace_mode(request.trace_mode());
         let runtime_library_context_snapshot = self.runtime_registry_library_context_snapshot(
             self.library_context.pinned_view().resolve_snapshot(),
@@ -3644,15 +3622,6 @@ struct CompiledRuntimePrepareRequest {
     syntax_diagnostics: Vec<SyntaxDiagnostic>,
     bind_diagnostics: Vec<BindDiagnostic>,
     registry_capability_denials: Vec<RuntimeFunctionCapabilityDenial>,
-    /// O-2.i seeding surface: the front-end artifacts and the exact bind
-    /// context this compile used, retained so `execute_with_host` can seed
-    /// the host's artifact cache instead of paying a second front end.
-    green_tree: GreenTreeRoot,
-    red_projection: RedProjection,
-    bind_context: BindContext,
-    locale_profile: Option<String>,
-    date_system: Option<String>,
-    format_profile: Option<String>,
 }
 
 fn compile_runtime_prepare_request(
@@ -3670,16 +3639,11 @@ fn compile_runtime_prepare_request(
     );
     let syntax_diagnostics = parse.green_tree.diagnostics.clone();
     let red_projection = project_red_view(source.formula_stable_id.clone(), &parse.green_tree);
-    // O-2.i: keep the green/red artifacts and the exact bind context so the
-    // caller can seed the host cache — the second front end then reuses
-    // instead of recomputing (verified by the host's own incremental gates).
-    let green_tree = parse.green_tree;
-    let bind_context = environment.bind_context_for_source(&source);
     let bind = bind_formula(crate::binding::BindRequest {
         source: source.clone(),
-        green_tree: green_tree.clone(),
-        red_projection: red_projection.clone(),
-        context: bind_context.clone(),
+        green_tree: parse.green_tree,
+        red_projection,
+        context: environment.bind_context_for_source(&source),
         reference_bind_profile: environment.reference_bind_profile,
     });
     let library_context_view = environment.library_context.pinned_view();
@@ -3709,9 +3673,9 @@ fn compile_runtime_prepare_request(
     let semantic_plan = compile_semantic_plan(CompileSemanticPlanRequest {
         bound_formula: bind.bound_formula.clone(),
         oxfunc_catalog_identity: "oxfunc:runtime-facade-session".to_string(),
-        locale_profile: locale_profile.clone(),
-        date_system: date_system.clone(),
-        format_profile: format_profile.clone(),
+        locale_profile,
+        date_system,
+        format_profile,
         library_context_snapshot,
     })
     .semantic_plan;
@@ -3729,12 +3693,6 @@ fn compile_runtime_prepare_request(
         syntax_diagnostics,
         bind_diagnostics,
         registry_capability_denials,
-        green_tree,
-        red_projection,
-        bind_context,
-        locale_profile,
-        date_system,
-        format_profile,
     })
 }
 
