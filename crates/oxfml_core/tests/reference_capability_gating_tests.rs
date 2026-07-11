@@ -318,10 +318,7 @@ fn r1c1_flag_off_rejects_r1c1_channel_bind() {
     );
     assert!(is_ref_error(&bound.root));
     assert!(
-        bound
-            .diagnostics
-            .iter()
-            .any(|d| d.message.contains("R1C1")),
+        bound.diagnostics.iter().any(|d| d.message.contains("R1C1")),
         "expected an R1C1 capability diagnostic, got {:?}",
         bound.diagnostics
     );

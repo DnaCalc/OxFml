@@ -5372,15 +5372,14 @@ fn lambda_binding_for_callee(
                         body: body.clone(),
                         closure: closure.clone(),
                     }),
-                    Some(HelperBinding::Arg(value)) => {
-                        callable_value_from_eval_value(value).and_then(|callable| {
+                    Some(HelperBinding::Arg(value)) => callable_value_from_eval_value(value)
+                        .and_then(|callable| {
                             let callable_token = callable_token_from_oxfunc_callable(&callable);
                             callable_registry
                                 .borrow()
                                 .get(&callable_token)
                                 .map(|binding| binding.lambda.clone())
-                        })
-                    }
+                        }),
                     _ => None,
                 })
         }

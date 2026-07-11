@@ -442,7 +442,8 @@ fn array_literal_bodied_lambda_with_capture_surfaces_payload() {
 }
 
 #[test]
-fn cell_captured_reference_uses_display_identity_and_no_defined_name_binding_under_minimal_profile() {
+fn cell_captured_reference_uses_display_identity_and_no_defined_name_binding_under_minimal_profile()
+{
     // Re-added non-grid version: a LAMBDA body capturing a bare same-sheet A1
     // reference (bound via the auto-wired minimal test reference profile). A
     // reference is not a defined name, so `name`/`identity` use the reference
@@ -676,10 +677,7 @@ fn produced_callable_captures_callable_free_name_at_definition_site() {
     // Editing A live to 10 in the consumer must be observed (A stays live):
     // G(2)=(2+10)*2=24.
     let mut consumer = SingleFormulaHost::new("defsite:consumer2", "=G(2)");
-    consumer.set_defined_name_callable(
-        "G",
-        produce_transitive_g_binding(),
-    );
+    consumer.set_defined_name_callable("G", produce_transitive_g_binding());
     consumer.set_defined_name_value("A", CalcValue::number(10.0));
     let output = consumer
         .recalc(None, Some(&oxfml_en_us_locale_context()))

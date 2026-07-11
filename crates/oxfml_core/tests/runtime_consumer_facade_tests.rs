@@ -477,7 +477,10 @@ fn runtime_result_exposes_prepared_formula_identity_for_direct_execution_under_m
         .expect("prepared identity should expose a reference template-hole for the A1 argument");
 
     assert_eq!(ref_hole.hole_kind, "ProfileReferenceHole");
-    assert_eq!(ref_hole.hole_kind_key, "ProfileReferenceHole:profile_symbolic");
+    assert_eq!(
+        ref_hole.hole_kind_key,
+        "ProfileReferenceHole:profile_symbolic"
+    );
     // Descriptor/path are the minimal-profile representation (profile id +
     // canonical A1 normal-form key), observed at runtime, not the old grid form.
     assert_eq!(

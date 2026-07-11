@@ -117,8 +117,7 @@ fn adapter_projects_direct_scalar_and_array_like_preparation_artifacts_under_min
         )
         .expect("array-like adapter run");
 
-    let prepared_argument =
-        &area_output.evaluation.trace.prepared_calls[0].prepared_arguments[0];
+    let prepared_argument = &area_output.evaluation.trace.prepared_calls[0].prepared_arguments[0];
     // The array-like reference projection is preserved: a bare A1:A2 area arg
     // projects ArrayLike.
     assert_eq!(

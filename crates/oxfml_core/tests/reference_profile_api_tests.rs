@@ -12,9 +12,10 @@ use oxfml_core::{
     ReferenceFingerprintPolicy, ReferenceInstantiationPurpose, ReferenceInstantiationRequest,
     ReferenceNormalFormKey, ReferencePolicy, ReferenceProfileFingerprint,
     ReferenceProfileFingerprintContext, ReferenceRangeBindRequest, ReferenceRangeBindResult,
-    ReferenceSourceInfo, ReferenceTransformKind, ReferenceTransformOutcome, ReferenceTransformRequest,
-    ReferenceTransformResult, ReferenceValidity, RuntimeHostFormulaContext, StructureContextVersion,
-    bind_formula, bind_formula_incremental, compile_semantic_plan,
+    ReferenceSourceInfo, ReferenceTransformKind, ReferenceTransformOutcome,
+    ReferenceTransformRequest, ReferenceTransformResult, ReferenceValidity,
+    RuntimeHostFormulaContext, StructureContextVersion, bind_formula, bind_formula_incremental,
+    compile_semantic_plan,
 };
 use oxfml_core::{EvaluationContext, evaluate_formula};
 use oxfml_core::{ParseRequest, parse_formula};
@@ -533,7 +534,10 @@ fn profile_transform_reference_reports_partially_invalid_clip() {
     let clipped = result
         .reference
         .expect("a partially-invalid transform still yields the surviving reference");
-    assert_eq!(clipped.validity, ReferenceValidity::InvalidForCurrentPlacement);
+    assert_eq!(
+        clipped.validity,
+        ReferenceValidity::InvalidForCurrentPlacement
+    );
     assert!(!result.diagnostics.is_empty());
 }
 
@@ -589,14 +593,12 @@ fn non_default_syntax_profile_reuses_plan_across_placements() {
         "template identity (the plan cache key input) must be shared across placements"
     );
     assert_eq!(
-        first.bound_formula.bind_context_fingerprint,
-        second.bound_formula.bind_context_fingerprint,
+        first.bound_formula.bind_context_fingerprint, second.bound_formula.bind_context_fingerprint,
         "caller anchor must be excluded from the bind fingerprint under the profile"
     );
     // Placement still refreshes so per-cell identity stays distinct.
     assert_ne!(
-        previous_placed,
-        second.bound_formula.placed_formula_identity,
+        previous_placed, second.bound_formula.placed_formula_identity,
         "placed identity must still refresh per caller cell"
     );
 }

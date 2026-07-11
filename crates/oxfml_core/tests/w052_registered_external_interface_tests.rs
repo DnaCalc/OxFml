@@ -8,14 +8,14 @@ use std::cell::RefCell;
 
 use oxfml_core::EvaluationTraceMode;
 use oxfml_core::TypedContextQueryBundleSpec;
-use oxfml_core::test_support::minimal::MINIMAL_REFERENCE_PROFILE;
-use oxfml_core::{EvaluationBackend, PinnedLibraryContextView};
 use oxfml_core::interface::{
     RegisteredExternalCatalogController, RegisteredExternalCatalogMutationRequest,
     RegisteredExternalCatalogMutationResult, RegisteredExternalHostRegistrationRequest,
     RegisteredExternalRegistrationChannel, TypedContextQueryBundle, TypedContextQueryFamily,
 };
 use oxfml_core::test_support::host::SingleFormulaHost;
+use oxfml_core::test_support::minimal::MINIMAL_REFERENCE_PROFILE;
+use oxfml_core::{EvaluationBackend, PinnedLibraryContextView};
 use oxfunc_core::value::CalcValue;
 
 #[test]
@@ -172,7 +172,7 @@ fn host_executes_call_by_register_id_through_lookup_lane() {
 
 #[test]
 fn host_preserves_reference_visible_call_argument_for_registered_external_invocation_under_minimal_profile()
-{
+ {
     // Re-added non-grid version: a reference-typed CALL argument (bare same-sheet
     // A1, bound via the auto-wired minimal test reference profile) must reach the
     // registered-external provider AS a reference (CoreValue::Reference) rather
@@ -191,8 +191,7 @@ fn host_preserves_reference_visible_call_argument_for_registered_external_invoca
     let output = host
         .recalc_with_library_context_view_and_reference_bind_profile(
             EvaluationBackend::OxFuncBacked,
-            TypedContextQueryBundle::default()
-                .with_registered_external_provider(Some(&provider)),
+            TypedContextQueryBundle::default().with_registered_external_provider(Some(&provider)),
             PinnedLibraryContextView::new(None, None, None),
             None,
             Some(&MINIMAL_REFERENCE_PROFILE),

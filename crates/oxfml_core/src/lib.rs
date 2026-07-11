@@ -79,10 +79,9 @@ pub use binding::{
     ReferenceSyntaxCapabilities, ReferenceTransformKind, ReferenceTransformOutcome,
     ReferenceTransformRequest, ReferenceTransformResult, ReferenceValidity,
     RuntimeDependencyIdentity, RuntimeHostFormulaContext, SheetSpan3DRef,
-    StructuredReferenceBindDiagnosticLink,
-    StructuredReferenceBindRecord, StructuredReferenceSelectedRegion,
-    StructuredReferenceSourceTokenKind, StructuredSectionKind, bind_formula,
-    bind_formula_incremental,
+    StructuredReferenceBindDiagnosticLink, StructuredReferenceBindRecord,
+    StructuredReferenceSelectedRegion, StructuredReferenceSourceTokenKind, StructuredSectionKind,
+    bind_formula, bind_formula_incremental,
 };
 pub use carrier::{
     CarrierRestrictionCode, CarrierValidationDisposition, ConditionalFormattingCarrierSpec,
@@ -95,8 +94,8 @@ pub use eval::{
     EvaluationBackend, EvaluationContext, EvaluationError, EvaluationOutput, EvaluationTrace,
     EvaluationTraceMode, PortableCallableValue, PreparedArgument, PreparedBlanknessClass,
     PreparedCall, PreparedEvaluationMode, PreparedResult, PreparedResultClass, PreparedSourceClass,
-    PreparedStructureClass, SHEET_SPAN_3D_DESCRIPTOR_SEPARATOR,
-    SHEET_SPAN_3D_REFERENCE_SYSTEM_ID, evaluate_formula,
+    PreparedStructureClass, SHEET_SPAN_3D_DESCRIPTOR_SEPARATOR, SHEET_SPAN_3D_REFERENCE_SYSTEM_ID,
+    evaluate_formula,
 };
 pub use interface::{
     HostFunctionInvocation, HostFunctionProvider, HostFunctionProviderError,

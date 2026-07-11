@@ -23,15 +23,13 @@ use std::collections::BTreeMap;
 use crate::binding::{
     ProfilePayload, ProfileReferenceRecord, ProfileVersion, ReferenceAtomBindRequest,
     ReferenceAtomBindResult, ReferenceBindProfile, ReferenceDependencyEnvelope,
-    ReferenceNormalFormKey, ReferenceProfileFingerprintContext,
-    ReferenceRangeBindRequest, ReferenceRangeBindResult, ReferenceSourceInfo, ReferenceValidity,
+    ReferenceNormalFormKey, ReferenceProfileFingerprintContext, ReferenceRangeBindRequest,
+    ReferenceRangeBindResult, ReferenceSourceInfo, ReferenceValidity,
 };
 use oxfunc_core::resolver::{
     ReferenceDereferenceRequest, ReferenceResolutionError, ReferenceSystemProvider,
 };
-use oxfunc_core::value::{
-    ArrayShape, CalcArray, CalcValue, ReferenceIdentity, ReferenceLike,
-};
+use oxfunc_core::value::{ArrayShape, CalcArray, CalcValue, ReferenceIdentity, ReferenceLike};
 
 /// Profile id for the minimal test-only reference language.
 pub const MINIMAL_REFERENCE_PROFILE_ID: &str = "oxfml.test.minimal.v1";
@@ -108,11 +106,7 @@ impl ReferenceBindProfile for MinimalReferenceProfile {
             parsed_qualifier: None,
             address_fidelity: None,
         };
-        ReferenceRangeBindResult::Bound(self.record(
-            key,
-            request.source_text.clone(),
-            source_info,
-        ))
+        ReferenceRangeBindResult::Bound(self.record(key, request.source_text.clone(), source_info))
     }
 
     fn dependency_hints(
@@ -142,7 +136,10 @@ impl MinimalReferenceSystemProvider {
     }
 
     fn cell_value(&self, key: &str) -> CalcValue {
-        self.cells.get(key).cloned().unwrap_or_else(CalcValue::empty)
+        self.cells
+            .get(key)
+            .cloned()
+            .unwrap_or_else(CalcValue::empty)
     }
 
     fn area_value(
@@ -255,7 +252,9 @@ fn column_from_letters(letters: &str) -> Option<u32> {
         if !upper.is_ascii_uppercase() {
             return None;
         }
-        col = col.checked_mul(26)?.checked_add(u32::from(upper as u8 - b'A') + 1)?;
+        col = col
+            .checked_mul(26)?
+            .checked_add(u32::from(upper as u8 - b'A') + 1)?;
     }
     (col > 0).then_some(col)
 }
@@ -311,7 +310,10 @@ mod tests {
     fn parses_cells_with_anchors_and_qualifiers() {
         assert_eq!(parse_cell("A1"), Some(GridCell { row: 1, col: 1 }));
         assert_eq!(parse_cell("$B$2"), Some(GridCell { row: 2, col: 2 }));
-        assert_eq!(parse_cell("Sheet1!AA10"), Some(GridCell { row: 10, col: 27 }));
+        assert_eq!(
+            parse_cell("Sheet1!AA10"),
+            Some(GridCell { row: 10, col: 27 })
+        );
         assert_eq!(parse_cell("SUM"), None);
         assert_eq!(parse_cell("A0"), None);
     }
@@ -352,7 +354,10 @@ mod tests {
                 reference: opaque_ref("A1:B1"),
             })
             .expect("area resolves");
-        assert!(matches!(area.core(), oxfunc_core::value::CoreValue::Array(_)));
+        assert!(matches!(
+            area.core(),
+            oxfunc_core::value::CoreValue::Array(_)
+        ));
 
         let empty = provider
             .dereference(&ReferenceDereferenceRequest {
