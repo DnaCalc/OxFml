@@ -493,7 +493,7 @@ impl EvaluationOutput {
         if let Some(portable) = &self.portable_callable {
             return CalcValue::callable(callable_value_from_portable(portable));
         }
-        CalcValue::from(self.oxfunc_value.clone())
+        self.oxfunc_value.clone()
     }
 }
 
@@ -1503,13 +1503,13 @@ fn precompute_context_free_expr(expr: CompiledExpr) -> CompiledExpr {
         other => other,
     };
 
-    if expr_can_be_precomputed(&expr) {
-        if let Some(value) = context_free_eval_value_for_expr(&expr) {
-            return CompiledExpr::PrecomputedValue {
-                value,
-                source: Box::new(expr),
-            };
-        }
+    if expr_can_be_precomputed(&expr)
+        && let Some(value) = context_free_eval_value_for_expr(&expr)
+    {
+        return CompiledExpr::PrecomputedValue {
+            value,
+            source: Box::new(expr),
+        };
     }
     expr
 }
@@ -1806,7 +1806,7 @@ fn with_callable_stack_guard<T>(context: &EvaluationContext<'_>, f: impl FnOnce(
     let depth = context.frame_state.callable_stack_guard_depth.get();
     // Avoid stacker probes on every helper-loop iteration, but keep periodic
     // checks for genuinely deep recursive lambda chains.
-    if depth > 0 && depth % LOCAL_CALLABLE_STACK_REPROBE_INTERVAL != 0 {
+    if depth > 0 && !depth.is_multiple_of(LOCAL_CALLABLE_STACK_REPROBE_INTERVAL) {
         let _guard = context.enter_callable_stack_guard();
         return f();
     }
@@ -2602,7 +2602,7 @@ fn returned_value_surface_for_output(
         return surface;
     }
 
-    ReturnedValueSurface::from_calc_value(&CalcValue::from(value.clone()))
+    ReturnedValueSurface::from_calc_value(&value.clone())
 }
 
 fn dereference_final_output_value(
@@ -2764,34 +2764,32 @@ fn evaluate_root_expr_value(
     callable_registry: &RefCell<CallableRegistry>,
     trace: &mut EvaluationTrace,
 ) -> Result<CalcValue, EvaluationError> {
-    if !context.bind_formula.root_expression_is_grouped {
-        if let CompiledExpr::Binary {
+    if !context.bind_formula.root_expression_is_grouped
+        && let CompiledExpr::Binary {
             op,
             call_target,
             left,
             right,
         } = expr
-        {
-            if matches!(op, BinaryOp::Add | BinaryOp::Subtract) {
-                let evaluation = evaluate_binary_operator_call_evaluation(
-                    *op,
-                    call_target,
-                    left,
-                    right,
-                    context,
-                    reference_system_provider,
-                    helper_bindings,
-                    callable_registry,
-                    trace,
-                )?;
-                return Ok(publish_root_add_subtract_zero_reaching_result(
-                    *op,
-                    &evaluation.lhs,
-                    &evaluation.rhs,
-                    evaluation.value,
-                ));
-            }
-        }
+        && matches!(op, BinaryOp::Add | BinaryOp::Subtract)
+    {
+        let evaluation = evaluate_binary_operator_call_evaluation(
+            *op,
+            call_target,
+            left,
+            right,
+            context,
+            reference_system_provider,
+            helper_bindings,
+            callable_registry,
+            trace,
+        )?;
+        return Ok(publish_root_add_subtract_zero_reaching_result(
+            *op,
+            &evaluation.lhs,
+            &evaluation.rhs,
+            evaluation.value,
+        ));
     }
 
     evaluate_expr_value(
@@ -3471,7 +3469,7 @@ fn numeric_literal_underflows_excel_admission_floor(raw: &str) -> bool {
         text = rest;
     }
 
-    let (coefficient, exponent) = match text.find(|ch| ch == 'e' || ch == 'E') {
+    let (coefficient, exponent) = match text.find(['e', 'E']) {
         Some(index) => {
             let exponent = match text[index + 1..].parse::<i32>() {
                 Ok(exponent) => exponent,
@@ -3534,12 +3532,11 @@ fn evaluate_expr_as_call_arg(
     callable_slot: bool,
     trace: &mut EvaluationTrace,
 ) -> Result<CalcValue, EvaluationError> {
-    if callable_slot {
-        if let Some(callable_arg) =
+    if callable_slot
+        && let Some(callable_arg) =
             built_in_callable_arg_for_expr(expr, context, callable_registry)?
-        {
-            return Ok(callable_arg);
-        }
+    {
+        return Ok(callable_arg);
     }
 
     match expr {

@@ -130,7 +130,7 @@ fn runtime_environment_respects_separator_context_for_text_grouping_ftc_0288() {
             .execute(
                 RuntimeFormulaRequest::new(
                     FormulaSourceRecord::new(
-                        &format!("runtime:ftc-0288:{case_id}"),
+                        format!("runtime:ftc-0288:{case_id}"),
                         1,
                         "=TEXT(1234567.89,\"#,##0.00\")",
                     )

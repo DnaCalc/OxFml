@@ -407,7 +407,7 @@ fn build_conditional_cell_format_grid(
     context: &VerificationPublicationContext,
 ) -> Option<ArrayCellFormatGrid> {
     if let CoreValue::Array(array) = value.core() {
-        let aggregate_context = AggregateConditionalFormattingContext::from_array(&array);
+        let aggregate_context = AggregateConditionalFormattingContext::from_array(array);
         let shape = array.shape();
         let mut rows = Vec::with_capacity(shape.rows);
         for row_index in 0..shape.rows {
@@ -1013,12 +1013,11 @@ fn render_effective_display_text(
     };
 
     let locale_ctx = locale_ctx?;
-    if let Some(code) = number_format_code {
-        if let Ok(rendered) =
+    if let Some(code) = number_format_code
+        && let Ok(rendered) =
             render_with_code(&locale_ctx.profile, locale_ctx.date_system, number, code)
-        {
-            return Some(rendered);
-        }
+    {
+        return Some(rendered);
     }
 
     let hint = presentation_hint.and_then(|value| value.number_format)?;
@@ -1026,7 +1025,7 @@ fn render_effective_display_text(
         oxfunc_core::value::NumberFormatHint::Currency => render_currency(
             &locale_ctx.profile,
             number,
-            locale_ctx.profile.currency_decimals.into(),
+            locale_ctx.profile.currency_decimals,
         )
         .ok(),
         oxfunc_core::value::NumberFormatHint::Percentage => {
@@ -1059,305 +1058,6 @@ fn selected_format_section_font_color(
         }
         CoreValue::Text(_) => selected_text_format_section_color(number_format_code),
         _ => None,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use oxfunc_core::value::ExcelText;
-
-    use super::{
-        VerificationConditionalFormattingRule, VerificationPublicationContext,
-        build_verification_publication_surface,
-    };
-    use crate::format::{oxfml_en_us_locale_context, render_with_code};
-    use crate::interface::ReturnedValueSurface;
-    use crate::seam::TopologyDelta;
-    use crate::source::FormulaSourceRecord;
-    use oxfunc_core::value::CalcValue;
-
-    fn empty_topology_delta(formula_stable_id: &str) -> TopologyDelta {
-        TopologyDelta {
-            formula_stable_id: formula_stable_id.to_string(),
-            dependency_additions: Vec::new(),
-            dependency_removals: Vec::new(),
-            dependency_reclassifications: Vec::new(),
-            dependency_consequence_facts: Vec::new(),
-            dynamic_reference_facts: Vec::new(),
-            spill_facts: Vec::new(),
-            format_dependency_facts: Vec::new(),
-            capability_effect_facts: Vec::new(),
-            candidate_result_id: None,
-        }
-    }
-
-    fn excel_text(text: &str) -> ExcelText {
-        ExcelText::from_utf16_code_units(text.encode_utf16().collect())
-    }
-
-    #[test]
-    fn number_format_code_heuristics_cover_grouping_percent_date_and_negative_sections() {
-        let locale = oxfml_en_us_locale_context();
-        assert_eq!(
-            render_with_code(&locale.profile, locale.date_system, 6.0, "$#,##0.00"),
-            Ok("$6.00".to_string())
-        );
-        assert_eq!(
-            render_with_code(&locale.profile, locale.date_system, 1234.567, "#,##0.000"),
-            Ok("1,234.567".to_string())
-        );
-        assert_eq!(
-            render_with_code(&locale.profile, locale.date_system, 0.125, "0.0%"),
-            Ok("12.5%".to_string())
-        );
-        assert_eq!(
-            render_with_code(&locale.profile, locale.date_system, -1234.5, "($#,##0.00)"),
-            Ok("($1,234.50)".to_string())
-        );
-        assert_eq!(
-            render_with_code(&locale.profile, locale.date_system, 45293.0, "m/d/yyyy"),
-            Ok("1/2/2024".to_string())
-        );
-        assert_eq!(
-            render_with_code(
-                &locale.profile,
-                locale.date_system,
-                45293.5,
-                "m/d/yyyy h:mm"
-            ),
-            Ok("1/2/2024 12:00".to_string())
-        );
-    }
-
-    #[test]
-    fn verification_publication_surface_applies_evaluable_conditional_formatting() {
-        let locale = oxfml_en_us_locale_context();
-        let source = FormulaSourceRecord::new("publication:test", 1, "=SUM(1,2,3)");
-        let returned_value_surface =
-            ReturnedValueSurface::from_calc_value(&CalcValue::from(CalcValue::number(6.0)));
-        let context = VerificationPublicationContext {
-            format_profile: Some("excel-spreadsheetml-2003-default".to_string()),
-            number_format_code: Some("$#,##0.00".to_string()),
-            style_id: Some("calc".to_string()),
-            style_hierarchy: vec!["calc".to_string()],
-            font_color: Some("#112233".to_string()),
-            fill_color: Some("#445566".to_string()),
-            conditional_formatting_rules: vec![
-                VerificationConditionalFormattingRule {
-                    target_ranges: vec!["A1".to_string()],
-                    rule_kind: "Expression".to_string(),
-                    operator: None,
-                    thresholds: vec!["=A1>0".to_string()],
-                    typed_rule: None,
-                    font_color: Some("#FF0000".to_string()),
-                    fill_color: Some("#00FF00".to_string()),
-                    effective_display_text: Some("[POS] $6.00".to_string()),
-                    applies: None,
-                    effective_font_color: None,
-                    effective_fill_color: None,
-                },
-                VerificationConditionalFormattingRule {
-                    target_ranges: vec!["A1".to_string()],
-                    rule_kind: "CellIs".to_string(),
-                    operator: Some("LessThan".to_string()),
-                    thresholds: vec!["0".to_string()],
-                    typed_rule: None,
-                    font_color: Some("#999999".to_string()),
-                    fill_color: Some("#EEEEEE".to_string()),
-                    effective_display_text: Some("[NEG] $6.00".to_string()),
-                    applies: None,
-                    effective_font_color: None,
-                    effective_fill_color: None,
-                },
-            ],
-        };
-
-        let surface = build_verification_publication_surface(
-            &source,
-            &CalcValue::number(6.0),
-            &returned_value_surface,
-            &TopologyDelta {
-                formula_stable_id: "publication:test".to_string(),
-                dependency_additions: Vec::new(),
-                dependency_removals: Vec::new(),
-                dependency_reclassifications: Vec::new(),
-                dependency_consequence_facts: Vec::new(),
-                dynamic_reference_facts: Vec::new(),
-                spill_facts: Vec::new(),
-                format_dependency_facts: Vec::new(),
-                capability_effect_facts: Vec::new(),
-                candidate_result_id: None,
-            },
-            None,
-            None,
-            Some(&locale),
-            None,
-            Some(&context),
-        );
-
-        assert_eq!(surface.effective_display_text, "[POS] $6.00");
-        assert_eq!(surface.effective_font_color.as_deref(), Some("#FF0000"));
-        assert_eq!(surface.effective_fill_color.as_deref(), Some("#00FF00"));
-        assert_eq!(
-            surface.conditional_formatting_applies,
-            vec![Some(true), Some(false)]
-        );
-        assert_eq!(
-            surface.conditional_formatting_effective_display,
-            vec![Some("[POS] $6.00".to_string()), None]
-        );
-        assert_eq!(
-            surface.conditional_formatting_effective_font_color,
-            vec![Some("#FF0000".to_string()), None]
-        );
-        assert_eq!(
-            surface.conditional_formatting_effective_fill_color,
-            vec![Some("#00FF00".to_string()), None]
-        );
-    }
-
-    #[test]
-    fn custom_format_colour_token_flows_to_publication_font_color() {
-        let locale = oxfml_en_us_locale_context();
-        let source = FormulaSourceRecord::new("publication:format-color", 1, "=42");
-        let returned_value_surface =
-            ReturnedValueSurface::from_calc_value(&CalcValue::number(42.0));
-        let context = VerificationPublicationContext {
-            number_format_code: Some("[Red]#,##0;[Blue]#,##0".to_string()),
-            ..Default::default()
-        };
-
-        let surface = build_verification_publication_surface(
-            &source,
-            &CalcValue::number(42.0),
-            &returned_value_surface,
-            &empty_topology_delta("publication:format-color"),
-            None,
-            None,
-            Some(&locale),
-            None,
-            Some(&context),
-        );
-
-        assert_eq!(surface.effective_display_text, "42");
-        assert_eq!(surface.effective_font_color.as_deref(), Some("#FF0000"));
-    }
-
-    #[test]
-    fn custom_format_colour_token_uses_selected_section_and_indexed_palette() {
-        let locale = oxfml_en_us_locale_context();
-        let source = FormulaSourceRecord::new("publication:format-color-index", 1, "=-42");
-        let returned_value_surface =
-            ReturnedValueSurface::from_calc_value(&CalcValue::number(-42.0));
-        let context = VerificationPublicationContext {
-            number_format_code: Some("[Red]#,##0;[Color3]#,##0;0".to_string()),
-            ..Default::default()
-        };
-
-        let surface = build_verification_publication_surface(
-            &source,
-            &CalcValue::number(-42.0),
-            &returned_value_surface,
-            &empty_topology_delta("publication:format-color-index"),
-            None,
-            None,
-            Some(&locale),
-            None,
-            Some(&context),
-        );
-
-        assert_eq!(surface.effective_display_text, "-42");
-        assert_eq!(surface.effective_font_color.as_deref(), Some("#FF0000"));
-    }
-
-    #[test]
-    fn custom_format_colour_token_respects_condition_order_and_cf_precedence() {
-        let locale = oxfml_en_us_locale_context();
-        let source = FormulaSourceRecord::new("publication:format-color-cf", 1, "=5000");
-        let returned_value_surface =
-            ReturnedValueSurface::from_calc_value(&CalcValue::number(5000.0));
-        let context = VerificationPublicationContext {
-            number_format_code: Some("[Green][>=1000]#,##0;[Red][<0](#,##0);0".to_string()),
-            conditional_formatting_rules: vec![VerificationConditionalFormattingRule {
-                target_ranges: vec!["A1".to_string()],
-                rule_kind: "CellIs".to_string(),
-                operator: Some("GreaterThan".to_string()),
-                thresholds: vec!["0".to_string()],
-                font_color: Some("#000000".to_string()),
-                ..Default::default()
-            }],
-            ..Default::default()
-        };
-
-        let surface = build_verification_publication_surface(
-            &source,
-            &CalcValue::number(5000.0),
-            &returned_value_surface,
-            &empty_topology_delta("publication:format-color-cf"),
-            None,
-            None,
-            Some(&locale),
-            None,
-            Some(&context),
-        );
-
-        assert_eq!(surface.effective_display_text, "5,000");
-        assert_eq!(surface.effective_font_color.as_deref(), Some("#000000"));
-        assert_eq!(surface.conditional_formatting_applies, vec![Some(true)]);
-    }
-
-    #[test]
-    fn custom_format_text_fourth_section_renders_at_placeholder() {
-        let locale = oxfml_en_us_locale_context();
-        let source = FormulaSourceRecord::new("publication:text-section", 1, "=\"x\"");
-        let value = CalcValue::text(excel_text("x"));
-        let returned_value_surface =
-            ReturnedValueSurface::from_calc_value(&CalcValue::from(value.clone()));
-        let context = VerificationPublicationContext {
-            number_format_code: Some("0.00;-0.00;\"-\";\"prefix-\"@\"-suffix\"".to_string()),
-            ..Default::default()
-        };
-
-        let surface = build_verification_publication_surface(
-            &source,
-            &value,
-            &returned_value_surface,
-            &empty_topology_delta("publication:text-section"),
-            None,
-            None,
-            Some(&locale),
-            None,
-            Some(&context),
-        );
-
-        assert_eq!(surface.effective_display_text, "prefix-x-suffix");
-    }
-
-    #[test]
-    fn custom_format_text_without_fourth_section_falls_back_to_verbatim_text() {
-        let locale = oxfml_en_us_locale_context();
-        let source = FormulaSourceRecord::new("publication:text-section-fallback", 1, "=\"hello\"");
-        let value = CalcValue::text(excel_text("hello"));
-        let returned_value_surface =
-            ReturnedValueSurface::from_calc_value(&CalcValue::from(value.clone()));
-        let context = VerificationPublicationContext {
-            number_format_code: Some("0.00;-0.00;\"-\"".to_string()),
-            ..Default::default()
-        };
-
-        let surface = build_verification_publication_surface(
-            &source,
-            &value,
-            &returned_value_surface,
-            &empty_topology_delta("publication:text-section-fallback"),
-            None,
-            None,
-            Some(&locale),
-            None,
-            Some(&context),
-        );
-
-        assert_eq!(surface.effective_display_text, "hello");
     }
 }
 
@@ -1438,9 +1138,7 @@ fn evaluate_color_scale_rule(
     value: &CalcValue,
     aggregate_context: &AggregateConditionalFormattingContext,
 ) -> Option<ArrayVisualizationOutcome> {
-    let Some(number) = value.as_number() else {
-        return None;
-    };
+    let number = value.as_number()?;
     if !number.is_finite() {
         return None;
     }
@@ -1460,19 +1158,14 @@ fn evaluate_data_bar_rule(
     value: &CalcValue,
     aggregate_context: &AggregateConditionalFormattingContext,
 ) -> Option<ArrayVisualizationOutcome> {
-    let Some(number) = value.as_number() else {
-        return None;
-    };
+    let number = value.as_number()?;
     if !number.is_finite() {
         return None;
     }
-    let Some(typed_options) = rule
+    let typed_options = rule
         .typed_rule
         .as_ref()
-        .and_then(|typed| typed.data_bar.as_ref())
-    else {
-        return None;
-    };
+        .and_then(|typed| typed.data_bar.as_ref())?;
     let fill_ratio = data_bar_ratio(typed_options, number, aggregate_context)?;
     let bar_color = typed_options
         .bar_color
@@ -1524,23 +1217,20 @@ fn evaluate_icon_set_rule(
     value: &CalcValue,
     aggregate_context: &AggregateConditionalFormattingContext,
 ) -> Option<ArrayVisualizationOutcome> {
-    let Some(number) = value.as_number() else {
-        return None;
-    };
+    let number = value.as_number()?;
     if !number.is_finite() {
         return None;
     }
-    let Some(typed_options) = rule
+    let typed_options = rule
         .typed_rule
         .as_ref()
-        .and_then(|typed| typed.icon_set.as_ref())
-    else {
-        return None;
-    };
+        .and_then(|typed| typed.icon_set.as_ref())?;
     let set_kind = typed_options.set_kind.trim().to_string();
-    let set_kind = (!set_kind.is_empty())
-        .then_some(set_kind)
-        .unwrap_or_else(|| "3Arrows".to_string());
+    let set_kind = if !set_kind.is_empty() {
+        set_kind
+    } else {
+        "3Arrows".to_string()
+    };
     let icon_count = icon_set_size(&set_kind);
     let ratio = aggregate_context.ratio_for_value(number, 0.5)?;
     let icon_index =
@@ -1801,13 +1491,10 @@ fn evaluate_average_rule(
     above: bool,
 ) -> Option<bool> {
     let mean = aggregate_context.mean?;
-    let Some(typed_options) = rule
+    let typed_options = rule
         .typed_rule
         .as_ref()
-        .and_then(|typed| typed.average.as_ref())
-    else {
-        return None;
-    };
+        .and_then(|typed| typed.average.as_ref())?;
     let stddev_multiplier = typed_options.stddev_multiplier.unwrap_or(0.0);
     let threshold = if stddev_multiplier == 0.0 {
         mean
@@ -1862,13 +1549,10 @@ fn aggregate_rank_count(
     if value_count == 0 {
         return Some(0);
     }
-    let Some(options) = rule
+    let options = rule
         .typed_rule
         .as_ref()
-        .and_then(|typed| typed.rank.as_ref())
-    else {
-        return None;
-    };
+        .and_then(|typed| typed.rank.as_ref())?;
 
     match options.rank {
         ConditionalFormattingRank::Count(count) => Some(count.min(value_count)),
@@ -2196,4 +1880,300 @@ fn parse_threshold_bool(threshold: &str) -> Option<bool> {
 
 fn strip_threshold_quotes(threshold: &str) -> &str {
     threshold.trim().trim_matches('"')
+}
+
+#[cfg(test)]
+mod tests {
+    use oxfunc_core::value::ExcelText;
+
+    use super::{
+        VerificationConditionalFormattingRule, VerificationPublicationContext,
+        build_verification_publication_surface,
+    };
+    use crate::format::{oxfml_en_us_locale_context, render_with_code};
+    use crate::interface::ReturnedValueSurface;
+    use crate::seam::TopologyDelta;
+    use crate::source::FormulaSourceRecord;
+    use oxfunc_core::value::CalcValue;
+
+    fn empty_topology_delta(formula_stable_id: &str) -> TopologyDelta {
+        TopologyDelta {
+            formula_stable_id: formula_stable_id.to_string(),
+            dependency_additions: Vec::new(),
+            dependency_removals: Vec::new(),
+            dependency_reclassifications: Vec::new(),
+            dependency_consequence_facts: Vec::new(),
+            dynamic_reference_facts: Vec::new(),
+            spill_facts: Vec::new(),
+            format_dependency_facts: Vec::new(),
+            capability_effect_facts: Vec::new(),
+            candidate_result_id: None,
+        }
+    }
+
+    fn excel_text(text: &str) -> ExcelText {
+        ExcelText::from_utf16_code_units(text.encode_utf16().collect())
+    }
+
+    #[test]
+    fn number_format_code_heuristics_cover_grouping_percent_date_and_negative_sections() {
+        let locale = oxfml_en_us_locale_context();
+        assert_eq!(
+            render_with_code(&locale.profile, locale.date_system, 6.0, "$#,##0.00"),
+            Ok("$6.00".to_string())
+        );
+        assert_eq!(
+            render_with_code(&locale.profile, locale.date_system, 1234.567, "#,##0.000"),
+            Ok("1,234.567".to_string())
+        );
+        assert_eq!(
+            render_with_code(&locale.profile, locale.date_system, 0.125, "0.0%"),
+            Ok("12.5%".to_string())
+        );
+        assert_eq!(
+            render_with_code(&locale.profile, locale.date_system, -1234.5, "($#,##0.00)"),
+            Ok("($1,234.50)".to_string())
+        );
+        assert_eq!(
+            render_with_code(&locale.profile, locale.date_system, 45293.0, "m/d/yyyy"),
+            Ok("1/2/2024".to_string())
+        );
+        assert_eq!(
+            render_with_code(
+                &locale.profile,
+                locale.date_system,
+                45293.5,
+                "m/d/yyyy h:mm"
+            ),
+            Ok("1/2/2024 12:00".to_string())
+        );
+    }
+
+    #[test]
+    fn verification_publication_surface_applies_evaluable_conditional_formatting() {
+        let locale = oxfml_en_us_locale_context();
+        let source = FormulaSourceRecord::new("publication:test", 1, "=SUM(1,2,3)");
+        let returned_value_surface = ReturnedValueSurface::from_calc_value(&CalcValue::number(6.0));
+        let context = VerificationPublicationContext {
+            format_profile: Some("excel-spreadsheetml-2003-default".to_string()),
+            number_format_code: Some("$#,##0.00".to_string()),
+            style_id: Some("calc".to_string()),
+            style_hierarchy: vec!["calc".to_string()],
+            font_color: Some("#112233".to_string()),
+            fill_color: Some("#445566".to_string()),
+            conditional_formatting_rules: vec![
+                VerificationConditionalFormattingRule {
+                    target_ranges: vec!["A1".to_string()],
+                    rule_kind: "Expression".to_string(),
+                    operator: None,
+                    thresholds: vec!["=A1>0".to_string()],
+                    typed_rule: None,
+                    font_color: Some("#FF0000".to_string()),
+                    fill_color: Some("#00FF00".to_string()),
+                    effective_display_text: Some("[POS] $6.00".to_string()),
+                    applies: None,
+                    effective_font_color: None,
+                    effective_fill_color: None,
+                },
+                VerificationConditionalFormattingRule {
+                    target_ranges: vec!["A1".to_string()],
+                    rule_kind: "CellIs".to_string(),
+                    operator: Some("LessThan".to_string()),
+                    thresholds: vec!["0".to_string()],
+                    typed_rule: None,
+                    font_color: Some("#999999".to_string()),
+                    fill_color: Some("#EEEEEE".to_string()),
+                    effective_display_text: Some("[NEG] $6.00".to_string()),
+                    applies: None,
+                    effective_font_color: None,
+                    effective_fill_color: None,
+                },
+            ],
+        };
+
+        let surface = build_verification_publication_surface(
+            &source,
+            &CalcValue::number(6.0),
+            &returned_value_surface,
+            &TopologyDelta {
+                formula_stable_id: "publication:test".to_string(),
+                dependency_additions: Vec::new(),
+                dependency_removals: Vec::new(),
+                dependency_reclassifications: Vec::new(),
+                dependency_consequence_facts: Vec::new(),
+                dynamic_reference_facts: Vec::new(),
+                spill_facts: Vec::new(),
+                format_dependency_facts: Vec::new(),
+                capability_effect_facts: Vec::new(),
+                candidate_result_id: None,
+            },
+            None,
+            None,
+            Some(&locale),
+            None,
+            Some(&context),
+        );
+
+        assert_eq!(surface.effective_display_text, "[POS] $6.00");
+        assert_eq!(surface.effective_font_color.as_deref(), Some("#FF0000"));
+        assert_eq!(surface.effective_fill_color.as_deref(), Some("#00FF00"));
+        assert_eq!(
+            surface.conditional_formatting_applies,
+            vec![Some(true), Some(false)]
+        );
+        assert_eq!(
+            surface.conditional_formatting_effective_display,
+            vec![Some("[POS] $6.00".to_string()), None]
+        );
+        assert_eq!(
+            surface.conditional_formatting_effective_font_color,
+            vec![Some("#FF0000".to_string()), None]
+        );
+        assert_eq!(
+            surface.conditional_formatting_effective_fill_color,
+            vec![Some("#00FF00".to_string()), None]
+        );
+    }
+
+    #[test]
+    fn custom_format_colour_token_flows_to_publication_font_color() {
+        let locale = oxfml_en_us_locale_context();
+        let source = FormulaSourceRecord::new("publication:format-color", 1, "=42");
+        let returned_value_surface =
+            ReturnedValueSurface::from_calc_value(&CalcValue::number(42.0));
+        let context = VerificationPublicationContext {
+            number_format_code: Some("[Red]#,##0;[Blue]#,##0".to_string()),
+            ..Default::default()
+        };
+
+        let surface = build_verification_publication_surface(
+            &source,
+            &CalcValue::number(42.0),
+            &returned_value_surface,
+            &empty_topology_delta("publication:format-color"),
+            None,
+            None,
+            Some(&locale),
+            None,
+            Some(&context),
+        );
+
+        assert_eq!(surface.effective_display_text, "42");
+        assert_eq!(surface.effective_font_color.as_deref(), Some("#FF0000"));
+    }
+
+    #[test]
+    fn custom_format_colour_token_uses_selected_section_and_indexed_palette() {
+        let locale = oxfml_en_us_locale_context();
+        let source = FormulaSourceRecord::new("publication:format-color-index", 1, "=-42");
+        let returned_value_surface =
+            ReturnedValueSurface::from_calc_value(&CalcValue::number(-42.0));
+        let context = VerificationPublicationContext {
+            number_format_code: Some("[Red]#,##0;[Color3]#,##0;0".to_string()),
+            ..Default::default()
+        };
+
+        let surface = build_verification_publication_surface(
+            &source,
+            &CalcValue::number(-42.0),
+            &returned_value_surface,
+            &empty_topology_delta("publication:format-color-index"),
+            None,
+            None,
+            Some(&locale),
+            None,
+            Some(&context),
+        );
+
+        assert_eq!(surface.effective_display_text, "-42");
+        assert_eq!(surface.effective_font_color.as_deref(), Some("#FF0000"));
+    }
+
+    #[test]
+    fn custom_format_colour_token_respects_condition_order_and_cf_precedence() {
+        let locale = oxfml_en_us_locale_context();
+        let source = FormulaSourceRecord::new("publication:format-color-cf", 1, "=5000");
+        let returned_value_surface =
+            ReturnedValueSurface::from_calc_value(&CalcValue::number(5000.0));
+        let context = VerificationPublicationContext {
+            number_format_code: Some("[Green][>=1000]#,##0;[Red][<0](#,##0);0".to_string()),
+            conditional_formatting_rules: vec![VerificationConditionalFormattingRule {
+                target_ranges: vec!["A1".to_string()],
+                rule_kind: "CellIs".to_string(),
+                operator: Some("GreaterThan".to_string()),
+                thresholds: vec!["0".to_string()],
+                font_color: Some("#000000".to_string()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        let surface = build_verification_publication_surface(
+            &source,
+            &CalcValue::number(5000.0),
+            &returned_value_surface,
+            &empty_topology_delta("publication:format-color-cf"),
+            None,
+            None,
+            Some(&locale),
+            None,
+            Some(&context),
+        );
+
+        assert_eq!(surface.effective_display_text, "5,000");
+        assert_eq!(surface.effective_font_color.as_deref(), Some("#000000"));
+        assert_eq!(surface.conditional_formatting_applies, vec![Some(true)]);
+    }
+
+    #[test]
+    fn custom_format_text_fourth_section_renders_at_placeholder() {
+        let locale = oxfml_en_us_locale_context();
+        let source = FormulaSourceRecord::new("publication:text-section", 1, "=\"x\"");
+        let value = CalcValue::text(excel_text("x"));
+        let returned_value_surface = ReturnedValueSurface::from_calc_value(&value.clone());
+        let context = VerificationPublicationContext {
+            number_format_code: Some("0.00;-0.00;\"-\";\"prefix-\"@\"-suffix\"".to_string()),
+            ..Default::default()
+        };
+
+        let surface = build_verification_publication_surface(
+            &source,
+            &value,
+            &returned_value_surface,
+            &empty_topology_delta("publication:text-section"),
+            None,
+            None,
+            Some(&locale),
+            None,
+            Some(&context),
+        );
+
+        assert_eq!(surface.effective_display_text, "prefix-x-suffix");
+    }
+
+    #[test]
+    fn custom_format_text_without_fourth_section_falls_back_to_verbatim_text() {
+        let locale = oxfml_en_us_locale_context();
+        let source = FormulaSourceRecord::new("publication:text-section-fallback", 1, "=\"hello\"");
+        let value = CalcValue::text(excel_text("hello"));
+        let returned_value_surface = ReturnedValueSurface::from_calc_value(&value.clone());
+        let context = VerificationPublicationContext {
+            number_format_code: Some("0.00;-0.00;\"-\"".to_string()),
+            ..Default::default()
+        };
+
+        let surface = build_verification_publication_surface(
+            &source,
+            &value,
+            &returned_value_surface,
+            &empty_topology_delta("publication:text-section-fallback"),
+            None,
+            None,
+            Some(&locale),
+            None,
+            Some(&context),
+        );
+
+        assert_eq!(surface.effective_display_text, "hello");
+    }
 }

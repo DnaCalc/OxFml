@@ -324,11 +324,11 @@ fn render_fixed_common(
     }
     rendered.push_str(prefix);
     rendered.push_str(&grouped);
-    if let Some(frac) = frac_part {
-        if decimals > 0 {
-            rendered.push_str(profile.decimal_separator);
-            rendered.push_str(&frac);
-        }
+    if let Some(frac) = frac_part
+        && decimals > 0
+    {
+        rendered.push_str(profile.decimal_separator);
+        rendered.push_str(&frac);
     }
     rendered
 }
@@ -847,9 +847,7 @@ fn render_fraction_format(value: f64, section: &str) -> Option<String> {
     }
 
     let integer_pattern = left.strip_suffix(&numerator_pattern).unwrap_or(left);
-    let has_integer_part = integer_pattern
-        .chars()
-        .any(|ch| is_fraction_placeholder(ch));
+    let has_integer_part = integer_pattern.chars().any(is_fraction_placeholder);
     let negative = value.is_sign_negative() && value != 0.0;
     let abs_value = value.abs();
     let whole = if has_integer_part {

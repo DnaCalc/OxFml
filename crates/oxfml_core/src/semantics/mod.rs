@@ -479,10 +479,10 @@ impl SemanticCompiler {
             function_name,
             args,
         } = callee
+            && function_name == "LAMBDA"
+            && lambda_has_lexical_capture(args)
         {
-            if function_name == "LAMBDA" && lambda_has_lexical_capture(args) {
-                self.helper_profile.lexical_capture_required = true;
-            }
+            self.helper_profile.lexical_capture_required = true;
         }
     }
 
@@ -709,32 +709,31 @@ impl SemanticCompiler {
         function_name: &str,
         meta: Option<FunctionMeta>,
     ) -> FunctionAvailabilitySummary {
-        if let Some(snapshot) = &self.library_context_snapshot {
-            if let Some(entry) = snapshot
+        if let Some(snapshot) = &self.library_context_snapshot
+            && let Some(entry) = snapshot
                 .entries
                 .iter()
                 .find(|entry| entry.surface_name.eq_ignore_ascii_case(function_name))
-            {
-                return FunctionAvailabilitySummary {
-                    surface_name: function_name.to_string(),
-                    canonical_id: entry.canonical_id.clone(),
-                    surface_stable_id: entry.surface_stable_id.clone(),
-                    name_resolution_table_ref: entry.name_resolution_table_ref.clone(),
-                    semantic_trait_profile_ref: entry.semantic_trait_profile_ref.clone(),
-                    gating_profile_ref: entry.gating_profile_ref.clone(),
-                    metadata_status: entry.metadata_status.clone(),
-                    special_interface_kind: entry.special_interface_kind.clone(),
-                    admission_interface_kind: entry.admission_interface_kind.clone(),
-                    preparation_owner: entry.preparation_owner.clone(),
-                    runtime_boundary_kind: entry.runtime_boundary_kind.clone(),
-                    interface_contract_ref: entry.interface_contract_ref.clone(),
-                    registration_source_kind: Some(entry.registration_source_kind),
-                    parse_bind_state: entry.parse_bind_state,
-                    semantic_plan_state: entry.semantic_plan_state,
-                    runtime_capability_state: entry.runtime_capability_state,
-                    post_dispatch_state: entry.post_dispatch_state,
-                };
-            }
+        {
+            return FunctionAvailabilitySummary {
+                surface_name: function_name.to_string(),
+                canonical_id: entry.canonical_id.clone(),
+                surface_stable_id: entry.surface_stable_id.clone(),
+                name_resolution_table_ref: entry.name_resolution_table_ref.clone(),
+                semantic_trait_profile_ref: entry.semantic_trait_profile_ref.clone(),
+                gating_profile_ref: entry.gating_profile_ref.clone(),
+                metadata_status: entry.metadata_status.clone(),
+                special_interface_kind: entry.special_interface_kind.clone(),
+                admission_interface_kind: entry.admission_interface_kind.clone(),
+                preparation_owner: entry.preparation_owner.clone(),
+                runtime_boundary_kind: entry.runtime_boundary_kind.clone(),
+                interface_contract_ref: entry.interface_contract_ref.clone(),
+                registration_source_kind: Some(entry.registration_source_kind),
+                parse_bind_state: entry.parse_bind_state,
+                semantic_plan_state: entry.semantic_plan_state,
+                runtime_capability_state: entry.runtime_capability_state,
+                post_dispatch_state: entry.post_dispatch_state,
+            };
         }
 
         if let Some(meta) = meta {

@@ -638,14 +638,13 @@ fn runtime_structured_references_use_sparse_values_when_available() {
             .expect("structured sparse reference aggregate should execute");
 
         assert_eq!(result.evaluation.oxfunc_value, expected, "{formula}");
-        assert_eq!(
+        assert!(
             result.structured_reference_bind_records[0]
                 .resolved_reference
                 .as_ref()
                 .map(|resolved| format!("{resolved:?}"))
                 .unwrap_or_default()
-                .contains("height: 3"),
-            true
+                .contains("height: 3")
         );
     }
 }
@@ -2700,7 +2699,7 @@ fn runtime_environment_emits_effective_display_text_comparison_view_for_programm
         let result = RuntimeEnvironment::new()
             .execute(RuntimeFormulaRequest::new(
                 FormulaSourceRecord::new(
-                    &format!("runtime:programmatic-verification:{case_id}"),
+                    format!("runtime:programmatic-verification:{case_id}"),
                     1,
                     formula,
                 ),
@@ -3237,7 +3236,7 @@ fn runtime_environment_matches_dnaonecalc_exact_request_shape_for_text_date_fami
             .execute(
                 RuntimeFormulaRequest::new(
                     FormulaSourceRecord::new(
-                        &format!("runtime:verification-context:{case_id}"),
+                        format!("runtime:verification-context:{case_id}"),
                         1,
                         formula,
                     )
@@ -3357,7 +3356,7 @@ fn runtime_environment_canonicalizes_en_us_locale_context_engines_for_text_date_
             .execute(
                 RuntimeFormulaRequest::new(
                     FormulaSourceRecord::new(
-                        &format!("runtime:foreign-locale:{case_id}"),
+                        format!("runtime:foreign-locale:{case_id}"),
                         1,
                         formula,
                     )
@@ -3480,7 +3479,7 @@ fn runtime_environment_blocks_no_locale_text_verification_cases() {
         let error = RuntimeEnvironment::new()
             .execute(RuntimeFormulaRequest::new(
                 FormulaSourceRecord::new(
-                    &format!("runtime:no-locale-foundation:{case_id}"),
+                    format!("runtime:no-locale-foundation:{case_id}"),
                     1,
                     formula,
                 ),
@@ -3590,7 +3589,7 @@ fn assert_runtime_foundation_case(
     let locale = oxfml_en_us_locale_context();
     let result = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
-            FormulaSourceRecord::new(&format!("runtime:foundation:{case_id}"), 1, formula),
+            FormulaSourceRecord::new(format!("runtime:foundation:{case_id}"), 1, formula),
             TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
         ))
         .unwrap_or_else(|error| panic!("{case_id} runtime execution should succeed: {error}"));
@@ -3621,7 +3620,7 @@ fn assert_runtime_foundation_text_case(
     let locale = oxfml_en_us_locale_context();
     let result = RuntimeEnvironment::new()
         .execute(RuntimeFormulaRequest::new(
-            FormulaSourceRecord::new(&format!("runtime:foundation:{case_id}"), 1, formula),
+            FormulaSourceRecord::new(format!("runtime:foundation:{case_id}"), 1, formula),
             TypedContextQueryBundle::new(None, None, Some(&locale), None, None),
         ))
         .unwrap_or_else(|error| panic!("{case_id} runtime execution should succeed: {error}"));
@@ -3749,7 +3748,7 @@ struct ValueRtdProvider;
 
 impl RtdProvider for ValueRtdProvider {
     fn resolve_rtd(&self, _request: &RtdRequest) -> RtdProviderResult {
-        RtdProviderResult::Value(CalcValue::from(CalcValue::number(7.0)))
+        RtdProviderResult::Value(CalcValue::number(7.0))
     }
 }
 
@@ -3766,8 +3765,8 @@ impl HostInfoProvider for ClaimingHostInfoProvider {
 
     fn query_info(&self, query: InfoQuery) -> Result<CalcValue, HostInfoError> {
         match query {
-            InfoQuery::Directory => Ok(CalcValue::from(CalcValue::text(
-                ExcelText::from_interop_assignment("C:\\Work"),
+            InfoQuery::Directory => Ok(CalcValue::text(ExcelText::from_interop_assignment(
+                "C:\\Work",
             ))),
             _ => Err(HostInfoError::UnsupportedInfoQuery(query)),
         }

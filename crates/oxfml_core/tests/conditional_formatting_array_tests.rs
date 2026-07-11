@@ -26,8 +26,7 @@ fn surface_for_value(
 ) -> VerificationPublicationSurface {
     let locale = oxfml_en_us_locale_context();
     let source = FormulaSourceRecord::new("cf-array", 1, "=A1#");
-    let returned_value_surface =
-        ReturnedValueSurface::from_calc_value(&CalcValue::from(value.clone()));
+    let returned_value_surface = ReturnedValueSurface::from_calc_value(&value.clone());
     let topology_delta = TopologyDelta {
         formula_stable_id: "cf-array".to_string(),
         dependency_additions: Vec::new(),

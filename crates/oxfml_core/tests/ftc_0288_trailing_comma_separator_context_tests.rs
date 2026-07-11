@@ -224,7 +224,7 @@ fn runtime_characterizes_trailing_comma_scaling_patterns_across_separator_contex
                 .execute(
                     RuntimeFormulaRequest::new(
                         FormulaSourceRecord::new(
-                            &format!("runtime:ftc-0288:{context_id}:{case_id}"),
+                            format!("runtime:ftc-0288:{context_id}:{case_id}"),
                             1,
                             formula,
                         )

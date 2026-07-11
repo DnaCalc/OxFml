@@ -426,35 +426,33 @@ pub(crate) fn collect_completion_proposals(request: CompletionRequest<'_>) -> Co
 
     if let Some(table_name) =
         structured_column_table_name(&request.source.entered_formula_text, replacement_span)
-    {
-        if let Some(table) = request
+        && let Some(table) = request
             .bind_context
             .table_catalog
             .iter()
             .find(|table| table.table_name.eq_ignore_ascii_case(&table_name))
-        {
-            for column in &table.columns {
-                if normalized_prefix.is_empty()
-                    || column
-                        .column_name
-                        .to_ascii_lowercase()
-                        .starts_with(&normalized_prefix)
-                {
-                    insert_proposal(
-                        &mut proposals,
-                        1,
-                        CompletionProposal {
-                            proposal_id: format!("table-column:{}", column.column_id),
-                            proposal_kind: CompletionProposalKind::TableColumn,
-                            display_text: column.column_name.clone(),
-                            insert_text: column.column_name.clone(),
-                            replacement_span: Some(replacement_span),
-                            documentation_ref: None,
-                            profile_payload: None,
-                            requires_revalidation: true,
-                        },
-                    );
-                }
+    {
+        for column in &table.columns {
+            if normalized_prefix.is_empty()
+                || column
+                    .column_name
+                    .to_ascii_lowercase()
+                    .starts_with(&normalized_prefix)
+            {
+                insert_proposal(
+                    &mut proposals,
+                    1,
+                    CompletionProposal {
+                        proposal_id: format!("table-column:{}", column.column_id),
+                        proposal_kind: CompletionProposalKind::TableColumn,
+                        display_text: column.column_name.clone(),
+                        insert_text: column.column_name.clone(),
+                        replacement_span: Some(replacement_span),
+                        documentation_ref: None,
+                        profile_payload: None,
+                        requires_revalidation: true,
+                    },
+                );
             }
         }
     }
@@ -601,10 +599,10 @@ pub(crate) fn signature_help_context_at_cursor(
     // end means the caret is one position past the `)` and we are
     // no longer inside the call's arguments — the help line is
     // misleading there.
-    if let Some(close_paren_end) = closed_call_close_paren_end(call_node) {
-        if cursor_offset >= close_paren_end {
-            return None;
-        }
+    if let Some(close_paren_end) = closed_call_close_paren_end(call_node)
+        && cursor_offset >= close_paren_end
+    {
+        return None;
     }
 
     Some(SignatureHelpContext {
@@ -951,7 +949,7 @@ fn insert_proposal(
     );
 }
 
-fn smallest_call_like_node<'a>(node: &'a GreenNode, cursor_offset: usize) -> Option<&'a GreenNode> {
+fn smallest_call_like_node(node: &GreenNode, cursor_offset: usize) -> Option<&GreenNode> {
     let contains_cursor = span_contains(node.span, cursor_offset);
     let one_past_node = cursor_offset == node.span.end().saturating_add(1);
     if !contains_cursor && !one_past_node {
@@ -967,13 +965,13 @@ fn smallest_call_like_node<'a>(node: &'a GreenNode, cursor_offset: usize) -> Opt
     };
 
     for child in &node.children {
-        if let GreenChild::Node(child_node) = child {
-            if let Some(candidate) = smallest_call_like_node(child_node, cursor_offset) {
-                best = match best {
-                    Some(current) if current.span.len <= candidate.span.len => Some(current),
-                    _ => Some(candidate),
-                };
-            }
+        if let GreenChild::Node(child_node) = child
+            && let Some(candidate) = smallest_call_like_node(child_node, cursor_offset)
+        {
+            best = match best {
+                Some(current) if current.span.len <= candidate.span.len => Some(current),
+                _ => Some(candidate),
+            };
         }
     }
 
@@ -1007,10 +1005,11 @@ fn callee_text_for_call(source: &FormulaSourceRecord, call_node: &GreenNode) -> 
 fn active_argument_index(arg_list: &GreenNode, cursor_offset: usize) -> usize {
     let mut index = 0usize;
     for child in &arg_list.children {
-        if let GreenChild::Token(token) = child {
-            if token.kind == TokenKind::Comma && token.span.start < cursor_offset {
-                index += 1;
-            }
+        if let GreenChild::Token(token) = child
+            && token.kind == TokenKind::Comma
+            && token.span.start < cursor_offset
+        {
+            index += 1;
         }
     }
     index

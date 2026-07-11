@@ -253,8 +253,8 @@ impl HostInfoProvider for MockHostInfoProvider {
         _reference: Option<&ReferenceLike>,
     ) -> Result<CalcValue, HostInfoError> {
         match query {
-            CellInfoQuery::Filename => Ok(CalcValue::from(CalcValue::text(
-                ExcelText::from_utf16_code_units("[Book1]Sheet1".encode_utf16().collect()),
+            CellInfoQuery::Filename => Ok(CalcValue::text(ExcelText::from_utf16_code_units(
+                "[Book1]Sheet1".encode_utf16().collect(),
             ))),
             _ => Err(HostInfoError::UnsupportedCellInfoQuery(query)),
         }
@@ -262,8 +262,8 @@ impl HostInfoProvider for MockHostInfoProvider {
 
     fn query_info(&self, query: InfoQuery) -> Result<CalcValue, HostInfoError> {
         match query {
-            InfoQuery::System => Ok(CalcValue::from(CalcValue::text(
-                ExcelText::from_utf16_code_units("pcdos".encode_utf16().collect()),
+            InfoQuery::System => Ok(CalcValue::text(ExcelText::from_utf16_code_units(
+                "pcdos".encode_utf16().collect(),
             ))),
             _ => Err(HostInfoError::UnsupportedInfoQuery(query)),
         }
@@ -284,7 +284,7 @@ impl RtdProvider for MockRtdProvider {
         &self,
         _request: &oxfunc_core::functions::rtd_fn::RtdRequest,
     ) -> RtdProviderResult {
-        RtdProviderResult::Value(CalcValue::from(CalcValue::number(7.0)))
+        RtdProviderResult::Value(CalcValue::number(7.0))
     }
 }
 

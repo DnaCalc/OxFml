@@ -71,7 +71,7 @@ fn editor_edit_service_applies_completion_proposal_through_facade() {
     let proposal = interaction
         .completion_result
         .as_ref()
-        .and_then(|result| result.proposals.iter().next())
+        .and_then(|result| result.proposals.first())
         .expect("completion proposal should exist")
         .clone();
 
@@ -475,7 +475,7 @@ fn replay_projection_service_matches_dnaonecalc_exact_request_shape_for_runtime_
             .execute(
                 RuntimeFormulaRequest::new(
                     FormulaSourceRecord::new(
-                        &format!("replay:verification-context:{case_id}"),
+                        format!("replay:verification-context:{case_id}"),
                         1,
                         formula,
                     )
@@ -774,7 +774,7 @@ fn replay_projection_service_emits_effective_display_text_for_programmatic_verif
         let runtime_result = environment
             .execute(RuntimeFormulaRequest::new(
                 FormulaSourceRecord::new(
-                    &format!("replay:programmatic-verification:{case_id}"),
+                    format!("replay:programmatic-verification:{case_id}"),
                     1,
                     formula,
                 ),

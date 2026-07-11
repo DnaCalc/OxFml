@@ -437,7 +437,7 @@ fn adapter_projects_image_capability_denied_as_blocked_error() {
 
 #[test]
 fn adapter_projects_registered_external_requests_for_register_id_and_call() {
-    let provider = RecordingRegisteredExternalProvider::default();
+    let provider = RecordingRegisteredExternalProvider;
 
     let register_run = run_oxfunc_preparation_adapter(OxFuncAdapterRequest::new(
         "register-id-request",

@@ -646,7 +646,6 @@ impl<'a> RuntimeEnvironment<'a> {
             table_catalog: self.table_catalog.clone(),
             enclosing_table_ref: self.enclosing_table_ref.clone(),
             caller_table_region: self.caller_table_region.clone(),
-            ..BindContext::default()
         }
     }
 
@@ -1023,7 +1022,7 @@ impl RuntimeFormulaResult {
             self.evaluation.calc_value()
         } else {
             let mut value = self.evaluation.calc_value();
-            value.core = CalcValue::from(self.published_worksheet_value.clone()).core;
+            value.core = self.published_worksheet_value.clone().core;
             value
         }
     }
@@ -1327,14 +1326,13 @@ impl<'a> FormulaDrillTraceBuilder<'a> {
         let id = FormulaDrillNodeId(format!("drill-node:{}", self.next_node_ordinal));
         self.next_node_ordinal += 1;
         node.node_id = id.clone();
-        if let Some(parent_id) = node.parent_node_id.clone() {
-            if let Some(parent) = self
+        if let Some(parent_id) = node.parent_node_id.clone()
+            && let Some(parent) = self
                 .nodes
                 .iter_mut()
                 .find(|candidate| candidate.node_id == parent_id)
-            {
-                parent.child_node_ids.push(id.clone());
-            }
+        {
+            parent.child_node_ids.push(id.clone());
         }
         self.nodes.push(node);
         id
@@ -2222,25 +2220,25 @@ struct FormulaArgumentMetadata {
 }
 
 fn argument_metadata(function_name: &str, ordinal: usize) -> FormulaArgumentMetadata {
-    if let Some(entry) = builtin_registry().lookup_by_surface_name(function_name) {
-        if let Some(parameter) = entry.display_signature.parameters.get(ordinal).or_else(|| {
+    if let Some(entry) = builtin_registry().lookup_by_surface_name(function_name)
+        && let Some(parameter) = entry.display_signature.parameters.get(ordinal).or_else(|| {
             entry
                 .display_signature
                 .parameters
                 .last()
                 .filter(|parameter| parameter.repeats)
-        }) {
-            let name = if parameter.repeats {
-                repeated_argument_name(&parameter.name, ordinal)
-            } else {
-                parameter.name.clone()
-            };
-            return FormulaArgumentMetadata {
-                role: argument_role_for_name(&name),
-                name,
-                name_source: FormulaArgumentNameSource::OxFuncMetadata,
-            };
-        }
+        })
+    {
+        let name = if parameter.repeats {
+            repeated_argument_name(&parameter.name, ordinal)
+        } else {
+            parameter.name.clone()
+        };
+        return FormulaArgumentMetadata {
+            role: argument_role_for_name(&name),
+            name,
+            name_source: FormulaArgumentNameSource::OxFuncMetadata,
+        };
     }
     FormulaArgumentMetadata {
         name: format!("arg[{ordinal}]"),
@@ -3650,13 +3648,13 @@ fn compile_runtime_prepare_request(
     });
     let library_context_view = environment.library_context.pinned_view();
     let base_library_context_snapshot = library_context_view.resolve_snapshot();
-    if let Some(snapshot_ref) = library_context_view.snapshot_ref() {
-        if base_library_context_snapshot.is_none() {
-            return Err(format!(
-                "requested library context snapshot {}@{} did not resolve",
-                snapshot_ref.snapshot_id, snapshot_ref.snapshot_version
-            ));
-        }
+    if let Some(snapshot_ref) = library_context_view.snapshot_ref()
+        && base_library_context_snapshot.is_none()
+    {
+        return Err(format!(
+            "requested library context snapshot {}@{} did not resolve",
+            snapshot_ref.snapshot_id, snapshot_ref.snapshot_version
+        ));
     }
     let library_context_snapshot =
         environment.runtime_registry_library_context_snapshot(base_library_context_snapshot);

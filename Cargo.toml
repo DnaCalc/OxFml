@@ -7,3 +7,15 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 authors = ["DNA Calc"]
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+# Accepted design-shape lints under the rust 1.94 toolchain baseline
+# (2026-07-11). Each is a deliberate current architecture shape, not an
+# oversight; revisit alongside the consumer-interface rearchitecture plan.
+result_large_err = "allow"     # typed rich error values are the seam contract
+too_many_arguments = "allow"   # seam-surface builders carry wide explicit context
+large_enum_variant = "allow"   # value/plan enums; sizes are engine-audited

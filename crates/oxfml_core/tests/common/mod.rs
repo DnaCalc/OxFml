@@ -13,6 +13,7 @@ pub struct CompiledFormulaArtifacts {
     pub semantic_plan: SemanticPlan,
 }
 
+#[allow(dead_code)] // shared test-support; not every test binary uses every helper
 pub fn compile_formula(
     formula_stable_id: &str,
     formula: &str,

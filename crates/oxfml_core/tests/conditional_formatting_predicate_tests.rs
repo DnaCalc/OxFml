@@ -14,8 +14,7 @@ fn surface_for(
 ) -> VerificationPublicationSurface {
     let locale = oxfml_en_us_locale_context();
     let source = FormulaSourceRecord::new("cf-predicate", 1, "=A1");
-    let returned_value_surface =
-        ReturnedValueSurface::from_calc_value(&CalcValue::from(value.clone()));
+    let returned_value_surface = ReturnedValueSurface::from_calc_value(&value.clone());
     let topology_delta = TopologyDelta {
         formula_stable_id: "cf-predicate".to_string(),
         dependency_additions: Vec::new(),

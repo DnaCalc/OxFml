@@ -142,7 +142,7 @@ impl HostRecalcOutput {
             self.evaluation.calc_value()
         } else {
             let mut value = self.evaluation.calc_value();
-            value.core = CalcValue::from(self.published_worksheet_value.clone()).core;
+            value.core = self.published_worksheet_value.clone().core;
             value
         }
     }
@@ -523,13 +523,13 @@ impl SingleFormulaHost {
             .locale_ctx
             .map(|_| "locale-format-context".to_string());
         let library_context_snapshot = library_context_view.resolve_snapshot();
-        if let Some(snapshot_ref) = library_context_view.snapshot_ref() {
-            if library_context_snapshot.is_none() {
-                return Err(format!(
-                    "requested library context snapshot {}@{} did not resolve",
-                    snapshot_ref.snapshot_id, snapshot_ref.snapshot_version
-                ));
-            }
+        if let Some(snapshot_ref) = library_context_view.snapshot_ref()
+            && library_context_snapshot.is_none()
+        {
+            return Err(format!(
+                "requested library context snapshot {}@{} did not resolve",
+                snapshot_ref.snapshot_id, snapshot_ref.snapshot_version
+            ));
         }
         let library_context_snapshot_ref = library_context_view.effective_snapshot_ref();
         let (semantic_plan, semantic_plan_reused) = if let Some(previous) = cached_artifacts {
@@ -564,7 +564,7 @@ impl SingleFormulaHost {
                     locale_profile: locale_profile.clone(),
                     date_system: date_system.clone(),
                     format_profile: format_profile.clone(),
-                    library_context_snapshot: library_context_snapshot,
+                    library_context_snapshot,
                 })
                 .semantic_plan,
                 false,
@@ -1206,65 +1206,7 @@ fn published_returned_value_surface(
     {
         evaluation.returned_value_surface.clone()
     } else {
-        ReturnedValueSurface::from_calc_value(&CalcValue::from(published_value.clone()))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::published_returned_value_surface;
-    use crate::eval::{
-        EvaluationOutput, EvaluationTrace, PreparedBlanknessClass, PreparedResult,
-        PreparedResultClass, PreparedStructureClass,
-    };
-    use crate::interface::{ReturnedValueSurface, ReturnedValueSurfaceKind};
-    use oxfunc_core::value::{
-        CoreValue, ExcelText, RichObjectValue, RichValueData, RichValueType, WorksheetErrorCode,
-    };
-
-    use oxfunc_core::value::CalcValue;
-
-    #[test]
-    fn published_returned_value_surface_preserves_non_ordinary_rich_surface() {
-        let evaluation = EvaluationOutput {
-            result: PreparedResult {
-                result_class: PreparedResultClass::Scalar,
-                structure_class: PreparedStructureClass::DirectScalar,
-                payload_summary: "Text(Sphere)".to_string(),
-                blankness_class: PreparedBlanknessClass::NonBlank,
-                reference_target: None,
-                callable_carrier: None,
-                callable_profile: None,
-                callable_profile_detail: None,
-                deferred_reason: None,
-                format_hint: None,
-                publication_hint: None,
-                capability_dependencies: Vec::new(),
-            },
-            oxfunc_value: CalcValue::text(ExcelText::from_interop_assignment("Sphere")),
-            returned_value_surface: ReturnedValueSurface::from_calc_value(&CalcValue::rich_object(
-                CoreValue::Text(ExcelText::from_interop_assignment("Sphere")),
-                RichObjectValue {
-                    value_type: RichValueType {
-                        type_name: "_webimage".to_string(),
-                        required_keys: vec!["WebImageIdentifier".to_string()],
-                        key_flags: vec![],
-                    },
-                    fallback: RichValueData::Text(ExcelText::from_interop_assignment("Sphere")),
-                    kvps: vec![],
-                },
-            )),
-            portable_callable: None,
-            trace: EvaluationTrace {
-                prepared_calls: Vec::new(),
-            },
-        };
-
-        let published = CalcValue::error(WorksheetErrorCode::Connect);
-        let surface = published_returned_value_surface(&evaluation, &published);
-
-        assert_eq!(surface.kind, ReturnedValueSurfaceKind::RichValue);
-        assert_eq!(surface.rich_value_type_name.as_deref(), Some("_webimage"));
+        ReturnedValueSurface::from_calc_value(&published_value.clone())
     }
 }
 
@@ -1408,5 +1350,63 @@ fn value_payload_for_eval_value(
             ValuePayload::Text(format!("Reference({})", reference.target())),
             Some(Extent { rows: 1, cols: 1 }),
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::published_returned_value_surface;
+    use crate::eval::{
+        EvaluationOutput, EvaluationTrace, PreparedBlanknessClass, PreparedResult,
+        PreparedResultClass, PreparedStructureClass,
+    };
+    use crate::interface::{ReturnedValueSurface, ReturnedValueSurfaceKind};
+    use oxfunc_core::value::{
+        CoreValue, ExcelText, RichObjectValue, RichValueData, RichValueType, WorksheetErrorCode,
+    };
+
+    use oxfunc_core::value::CalcValue;
+
+    #[test]
+    fn published_returned_value_surface_preserves_non_ordinary_rich_surface() {
+        let evaluation = EvaluationOutput {
+            result: PreparedResult {
+                result_class: PreparedResultClass::Scalar,
+                structure_class: PreparedStructureClass::DirectScalar,
+                payload_summary: "Text(Sphere)".to_string(),
+                blankness_class: PreparedBlanknessClass::NonBlank,
+                reference_target: None,
+                callable_carrier: None,
+                callable_profile: None,
+                callable_profile_detail: None,
+                deferred_reason: None,
+                format_hint: None,
+                publication_hint: None,
+                capability_dependencies: Vec::new(),
+            },
+            oxfunc_value: CalcValue::text(ExcelText::from_interop_assignment("Sphere")),
+            returned_value_surface: ReturnedValueSurface::from_calc_value(&CalcValue::rich_object(
+                CoreValue::Text(ExcelText::from_interop_assignment("Sphere")),
+                RichObjectValue {
+                    value_type: RichValueType {
+                        type_name: "_webimage".to_string(),
+                        required_keys: vec!["WebImageIdentifier".to_string()],
+                        key_flags: vec![],
+                    },
+                    fallback: RichValueData::Text(ExcelText::from_interop_assignment("Sphere")),
+                    kvps: vec![],
+                },
+            )),
+            portable_callable: None,
+            trace: EvaluationTrace {
+                prepared_calls: Vec::new(),
+            },
+        };
+
+        let published = CalcValue::error(WorksheetErrorCode::Connect);
+        let surface = published_returned_value_surface(&evaluation, &published);
+
+        assert_eq!(surface.kind, ReturnedValueSurfaceKind::RichValue);
+        assert_eq!(surface.rich_value_type_name.as_deref(), Some("_webimage"));
     }
 }

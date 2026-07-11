@@ -642,14 +642,12 @@ fn lookup_snapshot_entry(
     if let (Some(provider), Some(snapshot_ref)) = (
         environment.library_context.provider,
         request.library_context_snapshot_ref.as_ref(),
+    ) && let Some(entry) = crate::interface::LibraryContextProvider::lookup_surface(
+        provider,
+        snapshot_ref,
+        &request.lookup_key,
     ) {
-        if let Some(entry) = crate::interface::LibraryContextProvider::lookup_surface(
-            provider,
-            snapshot_ref,
-            &request.lookup_key,
-        ) {
-            return Some(entry);
-        }
+        return Some(entry);
     }
 
     environment

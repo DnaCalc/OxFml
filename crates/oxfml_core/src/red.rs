@@ -48,15 +48,14 @@ pub fn project_red_view_incremental(
     green_tree: &GreenTreeRoot,
     previous_red_projection: Option<&RedProjection>,
 ) -> IncrementalRedProjectionResult {
-    if let Some(previous_red_projection) = previous_red_projection {
-        if previous_red_projection.formula_stable_id == formula_stable_id
-            && previous_red_projection.green_tree_key == green_tree.green_tree_key
-        {
-            return IncrementalRedProjectionResult {
-                red_projection: previous_red_projection.clone(),
-                reused_red_projection: true,
-            };
-        }
+    if let Some(previous_red_projection) = previous_red_projection
+        && previous_red_projection.formula_stable_id == formula_stable_id
+        && previous_red_projection.green_tree_key == green_tree.green_tree_key
+    {
+        return IncrementalRedProjectionResult {
+            red_projection: previous_red_projection.clone(),
+            reused_red_projection: true,
+        };
     }
 
     IncrementalRedProjectionResult {

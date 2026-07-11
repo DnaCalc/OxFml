@@ -197,7 +197,7 @@ fn runtime_matches_ftc_0288_excel_adjacent_matrix() {
                 .execute(
                     RuntimeFormulaRequest::new(
                         FormulaSourceRecord::new(
-                            &format!("runtime:ftc-0288:{context_id}:{case_id}"),
+                            format!("runtime:ftc-0288:{context_id}:{case_id}"),
                             1,
                             formula,
                         )

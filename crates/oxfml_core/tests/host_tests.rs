@@ -621,8 +621,8 @@ impl HostInfoProvider for MockHostInfoProvider {
         _reference: Option<&ReferenceLike>,
     ) -> Result<CalcValue, HostInfoError> {
         match query {
-            CellInfoQuery::Filename => Ok(CalcValue::from(CalcValue::text(
-                ExcelText::from_utf16_code_units("[Book1]Sheet1".encode_utf16().collect()),
+            CellInfoQuery::Filename => Ok(CalcValue::text(ExcelText::from_utf16_code_units(
+                "[Book1]Sheet1".encode_utf16().collect(),
             ))),
             _ => Err(HostInfoError::UnsupportedCellInfoQuery(query)),
         }
@@ -630,8 +630,8 @@ impl HostInfoProvider for MockHostInfoProvider {
 
     fn query_info(&self, query: InfoQuery) -> Result<CalcValue, HostInfoError> {
         match query {
-            InfoQuery::Directory => Ok(CalcValue::from(CalcValue::text(
-                ExcelText::from_utf16_code_units("C:\\Work".encode_utf16().collect()),
+            InfoQuery::Directory => Ok(CalcValue::text(ExcelText::from_utf16_code_units(
+                "C:\\Work".encode_utf16().collect(),
             ))),
             _ => Err(HostInfoError::UnsupportedInfoQuery(query)),
         }

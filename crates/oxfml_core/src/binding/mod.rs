@@ -362,24 +362,23 @@ pub fn bind_formula_incremental(
         fingerprint_policy,
     );
 
-    if let Some(previous_bound_formula) = previous_bound_formula {
-        if previous_bound_formula.formula_stable_id == request.source.formula_stable_id.0
-            && previous_bound_formula.green_tree_key == request.green_tree.green_tree_key
-            && previous_bound_formula.bind_context_fingerprint == bind_context_fingerprint
-        {
-            let mut bound_formula = previous_bound_formula.clone();
-            bound_formula.placed_formula_identity = placed_formula_identity_for(
-                &bound_formula.formula_template_identity,
-                &request.context,
-                profile_fingerprint.as_ref(),
-            );
-            bound_formula.runtime_dependency_identity =
-                runtime_dependency_identity_for(&bound_formula.placed_formula_identity);
-            return IncrementalBindResult {
-                bound_formula,
-                reused_bound_formula: true,
-            };
-        }
+    if let Some(previous_bound_formula) = previous_bound_formula
+        && previous_bound_formula.formula_stable_id == request.source.formula_stable_id.0
+        && previous_bound_formula.green_tree_key == request.green_tree.green_tree_key
+        && previous_bound_formula.bind_context_fingerprint == bind_context_fingerprint
+    {
+        let mut bound_formula = previous_bound_formula.clone();
+        bound_formula.placed_formula_identity = placed_formula_identity_for(
+            &bound_formula.formula_template_identity,
+            &request.context,
+            profile_fingerprint.as_ref(),
+        );
+        bound_formula.runtime_dependency_identity =
+            runtime_dependency_identity_for(&bound_formula.placed_formula_identity);
+        return IncrementalBindResult {
+            bound_formula,
+            reused_bound_formula: true,
+        };
     }
 
     let bind = bind_formula(request);
@@ -1740,14 +1739,11 @@ impl Binder<'_> {
         text: &str,
         source_span: TextSpan,
     ) -> Option<HostNameBindRecord> {
-        let Some(mut record) = self
+        let mut record = self
             .context
             .host_name_bind_records
             .iter()
-            .find_map(|(name, record)| name.eq_ignore_ascii_case(text).then_some(record.clone()))
-        else {
-            return None;
-        };
+            .find_map(|(name, record)| name.eq_ignore_ascii_case(text).then_some(record.clone()))?;
         record.source_span = source_span;
         record.source_token_text = text.to_string();
         self.host_name_bind_records.push(record);
@@ -3148,22 +3144,22 @@ fn first_token_text_free(node: &GreenNode) -> Option<String> {
 }
 
 fn parse_reference_qualifier(text: &str) -> ParsedQualifier {
-    if let Some(rest) = text.strip_prefix('[') {
-        if let Some(close_index) = rest.find(']') {
-            let external_target_id = rest[..close_index].to_string();
-            let sheet_id = rest[close_index + 1..].to_string();
-            return ParsedQualifier {
-                raw: text.to_string(),
-                sheet_id: if sheet_id.is_empty() {
-                    "sheet:external".to_string()
-                } else {
-                    sheet_id
-                },
-                external_target_id: Some(external_target_id),
-                is_external: true,
-                explicit: true,
-            };
-        }
+    if let Some(rest) = text.strip_prefix('[')
+        && let Some(close_index) = rest.find(']')
+    {
+        let external_target_id = rest[..close_index].to_string();
+        let sheet_id = rest[close_index + 1..].to_string();
+        return ParsedQualifier {
+            raw: text.to_string(),
+            sheet_id: if sheet_id.is_empty() {
+                "sheet:external".to_string()
+            } else {
+                sheet_id
+            },
+            external_target_id: Some(external_target_id),
+            is_external: true,
+            explicit: true,
+        };
     }
 
     let sheet_id = if text.starts_with('\'') && text.ends_with('\'') && text.len() >= 2 {
@@ -3300,11 +3296,11 @@ fn parse_r1c1_cell_reference(text: &str, sheet_id: &str, context: &BindContext) 
     })
 }
 
-fn parse_r1c1_axis<'a>(
-    text: &'a str,
+fn parse_r1c1_axis(
+    text: &str,
     axis_kind: char,
     caller_anchor: u32,
-) -> Option<(u32, bool, bool, &'a str)> {
+) -> Option<(u32, bool, bool, &str)> {
     let remainder = text.strip_prefix(axis_kind)?;
     if let Some(relative) = remainder.strip_prefix('[') {
         let close_index = relative.find(']')?;

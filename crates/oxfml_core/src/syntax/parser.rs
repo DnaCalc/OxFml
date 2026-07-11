@@ -412,6 +412,9 @@ impl Parser {
         }
     }
 
+    // `allow_union_comma` is forwarded to nested sub-parses; only the
+    // intersection/union loop in the caller branches on it.
+    #[allow(clippy::only_used_in_recursion)]
     fn parse_range(&mut self, allow_union_comma: bool) -> GreenNode {
         self.skip_whitespace();
         if self.at(TokenKind::At) {

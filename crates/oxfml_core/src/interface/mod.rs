@@ -83,7 +83,7 @@ pub struct TableDescriptor {
     pub columns: Vec<TableColumnDescriptor>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct TypedContextQueryBundle<'a> {
     pub host_info: Option<&'a dyn HostInfoProvider>,
     pub rtd_provider: Option<&'a dyn RtdProvider>,
@@ -116,21 +116,6 @@ impl std::fmt::Debug for TypedContextQueryBundle<'_> {
                 &self.reference_system_provider.is_some(),
             )
             .finish()
-    }
-}
-
-impl<'a> Default for TypedContextQueryBundle<'a> {
-    fn default() -> Self {
-        Self {
-            host_info: None,
-            rtd_provider: None,
-            registered_external_provider: None,
-            host_function_provider: None,
-            locale_ctx: None,
-            now_serial: None,
-            random_provider: None,
-            reference_system_provider: None,
-        }
     }
 }
 
