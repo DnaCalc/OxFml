@@ -570,6 +570,19 @@ impl SingleFormulaHost {
                 false,
             )
         };
+        // Locale capability gate (calc-a4x2, relocated from the runtime
+        // facade): a locale-requiring plan without a caller-supplied locale
+        // context is denied before ANY evaluation context is built. Checked
+        // against the raw caller bundle (the facade's
+        // `request.typed_query_bundle.locale_ctx` view — the same source the
+        // plan-reuse locale keys above read), not the host-defaulted
+        // effective bundle.
+        if semantic_plan.execution_profile.requires_locale && query_bundle.locale_ctx.is_none() {
+            return Err(
+                "capability denied: locale_format_context unavailable for runtime execution"
+                    .to_string(),
+            );
+        }
         let artifact_reuse = ArtifactReuseReport {
             green_tree_reused,
             red_projection_reused: red.reused_red_projection,

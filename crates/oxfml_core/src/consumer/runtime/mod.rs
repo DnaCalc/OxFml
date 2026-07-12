@@ -571,18 +571,41 @@ impl<'a> RuntimeEnvironment<'a> {
             &compiled.registry_capability_denials,
             self.table_context_fingerprint(),
         );
-        if compiled
-            .prepare_request
-            .semantic_plan
-            .execution_profile
-            .requires_locale
-            && request.typed_query_bundle.locale_ctx.is_none()
-        {
-            return Err(
-                "capability denied: locale_format_context unavailable for runtime execution"
-                    .to_string(),
-            );
-        }
+        self.execute_prepared_with_owned_identity(host, prepared_formula_identity, request)
+    }
+
+    /// Execute against retained prepared state (calc-a4x2 / O-2.ii-iii seam):
+    /// the behavior of the facade execute path MINUS pass 1 — no
+    /// `compile_runtime_prepare_request` front end runs here, because the
+    /// caller already retains the prepared identity that pass exists to
+    /// compute. The host's own artifact-reuse gates (text equality,
+    /// bind-context fingerprint, reference-profile signature, plan keys)
+    /// remain the correctness authority: a stale or mismatched host simply
+    /// re-runs its front end. The locale capability gate lives inside the
+    /// host recalc, so it is enforced on this path exactly as on `execute`.
+    pub fn execute_prepared<'q>(
+        &self,
+        host: &mut SingleFormulaHost,
+        prepared_formula_identity: &RuntimePreparedFormulaIdentity,
+        request: RuntimeFormulaRequest<'q>,
+    ) -> Result<RuntimeFormulaResult, String> {
+        self.execute_prepared_with_owned_identity(host, prepared_formula_identity.clone(), request)
+    }
+
+    /// Shared tail of `execute_with_host` and `execute_prepared`: apply the
+    /// environment to the host, install formal-input bindings validated
+    /// against the prepared identity, and run the host recalc. Takes the
+    /// identity by value so the pass-1 path hands over its freshly computed
+    /// identity without an extra clone (the by-ref `execute_prepared` entry
+    /// pays one identity clone per call — the same cost the previous
+    /// per-call identity computation already carried into
+    /// `from_host_output`).
+    fn execute_prepared_with_owned_identity<'q>(
+        &self,
+        host: &mut SingleFormulaHost,
+        prepared_formula_identity: RuntimePreparedFormulaIdentity,
+        request: RuntimeFormulaRequest<'q>,
+    ) -> Result<RuntimeFormulaResult, String> {
         self.apply_to_host(host, request.source());
         apply_formal_input_bindings_to_host(
             host,
