@@ -1,4 +1,5 @@
 use oxfunc_core::value::CalcValue;
+use std::borrow::Cow;
 use std::fs;
 use std::path::PathBuf;
 
@@ -1141,15 +1142,18 @@ fn evaluate_fixture_formula(
 
     let mut context = EvaluationContext::new(&bind.bound_formula, &plan);
     let locale_ctx = oxfml_en_us_locale_context();
-    context.defined_names = binding_map;
+    context.defined_names = Cow::Owned(binding_map);
     context
         .cell_values
+        .to_mut()
         .insert("A1".to_string(), CalcValue::number(7.0));
     context
         .cell_values
+        .to_mut()
         .insert("A2".to_string(), CalcValue::number(11.0));
     context
         .cell_values
+        .to_mut()
         .insert("B2".to_string(), CalcValue::number(13.0));
     context.apply_typed_context_query_bundle(TypedContextQueryBundle::new(
         host_query_profile

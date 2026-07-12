@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::source::FormulaStableId;
 use crate::syntax::green::{GreenNode, GreenTreeRoot, SyntaxKind};
 use crate::syntax::token::TextSpan;
@@ -62,6 +64,27 @@ pub fn project_red_view_incremental(
         red_projection: project_red_view(formula_stable_id, green_tree),
         reused_red_projection: false,
     }
+}
+
+/// `Arc`-returning sibling of [`project_red_view_incremental`]. Shares the exact
+/// reuse gate; on a hit it clones the `Arc` handle rather than deep-cloning the
+/// red projection, on a miss it wraps a fresh projection.
+pub fn project_red_view_incremental_arc(
+    formula_stable_id: FormulaStableId,
+    green_tree: &GreenTreeRoot,
+    previous_red_projection: Option<&Arc<RedProjection>>,
+) -> (Arc<RedProjection>, bool) {
+    if let Some(previous_red_projection) = previous_red_projection
+        && previous_red_projection.formula_stable_id == formula_stable_id
+        && previous_red_projection.green_tree_key == green_tree.green_tree_key
+    {
+        return (Arc::clone(previous_red_projection), true);
+    }
+
+    (
+        Arc::new(project_red_view(formula_stable_id, green_tree)),
+        false,
+    )
 }
 
 fn flatten(node: &GreenNode, parent: Option<usize>, arena: &mut Vec<RedNode>) -> usize {

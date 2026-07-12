@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 pub use profile::{
     BindProfile, FormulaSourceIdentity, FormulaTemplateIdentity, InstantiatedReference,
@@ -386,6 +387,64 @@ pub fn bind_formula_incremental(
         bound_formula: bind.bound_formula,
         reused_bound_formula: false,
     }
+}
+
+/// `Arc`-returning sibling of [`bind_formula_incremental`]. Takes the green tree
+/// and red projection as shared `Arc` borrows (so a cache miss can deep-clone
+/// only the two inputs `bind_formula` consumes) and returns an
+/// `Arc<BoundFormula>` handle. The reuse gate is byte-identical to
+/// [`bind_formula_incremental`]: same three-condition match, then the placed
+/// identity is recomputed for THIS call. When the recomputed placed identity is
+/// unchanged (fixed-anchor/`IncludeCallerAnchor` reuse) the `Arc` handle is
+/// cloned; otherwise `Arc::make_mut` restamps only the placed + runtime
+/// dependency identity fields (`ExcludeCallerAnchorForTemplate` reuse across a
+/// moved anchor) — reproducing the owned fn's unconditional recompute exactly.
+pub fn bind_formula_incremental_arc(
+    source: FormulaSourceRecord,
+    green_tree: &Arc<GreenTreeRoot>,
+    red_projection: &Arc<RedProjection>,
+    context: BindContext,
+    reference_bind_profile: Option<&dyn ReferenceBindProfile>,
+    previous_bound_formula: Option<&Arc<BoundFormula>>,
+) -> (Arc<BoundFormula>, bool) {
+    let profile_context = reference_profile_fingerprint_context(&context);
+    let profile_fingerprint =
+        reference_profile_fingerprint(reference_bind_profile, &profile_context);
+    let fingerprint_policy = reference_bind_profile
+        .map(|profile| profile.fingerprint_policy())
+        .unwrap_or(ReferenceFingerprintPolicy::IncludeCallerAnchor);
+    let bind_context_fingerprint =
+        bind_context_fingerprint_for(&context, profile_fingerprint.as_ref(), fingerprint_policy);
+
+    if let Some(previous) = previous_bound_formula
+        && previous.formula_stable_id == source.formula_stable_id.0
+        && previous.green_tree_key == green_tree.green_tree_key
+        && previous.bind_context_fingerprint == bind_context_fingerprint
+    {
+        let new_placed = placed_formula_identity_for(
+            &previous.formula_template_identity,
+            &context,
+            profile_fingerprint.as_ref(),
+        );
+        if new_placed == previous.placed_formula_identity {
+            return (Arc::clone(previous), true);
+        }
+        let mut arc = Arc::clone(previous);
+        let bound = Arc::make_mut(&mut arc);
+        bound.runtime_dependency_identity = runtime_dependency_identity_for(&new_placed);
+        bound.placed_formula_identity = new_placed;
+        return (arc, true);
+    }
+
+    let request = BindRequest {
+        source,
+        green_tree: (**green_tree).clone(),
+        red_projection: (**red_projection).clone(),
+        context,
+        reference_bind_profile,
+    };
+    let result = bind_formula(request);
+    (Arc::new(result.bound_formula), false)
 }
 
 struct Binder<'a> {

@@ -81,7 +81,7 @@ pub use binding::{
     RuntimeDependencyIdentity, RuntimeHostFormulaContext, SheetSpan3DRef,
     StructuredReferenceBindDiagnosticLink, StructuredReferenceBindRecord,
     StructuredReferenceSelectedRegion, StructuredReferenceSourceTokenKind, StructuredSectionKind,
-    bind_formula, bind_formula_incremental,
+    bind_formula, bind_formula_incremental, bind_formula_incremental_arc,
 };
 pub use carrier::{
     CarrierRestrictionCode, CarrierValidationDisposition, ConditionalFormattingCarrierSpec,
@@ -119,7 +119,7 @@ pub use publication::{
 };
 pub use red::{
     IncrementalRedProjectionResult, RedNode, RedProjection, project_red_view,
-    project_red_view_incremental,
+    project_red_view_incremental, project_red_view_incremental_arc,
 };
 pub use scheduler::{
     ExecutionContract, ExecutionRestriction, ReplaySensitivityClass, SchedulerLaneClass,
@@ -150,7 +150,7 @@ pub use source::{
 pub use syntax::green::{GreenTreeRoot, SyntaxKind};
 pub use syntax::parser::{
     IncrementalParseResult, ParseRequest, ParseResult, ReferenceSelectorSyntaxProfile,
-    parse_formula, parse_formula_incremental,
+    parse_formula, parse_formula_incremental, parse_formula_incremental_arc,
     parse_formula_incremental_with_reference_selector_syntax,
     parse_formula_with_reference_selector_syntax,
 };

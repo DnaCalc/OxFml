@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::{Deref, DerefMut};
@@ -1687,8 +1688,8 @@ pub struct EvaluationContext<'a> {
     pub backend: EvaluationBackend,
     pub caller_row: usize,
     pub caller_col: usize,
-    pub cell_values: BTreeMap<String, CalcValue>,
-    pub defined_names: BTreeMap<String, DefinedNameBinding>,
+    pub cell_values: Cow<'a, BTreeMap<String, CalcValue>>,
+    pub defined_names: Cow<'a, BTreeMap<String, DefinedNameBinding>>,
     pub locale_ctx: Option<&'a LocaleFormatContext<'a>>,
     pub host_info: Option<&'a dyn HostInfoProvider>,
     pub rtd_provider: Option<&'a dyn RtdProvider>,
@@ -1710,8 +1711,8 @@ impl<'a> EvaluationContext<'a> {
             backend: EvaluationBackend::OxFuncBacked,
             caller_row: 1,
             caller_col: 1,
-            cell_values: BTreeMap::new(),
-            defined_names: BTreeMap::new(),
+            cell_values: Cow::Owned(BTreeMap::new()),
+            defined_names: Cow::Owned(BTreeMap::new()),
             locale_ctx: None,
             host_info: None,
             rtd_provider: None,

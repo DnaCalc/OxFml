@@ -1,4 +1,5 @@
 use oxfunc_core::value::CalcValue;
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::fs;
@@ -2561,7 +2562,7 @@ fn evaluate_with_reference_system_provider(
     );
 
     let mut context = EvaluationContext::new(&compiled.bound_formula, &compiled.semantic_plan);
-    context.cell_values.extend(cell_values.clone());
+    context.cell_values.to_mut().extend(cell_values.clone());
     let locale = oxfml_en_us_locale_context();
     context.apply_typed_context_query_bundle(
         TypedContextQueryBundle::new(
@@ -2648,7 +2649,7 @@ fn evaluate_with_defined_names_and_reference_system_provider(
     );
 
     let mut context = EvaluationContext::new(&compiled.bound_formula, &compiled.semantic_plan);
-    context.defined_names = defined_names;
+    context.defined_names = Cow::Owned(defined_names);
     let locale = oxfml_en_us_locale_context();
     context.apply_typed_context_query_bundle(
         TypedContextQueryBundle::new(
@@ -2687,14 +2688,17 @@ fn evaluate_with_cells_result(
     let mut context = EvaluationContext::new(&compiled.bound_formula, &compiled.semantic_plan);
     context
         .cell_values
+        .to_mut()
         .insert("A1".to_string(), CalcValue::number(7.0));
     context
         .cell_values
+        .to_mut()
         .insert("A2".to_string(), CalcValue::number(11.0));
     context
         .cell_values
+        .to_mut()
         .insert("B2".to_string(), CalcValue::number(13.0));
-    context.cell_values.extend(extra_cells);
+    context.cell_values.to_mut().extend(extra_cells);
     let locale = oxfml_en_us_locale_context();
     context.apply_typed_context_query_bundle(TypedContextQueryBundle::new(
         None,
@@ -2740,14 +2744,17 @@ fn evaluate_with_rtd_provider(
     let mut context = EvaluationContext::new(&compiled.bound_formula, &compiled.semantic_plan);
     context
         .cell_values
+        .to_mut()
         .insert("A1".to_string(), CalcValue::number(7.0));
     context
         .cell_values
+        .to_mut()
         .insert("A2".to_string(), CalcValue::number(11.0));
     context
         .cell_values
+        .to_mut()
         .insert("B2".to_string(), CalcValue::number(13.0));
-    context.defined_names = defined_names.unwrap_or_default();
+    context.defined_names = Cow::Owned(defined_names.unwrap_or_default());
     context.apply_typed_context_query_bundle(TypedContextQueryBundle::new(
         host_info,
         rtd_provider,

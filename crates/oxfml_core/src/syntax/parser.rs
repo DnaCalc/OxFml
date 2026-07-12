@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::binding::{ReferenceBindProfile, ReferenceSelectorKind, ReferenceSelectorSyntax};
 use crate::source::FormulaSourceRecord;
 use crate::syntax::green::{GreenChild, GreenNode, GreenTreeRoot, SyntaxKind};
@@ -104,24 +106,35 @@ pub fn parse_formula_incremental(
     )
 }
 
+/// The parse-reuse gate: a previously parsed green tree may be reused when its
+/// full-fidelity token text (Eof excluded) equals the entered formula text.
+/// Shared by the owned and `Arc`-returning incremental parse entry points so
+/// the two never drift.
+fn green_tree_reuse_matches(
+    previous_green_tree: &GreenTreeRoot,
+    entered_formula_text: &str,
+) -> bool {
+    let previous_text = previous_green_tree
+        .full_fidelity_tokens
+        .iter()
+        .filter(|token| token.kind != TokenKind::Eof)
+        .map(|token| token.text.as_str())
+        .collect::<String>();
+    previous_text == entered_formula_text
+}
+
 pub fn parse_formula_incremental_with_reference_selector_syntax(
     request: ParseRequest,
     previous_green_tree: Option<&GreenTreeRoot>,
     reference_selector_syntax: &ReferenceSelectorSyntaxProfile,
 ) -> IncrementalParseResult {
-    if let Some(previous_green_tree) = previous_green_tree {
-        let previous_text = previous_green_tree
-            .full_fidelity_tokens
-            .iter()
-            .filter(|token| token.kind != TokenKind::Eof)
-            .map(|token| token.text.as_str())
-            .collect::<String>();
-        if previous_text == request.source.entered_formula_text {
-            return IncrementalParseResult {
-                green_tree: previous_green_tree.clone(),
-                reused_green_tree: true,
-            };
-        }
+    if let Some(previous_green_tree) = previous_green_tree
+        && green_tree_reuse_matches(previous_green_tree, &request.source.entered_formula_text)
+    {
+        return IncrementalParseResult {
+            green_tree: previous_green_tree.clone(),
+            reused_green_tree: true,
+        };
     }
 
     let parse = parse_formula_with_reference_selector_syntax(request, reference_selector_syntax);
@@ -129,6 +142,25 @@ pub fn parse_formula_incremental_with_reference_selector_syntax(
         green_tree: parse.green_tree,
         reused_green_tree: false,
     }
+}
+
+/// `Arc`-returning sibling of
+/// [`parse_formula_incremental_with_reference_selector_syntax`]. Shares the
+/// exact reuse gate; on a hit it clones the `Arc` handle (pointer-cheap) rather
+/// than deep-cloning the green tree, on a miss it wraps a fresh parse.
+pub fn parse_formula_incremental_arc(
+    request: ParseRequest,
+    previous_green_tree: Option<&Arc<GreenTreeRoot>>,
+    reference_selector_syntax: &ReferenceSelectorSyntaxProfile,
+) -> (Arc<GreenTreeRoot>, bool) {
+    if let Some(previous_green_tree) = previous_green_tree
+        && green_tree_reuse_matches(previous_green_tree, &request.source.entered_formula_text)
+    {
+        return (Arc::clone(previous_green_tree), true);
+    }
+
+    let parse = parse_formula_with_reference_selector_syntax(request, reference_selector_syntax);
+    (Arc::new(parse.green_tree), false)
 }
 
 fn worksheet_cell_entry_literal_root(

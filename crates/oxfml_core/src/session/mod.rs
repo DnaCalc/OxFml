@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 use oxfunc_core::value::{CalcValue, CoreValue};
@@ -416,8 +417,8 @@ impl SessionService {
             evaluation_context.backend = request.backend;
             evaluation_context.caller_row = request.caller_row;
             evaluation_context.caller_col = request.caller_col;
-            evaluation_context.cell_values = request.cell_values;
-            evaluation_context.defined_names = request.defined_names;
+            evaluation_context.cell_values = Cow::Owned(request.cell_values);
+            evaluation_context.defined_names = Cow::Owned(request.defined_names);
             evaluation_context.apply_typed_context_query_bundle(request.typed_query_bundle);
 
             let evaluation = match evaluate_formula(evaluation_context) {

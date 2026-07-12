@@ -1,4 +1,6 @@
+use std::borrow::Cow;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use oxfunc_core::functions::call_register_id_family::{
     RegisteredExternalProvider, RegisteredExternalProviderError,
@@ -9,8 +11,8 @@ use oxfunc_core::locale_format::LocaleFormatContext;
 use oxfunc_core::value::{CalcValue, CoreValue, ExcelText, ReferenceLike, WorksheetErrorCode};
 
 use crate::binding::{
-    BindContext, BindDiagnostic, BindRequest, BoundFormula, NameKind, ReferenceBindProfile,
-    bind_formula_incremental,
+    BindContext, BindDiagnostic, BoundFormula, NameKind, ReferenceBindProfile,
+    bind_formula_incremental_arc,
 };
 use crate::eval::{
     CallableDefinedNameBinding, DefinedNameBinding, EvaluationBackend, EvaluationContext,
@@ -29,7 +31,7 @@ use crate::publication::{
     VerificationPublicationContext, VerificationPublicationSurface,
     build_verification_publication_surface,
 };
-use crate::red::{RedProjection, project_red_view_incremental};
+use crate::red::{RedProjection, project_red_view_incremental_arc};
 use crate::scheduler::{ExecutionContract, build_execution_contract};
 use crate::seam::{
     AcceptDecision, AcceptedCandidateResult, CapabilityEffectFact, CommitRequest,
@@ -44,8 +46,7 @@ use crate::semantics::{CompileSemanticPlanRequest, SemanticPlan, compile_semanti
 use crate::source::{FormulaSourceRecord, StructureContextVersion};
 use crate::syntax::green::GreenTreeRoot;
 use crate::syntax::parser::{
-    ParseRequest, ReferenceSelectorSyntaxProfile,
-    parse_formula_incremental_with_reference_selector_syntax,
+    ParseRequest, ReferenceSelectorSyntaxProfile, parse_formula_incremental_arc,
 };
 use crate::syntax::token::SyntaxDiagnostic;
 
@@ -59,10 +60,10 @@ pub struct ArtifactReuseReport {
 
 #[derive(Debug, Clone, PartialEq)]
 struct CachedHostArtifacts {
-    green_tree: GreenTreeRoot,
-    red_projection: RedProjection,
-    bound_formula: BoundFormula,
-    semantic_plan: SemanticPlan,
+    green_tree: Arc<GreenTreeRoot>,
+    red_projection: Arc<RedProjection>,
+    bound_formula: Arc<BoundFormula>,
+    semantic_plan: Arc<SemanticPlan>,
     semantic_plan_catalog_identity: String,
     locale_profile: Option<String>,
     date_system: Option<String>,
@@ -457,58 +458,55 @@ impl SingleFormulaHost {
         let cached_artifacts = self.cached_artifacts.as_ref();
         let selector_syntax =
             ReferenceSelectorSyntaxProfile::from_bind_profile(reference_bind_profile);
-        let parse = parse_formula_incremental_with_reference_selector_syntax(
+        let (green_tree_arc, green_tree_reused) = parse_formula_incremental_arc(
             ParseRequest {
                 source: source.clone(),
             },
             cached_artifacts.map(|artifacts| &artifacts.green_tree),
             &selector_syntax,
         );
-        let (green_tree, green_tree_reused) = (parse.green_tree, parse.reused_green_tree);
-        let red = project_red_view_incremental(
+        let (red_arc, red_projection_reused) = project_red_view_incremental_arc(
             source.formula_stable_id.clone(),
-            &green_tree,
+            &green_tree_arc,
             cached_artifacts.map(|artifacts| &artifacts.red_projection),
         );
-        let syntax_diagnostics = green_tree.diagnostics.clone();
+        let syntax_diagnostics = green_tree_arc.diagnostics.clone();
         if !syntax_diagnostics.is_empty() {
             return Err(syntax_diagnostic_execution_error(&syntax_diagnostics));
         }
-        let bind = bind_formula_incremental(
-            BindRequest {
-                source: source.clone(),
-                green_tree: green_tree.clone(),
-                red_projection: red.red_projection.clone(),
-                context: BindContext {
-                    workbook_id: self.workbook_id.clone(),
-                    sheet_id: self.primary_locus.sheet_id.clone(),
-                    structure_context_version: StructureContextVersion(
-                        self.structure_context_version.clone(),
-                    ),
-                    caller_row: self.caller_row,
-                    caller_col: self.caller_col,
-                    formula_token: source.formula_token(),
-                    names: self
-                        .defined_names
-                        .iter()
-                        .map(|(name, binding)| {
-                            (
-                                name.clone(),
-                                match binding {
-                                    DefinedNameBinding::Value(_) => NameKind::ValueLike,
-                                    DefinedNameBinding::Reference(_) => NameKind::ReferenceLike,
-                                    DefinedNameBinding::Callable(_) => NameKind::ValueLike,
-                                },
-                            )
-                        })
-                        .collect(),
-                    table_catalog: self.table_catalog.clone(),
-                    enclosing_table_ref: self.enclosing_table_ref.clone(),
-                    caller_table_region: self.caller_table_region.clone(),
-                    ..BindContext::default()
-                },
-                reference_bind_profile,
+        let (bound_formula_arc, bound_formula_reused) = bind_formula_incremental_arc(
+            source.clone(),
+            &green_tree_arc,
+            &red_arc,
+            BindContext {
+                workbook_id: self.workbook_id.clone(),
+                sheet_id: self.primary_locus.sheet_id.clone(),
+                structure_context_version: StructureContextVersion(
+                    self.structure_context_version.clone(),
+                ),
+                caller_row: self.caller_row,
+                caller_col: self.caller_col,
+                formula_token: source.formula_token(),
+                names: self
+                    .defined_names
+                    .iter()
+                    .map(|(name, binding)| {
+                        (
+                            name.clone(),
+                            match binding {
+                                DefinedNameBinding::Value(_) => NameKind::ValueLike,
+                                DefinedNameBinding::Reference(_) => NameKind::ReferenceLike,
+                                DefinedNameBinding::Callable(_) => NameKind::ValueLike,
+                            },
+                        )
+                    })
+                    .collect(),
+                table_catalog: self.table_catalog.clone(),
+                enclosing_table_ref: self.enclosing_table_ref.clone(),
+                caller_table_region: self.caller_table_region.clone(),
+                ..BindContext::default()
             },
+            reference_bind_profile,
             cached_artifacts.map(|artifacts| &artifacts.bound_formula),
         );
 
@@ -532,8 +530,8 @@ impl SingleFormulaHost {
             ));
         }
         let library_context_snapshot_ref = library_context_view.effective_snapshot_ref();
-        let (semantic_plan, semantic_plan_reused) = if let Some(previous) = cached_artifacts {
-            if previous.bound_formula.bind_hash == bind.bound_formula.bind_hash
+        let (semantic_plan_arc, semantic_plan_reused) = if let Some(previous) = cached_artifacts {
+            if previous.bound_formula.bind_hash == bound_formula_arc.bind_hash
                 && previous.semantic_plan_catalog_identity == semantic_plan_catalog_identity
                 && previous.semantic_plan.library_context_snapshot_ref
                     == library_context_snapshot_ref
@@ -541,32 +539,36 @@ impl SingleFormulaHost {
                 && previous.date_system == date_system
                 && previous.format_profile == format_profile
             {
-                (previous.semantic_plan.clone(), true)
+                (Arc::clone(&previous.semantic_plan), true)
             } else {
                 (
-                    compile_semantic_plan(CompileSemanticPlanRequest {
-                        bound_formula: bind.bound_formula.clone(),
-                        oxfunc_catalog_identity: semantic_plan_catalog_identity.clone(),
-                        locale_profile: locale_profile.clone(),
-                        date_system: date_system.clone(),
-                        format_profile: format_profile.clone(),
-                        library_context_snapshot: library_context_snapshot.clone(),
-                    })
-                    .semantic_plan,
+                    Arc::new(
+                        compile_semantic_plan(CompileSemanticPlanRequest {
+                            bound_formula: (*bound_formula_arc).clone(),
+                            oxfunc_catalog_identity: semantic_plan_catalog_identity.clone(),
+                            locale_profile: locale_profile.clone(),
+                            date_system: date_system.clone(),
+                            format_profile: format_profile.clone(),
+                            library_context_snapshot: library_context_snapshot.clone(),
+                        })
+                        .semantic_plan,
+                    ),
                     false,
                 )
             }
         } else {
             (
-                compile_semantic_plan(CompileSemanticPlanRequest {
-                    bound_formula: bind.bound_formula.clone(),
-                    oxfunc_catalog_identity: semantic_plan_catalog_identity.clone(),
-                    locale_profile: locale_profile.clone(),
-                    date_system: date_system.clone(),
-                    format_profile: format_profile.clone(),
-                    library_context_snapshot,
-                })
-                .semantic_plan,
+                Arc::new(
+                    compile_semantic_plan(CompileSemanticPlanRequest {
+                        bound_formula: (*bound_formula_arc).clone(),
+                        oxfunc_catalog_identity: semantic_plan_catalog_identity.clone(),
+                        locale_profile: locale_profile.clone(),
+                        date_system: date_system.clone(),
+                        format_profile: format_profile.clone(),
+                        library_context_snapshot,
+                    })
+                    .semantic_plan,
+                ),
                 false,
             )
         };
@@ -577,7 +579,8 @@ impl SingleFormulaHost {
         // `request.typed_query_bundle.locale_ctx` view — the same source the
         // plan-reuse locale keys above read), not the host-defaulted
         // effective bundle.
-        if semantic_plan.execution_profile.requires_locale && query_bundle.locale_ctx.is_none() {
+        if semantic_plan_arc.execution_profile.requires_locale && query_bundle.locale_ctx.is_none()
+        {
             return Err(
                 "capability denied: locale_format_context unavailable for runtime execution"
                     .to_string(),
@@ -585,35 +588,35 @@ impl SingleFormulaHost {
         }
         let artifact_reuse = ArtifactReuseReport {
             green_tree_reused,
-            red_projection_reused: red.reused_red_projection,
-            bound_formula_reused: bind.reused_bound_formula,
+            red_projection_reused,
+            bound_formula_reused,
             semantic_plan_reused,
         };
         self.cached_artifacts = Some(CachedHostArtifacts {
-            green_tree,
-            red_projection: red.red_projection,
-            bound_formula: bind.bound_formula.clone(),
-            semantic_plan: semantic_plan.clone(),
+            green_tree: Arc::clone(&green_tree_arc),
+            red_projection: Arc::clone(&red_arc),
+            bound_formula: Arc::clone(&bound_formula_arc),
+            semantic_plan: Arc::clone(&semantic_plan_arc),
             semantic_plan_catalog_identity,
             locale_profile,
             date_system,
             format_profile,
         });
 
-        let execution_contract = build_execution_contract(&semantic_plan);
+        let execution_contract = build_execution_contract(&semantic_plan_arc);
 
-        let mut evaluation_context = EvaluationContext::new(&bind.bound_formula, &semantic_plan);
+        let mut evaluation_context = EvaluationContext::new(&bound_formula_arc, &semantic_plan_arc);
         evaluation_context.backend = backend;
         evaluation_context.caller_row = self.caller_row as usize;
         evaluation_context.caller_col = self.caller_col as usize;
-        evaluation_context.cell_values = self.cell_values.clone();
-        evaluation_context.defined_names = self.defined_names.clone();
+        evaluation_context.cell_values = Cow::Borrowed(&self.cell_values);
+        evaluation_context.defined_names = Cow::Borrowed(&self.defined_names);
         evaluation_context.apply_typed_context_query_bundle(effective_query_bundle);
         evaluation_context.set_trace_mode(self.trace_mode);
 
-        let bind_mismatch_detail = bind_mismatch_detail(&bind.bound_formula.diagnostics);
+        let bind_mismatch_detail = bind_mismatch_detail(&bound_formula_arc.diagnostics);
         let evaluation = if let Some(detail) = bind_mismatch_detail.as_deref() {
-            synthetic_bind_mismatch_evaluation(&semantic_plan, detail)
+            synthetic_bind_mismatch_evaluation(&semantic_plan_arc, detail)
         } else {
             evaluate_formula(evaluation_context).map_err(|err| err.message)?
         };
@@ -628,7 +631,7 @@ impl SingleFormulaHost {
 
         let candidate_result = build_candidate_result(
             &source,
-            &semantic_plan,
+            &semantic_plan_arc,
             &evaluation,
             &published_worksheet_value,
             &returned_value_surface,
@@ -663,9 +666,9 @@ impl SingleFormulaHost {
         Ok(HostRecalcOutput {
             source,
             syntax_diagnostics,
-            bind_diagnostics: bind.bound_formula.diagnostics.clone(),
+            bind_diagnostics: bound_formula_arc.diagnostics.clone(),
             library_context_snapshot_ref,
-            semantic_plan,
+            semantic_plan: (*semantic_plan_arc).clone(),
             execution_contract,
             typed_query_bundle_spec,
             published_worksheet_value,
