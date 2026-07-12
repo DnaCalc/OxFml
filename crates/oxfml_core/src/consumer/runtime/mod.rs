@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::hash_map::DefaultHasher;
@@ -149,7 +150,10 @@ pub struct RuntimeEnvironment<'a> {
     caller_col: u32,
     primary_locus: Locus,
     defined_names: BTreeMap<String, DefinedNameBinding>,
-    cell_values: BTreeMap<String, CalcValue>,
+    // `Cow` so a caller that already owns a run-scope cell-value map can lend
+    // it per invocation (`with_cell_values_ref`) instead of rebuilding or
+    // cloning an owned map per call; one-shot callers keep the owned form.
+    cell_values: Cow<'a, BTreeMap<String, CalcValue>>,
     formal_input_bindings: Vec<RuntimeFormalInputBinding>,
     host_formula_context: Option<RuntimeHostFormulaContext>,
     host_name_bindings: Vec<RuntimeHostNameBinding>,
@@ -178,7 +182,7 @@ impl<'a> RuntimeEnvironment<'a> {
                 col: 1,
             },
             defined_names: BTreeMap::new(),
-            cell_values: BTreeMap::new(),
+            cell_values: Cow::Owned(BTreeMap::new()),
             formal_input_bindings: Vec::new(),
             host_formula_context: None,
             host_name_bindings: Vec::new(),
@@ -416,7 +420,17 @@ impl<'a> RuntimeEnvironment<'a> {
     }
 
     pub fn with_cell_values(mut self, cell_values: BTreeMap<String, CalcValue>) -> Self {
-        self.cell_values = cell_values;
+        self.cell_values = Cow::Owned(cell_values);
+        self
+    }
+
+    /// Borrowing variant of [`Self::with_cell_values`]: the environment lends
+    /// the caller's map for the duration of the call instead of taking an
+    /// owned copy. Hot per-invocation paths (one environment per formula
+    /// against a shared, incrementally maintained run-scope map) use this to
+    /// avoid per-call O(model) map construction.
+    pub fn with_cell_values_ref(mut self, cell_values: &'a BTreeMap<String, CalcValue>) -> Self {
+        self.cell_values = Cow::Borrowed(cell_values);
         self
     }
 
@@ -691,7 +705,7 @@ impl<'a> RuntimeEnvironment<'a> {
         host.defined_names = self.defined_names.clone();
         host.defined_names
             .extend(host_name_defined_names(&self.host_name_bindings));
-        host.cell_values = self.cell_values.clone();
+        host.cell_values = self.cell_values.as_ref().clone();
         host.table_catalog = self.table_catalog.clone();
         host.enclosing_table_ref = self.enclosing_table_ref.clone();
         host.caller_table_region = self.caller_table_region.clone();
@@ -2846,7 +2860,7 @@ impl<'a> RuntimeSessionFacade<'a> {
             backend: request.backend(),
             caller_row: self.environment.caller_row as usize,
             caller_col: self.environment.caller_col as usize,
-            cell_values: self.environment.cell_values.clone(),
+            cell_values: self.environment.cell_values.as_ref().clone(),
             defined_names,
             typed_query_bundle: *request.typed_query_bundle(),
         })?;
